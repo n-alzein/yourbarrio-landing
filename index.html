@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>YourBarrio – Your Neighborhood. Delivered.</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cobalt: #2357FF;
+      --navy: #0D1A33;
+      --white: #FFFFFF;
+      --soft-gray: #DDE1EA;
+      --cyan: #40E0FF;
+      --charcoal: #1F2733;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #F5F7FB;
+      color: var(--charcoal);
+      line-height: 1.6;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    header {
+      background: var(--white);
+      border-bottom: 1px solid #E2E6F0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .nav-container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: radial-gradient(circle at 30% 20%, var(--cyan), var(--cobalt));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--white);
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .logo-text-main {
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--navy);
+    }
+
+    .logo-text-sub {
+      font-size: 11px;
+      color: #7A8497;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      font-size: 14px;
+      color: #4A5366;
+    }
+
+    .nav-cta {
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: var(--cobalt);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .nav-cta:hover {
+      background: #1d49d6;
+      box-shadow: 0 8px 20px rgba(35, 87, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .hero {
+      max-width: 1120px;
+      margin: 40px auto 60px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 40px;
+      align-items: center;
+    }
+
+    .hero-title {
+      font-size: clamp(30px, 3.2vw, 40px);
+      font-weight: 700;
+      color: var(--navy);
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+
+    .hero-highlight {
+      color: var(--cobalt);
+    }
+
+    .hero-subtitle {
+      font-size: 15px;
+      color: #4A5366;
+      max-width: 460px;
+      margin-bottom: 22px;
+    }
+
+    .hero-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .hero-input {
+      flex: 1 1 160px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid #CDD3E3;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .hero-input:focus {
+      border-color: var(--cobalt);
+      box-shadow: 0 0 0 2px rgba(35, 87, 255, 0.18);
+    }
+
+    .hero-cta {
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: var(--cobalt);
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.1s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .hero-cta:hover {
+      background: #1d49d6;
+      box-shadow: 0 10px 24px rgba(35, 87, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .hero-note {
+      font-size: 12px;
+      color: #7A8497;
+    }
+
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+      font-size: 11px;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #CDD3E3;
+      background: #FFFFFF;
+      color: #4A5366;
+    }
+
+    .hero-card {
+      background: radial-gradient(circle at top left, #2f66ff, #0D1A33);
+      border-radius: 20px;
+      padding: 18px 18px 20px;
+      color: var(--white);
+      box-shadow: 0 22px 40px rgba(7, 18, 43, 0.45);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .hero-card-subtitle {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-bottom: 12px;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      font-size: 11px;
+    }
+
+    .metric-box {
+      background: rgba(13, 26, 51, 0.42);
+      border-radius: 12px;
+      padding: 8px 9px;
+      backdrop-filter: blur(10px);
+    }
+
+    .metric-label {
+      opacity: 0.7;
+      margin-bottom: 2px;
+    }
+
+    .metric-value {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .hero-card-tag {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .hero-heat {
+      position: absolute;
+      bottom: -40px;
+      right: -40px;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(64,224,255,0.4) 0%, transparent 60%);
+      opacity: 0.8;
+    }
+
+    .section {
+      max-width: 1120px;
+      margin: 0 auto 60px;
+      padding: 0 20px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 10px;
+    }
+
+    .section-subtitle {
+      font-size: 14px;
+      color: #4A5366;
+      margin-bottom: 20px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 16px 16px 18px;
+      border: 1px solid #E2E6F0;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--navy);
+    }
+
+    .card-body {
+      font-size: 13px;
+      color: #4A5366;
+    }
+
+    .pill {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #EDF1FF;
+      color: var(--cobalt);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 26px;
+      align-items: start;
+    }
+
+    .list {
+      font-size: 13px;
+      color: #4A5366;
+      margin-left: 16px;
+    }
+
+    .list li {
+      margin-bottom: 6px;
+    }
+
+    footer {
+      border-top: 1px solid #E2E6F0;
+      padding: 20px;
+      font-size: 12px;
+      color: #7A8497;
+      text-align: center;
+      background: #F5F7FB;
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .cards {
+        grid-template-columns: 1fr;
+      }
+      .two-column {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav-container">
+      <div class="logo">
+        <div class="logo-icon">YB</div>
+        <div>
+          <div class="logo-text-main">YourBarrio</div>
+          <div class="logo-text-sub">Your neighborhood. Delivered.</div>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <a href="#how-it-works">How it works</a>
+        <a href="#merchants">For merchants</a>
+        <a href="#about">About</a>
+      </nav>
+      <button class="nav-cta">Open a store</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <h1 class="hero-title">
+          Shop your <span class="hero-highlight">neighborhood</span> the modern way.
+        </h1>
+        <p class="hero-subtitle">
+          Discover nearby shops, order in seconds, and choose fast pickup or delivery — all in one clean, simple experience.
+        </p>
+        <form class="hero-form">
+          <input class="hero-input" type="text" placeholder="Enter your ZIP (e.g. 90802)" />
+          <button type="submit" class="hero-cta">Check availability</button>
+        </form>
+        <p class="hero-note">Launching first in select neighborhoods. Be the first to know when YourBarrio goes live near you.</p>
+        <div class="hero-badges">
+          <div class="badge">Support local businesses</div>
+          <div class="badge">Transparent pricing</div>
+          <div class="badge">Pickup or delivery</div>
+        </div>
+      </div>
+
+      <div class="hero-card">
+        <div class="hero-card-tag">Demo view</div>
+        <h3 class="hero-card-title">Long Beach · YourBarrio</h3>
+        <p class="hero-card-subtitle">Today’s local highlights</p>
+        <div class="hero-metrics">
+          <div class="metric-box">
+            <div class="metric-label">Shops online</div>
+            <div class="metric-value">32</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Avg. pickup time</div>
+            <div class="metric-value">18 min</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Fees</div>
+            <div class="metric-value">Clear & upfront</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Neighborhood rating</div>
+            <div class="metric-value">4.8 ★</div>
+          </div>
+        </div>
+        <div class="hero-heat"></div>
+      </div>
+    </section>
+
+    <section class="section" id="how-it-works">
+      <h2 class="section-title">How YourBarrio works</h2>
+      <p class="section-subtitle">Local shopping in three simple steps.</p>
+      <div class="cards">
+        <div class="card">
+          <div class="pill">1 · Discover</div>
+          <div class="card-title">Browse nearby shops</div>
+          <p class="card-body">
+            Enter your ZIP code to see local stores, cafes, florists and more — all verified and mapped to your neighborhood.
+          </p>
+        </div>
+        <div class="card">
+          <div class="pill">2 · Order</div>
+          <div class="card-title">Add items in seconds</div>
+          <p class="card-body">
+            Choose pickup or delivery, see clear fees, and place your order with a single, modern checkout flow.
+          </p>
+        </div>
+        <div class="card">
+          <div class="pill">3 · Enjoy</div>
+          <div class="card-title">Pickup or get it delivered</div>
+          <p class="card-body">
+            Get real-time updates as your order is prepared. Swing by for pickup or relax while YourBarrio handles delivery.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="merchants">
+      <div class="two-column">
+        <div>
+          <h2 class="section-title">For local merchants</h2>
+          <p class="section-subtitle">
+            Turn your shop into a modern local destination without learning new software or hiring a tech team.
+          </p>
+          <ul class="list">
+            <li>Launch your storefront in days, not months.</li>
+            <li>Show up where nearby customers are already searching.</li>
+            <li>Offer pickup and delivery without changing your workflow.</li>
+            <li>Transparent, merchant-friendly fees and fast payouts.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="pill">Merchant snapshot</div>
+          <div class="card-title">What YourBarrio adds to your store</div>
+          <p class="card-body">
+            <strong>Online presence:</strong> A clean, branded store page for your shop.<br/><br/>
+            <strong>Orders that fit your day:</strong> Configure prep times, hours, and blackout dates so you stay in control.<br/><br/>
+            <strong>Insights:</strong> See what sells, when, and to which neighborhoods.
+          </p>
+          <div style="margin-top: 14px;">
+            <button class="hero-cta" type="button">Open a YourBarrio store</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="about">
+      <h2 class="section-title">Why YourBarrio</h2>
+      <p class="section-subtitle">
+        Because your neighborhood deserves the same convenience as big-box stores — without losing what makes it special.
+      </p>
+      <ul class="list">
+        <li><strong>Local first:</strong> We highlight independent shops and neighborhood staples.</li>
+        <li><strong>Modern experience:</strong> Clean design, transparent pricing, no dark patterns.</li>
+        <li><strong>Community impact:</strong> Every order keeps more money in your local economy.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    © <span id="year"></span> YourBarrio. Your neighborhood. Delivered.
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
