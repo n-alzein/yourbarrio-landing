@@ -1,5 +1,6 @@
 import { getUser } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabase";
+
 
 export async function GET(request) {
   const user = await getUser(request);

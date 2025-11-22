@@ -1,4 +1,5 @@
-import { supabase } from "./supabase";
+import { supabaseServer } from "@/lib/supabase";
+
 
 export async function getUser(request) {
   // Extract token from "Authorization: Bearer <token>"
@@ -6,7 +7,7 @@ export async function getUser(request) {
 
   if (!token) return null;
 
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await supabaseServer.auth.getUser(token);
 
   if (error || !data?.user) return null;
 
