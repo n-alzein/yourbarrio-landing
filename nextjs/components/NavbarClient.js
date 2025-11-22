@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Navbar from "./Navbar";
-import { supabaseClient } from "@/lib/supabase";
+import { supabaseClient } from "@/lib/supabaseClient";
 
 export default function NavbarClient() {
   const [user, setUser] = useState(null);
