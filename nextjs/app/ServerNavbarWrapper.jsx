@@ -1,10 +1,10 @@
 import { supabaseServer } from "@/lib/supabase";
-import Navbar from "@/components/Navbar";
+import NavbarClient from "@/components/NavbarClient";
 
 export default async function ServerNavbarWrapper() {
   const {
     data: { user },
   } = await supabaseServer.auth.getUser();
 
-  return <Navbar user={user} />;
+  return <NavbarClient user={user} />;
 }
