@@ -1,11 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-import Navbar from "@/components/Navbar";
-import { supabaseServer } from "@/lib/supabase";
-
-
-
+import ServerNavbarWrapper from "./ServerNavbarWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,16 +17,11 @@ export const metadata = {
   description: "YourBarrio neighborhood discovery landing page",
 };
 
-
-export default async function RootLayout({ children }) {
-  const {
-    data: { user },
-  } = await supabaseServer.auth.getUser();
-
+export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="pt-20">
-        <Navbar user={user} />
+        <ServerNavbarWrapper />
         {children}
       </body>
     </html>
