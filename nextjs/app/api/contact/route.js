@@ -12,7 +12,7 @@ export async function POST(request) {
   const { name, email, message } = data;
 
   await sendEmail({
-    to: "your-email@gmail.com",
+    to: "n.alzein@gmail.com",
     subject: "New Contact Submission",
     html: `
       <p>Name: ${name}</p>
