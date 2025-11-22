@@ -13,6 +13,7 @@ export async function POST(request) {
 
   await sendEmail({
     to: "n.alzein@gmail.com",
+    from: "YourBarrio <onboarding@resend.dev>",   // 👈 temporary working option
     subject: "New Contact Submission",
     html: `
       <p>Name: ${name}</p>
