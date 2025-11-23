@@ -1,0 +1,37 @@
+export default function Footer() {
+    return (
+      <footer className="mt-20 bg-white border-t border-slate-200 py-10">
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-10 text-slate-700">
+  
+          <div>
+            <h3 className="text-xl font-bold text-indigo-600">YourBarrio</h3>
+            <p className="mt-2 text-slate-500">
+              Discover your neighborhood like never before.
+            </p>
+          </div>
+  
+          <div>
+            <h4 className="text-lg font-semibold">Navigation</h4>
+            <ul className="mt-3 space-y-2">
+              <li><a href="/businesses" className="hover:text-indigo-600">Businesses</a></li>
+              <li><a href="/about" className="hover:text-indigo-600">About</a></li>
+              <li><a href="/login" className="hover:text-indigo-600">Login</a></li>
+            </ul>
+          </div>
+  
+          <div>
+            <h4 className="text-lg font-semibold">Contact</h4>
+            <ul className="mt-3 space-y-2">
+              <li>support@yourbarrio.com</li>
+              <li>Los Angeles, CA</li>
+            </ul>
+          </div>
+        </div>
+  
+        <div className="text-center text-slate-500 mt-10">
+          © {new Date().getFullYear()} YourBarrio — All rights reserved.
+        </div>
+      </footer>
+    );
+  }
+  

@@ -1,0 +1,4 @@
+.test-box {
+    @apply bg-red-500 text-white p-6 text-2xl;
+  }
+  
