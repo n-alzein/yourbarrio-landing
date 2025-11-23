@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabaseServer";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 
 export async function getUser(request) {
@@ -7,7 +7,9 @@ export async function getUser(request) {
 
   if (!token) return null;
 
-  const { data, error } = await supabaseServer.auth.getUser(token);
+  const supabase = createSupabaseServerClient();
+
+  const { data, error } = await supabase.auth.getUser(token);
 
   if (error || !data?.user) return null;
 
