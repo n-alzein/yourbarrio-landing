@@ -1,12 +1,12 @@
 import { getUser } from "@/lib/auth";
-import { supabaseServer } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabaseServer";
 
 
 export async function GET(request, { params }) {
   const user = await getUser(request);
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const { data } = await supabase
+  const { data } = await supabaseServer
     .from("users")
     .select("*")
     .eq("id", params.id)
@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
 
   const updates = await request.json();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from("users")
     .update(updates)
     .eq("id", params.id)
@@ -36,7 +36,7 @@ export async function DELETE(request, { params }) {
   const user = await getUser(request);
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  await supabase.from("users").delete().eq("id", params.id);
+  await supabaseServer.from("users").delete().eq("id", params.id);
 
   return Response.json({ success: true });
 }
