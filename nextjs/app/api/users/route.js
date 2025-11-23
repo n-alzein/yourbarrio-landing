@@ -1,23 +1,15 @@
-import { getUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 
+export async function GET(req, { params }) {
+  const supabase = supabaseServer();
+  const { id } = params;
 
-export async function GET(request) {
-  const user = await getUser(request);
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", id)
+    .single();
 
-  const { data } = await supabaseServer.from("users").select("*");
-  return Response.json(data);
-}
-
-export async function POST(request) {
-  const user = await getUser(request);
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const body = await request.json();
-  const { data, error } = await supabaseServer.from("users").insert(body).single();
-
-  if (error) return Response.json({ error }, { status: 400 });
-
+  if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json(data);
 }
