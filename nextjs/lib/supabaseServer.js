@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export function createSupabaseServerClient() {
@@ -13,13 +13,12 @@ export function createSupabaseServerClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
+          // Server Components can't set cookies directly
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch {
-            // Server Components can't set cookies directly; ignore.
-          }
+          } catch {}
         },
       },
     }
