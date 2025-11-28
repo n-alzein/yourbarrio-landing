@@ -3,24 +3,34 @@
 import { createBrowserClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
-export default function LogoutButton({ mobile }) {
+export default function LogoutButton({ children, className = "", mobile }) {
+  const supabase = createBrowserClient();
   const router = useRouter();
 
-  async function logout() {
-    await supabaseClient.auth.signOut();
+  async function handleLogout() {
+    await supabase.auth.signOut();
+
+    // IMPORTANT: refresh the entire app state
+    router.refresh();
+
+    // Optional redirect
     router.push("/login");
   }
 
+  if (mobile) {
+    return (
+      <button
+        onClick={handleLogout}
+        className="px-4 py-2 text-left text-white hover:bg-white/10 rounded-lg"
+      >
+        Logout
+      </button>
+    );
+  }
+
   return (
-    <button
-      onClick={logout}
-      className={
-        mobile
-          ? "text-red-600 hover:text-red-700 text-left"
-          : "bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
-      }
-    >
-      Logout
+    <button onClick={handleLogout} className={className}>
+      {children}
     </button>
   );
 }

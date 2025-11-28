@@ -23,7 +23,7 @@ export default function Footer() {
             <h4 className="text-lg font-semibold">Contact</h4>
             <ul className="mt-3 space-y-2">
               <li>support@yourbarrio.com</li>
-              <li>Los Angeles, CA</li>
+              <li>Long Beach, CA</li>
             </ul>
           </div>
         </div>
