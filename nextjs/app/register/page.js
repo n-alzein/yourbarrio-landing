@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
 
   /* ---------------------------------------------------------
-     🚫 BLOCK SIGN-UP PAGE IF USER IS LOGGED IN
+     Prevent access if already logged in
   --------------------------------------------------------- */
   useEffect(() => {
     async function checkUser() {
@@ -46,7 +46,7 @@ export default function RegisterPage() {
   if (initializing) return null;
 
   /* ---------------------------------------------------------
-     📝 HANDLE SIGNUP
+     Handle signup
   --------------------------------------------------------- */
   async function handleRegister(e) {
     e.preventDefault();
@@ -64,7 +64,6 @@ export default function RegisterPage() {
     }
 
     const user = signUpData.user;
-
     if (!user) {
       alert("Signup failed: no user returned.");
       setLoading(false);
@@ -81,7 +80,6 @@ export default function RegisterPage() {
     });
 
     if (insertError) {
-      console.error("Profile Insert Error:", insertError);
       alert("Failed to create profile row.");
       setLoading(false);
       return;
@@ -95,127 +93,129 @@ export default function RegisterPage() {
   }
 
   /* ---------------------------------------------------------
-     💄 UI
+     UI  — Same style & positioning as login page
   --------------------------------------------------------- */
   return (
-    <div
-      className="
-        min-h-screen w-full
-        bg-transparent            // 👈 fully transparent page background
-        flex items-center justify-center 
-        px-4 py-10 text-white
-      "
-    >
+    <div className="min-h-screen flex flex-col">
+
       <div
         className="
-          max-w-md w-full p-10 rounded-2xl 
-          bg-black/25             // 👈 25% transparent black inside signup box
-          backdrop-blur-xl        // 👈 frosted glass effect
-          border border-white/10
-          shadow-[0_0_60px_-10px_rgba(0,0,0,0.4)]
-          animate-fadeIn
+          w-full flex justify-center
+          px-4 
+          mt-24          /* 👈 same as login */
+          grow
+          text-white
         "
       >
-        {/* 🚫 LOGO REMOVED */}
+        {/* Glass Card */}
+        <div
+          className="
+            max-w-md w-full 
+            max-h-[400px]      /* 👈 similar height constraint as login */
+            p-8
+            rounded-2xl
+            bg-black/25
+            backdrop-blur-xl
+            border border-white/10
+            overflow-y-auto
+            shadow-[0_0_60px_-12px_rgba(0,0,0,0.4)]
+            animate-fadeIn
+          "
+        >
+          <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
+            Create Account
+          </h1>
 
-        <h1 className="text-4xl font-extrabold text-center mb-2 tracking-tight">
-          Create Account
-        </h1>
+          <p className="text-center text-white/70 mb-6">
+            Join YourBarrio in seconds
+          </p>
 
-        <p className="text-center text-white/70 mb-8">
-          Join YourBarrio in seconds
-        </p>
+          <form onSubmit={handleRegister} className="space-y-4">
 
-        <form onSubmit={handleRegister} className="space-y-6">
+            {/* EMAIL */}
+            <input
+              type="email"
+              placeholder="Email"
+              className="
+                w-full px-4 py-3 rounded-xl 
+                bg-black/20 border border-white/10 
+                text-white placeholder-white/50 
+                focus:ring-2 focus:ring-purple-500/40 
+                focus:border-purple-400 transition
+              "
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-          {/* EMAIL */}
-          <input
-            type="email"
-            placeholder="Email"
-            className="
-              w-full px-4 py-3.5 rounded-xl 
-              bg-black/20
-              border border-white/10 
-              text-white placeholder-white/50 
-              focus:ring-2 focus:ring-purple-500/40 
-              focus:border-purple-400
-              transition
-            "
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+            {/* PASSWORD */}
+            <input
+              type="password"
+              placeholder="Password"
+              className="
+                w-full px-4 py-3 rounded-xl 
+                bg-black/20 border border-white/10 
+                text-white placeholder-white/50 
+                focus:ring-2 focus:ring-purple-500/40 
+                focus:border-purple-400 transition
+              "
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-          {/* PASSWORD */}
-          <input
-            type="password"
-            placeholder="Password"
-            className="
-              w-full px-4 py-3.5 rounded-xl 
-              bg-black/20
-              border border-white/10 
-              text-white placeholder-white/50 
-              focus:ring-2 focus:ring-purple-500/40 
-              focus:border-purple-400
-              transition
-            "
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+            {/* ROLE */}
+            <select
+              className="
+                w-full px-4 py-3 rounded-xl 
+                bg-black/20 border border-white/10 
+                text-white focus:ring-2 
+                focus:ring-purple-500/40 focus:border-purple-400 
+                transition
+              "
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            >
+              <option value="customer" className="text-black">Customer</option>
+              <option value="business" className="text-black">Business</option>
+            </select>
 
-          {/* ROLE */}
-          <select
-            className="
-              w-full px-4 py-3.5 rounded-xl 
-              bg-black/20
-              border border-white/10 
-              text-white
-              focus:ring-2 focus:ring-purple-500/40 
-              focus:border-purple-400
-              transition
-            "
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
-            <option value="customer" className="text-black">Customer</option>
-            <option value="business" className="text-black">Business</option>
-          </select>
+            {/* SUBMIT BUTTON */}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`
+                w-full py-3 rounded-xl font-semibold text-white text-lg
+                bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500
+                shadow-lg shadow-purple-500/30 
+                hover:brightness-110 active:scale-[0.98]
+                transition-all duration-200
+                ${loading ? "opacity-60 cursor-not-allowed" : ""}
+              `}
+            >
+              {loading ? "Registering..." : "Create Account"}
+            </button>
+          </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`
-              w-full py-3.5 rounded-xl font-semibold text-white text-lg
-              bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500
-              shadow-lg shadow-purple-500/30 
-              hover:brightness-110 active:scale-[0.98]
-              transition-all duration-200
-              ${loading ? "opacity-60 cursor-not-allowed" : ""}
-            `}
-          >
-            {loading ? "Registering..." : "Create Account"}
-          </button>
-        </form>
+          <p className="text-center text-white/70 text-sm mt-4">
+            Already have an account?{" "}
+            <a href="/login" className="text-pink-400 font-medium hover:underline">
+              Log in
+            </a>
+          </p>
+        </div>
 
-        <p className="text-center text-white/80 text-sm mt-6">
-          Already have an account?{" "}
-          <a href="/login" className="text-pink-400 font-medium hover:underline">
-            Log in
-          </a>
-        </p>
+        <style>{`
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fadeIn {
+            animation: fadeIn 0.6s ease-out;
+          }
+        `}</style>
       </div>
 
-      {/* Animations */}
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.6s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

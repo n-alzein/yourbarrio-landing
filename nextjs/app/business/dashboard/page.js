@@ -10,11 +10,31 @@ export default function BusinessDashboard() {
   const router = useRouter();
   const { supabase, user, role, loadingUser } = useAuth();
 
-  const [business, setBusiness] = useState(null);
-  const [stats, setStats] = useState(null);
+  /* ---------------------------------------------------------- */
+  /*  INSTANT INITIAL VALUES FROM user                          */
+  /* ---------------------------------------------------------- */
+  const [business, setBusiness] = useState({
+    business_name: user?.business_name || "",
+    category: user?.category || "",
+    city: user?.city || "",
+    profile_photo_url: user?.profile_photo_url || "",
+  });
+
+  const [stats, setStats] = useState({
+    views: "",
+    messages: "",
+    saves: "",
+    rating: "",
+    reviewCount: "",
+  });
+
+  // Fix logout UI delays
+  useEffect(() => {
+    supabase.auth.onAuthStateChange(() => {});
+  }, []);
 
   /* ---------------------------------------------------------- */
-  /* 1️⃣ — AUTH CHECK (NON-BLOCKING)                             */
+  /*  AUTH CHECK — no blocking                                  */
   /* ---------------------------------------------------------- */
   useEffect(() => {
     if (loadingUser) return;
@@ -31,51 +51,63 @@ export default function BusinessDashboard() {
   }, [loadingUser, user, role, router]);
 
   /* ---------------------------------------------------------- */
-  /* 2️⃣ — LOAD BUSINESS ROW (BACKGROUND)                        */
+  /*  LOAD BUSINESS FROM SUPABASE (background refresh)          */
   /* ---------------------------------------------------------- */
   useEffect(() => {
-    if (loadingUser || !user || role !== "business") return;
+    if (!user || role !== "business" || loadingUser) return;
 
-    supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        setBusiness(data || null);
-      });
+    let active = true;
+
+    async function refreshBusiness() {
+      const { data } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (!active || !data) return;
+
+      // merge fresh data with existing instant values
+      setBusiness(prev => ({
+        ...prev,
+        ...data,
+      }));
+    }
+
+    refreshBusiness();
+    return () => (active = false);
   }, [loadingUser, user, role, supabase]);
 
   /* ---------------------------------------------------------- */
-  /* 3️⃣ — LOAD ANALYTICS (BACKGROUND, AFTER BUSINESS READY)     */
+  /*  LOAD STATS IN BACKGROUND — instant values stay visible    */
   /* ---------------------------------------------------------- */
   useEffect(() => {
-    if (!business) return;
+    if (!user) return;
 
-    (async () => {
+    async function refreshStats() {
       const [viewsRes, savesRes, msgRes, reviewsRes] = await Promise.all([
         supabase
           .from("business_views")
           .select("id", { count: "exact", head: true })
-          .eq("business_id", business.id),
+          .eq("business_id", user.id),
 
         supabase
           .from("business_saves")
           .select("id", { count: "exact", head: true })
-          .eq("business_id", business.id),
+          .eq("business_id", user.id),
 
         supabase
           .from("business_messages")
           .select("id", { count: "exact", head: true })
-          .eq("business_id", business.id),
+          .eq("business_id", user.id),
 
         supabase
           .from("business_reviews")
           .select("rating")
-          .eq("business_id", business.id),
+          .eq("business_id", user.id),
       ]);
 
-      const ratings = reviewsRes.data?.map((r) => r.rating) ?? [];
+      const ratings = reviewsRes.data?.map(r => r.rating) ?? [];
 
       setStats({
         views: viewsRes.count ?? 0,
@@ -83,29 +115,32 @@ export default function BusinessDashboard() {
         messages: msgRes.count ?? 0,
         rating: ratings.length
           ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
-          : null,
+          : "",
         reviewCount: ratings.length,
       });
-    })();
-  }, [business, supabase]);
+    }
+
+    refreshStats();
+  }, [user, supabase]);
 
   /* ---------------------------------------------------------- */
-  /* 4️⃣ — INSTANT PAGE RENDER (NO DELAY)                       */
+  /*  PAGE UI — zero blinking                                   */
   /* ---------------------------------------------------------- */
 
   return (
     <div className="min-h-screen px-6 md:px-10 pt-12 pb-20 relative text-white">
+
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-black to-purple-900 opacity-70 -z-10"></div>
-      <div className="absolute inset-0 backdrop-blur-2xl -z-10"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-black to-purple-900 opacity-70 -z-10" />
+      <div className="absolute inset-0 backdrop-blur-2xl -z-10" />
 
       <div className="max-w-6xl mx-auto">
 
-        {/* BUSINESS HEADER (Load instantly + fills when data arrives) */}
+        {/* HEADER — always instant */}
         <div className="flex flex-col md:flex-row items-center gap-6 mb-14 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-xl backdrop-blur-2xl">
 
           <Image
-            src={business?.profile_photo_url || "/business-placeholder.png"}
+            src={business.profile_photo_url || "/business-placeholder.png"}
             width={128}
             height={128}
             alt="Business Logo"
@@ -113,84 +148,102 @@ export default function BusinessDashboard() {
           />
 
           <div className="flex flex-col gap-1 text-center md:text-left">
+
             <h1 className="text-4xl font-bold">
-              {business?.business_name || "Loading..."}
+              {business.business_name}
             </h1>
 
             <p className="text-white/70 text-lg">
-              {business?.category || "Loading category..."}
+              {business.category}
             </p>
 
             <p className="text-white/60 text-sm flex items-center gap-2">
-              📍 {business?.city || "Loading city..."}
+              {business.city && <>📍 {business.city}</>}
             </p>
-            <Link
-  href="/business/profile/edit"
-  className="
-    mt-4 inline-flex px-5 py-2 rounded-xl 
-    bg-white/10 
-    border border-white/15 
-    text-white/80 
-    backdrop-blur-md 
-    hover:bg-white/20 hover:text-white 
-    transition-all duration-200
-  "
->
-  Edit Profile
-</Link>
 
+            <Link
+              href="/business/profile/edit"
+              className="
+                mt-4 inline-flex px-5 py-2 rounded-xl 
+                bg-white/10 border border-white/15 text-white/80 
+                backdrop-blur-md 
+                hover:bg-white/20 hover:text-white 
+                transition
+              "
+            >
+              Edit Profile
+            </Link>
           </div>
         </div>
 
-        {/* ANALYTICS (Load instantly with placeholders) */}
+        {/* STATS — instant values, quiet refresh */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-14">
-          <StatCard label="Profile Views" value={stats?.views ?? "—"} />
-          <StatCard label="Messages" value={stats?.messages ?? "—"} />
-          <StatCard label="Saves" value={stats?.saves ?? "—"} />
+
+          <StatCard label="Profile Views" value={stats.views} />
+          <StatCard label="Messages" value={stats.messages} />
+          <StatCard label="Saves" value={stats.saves} />
           <StatCard
             label="Rating"
-            value={stats?.rating ?? "—"}
-            suffix={stats?.rating ? "★" : ""}
-            footnote={stats?.reviewCount ? `${stats.reviewCount} reviews` : ""}
+            value={stats.rating}
+            suffix={stats.rating ? "★" : ""}
+            footnote={stats.reviewCount ? `${stats.reviewCount} reviews` : ""}
           />
+
         </div>
 
-        {/* ACTION CARDS (always visible instantly) */}
+        {/* ACTION CARDS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+
           <DashboardCard title="Inbox">
             <p className="text-white/60 mb-4">Customer messages appear here.</p>
-            <Link href="/business/inbox" className="inline-block px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition">
+            <Link
+              href="/business/inbox"
+              className="inline-block px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition"
+            >
               Open Inbox
             </Link>
           </DashboardCard>
 
           <DashboardCard title="Reviews">
             <p className="text-white/60 mb-4">See what customers are saying.</p>
-            <Link href="/business/reviews" className="inline-block px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition">
+            <Link
+              href="/business/reviews"
+              className="inline-block px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition"
+            >
               View Reviews
             </Link>
           </DashboardCard>
 
           <DashboardCard title="Photos & Media">
             <p className="text-white/60 mb-4">Upload new business images.</p>
-            <Link href="/business/media" className="inline-block px-4 py-3 rounded-lg bg-pink-600/40 hover:bg-pink-600/60 transition">
+            <Link
+              href="/business/media"
+              className="inline-block px-4 py-3 rounded-lg bg-pink-600/40 hover:bg-pink-600/60 transition"
+            >
               Manage Photos
             </Link>
           </DashboardCard>
 
           <DashboardCard title="Manage Listings">
             <p className="text-white/60 mb-4">Edit and manage your business listings.</p>
-            <Link href="/business/listings" className="inline-block px-4 py-3 rounded-lg bg-blue-600/40 hover:bg-blue-600/60 transition">
+            <Link
+              href="/business/listings"
+              className="inline-block px-4 py-3 rounded-lg bg-blue-600/40 hover:bg-blue-600/60 transition"
+            >
               Open Listings
             </Link>
           </DashboardCard>
+
         </div>
       </div>
     </div>
   );
 }
 
-/* COMPONENTS */
+/* --------------------------------------------------------- */
+/* COMPONENTS                                                */
+/* --------------------------------------------------------- */
+
 function StatCard({ label, value, suffix = "", footnote = "" }) {
   return (
     <div className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl shadow-xl">
