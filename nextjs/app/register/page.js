@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const supabase = createBrowserClient();
+  const { supabase } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -25,7 +25,7 @@ export default function RegisterPage() {
 
       if (session?.user) {
         const { data: profile } = await supabase
-          .from("profiles")
+          .from("users")
           .select("role")
           .eq("id", session.user.id)
           .single();
@@ -73,7 +73,7 @@ export default function RegisterPage() {
 
     const safeRole = role || "customer";
 
-    const { error: insertError } = await supabase.from("profiles").insert({
+    const { error: insertError } = await supabase.from("users").insert({
       id: user.id,
       email: user.email,
       role: safeRole,

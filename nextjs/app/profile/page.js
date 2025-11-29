@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const supabase = createBrowserClient();
+  const { supabase } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,7 +32,7 @@ export default function ProfilePage() {
       setUser(user);
 
       const { data: profileData } = await supabase
-        .from("profiles")
+        .from("users")
         .select("*")
         .eq("id", user.id)
         .single();
@@ -59,7 +59,7 @@ export default function ProfilePage() {
 
     // Only update full_name, NOT role
     await supabase
-      .from("profiles")
+      .from("users")
       .update({
         full_name: profile.full_name,
       })

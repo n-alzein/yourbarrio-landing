@@ -22,27 +22,45 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body
-        className={`relative min-h-screen pt-20 ${geistSans.variable} ${geistMono.variable} antialiased text-white`}
+        className={`relative min-h-screen pt-20 overflow-x-hidden w-full max-w-full ${geistSans.variable} ${geistMono.variable} antialiased text-white`}
       >
-
-        {/* 🌌 GLOBAL YOURBARRIO BACKGROUND */}
-        <div className="absolute inset-0 -z-10 bg-[#05010d]" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
-
-        {/* Soft glowing blobs (same as landing page) */}
-        <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
-        <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
-
-        {/* Pre-existing animated background (if still needed) */}
-        <div className="animated-bg" />
-
-        {/* 🔥 AuthProvider wraps Navbar + children */}
         <AuthProvider>
-          <Navbar />
-          {children}
-          <Footer />
+
+          {/* Backgrounds */}
+{/*       Kept for info on original color: 
+          <div className="absolute inset-0 -z-10 bg-[#05010d]" />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
+          <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
+           <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+          <div className="animated-bg" /> 
+ */}
+
+ {/* Backgrounds (now clipped) */}
+<div className="absolute inset-0 -z-10 overflow-hidden h-full">
+  <div className="absolute inset-0 bg-[#05010d]" />
+  <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
+  <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
+  <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+  <div className="animated-bg" />
+</div>
+
+          {/* ⭐ FIXED STRUCTURE ⭐ */}
+          <div className="flex flex-col min-h-screen">
+            
+            <Navbar />
+
+            {/* Main content grows but does NOT force extra space */}
+            <main className="flex-1">
+              {children}
+            </main>
+
+            <Footer />
+
+          </div>
+          {/* END FIX */}
+          
         </AuthProvider>
       </body>
     </html>

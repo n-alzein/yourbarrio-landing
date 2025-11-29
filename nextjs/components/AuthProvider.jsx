@@ -6,64 +6,82 @@ import { createContext, useContext, useEffect, useState } from "react";
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const supabase = createBrowserClient();
+  const [supabase] = useState(() => createBrowserClient());
 
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
+  const [appUser, setAppUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
+  async function loadProfile(userId) {
+    if (!userId) return null;
+    const { data } = await supabase.from("users").select("*").eq("id", userId).single();
+    return data;
+  }
+
+  // Load initial session ONCE
   useEffect(() => {
-    const getInitialSession = async () => {
+    let active = true;
+
+    async function load() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
+      if (!active) return;
 
-      if (currentUser) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", currentUser.id)
-          .single();
+      const authU = session?.user || null;
+      setAuthUser(authU);
 
-        setRole(profile?.role ?? null);
+      if (authU) {
+        const profile = await loadProfile(authU.id);
+        if (active) setAppUser(profile);
       }
 
-      setLoadingUser(false);
-    };
+      if (active) setLoadingUser(false);
+    }
 
-    getInitialSession();
+    load();
 
-    // Listen to login/logout events
+    // Listen for login/logout — DO NOT setLoadingUser(true) again
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
+        const authU = session?.user || null;
+        setAuthUser(authU);
 
-        if (!currentUser) {
-          setRole(null);
-          return;
+        if (authU) {
+          const profile = await loadProfile(authU.id);
+          setAppUser(profile);
+        } else {
+          setAppUser(null);
         }
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", currentUser.id)
-          .single();
-
-        setRole(profile?.role ?? null);
       }
     );
 
     return () => {
+      active = false;
       listener.subscription.unsubscribe();
     };
-  }, [supabase]); // ✅ critical fix
+  }, [supabase]);
 
   return (
-    <AuthContext.Provider value={{ user, role, loadingUser }}>
+    <AuthContext.Provider
+        value={{
+          supabase,
+          authUser,
+          user: appUser,
+          role: appUser?.role || null,
+          loadingUser,
+          refreshProfile: async () => {
+            if (!authUser) return;
+            const { data } = await supabase
+              .from("users")
+              .select("*")
+              .eq("id", authUser.id)
+              .single();
+            setAppUser(data);
+          }
+        }}
+    >
       {children}
     </AuthContext.Provider>
   );

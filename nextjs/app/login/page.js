@@ -2,18 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createBrowserClient();
+  const { supabase } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ⛔ Prevent access to login when logged in
+  // Prevent access when logged in
   useEffect(() => {
     async function checkSession() {
       const {
@@ -22,7 +22,7 @@ export default function LoginPage() {
 
       if (session?.user) {
         const { data: profile } = await supabase
-          .from("profiles")
+          .from("users")
           .select("role")
           .eq("id", session.user.id)
           .single();
@@ -41,7 +41,7 @@ export default function LoginPage() {
     checkSession();
   }, []);
 
-  // 🔐 Handle Login
+  // Login handler
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
@@ -60,7 +60,7 @@ export default function LoginPage() {
     const user = data.user;
 
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("users")
       .select("role")
       .eq("id", user.id)
       .single();
@@ -77,43 +77,49 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="
-        min-h-screen w-full 
-        bg-transparent        // page fully transparent
-        flex items-center justify-center 
-        px-4 py-12
-        text-white
-      "
-    >
-        {/* Glass Card */}
+    <div className="min-h-screen flex flex-col">
+      {/* Login Section */}
+      <div
+        className="
+          w-full flex justify-center
+          px-4 
+          mt-24
+          grow
+          text-white
+        "
+      >
+        {/* Square Glass Card */}
         <div
           className="
-            max-w-md w-full p-10 rounded-2xl 
-            bg-black/25          // 👈 25% transparent BLACK
-            backdrop-blur-xl     // 👈 frosted-glass effect
+            max-w-md w-full 
+            max-h-[380px]     // 👈 keeps the box square-ish
+            p-8              // 👈 smaller padding
+            rounded-2xl 
+            bg-black/25
+            backdrop-blur-xl
             border border-white/10
+            overflow-y-auto   // 👈 prevents vertical stretching
             shadow-[0_0_50px_-12px_rgba(0,0,0,0.4)]
             animate-fadeIn
           "
         >
           {/* Title */}
-          <h1 className="text-4xl font-extrabold text-center mb-2 tracking-tight">
+          <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
             Welcome Back
           </h1>
-  
-          <p className="text-center text-white/70 mb-8">
+
+          <p className="text-center text-white/70 mb-6">
             Sign in to continue
           </p>
-  
+
           {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"
               placeholder="Email"
               className="
-                w-full px-4 py-3.5 rounded-xl 
-                bg-black/30        // input dark glass
+                w-full px-4 py-3 rounded-xl 
+                bg-black/30
                 border border-white/10 
                 text-white placeholder-white/40
                 focus:ring-2 focus:ring-pink-500/40 
@@ -124,12 +130,12 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-  
+
             <input
               type="password"
               placeholder="Password"
               className="
-                w-full px-4 py-3.5 rounded-xl 
+                w-full px-4 py-3 rounded-xl 
                 bg-black/30
                 border border-white/10 
                 text-white placeholder-white/40
@@ -141,12 +147,12 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-  
+
             <button
               type="submit"
               disabled={loading}
               className={`
-                w-full py-3.5 rounded-xl font-semibold text-white text-lg
+                w-full py-3 rounded-xl font-semibold text-white text-lg
                 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500
                 shadow-lg shadow-purple-500/30 
                 hover:brightness-110 active:scale-[0.98]
@@ -157,16 +163,18 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Log in"}
             </button>
           </form>
-  
-          <p className="text-center text-white/70 text-sm mt-6">
+
+          <p className="text-center text-white/70 text-sm mt-4">
             Don’t have an account?{" "}
-            <a href="/register" className="text-pink-400 font-medium hover:underline">
+            <a
+              href="/register"
+              className="text-pink-400 font-medium hover:underline"
+            >
               Sign up
             </a>
           </p>
         </div>
-  
-        {/* Animations */}
+
         <style>{`
           @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -176,9 +184,7 @@ export default function LoginPage() {
             animation: fadeIn 0.6s ease-out;
           }
         `}</style>
+      </div>
     </div>
   );
-  
-  
-  
 }

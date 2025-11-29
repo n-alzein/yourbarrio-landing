@@ -21,7 +21,7 @@ export async function middleware(req) {
 
     // Fetch profile role
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("users")
       .select("role")
       .eq("id", session.user.id)
       .single();

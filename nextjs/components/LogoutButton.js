@@ -1,10 +1,10 @@
 "use client";
 
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 
 export default function LogoutButton({ children, className = "", mobile }) {
-  const supabase = createBrowserClient();
+  const { supabase } = useAuth();
   const router = useRouter();
 
   async function handleLogout() {

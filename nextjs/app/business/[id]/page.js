@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 import Image from "next/image";
 
 export default function BusinessPublicPage({ params }) {
-  const supabase = createBrowserClient();
+  const { supabase } = useAuth();
   const router = useRouter();
+
+  // ✅ FIX: unwrap params (Next.js 16 requirement)
+  const { id } = use(params);
 
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
-
-  const id = params.id;
 
   useEffect(() => {
     async function loadBusiness() {
@@ -32,7 +33,6 @@ export default function BusinessPublicPage({ params }) {
         await supabase.from("business_views").insert({
           business_id: id,
         });
-
       } else {
         console.error(error);
       }
@@ -91,11 +91,9 @@ export default function BusinessPublicPage({ params }) {
 
       {/* CONTENT */}
       <div className="max-w-5xl mx-auto px-6 -mt-20 relative z-10">
-
         {/* BUSINESS CARD */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
           <div className="flex items-center gap-6">
-
             <Image
               src={business.logo_url || "/placeholder-logo.png"}
               alt={business.name}
@@ -119,7 +117,6 @@ export default function BusinessPublicPage({ params }) {
             >
               {saved ? "Saved" : "Save"}
             </button>
-
           </div>
 
           {/* DESCRIPTION */}
@@ -127,9 +124,15 @@ export default function BusinessPublicPage({ params }) {
 
           {/* CONTACT */}
           <div className="mt-6 space-y-2 text-white/80">
-            <p><strong>Address:</strong> {business.address}</p>
-            <p><strong>Phone:</strong> {business.phone}</p>
-            <p><strong>Website:</strong> {business.website}</p>
+            <p>
+              <strong>Address:</strong> {business.address}
+            </p>
+            <p>
+              <strong>Phone:</strong> {business.phone}
+            </p>
+            <p>
+              <strong>Website:</strong> {business.website}
+            </p>
           </div>
 
           {/* MESSAGE BUTTON */}

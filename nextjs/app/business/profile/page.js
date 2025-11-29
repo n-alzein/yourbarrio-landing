@@ -1,68 +1,71 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function BusinessProfileView() {
   const router = useRouter();
-  const supabase = createBrowserClient();
+  const { authUser, user, supabase, loadingUser, role } = useAuth();
 
-  const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
-  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Placeholder image (should exist under /public)
   const placeholderImage = "/business-placeholder.png";
 
+  // ---------------------------------------------------------
+  // 🔥 Fetch fresh profile from Supabase
+  // ---------------------------------------------------------
+  const loadProfile = useCallback(async () => {
+    if (!authUser) return;
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", authUser.id)
+      .single();
+
+    if (error) {
+      console.error("Failed to load fresh user profile:", error);
+      return;
+    }
+
+    setProfile(data);
+  }, [authUser?.id, supabase]);
+
+  // ---------------------------------------------------------
+  // 🔥 Main auth guard + instant render
+  // ---------------------------------------------------------
   useEffect(() => {
-    async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    if (loadingUser) return;
 
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+    if (!authUser) {
+      router.push("/login");
+      return;
+    }
 
-      setUser(user);
+    if (role !== "business") {
+      router.push("/profile");
+      return;
+    }
 
-      // 1️⃣ Fetch profile row of the auth user
-      const { data: userProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", user.id)
-        .single();
-
-      if (!userProfile) {
-        console.error("No profiles row found for user!");
-        setLoading(false);
-        return;
-      }
-
-      // 2️⃣ Fetch the business profile
-      const { data: business } = await supabase
-        .from("business_profiles")
-        .select("*")
-        .eq("owner_id", userProfile.id)
-        .maybeSingle();
-
-      if (!business) {
-        setLoading(false);
-        router.push("/business/profile/edit");
-        return;
-      }
-
-      setProfile(business);
+    if (user) {
+      setProfile(user);
       setLoading(false);
     }
 
-    load();
-  }, []);
+    loadProfile();
+  }, [loadingUser, authUser, role, user, loadProfile, router]);
 
+  // ---------------------------------------------------------
+  // RENDER
+  // ---------------------------------------------------------
   if (loading)
-    return <div className="text-white text-center mt-24">Loading…</div>;
+    return (
+      <div className="text-white text-center mt-24">
+        Loading…
+      </div>
+    );
 
   if (!profile)
     return (
@@ -71,33 +74,26 @@ export default function BusinessProfileView() {
       </div>
     );
 
-  const photoToShow =
-    profile.profile_photo_url &&
-    profile.profile_photo_url.trim() !== "" &&
-    profile.profile_photo_url !== "business photo"
+  const photo =
+    profile.profile_photo_url && profile.profile_photo_url.trim() !== ""
       ? profile.profile_photo_url
       : placeholderImage;
 
   return (
-    <div className="max-w-2xl mx-auto mt-20 bg-white/10 backdrop-blur-xl p-10 rounded-3xl text-white border border-white/20">
-
+    <div className="max-w-2xl mx-auto mt-12 bg-white/10 backdrop-blur-xl p-10 rounded-3xl text-white border border-white/20">
       <h1 className="text-3xl font-bold mb-6">Business Profile</h1>
 
-      {/* ⭐ LOGO (Square, not Circle) */}
+      {/* UPDATED LOGO — NO BORDER, NO SQUARE, JUST IMAGE */}
       <div className="flex justify-center mb-8">
-        <div className="w-40 h-40 bg-white/10 rounded-xl border border-white/20 shadow-lg flex items-center justify-center overflow-hidden">
-          <img
-            src={photoToShow}
-            alt="Business Logo"
-            onError={(e) => {
-              e.currentTarget.src = placeholderImage;
-            }}
-            className="object-contain w-full h-full p-2"
-          />
-        </div>
+        <img
+          src={photo}
+          alt="Business Logo"
+          className="object-cover w-40 h-40 rounded-xl"
+          onError={(e) => (e.currentTarget.src = placeholderImage)}
+        />
       </div>
 
-      <ProfileRow label="Email" value={user.email} />
+      <ProfileRow label="Email" value={profile.email} />
       <ProfileRow label="Business Name" value={profile.business_name} />
       <ProfileRow label="Category" value={profile.category} />
       <ProfileRow label="Website" value={profile.website} />
@@ -108,7 +104,7 @@ export default function BusinessProfileView() {
 
       <button
         onClick={() => router.push("/business/profile/edit")}
-        className="w-full mt-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 font-semibold hover:opacity-90 transition"
+        className="w-full mt-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 font-semibold hover:opacity-90"
       >
         Edit Profile
       </button>

@@ -2,7 +2,7 @@
 
 import { useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 
 // ------------------------------
 // State + reducer (must be ABOVE component)
@@ -24,7 +24,7 @@ function formReducer(state, action) {
 // MAIN COMPONENT (only ONE export default)
 // ------------------------------
 export default function BusinessOnboardingPage() {
-  const supabase = createBrowserClient();
+  const { supabase } = useAuth();
   const router = useRouter();
 
   const [form, dispatch] = useReducer(formReducer, initialForm);
@@ -71,7 +71,7 @@ export default function BusinessOnboardingPage() {
       const { data, error } = await supabase
         .from("businesses")
         .insert({
-          owner_id: user.id,
+          id: user.id,
           name: form.businessName,
           category: form.category,
           description: form.description,

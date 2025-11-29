@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function BusinessProfileEdit() {
   const router = useRouter();
-  const supabase = createBrowserClient();
+
+  // ⬅️ NEW: include refreshProfile from AuthProvider
+  const { supabase, authUser, user, role, loadingUser, refreshProfile } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [ownerId, setOwnerId] = useState(null);
 
   const [profile, setProfile] = useState({
     business_name: "",
@@ -29,108 +29,116 @@ export default function BusinessProfileEdit() {
 
   const placeholderImage = "/business-placeholder.png";
 
-  // ------------------------------------------
-  // LOAD PROFILE
-  // ------------------------------------------
+  /* ----------------------------------------------------------
+     SAFE AUTH GUARD + LOAD PROFILE
+  ---------------------------------------------------------- */
   useEffect(() => {
+    if (loadingUser) return;
+    if (!authUser) {
+      router.push("/login");
+      return;
+    }
+    if (role !== "business") {
+      router.push("/profile");
+      return;
+    }
+    if (!user) return;
+
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: userProfile } = await supabase
-        .from("profiles")
+      const { data, error } = await supabase
+        .from("users")
         .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (!userProfile) {
-        console.error("No profiles row found!");
-        return;
-      }
-
-      setOwnerId(userProfile.id);
-
-      const { data: business } = await supabase
-        .from("business_profiles")
-        .select("*")
-        .eq("owner_id", userProfile.id)
+        .eq("id", authUser.id)
         .maybeSingle();
 
-      if (business) {
-        setProfile(business);
-        if (business.profile_photo_url) {
-          setPhotoPreview(business.profile_photo_url);
-        }
+      if (error) {
+        console.error("Error loading business profile:", error);
+        setLoading(false);
+        return;
+      }
+
+      setProfile({
+        business_name: data?.business_name ?? "",
+        category: data?.category ?? "",
+        description: data?.description ?? "",
+        website: data?.website ?? "",
+        phone: data?.phone ?? "",
+        address: data?.address ?? "",
+        city: data?.city ?? "",
+        profile_photo_url: data?.profile_photo_url ?? "",
+      });
+
+      if (data?.profile_photo_url) {
+        setPhotoPreview(data.profile_photo_url);
       }
 
       setLoading(false);
     }
 
     load();
-  }, []);
+  }, [loadingUser, authUser, user, role, supabase, router]);
 
-  // ------------------------------------------
-  // UPLOAD PHOTO
-  // ------------------------------------------
-  async function uploadPhoto() {
-    if (!photoFile) return profile.profile_photo_url;
+  /* ----------------------------------------------------------
+     UPLOAD PHOTO
+  ---------------------------------------------------------- */
+  const uploadPhoto = async (file) => {
+    if (!file) return profile.profile_photo_url;
 
-    const ext = photoFile.name.split(".").pop();
-    const fileName = `${ownerId}-${Date.now()}.${ext}`;
+    if (!authUser || !authUser.id) {
+      console.warn("Skipping photo upload: authUser not ready");
+      return profile.profile_photo_url;
+    }
 
-    const { error } = await supabase.storage
+    const ext = file.name.split(".").pop();
+    const fileName = `${authUser.id}-${Date.now()}.${ext}`;
+    const path = `business-photos/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
       .from("business-photos")
-      .upload(fileName, photoFile, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType: photoFile.type,
-      });
+      .upload(path, file);
 
-    if (error) {
-      console.error("Photo upload error:", error);
-      alert("Failed to upload image");
+    if (uploadError) {
+      console.error("Upload error:", uploadError);
       return profile.profile_photo_url;
     }
 
     const { data } = supabase.storage
       .from("business-photos")
-      .getPublicUrl(fileName);
+      .getPublicUrl(path);
 
     return data.publicUrl;
-  }
+  };
 
-  // ------------------------------------------
-  // SAVE
-  // ------------------------------------------
+  /* ----------------------------------------------------------
+     SAVE CHANGES
+  ---------------------------------------------------------- */
   async function handleSave() {
-    if (!ownerId) return;
-
     setSaving(true);
 
-    const photoUrl = await uploadPhoto();
+    if (!authUser || !authUser.id) {
+      alert("Session still loading. Try again.");
+      setSaving(false);
+      return;
+    }
+
+    const uploadedUrl = await uploadPhoto(photoFile);
 
     const payload = {
-      owner_id: ownerId,
-      business_name: profile.business_name || "",
-      category: profile.category || "",
-      description: profile.description || "",
-      website: profile.website || "",
-      phone: profile.phone || "",
-      address: profile.address || "",
-      city: profile.city || "",
-      profile_photo_url: photoUrl || "",
+      business_name: profile.business_name,
+      category: profile.category,
+      description: profile.description,
+      website: profile.website,
+      phone: profile.phone,
+      address: profile.address,
+      city: profile.city,
+      profile_photo_url: uploadedUrl,
       updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase
-      .from("business_profiles")
-      .upsert(payload, { onConflict: "owner_id" });
+      .from("users")
+      .update(payload)
+      .eq("id", authUser.id);
 
     if (error) {
       console.error("Save error:", error);
@@ -139,15 +147,19 @@ export default function BusinessProfileEdit() {
       return;
     }
 
+    // ⭐ NEW: force AuthProvider to reload user row so NAVBAR updates
+    await refreshProfile();
+
     setSaving(false);
     router.push("/business/profile");
   }
 
-  // ------------------------------------------
-  // RENDER
-  // ------------------------------------------
-  if (loading)
-    return <div className="text-white text-center mt-24">Loading…</div>;
+  /* ----------------------------------------------------------
+     RENDER
+  ---------------------------------------------------------- */
+// Do not render ANY UI until AuthProvider fully loads
+if (loadingUser) return null;
+
 
   const displayPhoto = photoPreview || placeholderImage;
 
@@ -156,29 +168,19 @@ export default function BusinessProfileEdit() {
 
       <h1 className="text-3xl font-bold mb-6">Edit Business Profile</h1>
 
-      {/* ⭐ PREMIUM LOGO UPLOAD BOX */}
+      {/* PHOTO UPLOAD */}
       <div className="flex justify-center mb-8">
         <label className="relative cursor-pointer group">
-          <div className="w-40 h-40 bg-white/10 rounded-xl border border-white/20 shadow-lg flex items-center justify-center overflow-hidden">
+          <div className="w-40 h-40 rounded-xl bg-white/10 border border-white/20 shadow-lg overflow-hidden">
             <img
               src={displayPhoto}
               alt="Business Logo"
-              className="object-contain w-full h-full p-2"
+              className="object-cover w-full h-full"
             />
           </div>
 
-          {/* 🔥 Overlay (appears on hover) */}
-          <div
-            className="
-              absolute inset-0 rounded-xl bg-black/40 
-              flex items-center justify-center 
-              opacity-0 group-hover:opacity-100 
-              transition-opacity
-            "
-          >
-            <span className="text-sm font-medium text-white">
-              Click to update logo
-            </span>
+          <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-sm font-medium text-white">Click to upload new logo</span>
           </div>
 
           <input
@@ -211,6 +213,7 @@ export default function BusinessProfileEdit() {
         >
           Cancel
         </button>
+
         <button
           onClick={handleSave}
           disabled={saving}
@@ -223,9 +226,6 @@ export default function BusinessProfileEdit() {
   );
 }
 
-// ------------------------------------------
-// FIELD COMPONENT
-// ------------------------------------------
 function Field({ label, value, onChange }) {
   return (
     <div className="mb-6">
