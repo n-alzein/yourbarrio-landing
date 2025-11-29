@@ -1,12 +1,13 @@
 "use client";
 
+import { Suspense } from "react";          // ✅ Added
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
-export default function LoginPage() {
+function LoginPageInner() {                // ✅ Wrapped original component
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ FIXED
+  const searchParams = useSearchParams();
   const { supabase } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -14,12 +15,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ✅ Detect if login is intended for business accounts
   const isBusinessLogin = searchParams.get("business") === "1";
 
-  // ---------------------------------------------------
-  // PREVENT ACCESS WHEN ALREADY LOGGED IN
-  // ---------------------------------------------------
   useEffect(() => {
     async function checkSession() {
       const {
@@ -47,14 +44,10 @@ export default function LoginPage() {
     checkSession();
   }, []);
 
-  // ---------------------------------------------------
-  // LOGIN HANDLER
-  // ---------------------------------------------------
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
 
-    // 1. Attempt login
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -68,14 +61,12 @@ export default function LoginPage() {
 
     const user = data.user;
 
-    // 2. Fetch user role
     const { data: profile } = await supabase
       .from("users")
       .select("role")
       .eq("id", user.id)
       .single();
 
-    // 3. BUSINESS-LOGIN RESTRICTION
     if (isBusinessLogin && profile.role !== "business") {
       alert("Only business accounts can log in here.");
       await supabase.auth.signOut();
@@ -83,7 +74,6 @@ export default function LoginPage() {
       return;
     }
 
-    // 4. Redirect based on role
     router.push(
       profile.role === "business"
         ? "/business/dashboard"
@@ -93,24 +83,14 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  // ---------------------------------------------------
-  // LOADING SCREEN
-  // ---------------------------------------------------
   if (checkingAuth) {
     return <div className="min-h-screen bg-black" />;
   }
 
-  // ---------------------------------------------------
-  // LOGIN UI
-  // ---------------------------------------------------
+  // === UI stays EXACTLY as you wrote ===
   return (
     <div className="min-h-screen flex flex-col">
-      <div
-        className="
-          w-full flex justify-center
-          px-4 mt-24 grow text-white
-        "
-      >
+      <div className="w-full flex justify-center px-4 mt-24 grow text-white">
         <div
           className="
             max-w-md w-full 
@@ -208,5 +188,16 @@ export default function LoginPage() {
         `}</style>
       </div>
     </div>
+  );
+}
+
+/* ============================================================
+   EXPORT — Suspense wrapper (fix for Vercel build)
+============================================================ */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }
