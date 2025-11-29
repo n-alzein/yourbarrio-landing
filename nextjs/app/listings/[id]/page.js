@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import Image from "next/image";
 
 export default function ListingDetails({ params }) {
-  const supabase = createBrowserClient();
+  const supabase = getBrowserSupabaseClient();
   const id = params.id;
 
   const [listing, setListing] = useState(null);

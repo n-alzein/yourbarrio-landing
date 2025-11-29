@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // ✅ FIXED
   const { supabase } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -13,7 +14,12 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Prevent access when logged in
+  // ✅ Detect if login is intended for business accounts
+  const isBusinessLogin = searchParams.get("business") === "1";
+
+  // ---------------------------------------------------
+  // PREVENT ACCESS WHEN ALREADY LOGGED IN
+  // ---------------------------------------------------
   useEffect(() => {
     async function checkSession() {
       const {
@@ -41,11 +47,14 @@ export default function LoginPage() {
     checkSession();
   }, []);
 
-  // Login handler
+  // ---------------------------------------------------
+  // LOGIN HANDLER
+  // ---------------------------------------------------
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
 
+    // 1. Attempt login
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -59,60 +68,73 @@ export default function LoginPage() {
 
     const user = data.user;
 
+    // 2. Fetch user role
     const { data: profile } = await supabase
       .from("users")
       .select("role")
       .eq("id", user.id)
       .single();
 
+    // 3. BUSINESS-LOGIN RESTRICTION
+    if (isBusinessLogin && profile.role !== "business") {
+      alert("Only business accounts can log in here.");
+      await supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
+    // 4. Redirect based on role
     router.push(
       profile.role === "business"
         ? "/business/dashboard"
         : "/customer/home"
     );
+
+    setLoading(false);
   }
 
+  // ---------------------------------------------------
+  // LOADING SCREEN
+  // ---------------------------------------------------
   if (checkingAuth) {
     return <div className="min-h-screen bg-black" />;
   }
 
+  // ---------------------------------------------------
+  // LOGIN UI
+  // ---------------------------------------------------
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Login Section */}
       <div
         className="
           w-full flex justify-center
-          px-4 
-          mt-24
-          grow
-          text-white
+          px-4 mt-24 grow text-white
         "
       >
-        {/* Square Glass Card */}
         <div
           className="
             max-w-md w-full 
-            max-h-[380px]     // 👈 keeps the box square-ish
-            p-8              // 👈 smaller padding
+            max-h-[380px]
+            p-8
             rounded-2xl 
             bg-black/25
             backdrop-blur-xl
             border border-white/10
-            overflow-y-auto   // 👈 prevents vertical stretching
+            overflow-y-auto
             shadow-[0_0_50px_-12px_rgba(0,0,0,0.4)]
             animate-fadeIn
           "
         >
-          {/* Title */}
           <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
-            Welcome Back
+            {isBusinessLogin ? "Business Login" : "Welcome Back"}
           </h1>
 
           <p className="text-center text-white/70 mb-6">
-            Sign in to continue
+            {isBusinessLogin
+              ? "Sign in to manage your business"
+              : "Sign in to continue"}
           </p>
 
-          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"
@@ -167,7 +189,7 @@ export default function LoginPage() {
           <p className="text-center text-white/70 text-sm mt-4">
             Don’t have an account?{" "}
             <a
-              href="/register"
+              href={isBusinessLogin ? "/business/register" : "/register"}
               className="text-pink-400 font-medium hover:underline"
             >
               Sign up

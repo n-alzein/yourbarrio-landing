@@ -15,6 +15,42 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
 
+  /* ---------------------------------------------------
+     BUSINESS NAV MODE — persistent, correct behavior
+  --------------------------------------------------- */
+  const [businessNavMode, setBusinessNavMode] = useState(false);
+
+  useEffect(() => {
+    // 1. Clicking the homepage resets to customer mode
+    if (pathname === "/") {
+      sessionStorage.removeItem("businessNavMode");
+      setBusinessNavMode(false);
+      return;
+    }
+
+    // 2. Any /business/* path activates business mode
+    if (pathname.startsWith("/business")) {
+      sessionStorage.setItem("businessNavMode", "1");
+      setBusinessNavMode(true);
+      return;
+    }
+
+    // 3. Restore last business mode for About, Login, Register, etc.
+    const saved = sessionStorage.getItem("businessNavMode") === "1";
+    if (saved) {
+      setBusinessNavMode(true);
+      return;
+    }
+
+    // 4. Default fallback → customer mode
+    setBusinessNavMode(false);
+  }, [pathname]);
+
+  const showBusinessLabel = businessNavMode;
+
+  /* ---------------------------------------------------
+     Active link helper
+  --------------------------------------------------- */
   const isActive = (href) => pathname === href;
 
   const NavItem = ({ href, children }) => (
@@ -40,9 +76,9 @@ export default function Navbar() {
     </div>
   );
 
-  // ---------------------------------------------------
-  // LOAD AVATAR
-  // ---------------------------------------------------
+  /* ---------------------------------------------------
+     Load Avatar
+  --------------------------------------------------- */
   useEffect(() => {
     async function loadPhoto() {
       if (!user) return setPhotoUrl(null);
@@ -55,78 +91,112 @@ export default function Navbar() {
 
       setPhotoUrl(data?.profile_photo_url ?? null);
     }
-
     loadPhoto();
   }, [user, supabase]);
 
   const avatarSrc =
-    photoUrl && typeof photoUrl === "string" && photoUrl.trim() !== ""
-      ? photoUrl
-      : "/business-placeholder.png";
+    photoUrl && photoUrl.trim() !== "" ? photoUrl : "/business-placeholder.png";
 
   const dashboardLink =
     role === "business" ? "/business/dashboard" : "/dashboard";
 
-  // ---------------------------------------------------
-  // LOADING PLACEHOLDER
-  // ---------------------------------------------------
+  /* ---------------------------------------------------
+     Loading Placeholder
+  --------------------------------------------------- */
   if (loadingUser) {
     return (
       <nav className="fixed top-0 inset-x-0 z-50 h-16 backdrop-blur-xl bg-black/40 border-b border-white/10" />
     );
   }
 
+  /* ---------------------------------------------------
+     NAVBAR
+  --------------------------------------------------- */
   return (
     <nav className="fixed top-0 inset-x-0 z-50">
       <div className="backdrop-blur-xl bg-black/40 border-b border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
         <div className="max-w-7xl mx-auto px-10">
           <div className="h-20 flex items-center justify-between">
 
-            {/* ------------------------------------------------- */}
-            {/* LEFT SECTION */}
-            {/* ------------------------------------------------- */}
+            {/* LEFT SIDE */}
             <div className="flex items-center gap-x-14">
-            <Link
-  href={role === "business" ? "/business/dashboard" : "/"}
-  className="flex items-center select-none"
->
-  <img
-    src="/logo.png"
-    alt="YourBarrio Logo"
-    className="h-36 w-auto drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
-  />
-</Link>
 
+              {/* LOGO + LABEL */}
+              <div className="relative" style={{ height: "90px" }}>
+                <Link
+                  href={businessNavMode ? "/business" : "/"}
+                  className="select-none"
+                  onClick={() => {
+                    if (!businessNavMode) return;
+                    sessionStorage.removeItem("businessNavMode");
+                  }}
+                >
+                  <img
+                    src="/logo.png"
+                    alt="YourBarrio Logo"
+                    className="h-36 w-auto drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+                    style={{ marginTop: "-25px" }}
+                  />
+                </Link>
 
+                {showBusinessLabel && (
+                  <span
+                    className="absolute font-bold text-sm text-white/90 whitespace-nowrap pointer-events-none"
+                    style={{ left: "60px", bottom: "12px" }}
+                  >
+                    for Business
+                  </span>
+                )}
+              </div>
+
+              {/* LEFT NAVIGATION */}
               <div className="hidden md:flex items-center gap-x-10">
-
-                {/* ⭐ CONDITIONAL NAV ITEM ⭐ */}
-                {role === "business" ? (
+                {businessNavMode && role === "business" ? (
                   <NavItem href="/business/listings">Listings</NavItem>
                 ) : (
-                  <NavItem href="/businesses">Businesses</NavItem>
+                  <NavItem href="/business">Businesses</NavItem>
                 )}
 
                 <NavItem href="/about">About</NavItem>
               </div>
             </div>
 
-            {/* ------------------------------------------------- */}
-            {/* RIGHT SECTION */}
-            {/* ------------------------------------------------- */}
+            {/* RIGHT SIDE */}
             <div className="hidden md:flex items-center gap-x-12">
-              {!user ? (
-                <>
-                  <NavItem href="/login">Log in</NavItem>
 
-                  <Link
-                    href="/register"
-                    className="px-5 py-2 rounded-xl font-semibold text-white whitespace-nowrap bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-[0_4px_20px_rgba(255,0,128,0.35)] hover:brightness-110 active:scale-95 transition-all"
-                  >
-                    Sign Up
-                  </Link>
+              {/* NOT LOGGED IN */}
+              {!user && (
+                <>
+                  {/* CUSTOMER MODE */}
+                  {!businessNavMode && (
+                    <>
+                      <NavItem href="/login">Log in</NavItem>
+                      <Link
+                        href="/register"
+                        className="px-5 py-2 rounded-xl font-semibold text-white whitespace-nowrap bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-[0_4px_20px_rgba(255,0,128,0.35)] hover:brightness-110 active:scale-95 transition-all"
+                      >
+                        Sign Up
+                      </Link>
+                    </>
+                  )}
+
+                  {/* BUSINESS MODE */}
+                  {businessNavMode && (
+                    <>
+                      <NavItem href="/business/login">Business Login</NavItem>
+                      <Link
+                        href="/business/register"
+                        className="px-5 py-2 rounded-xl font-semibold text-black whitespace-nowrap bg-white hover:bg-gray-200 active:scale-95 transition-all"
+                      >
+                        Business Signup
+                      </Link>
+                    </>
+                  )}
                 </>
-              ) : (
+              )}
+
+              {/* LOGGED IN */}
+              {user && (
                 <div className="relative">
                   <button
                     onClick={() => setMenuOpen(!menuOpen)}
@@ -137,6 +207,7 @@ export default function Navbar() {
                       className="h-11 w-11 rounded-xl object-cover border border-white/20 shadow-lg group-hover:ring-2 group-hover:ring-white/40 transition"
                       alt="Profile"
                     />
+
                     <ChevronDown className="h-4 w-4 text-white/80 group-hover:text-white transition" />
                   </button>
 
@@ -169,7 +240,7 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* MOBILE BUTTON */}
+            {/* MOBILE MENU BUTTON */}
             <button
               className="md:hidden text-white hover:text-white/90 transition"
               onClick={() => setOpen(!open)}
@@ -189,23 +260,20 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* ------------------------------------------------- */}
       {/* MOBILE MENU */}
-      {/* ------------------------------------------------- */}
       {open && (
         <div className="md:hidden backdrop-blur-xl bg-black/40 border-b border-white/20 shadow-xl transition-all">
           <div className="px-6 py-4 flex flex-col gap-5 text-white">
 
-            {/* ⭐ MOBILE CONDITIONAL NAV ITEM ⭐ */}
-            {role === "business" ? (
+            {businessNavMode && role === "business" ? (
               <NavItem href="/business/listings">Listings</NavItem>
             ) : (
-              <NavItem href="/businesses">Businesses</NavItem>
+              <NavItem href="/business">Businesses</NavItem>
             )}
 
             <NavItem href="/about">About</NavItem>
 
-            {!user ? (
+            {!user && !businessNavMode && (
               <>
                 <NavItem href="/login">Login</NavItem>
                 <Link
@@ -216,7 +284,22 @@ export default function Navbar() {
                   Sign Up
                 </Link>
               </>
-            ) : (
+            )}
+
+            {!user && businessNavMode && (
+              <>
+                <NavItem href="/business/login">Business Login</NavItem>
+                <Link
+                  href="/business/register"
+                  onClick={() => setOpen(false)}
+                  className="px-4 py-2 rounded-lg text-center font-semibold bg-white text-black shadow-md"
+                >
+                  Business Signup
+                </Link>
+              </>
+            )}
+
+            {user && (
               <>
                 <NavItem href={role === "business" ? "/business/profile" : "/profile"}>
                   Profile

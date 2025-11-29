@@ -1,36 +1,56 @@
 "use client";
 
-import { createBrowserClient } from "@/lib/supabaseClient";
-import { createContext, useContext, useEffect, useState } from "react";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [supabase] = useState(() => createBrowserClient());
+  const supabaseRef = useRef(null);
 
-  const [authUser, setAuthUser] = useState(null);   // session user
-  const [appUser, setAppUser] = useState(null);     // row from "users"
-  const [loadingUser, setLoadingUser] = useState(true);
-
-  // Load profile from Supabase
-  async function loadProfile(userId) {
-    if (!userId) return null;
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.error("Profile load error:", error);
-      return null;
-    }
-
-    return data;
+  if (!supabaseRef.current) {
+    supabaseRef.current = getBrowserSupabaseClient();
   }
 
-  // Initial load
+  const supabase = supabaseRef.current;
+
+  const [authUser, setAuthUser] = useState(null);
+  const [appUser, setAppUser] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  /* ============================================================
+     SAFE PROFILE LOADER WITH RETRY (fixes blank after signup)
+  ============================================================ */
+  async function loadProfileWithRetry(userId) {
+    if (!userId) return null;
+
+    for (let i = 0; i < 12; i++) {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+
+      // When the row exists → return it
+      if (data) return data;
+
+      // If Supabase returns a REAL error → stop retrying
+      if (error && (error.code || error.message)) {
+        console.error("Profile load error:", error);
+        return null;
+      }
+
+      // Otherwise wait a bit then retry (row not created yet)
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    console.warn("Profile did not load after retries.");
+    return null;
+  }
+
+  /* ============================================================
+     INITIAL SESSION + PROFILE LOAD
+  ============================================================ */
   useEffect(() => {
     let active = true;
 
@@ -41,11 +61,11 @@ export function AuthProvider({ children }) {
 
       if (!active) return;
 
-      const authU = session?.user || null;
-      setAuthUser(authU);
+      const user = session?.user || null;
+      setAuthUser(user);
 
-      if (authU) {
-        const profile = await loadProfile(authU.id);
+      if (user) {
+        const profile = await loadProfileWithRetry(user.id);
         if (active) setAppUser(profile);
       }
 
@@ -54,14 +74,16 @@ export function AuthProvider({ children }) {
 
     init();
 
-    // Listen for login/logout
+    /* ============================================================
+       AUTH STATE LISTENER
+    ============================================================ */
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        const authU = session?.user || null;
-        setAuthUser(authU);
+        const user = session?.user || null;
+        setAuthUser(user);
 
-        if (authU) {
-          const profile = await loadProfile(authU.id);
+        if (user) {
+          const profile = await loadProfileWithRetry(user.id);
           setAppUser(profile);
         } else {
           setAppUser(null);
@@ -71,28 +93,22 @@ export function AuthProvider({ children }) {
 
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
+      listener?.subscription?.unsubscribe?.();
     };
   }, [supabase]);
 
-  // SUPER-STABLE refreshProfile (never hangs)
+  /* ============================================================
+     MANUAL PROFILE REFRESH
+  ============================================================ */
   async function refreshProfile() {
     if (!authUser?.id) return;
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", authUser.id)
-      .single();
-
-    if (error) {
-      console.warn("refreshProfile failed:", error);
-      return;
-    }
-
-    setAppUser(data);
+    const profile = await loadProfileWithRetry(authUser.id);
+    if (profile) setAppUser(profile);
   }
 
+  /* ============================================================
+     PROVIDED CONTEXT
+  ============================================================ */
   return (
     <AuthContext.Provider
       value={{

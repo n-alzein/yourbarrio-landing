@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createBrowserClient } from "@/lib/supabaseClient";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
 
 export default function PublicListingsPage() {
-  const supabase = createBrowserClient();
+  const supabase = getBrowserSupabaseClient();
   const [listings, setListings] = useState([]);
 
   useEffect(() => {
