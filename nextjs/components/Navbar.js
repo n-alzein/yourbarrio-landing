@@ -41,22 +41,17 @@ export default function Navbar() {
   );
 
   // ---------------------------------------------------
-  // LOAD AVATAR FROM "users" TABLE
+  // LOAD AVATAR
   // ---------------------------------------------------
   useEffect(() => {
     async function loadPhoto() {
       if (!user) return setPhotoUrl(null);
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("users")
         .select("profile_photo_url")
         .eq("id", user.id)
         .single();
-
-      if (error) {
-        console.error("Navbar avatar fetch error:", error);
-        return setPhotoUrl(null);
-      }
 
       setPhotoUrl(data?.profile_photo_url ?? null);
     }
@@ -73,7 +68,7 @@ export default function Navbar() {
     role === "business" ? "/business/dashboard" : "/dashboard";
 
   // ---------------------------------------------------
-  // LOADING
+  // LOADING PLACEHOLDER
   // ---------------------------------------------------
   if (loadingUser) {
     return (
@@ -83,33 +78,41 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 inset-x-0 z-50">
-      {/* DARKER NAVBAR BACKGROUND */}
       <div className="backdrop-blur-xl bg-black/40 border-b border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
-        
-        <div className="max-w-7xl mx-auto px-10"> {/* MORE LEFT PADDING */}
+        <div className="max-w-7xl mx-auto px-10">
           <div className="h-20 flex items-center justify-between">
 
             {/* ------------------------------------------------- */}
-            {/* LEFT SECTION — Logo + Nav links (shifted left) */}
+            {/* LEFT SECTION */}
             {/* ------------------------------------------------- */}
-            <div className="flex items-center gap-x-14"> {/* MORE SPACE ON LEFT */}
-              <Link href="/" className="flex items-center select-none">
-                <img
-                  src="/logo.png"
-                  alt="YourBarrio Logo"
-                  className="h-36 w-auto drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
-                  draggable="false"
-                />
-              </Link>
+            <div className="flex items-center gap-x-14">
+            <Link
+  href={role === "business" ? "/business/dashboard" : "/"}
+  className="flex items-center select-none"
+>
+  <img
+    src="/logo.png"
+    alt="YourBarrio Logo"
+    className="h-36 w-auto drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+  />
+</Link>
+
 
               <div className="hidden md:flex items-center gap-x-10">
-                <NavItem href="/businesses">Businesses</NavItem>
+
+                {/* ⭐ CONDITIONAL NAV ITEM ⭐ */}
+                {role === "business" ? (
+                  <NavItem href="/business/listings">Listings</NavItem>
+                ) : (
+                  <NavItem href="/businesses">Businesses</NavItem>
+                )}
+
                 <NavItem href="/about">About</NavItem>
               </div>
             </div>
 
             {/* ------------------------------------------------- */}
-            {/* RIGHT SECTION — Auth / Dropdown */}
+            {/* RIGHT SECTION */}
             {/* ------------------------------------------------- */}
             <div className="hidden md:flex items-center gap-x-12">
               {!user ? (
@@ -166,7 +169,7 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* MOBILE MENU BUTTON */}
+            {/* MOBILE BUTTON */}
             <button
               className="md:hidden text-white hover:text-white/90 transition"
               onClick={() => setOpen(!open)}
@@ -186,22 +189,29 @@ export default function Navbar() {
         </div>
       </div>
 
+      {/* ------------------------------------------------- */}
       {/* MOBILE MENU */}
+      {/* ------------------------------------------------- */}
       {open && (
         <div className="md:hidden backdrop-blur-xl bg-black/40 border-b border-white/20 shadow-xl transition-all">
           <div className="px-6 py-4 flex flex-col gap-5 text-white">
 
-            <NavItem href="/businesses">Businesses</NavItem>
+            {/* ⭐ MOBILE CONDITIONAL NAV ITEM ⭐ */}
+            {role === "business" ? (
+              <NavItem href="/business/listings">Listings</NavItem>
+            ) : (
+              <NavItem href="/businesses">Businesses</NavItem>
+            )}
+
             <NavItem href="/about">About</NavItem>
 
             {!user ? (
               <>
                 <NavItem href="/login">Login</NavItem>
-
                 <Link
                   href="/register"
-                  className="px-4 py-2 rounded-lg text-center font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-md"
                   onClick={() => setOpen(false)}
+                  className="px-4 py-2 rounded-lg text-center font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-md"
                 >
                   Sign Up
                 </Link>

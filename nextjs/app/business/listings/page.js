@@ -3,89 +3,177 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import Image from "next/image";
 
 export default function BusinessListingsPage() {
-  const { supabase, authUser, role, loadingUser } = useAuth();
+  const { supabase, authUser, loadingUser } = useAuth();
   const router = useRouter();
 
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ------------------------------------------------------
+  //  SAFE AUTH GUARD + FETCH
+  // ------------------------------------------------------
   useEffect(() => {
-    if (loadingUser) return;
-
+    if (loadingUser) return;           // Wait for auth system
     if (!authUser) {
-      router.push("/login");
+      router.push("/login");           // Redirect safely
       return;
     }
 
-    if (role !== "business") {
-      router.push("/profile");
-      return;
+    async function fetchListings() {
+      const { data, error } = await supabase
+        .from("listings")
+        .select("*")
+        .eq("business_id", authUser.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("❌ Fetch listings error:", error);
+      } else {
+        setListings(data || []);
+      }
+
+      setLoading(false);
     }
 
-    load();
-  }, [authUser, loadingUser, role]);
+    fetchListings();
+  }, [loadingUser, authUser, supabase, router]);
 
-  async function load() {
-    const { data, error } = await supabase
+  // ------------------------------------------------------
+  // DELETE LISTING
+  // ------------------------------------------------------
+  async function handleDelete(id) {
+    if (!confirm("Are you sure you want to delete this listing?")) return;
+
+    const { error } = await supabase
       .from("listings")
-      .select("*")
-      .eq("business_id", authUser.id)
-      .order("created_at", { ascending: false });
+      .delete()
+      .eq("id", id);
 
-    setListings(data || []);
-    setLoading(false);
+    if (error) {
+      console.error("❌ Delete error:", error);
+      alert("Failed to delete listing.");
+      return;
+    }
+
+    setListings((prev) => prev.filter((l) => l.id !== id));
   }
 
+  // ------------------------------------------------------
+  //  LOADING STATES
+  // ------------------------------------------------------
+  if (loadingUser || loading) {
+    return (
+      <p className="text-white text-center py-20">
+        Loading listings...
+      </p>
+    );
+  }
+
+  // ------------------------------------------------------
+  //  RENDER
+  // ------------------------------------------------------
   return (
-    <div className="max-w-3xl mx-auto py-10">
-      <div className="flex justify-between mb-6">
-        <h1 className="text-3xl font-bold">Your Listings</h1>
+    <div className="max-w-5xl mx-auto px-6 py-16">
+
+      <div className="mb-6 text-center">
+        <h1 className="text-4xl font-extrabold text-white drop-shadow-sm">
+          Your Listings
+        </h1>
+      </div>
+
+      {/* CREATE NEW LISTING */}
+      <div className="flex justify-center mb-12">
         <button
           onClick={() => router.push("/business/listings/new")}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+          className="
+            px-6 py-3 
+            rounded-2xl 
+            bg-gradient-to-r from-blue-600 to-indigo-600 
+            text-white text-lg font-semibold 
+            shadow-lg hover:opacity-90 transition
+          "
         >
-          + New Listing
+          + Create New Listing
         </button>
       </div>
 
-      {loading && <p>Loading...</p>}
+      {/* EMPTY STATE */}
+      {listings.length === 0 && (
+        <p className="text-gray-300 text-center py-10">
+          You haven’t created any listings yet.
+        </p>
+      )}
 
-      {listings.length === 0 && !loading && <p>No listings yet.</p>}
+      {/* LIST GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
 
-      <div className="grid gap-4">
-        {listings.map((item) => (
+        {listings.map((listing) => (
           <div
-            key={item.id}
-            className="border rounded-lg p-4 flex items-center justify-between"
+            key={listing.id}
+            className="
+              backdrop-blur-xl bg-white/10 border border-white/20 
+              rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.3)] 
+              hover:bg-white/15 transition flex flex-col
+            "
           >
-            <div className="flex items-center gap-4">
-              <Image
-                src={item.photo_url || "/business-placeholder.png"}
-                width={80}
-                height={80}
-                className="rounded-md object-cover"
-                alt="Listing"
+            {listing.photo_url ? (
+              <img
+                src={listing.photo_url}
+                alt={listing.title}
+                className="w-full h-48 object-cover rounded-2xl mb-4"
               />
-
-              <div>
-                <h2 className="font-semibold">{item.title}</h2>
-                <p className="text-gray-500">${item.price}</p>
+            ) : (
+              <div className="w-full h-48 bg-white/10 rounded-2xl flex items-center justify-center text-gray-400">
+                No Image
               </div>
+            )}
+
+            <h2 className="text-xl text-white font-semibold mb-1">
+              {listing.title}
+            </h2>
+
+            <div className="flex justify-between text-gray-300 mb-4">
+              <span>{listing.category}</span>
+              <span className="font-medium text-white">${listing.price}</span>
             </div>
 
-            <button
-              className="px-3 py-1 bg-gray-200 rounded"
-              onClick={() =>
-                router.push(`/business/listings/${item.id}/edit`)
-              }
-            >
-              Edit
-            </button>
+            <div className="flex items-center justify-between mt-auto gap-3">
+
+              {/* EDIT */}
+              <button
+                onClick={() =>
+                  router.push(`/business/listings/${listing.id}/edit`)
+                }
+                className="
+                  flex items-center gap-2 px-4 py-2 rounded-xl 
+                  backdrop-blur-md bg-white/10 
+                  border border-white/20 
+                  text-white text-sm hover:bg-white/20 
+                  hover:border-white/30 transition
+                "
+              >
+                ✏️ Edit
+              </button>
+
+              {/* DELETE */}
+              <button
+                onClick={() => handleDelete(listing.id)}
+                className="
+                  flex items-center gap-2 px-4 py-2 rounded-xl 
+                  bg-gradient-to-r from-red-600/80 to-rose-600/80 
+                  text-white text-sm font-medium shadow-md 
+                  hover:opacity-90 transition
+                "
+              >
+                🗑 Delete
+              </button>
+
+            </div>
           </div>
         ))}
+
       </div>
     </div>
   );

@@ -5,37 +5,36 @@ export async function middleware(req) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req, res });
 
-  // 1️⃣ Get the user session
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
   const path = req.nextUrl.pathname;
 
-  // 2️⃣ Protect /business/* — requires logged-in + role === "business"
+  // Only protect the /business pages
   if (path.startsWith("/business")) {
+
+    // 🔥 If NOT logged in → ALWAYS send home (never send to login)
     if (!session) {
-      // Redirect to login if not logged in
-      return NextResponse.redirect(new URL("/login", req.url));
+      return NextResponse.redirect(new URL("/", req.url));
     }
 
-    // Fetch profile role
+    // Check user role
     const { data: profile } = await supabase
       .from("users")
       .select("role")
       .eq("id", session.user.id)
       .single();
 
+    // 🔥 If logged in but NOT a business → send home
     if (profile?.role !== "business") {
-      // Not a business user → send to customer home (or homepage)
-      return NextResponse.redirect(new URL("/customer/home", req.url));
+      return NextResponse.redirect(new URL("/", req.url));
     }
   }
 
   return res;
 }
 
-// 👇 Define which routes this middleware runs on
 export const config = {
-  matcher: ["/business/:path*"], // All business routes
+  matcher: ["/business/:path*"],
 };

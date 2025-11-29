@@ -8,21 +8,33 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [supabase] = useState(() => createBrowserClient());
 
-  const [authUser, setAuthUser] = useState(null);
-  const [appUser, setAppUser] = useState(null);
+  const [authUser, setAuthUser] = useState(null);   // session user
+  const [appUser, setAppUser] = useState(null);     // row from "users"
   const [loadingUser, setLoadingUser] = useState(true);
 
+  // Load profile from Supabase
   async function loadProfile(userId) {
     if (!userId) return null;
-    const { data } = await supabase.from("users").select("*").eq("id", userId).single();
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.error("Profile load error:", error);
+      return null;
+    }
+
     return data;
   }
 
-  // Load initial session ONCE
+  // Initial load
   useEffect(() => {
     let active = true;
 
-    async function load() {
+    async function init() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -40,9 +52,9 @@ export function AuthProvider({ children }) {
       if (active) setLoadingUser(false);
     }
 
-    load();
+    init();
 
-    // Listen for login/logout — DO NOT setLoadingUser(true) again
+    // Listen for login/logout
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         const authU = session?.user || null;
@@ -63,24 +75,34 @@ export function AuthProvider({ children }) {
     };
   }, [supabase]);
 
+  // SUPER-STABLE refreshProfile (never hangs)
+  async function refreshProfile() {
+    if (!authUser?.id) return;
+
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", authUser.id)
+      .single();
+
+    if (error) {
+      console.warn("refreshProfile failed:", error);
+      return;
+    }
+
+    setAppUser(data);
+  }
+
   return (
     <AuthContext.Provider
-        value={{
-          supabase,
-          authUser,
-          user: appUser,
-          role: appUser?.role || null,
-          loadingUser,
-          refreshProfile: async () => {
-            if (!authUser) return;
-            const { data } = await supabase
-              .from("users")
-              .select("*")
-              .eq("id", authUser.id)
-              .single();
-            setAppUser(data);
-          }
-        }}
+      value={{
+        supabase,
+        authUser,
+        user: appUser,
+        role: appUser?.role || null,
+        loadingUser,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>

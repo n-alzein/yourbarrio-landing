@@ -4,17 +4,21 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 
 export default function LogoutButton({ children, className = "", mobile }) {
-  const { supabase } = useAuth();
+  const { supabase, setRole, setUser } = useAuth();
   const router = useRouter();
 
   async function handleLogout() {
     await supabase.auth.signOut();
 
-    // IMPORTANT: refresh the entire app state
+    // 🔥 Immediately clear local auth state
+    if (setUser) setUser(null);
+    if (setRole) setRole(null);
+
+    // Refresh UI
     router.refresh();
 
-    // Optional redirect
-    router.push("/login");
+    // Redirect home
+    router.push("/");
   }
 
   if (mobile) {

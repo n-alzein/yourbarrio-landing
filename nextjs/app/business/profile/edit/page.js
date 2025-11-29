@@ -7,8 +7,8 @@ import { useAuth } from "@/components/AuthProvider";
 export default function BusinessProfileEdit() {
   const router = useRouter();
 
-  // ⬅️ NEW: include refreshProfile from AuthProvider
-  const { supabase, authUser, user, role, loadingUser, refreshProfile } = useAuth();
+  const { supabase, authUser, user, role, loadingUser, refreshProfile } =
+    useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,26 +30,54 @@ export default function BusinessProfileEdit() {
   const placeholderImage = "/business-placeholder.png";
 
   /* ----------------------------------------------------------
-     SAFE AUTH GUARD + LOAD PROFILE
+     SAFE AUTH GUARD + LOAD PROFILE (FROM user FIRST)
   ---------------------------------------------------------- */
   useEffect(() => {
     if (loadingUser) return;
+
     if (!authUser) {
       router.push("/login");
       return;
     }
+
     if (role !== "business") {
       router.push("/profile");
       return;
     }
-    if (!user) return;
 
     async function load() {
+      // 1️⃣ First try to hydrate from `user` (AuthProvider DB row)
+      if (user) {
+        setProfile({
+          business_name: user.business_name ?? "",
+          category: user.category ?? "",
+          description: user.description ?? "",
+          website: user.website ?? "",
+          phone: user.phone ?? "",
+          address: user.address ?? "",
+          city: user.city ?? "",
+          profile_photo_url: user.profile_photo_url ?? "",
+        });
+
+        if (user.profile_photo_url) {
+          setPhotoPreview(user.profile_photo_url);
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // 2️⃣ Fallback: fetch directly from Supabase if `user` is not set
+      if (!authUser?.id) {
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("users")
         .select("*")
         .eq("id", authUser.id)
-        .maybeSingle();
+        .single();
 
       if (error) {
         console.error("Error loading business profile:", error);
@@ -57,26 +85,28 @@ export default function BusinessProfileEdit() {
         return;
       }
 
-      setProfile({
-        business_name: data?.business_name ?? "",
-        category: data?.category ?? "",
-        description: data?.description ?? "",
-        website: data?.website ?? "",
-        phone: data?.phone ?? "",
-        address: data?.address ?? "",
-        city: data?.city ?? "",
-        profile_photo_url: data?.profile_photo_url ?? "",
-      });
+      if (data) {
+        setProfile({
+          business_name: data.business_name ?? "",
+          category: data.category ?? "",
+          description: data.description ?? "",
+          website: data.website ?? "",
+          phone: data.phone ?? "",
+          address: data.address ?? "",
+          city: data.city ?? "",
+          profile_photo_url: data.profile_photo_url ?? "",
+        });
 
-      if (data?.profile_photo_url) {
-        setPhotoPreview(data.profile_photo_url);
+        if (data.profile_photo_url) {
+          setPhotoPreview(data.profile_photo_url);
+        }
       }
 
       setLoading(false);
     }
 
     load();
-  }, [loadingUser, authUser, user, role, supabase, router]);
+  }, [loadingUser, authUser, role, user, supabase, router]);
 
   /* ----------------------------------------------------------
      UPLOAD PHOTO
@@ -114,58 +144,67 @@ export default function BusinessProfileEdit() {
   ---------------------------------------------------------- */
   async function handleSave() {
     setSaving(true);
-
-    if (!authUser || !authUser.id) {
-      alert("Session still loading. Try again.");
+  
+    try {
+      if (!authUser || !authUser.id) {
+        alert("Session still loading. Try again.");
+        return;
+      }
+  
+      // Upload photo if needed
+      const uploadedUrl = await uploadPhoto(photoFile);
+  
+      const payload = {
+        business_name: profile.business_name,
+        category: profile.category,
+        description: profile.description,
+        website: profile.website,
+        phone: profile.phone,
+        address: profile.address,
+        city: profile.city,
+        profile_photo_url: uploadedUrl,
+        updated_at: new Date().toISOString(),
+      };
+  
+      const { error } = await supabase
+        .from("users")
+        .update(payload)
+        .eq("id", authUser.id);
+  
+      if (error) {
+        console.error("Save error:", error);
+        alert("Failed to save profile");
+        return;
+      }
+  
+      // ⭐ Make sure refreshProfile doesn't hang
+      await Promise.race([
+        refreshProfile(),
+        new Promise((resolve) => setTimeout(resolve, 500)), // safety timeout
+      ]);
+  
+      // Release button BEFORE redirect
       setSaving(false);
-      return;
-    }
-
-    const uploadedUrl = await uploadPhoto(photoFile);
-
-    const payload = {
-      business_name: profile.business_name,
-      category: profile.category,
-      description: profile.description,
-      website: profile.website,
-      phone: profile.phone,
-      address: profile.address,
-      city: profile.city,
-      profile_photo_url: uploadedUrl,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase
-      .from("users")
-      .update(payload)
-      .eq("id", authUser.id);
-
-    if (error) {
-      console.error("Save error:", error);
-      alert("Failed to save profile");
+  
+      router.push("/business/profile");
+    } catch (e) {
+      console.error(e);
+      alert("Unexpected error");
       setSaving(false);
-      return;
     }
-
-    // ⭐ NEW: force AuthProvider to reload user row so NAVBAR updates
-    await refreshProfile();
-
-    setSaving(false);
-    router.push("/business/profile");
   }
+  
 
   /* ----------------------------------------------------------
      RENDER
   ---------------------------------------------------------- */
-// Do not render ANY UI until AuthProvider fully loads
-if (loadingUser) return null;
-
+  // Do not render ANY UI until AuthProvider + local load are done
+  if (loadingUser || loading) return null;
 
   const displayPhoto = photoPreview || placeholderImage;
 
   return (
     <div className="max-w-2xl mx-auto mt-20 bg-white/10 backdrop-blur-xl p-10 rounded-3xl text-white border border-white/20">
-
       <h1 className="text-3xl font-bold mb-6">Edit Business Profile</h1>
 
       {/* PHOTO UPLOAD */}
@@ -180,7 +219,9 @@ if (loadingUser) return null;
           </div>
 
           <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-sm font-medium text-white">Click to upload new logo</span>
+            <span className="text-sm font-medium text-white">
+              Click to upload new logo
+            </span>
           </div>
 
           <input
@@ -190,20 +231,50 @@ if (loadingUser) return null;
             onChange={(e) => {
               const file = e.target.files[0];
               setPhotoFile(file);
-              setPhotoPreview(URL.createObjectURL(file));
+              if (file) {
+                setPhotoPreview(URL.createObjectURL(file));
+              }
             }}
           />
         </label>
       </div>
 
       {/* FIELDS */}
-      <Field label="Business Name" value={profile.business_name} onChange={(v) => setProfile({ ...profile, business_name: v })} />
-      <Field label="Category" value={profile.category} onChange={(v) => setProfile({ ...profile, category: v })} />
-      <Field label="Description" value={profile.description} onChange={(v) => setProfile({ ...profile, description: v })} />
-      <Field label="Website" value={profile.website} onChange={(v) => setProfile({ ...profile, website: v })} />
-      <Field label="Phone" value={profile.phone} onChange={(v) => setProfile({ ...profile, phone: v })} />
-      <Field label="Address" value={profile.address} onChange={(v) => setProfile({ ...profile, address: v })} />
-      <Field label="City" value={profile.city} onChange={(v) => setProfile({ ...profile, city: v })} />
+      <Field
+        label="Business Name"
+        value={profile.business_name}
+        onChange={(v) => setProfile({ ...profile, business_name: v })}
+      />
+      <Field
+        label="Category"
+        value={profile.category}
+        onChange={(v) => setProfile({ ...profile, category: v })}
+      />
+      <Field
+        label="Description"
+        value={profile.description}
+        onChange={(v) => setProfile({ ...profile, description: v })}
+      />
+      <Field
+        label="Website"
+        value={profile.website}
+        onChange={(v) => setProfile({ ...profile, website: v })}
+      />
+      <Field
+        label="Phone"
+        value={profile.phone}
+        onChange={(v) => setProfile({ ...profile, phone: v })}
+      />
+      <Field
+        label="Address"
+        value={profile.address}
+        onChange={(v) => setProfile({ ...profile, address: v })}
+      />
+      <Field
+        label="City"
+        value={profile.city}
+        onChange={(v) => setProfile({ ...profile, city: v })}
+      />
 
       {/* BUTTONS */}
       <div className="flex gap-4 mt-8">
