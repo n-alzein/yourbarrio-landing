@@ -33,16 +33,15 @@ export default function BusinessProfileEdit() {
      SAFE AUTH GUARD + LOAD PROFILE (FROM user FIRST)
   ---------------------------------------------------------- */
   useEffect(() => {
-    if (loadingUser) return;
-
-    if (!authUser) {
-      router.push(if (!authUser) {
-        router.push("/business-auth/login");
-        return null;
-      }
-      );
-      return;
+    if (loadingUser) {
+      return <div className="text-white">Loading...</div>;
     }
+    
+    if (!authUser) {
+      router.push("/business-auth/login");
+      return null;
+    }
+    
 
     if (role !== "business") {
       router.push("/profile");
