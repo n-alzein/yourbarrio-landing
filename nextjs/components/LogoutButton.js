@@ -1,30 +1,18 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { useRouter } from "next/navigation";
 
 export default function LogoutButton({ children, className = "", mobile }) {
-  const { supabase, setRole, setUser } = useAuth();
-  const router = useRouter();
+  const { logout } = useAuth();
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-
-    // 🔥 Immediately clear local auth state
-    if (setUser) setUser(null);
-    if (setRole) setRole(null);
-
-    // Refresh UI
-    router.refresh();
-
-    // Redirect home
-    router.push("/");
+  function handleClick() {
+    logout(); // new global logout function handles everything
   }
 
   if (mobile) {
     return (
       <button
-        onClick={handleLogout}
+        onClick={handleClick}
         className="px-4 py-2 text-left text-white hover:bg-white/10 rounded-lg"
       >
         Logout
@@ -33,7 +21,7 @@ export default function LogoutButton({ children, className = "", mobile }) {
   }
 
   return (
-    <button onClick={handleLogout} className={className}>
+    <button onClick={handleClick} className={className}>
       {children}
     </button>
   );

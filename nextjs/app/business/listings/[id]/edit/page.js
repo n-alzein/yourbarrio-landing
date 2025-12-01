@@ -31,9 +31,10 @@ export default function EditListingPage() {
   }
 
   if (!authUser) {
-    router.push("/login");
+    router.push("/business-auth/login");
     return null;
   }
+  
 
   // Load existing listing
   useEffect(() => {

@@ -29,7 +29,7 @@ export default function BusinessDashboard() {
     if (loadingUser) return;
 
     if (!user) {
-      router.replace("/login");
+      router.replace("/business-auth/login");
       return;
     }
 

@@ -40,9 +40,10 @@ export default function BusinessProfileView() {
     if (loadingUser) return;
 
     if (!authUser) {
-      router.push("/login");
-      return;
+      router.push("/business-auth/login");
+      return null;
     }
+    
 
     if (role !== "business") {
       router.push("/profile");

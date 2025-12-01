@@ -1,123 +1,137 @@
 "use client";
 
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import { createContext, useContext, useEffect, useState, useRef } from "react";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
+  /* -------------------------------------------------------------
+     STABLE SUPABASE CLIENT
+  ------------------------------------------------------------- */
   const supabaseRef = useRef(null);
-
   if (!supabaseRef.current) {
     supabaseRef.current = getBrowserSupabaseClient();
   }
-
   const supabase = supabaseRef.current;
 
-  const [authUser, setAuthUser] = useState(null);
-  const [appUser, setAppUser] = useState(null);
+  /* -------------------------------------------------------------
+     STATE
+  ------------------------------------------------------------- */
+  const [authUser, setAuthUser] = useState(null);   // auth.users
+  const [profile, setProfile] = useState(null);      // public.users
   const [loadingUser, setLoadingUser] = useState(true);
 
-  /* ============================================================
-     SAFE PROFILE LOADER WITH RETRY (fixes blank after signup)
-  ============================================================ */
-  async function loadProfileWithRetry(userId) {
+  /* -------------------------------------------------------------
+     LOAD PROFILE ROW
+  ------------------------------------------------------------- */
+  async function loadProfile(userId) {
     if (!userId) return null;
 
-    for (let i = 0; i < 12; i++) {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userId)
-        .maybeSingle();
+    const { data } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
 
-      // When the row exists → return it
-      if (data) return data;
-
-      // If Supabase returns a REAL error → stop retrying
-      if (error && (error.code || error.message)) {
-        console.error("Profile load error:", error);
-        return null;
-      }
-
-      // Otherwise wait a bit then retry (row not created yet)
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
-
-    console.warn("Profile did not load after retries.");
-    return null;
+    return data || null;
   }
 
-  /* ============================================================
-     INITIAL SESSION + PROFILE LOAD
-  ============================================================ */
+  /* -------------------------------------------------------------
+     INITIAL SESSION LOAD
+  ------------------------------------------------------------- */
   useEffect(() => {
-    let active = true;
+    let mounted = true;
 
     async function init() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!active) return;
+      const user = session?.user ?? null;
+      if (!mounted) return;
 
-      const user = session?.user || null;
       setAuthUser(user);
 
       if (user) {
-        const profile = await loadProfileWithRetry(user.id);
-        if (active) setAppUser(profile);
+        const p = await loadProfile(user.id);
+        if (mounted) setProfile(p);
       }
 
-      if (active) setLoadingUser(false);
+      setLoadingUser(false);
     }
 
     init();
 
-    /* ============================================================
-       AUTH STATE LISTENER
-    ============================================================ */
+    /* -------------------------------------------------------------
+       AUTH LISTENER — FIXED TO IGNORE LOGOUT REDIRECTS
+    ------------------------------------------------------------- */
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        const user = session?.user || null;
+      async (event, session) => {
+        // Prevent unwanted redirects after logout()
+        if (
+          typeof window !== "undefined" &&
+          sessionStorage.getItem("forceLogout") === "1"
+        ) {
+          sessionStorage.removeItem("forceLogout");
+          return;
+        }
+
+        const user = session?.user ?? null;
         setAuthUser(user);
 
         if (user) {
-          const profile = await loadProfileWithRetry(user.id);
-          setAppUser(profile);
+          const p = await loadProfile(user.id);
+          setProfile(p);
         } else {
-          setAppUser(null);
+          setProfile(null);
         }
       }
     );
 
     return () => {
-      active = false;
-      listener?.subscription?.unsubscribe?.();
+      mounted = false;
+      listener.subscription.unsubscribe();
     };
   }, [supabase]);
 
-  /* ============================================================
-     MANUAL PROFILE REFRESH
-  ============================================================ */
+  /* -------------------------------------------------------------
+     REFRESH PROFILE MANUALLY
+  ------------------------------------------------------------- */
   async function refreshProfile() {
     if (!authUser?.id) return;
-    const profile = await loadProfileWithRetry(authUser.id);
-    if (profile) setAppUser(profile);
+    const p = await loadProfile(authUser.id);
+    if (p) setProfile(p);
   }
 
-  /* ============================================================
-     PROVIDED CONTEXT
-  ============================================================ */
+  /* -------------------------------------------------------------
+     LOGOUT — NO MORE /login REDIRECT
+  ------------------------------------------------------------- */
+  async function logout() {
+    // Prevent onAuthStateChange from redirecting
+    sessionStorage.setItem("forceLogout", "1");
+
+    await supabase.auth.signOut();
+    setAuthUser(null);
+    setProfile(null);
+
+    // ALWAYS send to home
+    window.location.replace("/");
+  }
+
+  /* -------------------------------------------------------------
+     PROVIDER
+  ------------------------------------------------------------- */
   return (
     <AuthContext.Provider
       value={{
         supabase,
         authUser,
-        user: appUser,
-        role: appUser?.role || null,
+        user: profile,
+        role: profile?.role ?? null,
         loadingUser,
         refreshProfile,
+        logout,
       }}
     >
       {children}
@@ -125,6 +139,9 @@ export function AuthProvider({ children }) {
   );
 }
 
+/* -------------------------------------------------------------
+   HOOK
+------------------------------------------------------------- */
 export function useAuth() {
   return useContext(AuthContext);
 }

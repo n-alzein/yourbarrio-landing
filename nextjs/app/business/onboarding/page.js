@@ -63,7 +63,7 @@ export default function BusinessOnboardingPage() {
       if (!user) {
         setMessage("You must be logged in to create a business.");
         setLoading(false);
-        router.push("/login");
+        router.push("/business-auth/login");
         return;
       }
 

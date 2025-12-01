@@ -11,24 +11,41 @@ export async function middleware(req) {
 
   const path = req.nextUrl.pathname;
 
-  // Only protect the /business pages
-  if (path.startsWith("/business")) {
+  /* ---------------------------------------------------------
+     1. PUBLIC BUSINESS AUTH ROUTES (always allowed)
+  --------------------------------------------------------- */
+  if (
+    path.startsWith("/business-auth/login") ||
+    path.startsWith("/business-auth/register")
+  ) {
+    return res;
+  }
 
-    // 🔥 If NOT logged in → ALWAYS send home (never send to login)
+  /* ---------------------------------------------------------
+     2. PROTECT REAL BUSINESS AREA ONLY:
+        "/business/*" but NOT "/business-auth/*"
+  --------------------------------------------------------- */
+  if (
+    path.startsWith("/business") &&    // business section
+    !path.startsWith("/business-auth") // exclude business-auth
+  ) {
+    // Not logged in → send to business login
     if (!session) {
-      return NextResponse.redirect(new URL("/", req.url));
+      return NextResponse.redirect(
+        new URL("/business-auth/login", req.url)
+      );
     }
 
-    // Check user role
+    // Get role
     const { data: profile } = await supabase
       .from("users")
       .select("role")
       .eq("id", session.user.id)
       .single();
 
-    // 🔥 If logged in but NOT a business → send home
+    // If not business → redirect to customer home
     if (profile?.role !== "business") {
-      return NextResponse.redirect(new URL("/", req.url));
+      return NextResponse.redirect(new URL("/customer/home", req.url));
     }
   }
 
@@ -36,5 +53,9 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/business/:path*"],
+  matcher: [
+    "/business/:path*",        // business protected routes
+    "/business-auth/login",    // public, bypass protection
+    "/business-auth/register", // public, bypass protection
+  ],
 };

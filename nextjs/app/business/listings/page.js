@@ -15,9 +15,9 @@ export default function BusinessListingsPage() {
   //  SAFE AUTH GUARD + FETCH
   // ------------------------------------------------------
   useEffect(() => {
-    if (loadingUser) return;           // Wait for auth system
+    if (loadingUser) return; // Wait for auth
     if (!authUser) {
-      router.push("/login");           // Redirect safely
+      router.push("/business-auth/login"); // ← FIXED
       return;
     }
 
@@ -61,7 +61,7 @@ export default function BusinessListingsPage() {
   }
 
   // ------------------------------------------------------
-  //  LOADING STATES
+  // LOADING STATES
   // ------------------------------------------------------
   if (loadingUser || loading) {
     return (
@@ -72,7 +72,7 @@ export default function BusinessListingsPage() {
   }
 
   // ------------------------------------------------------
-  //  RENDER
+  // RENDER
   // ------------------------------------------------------
   return (
     <div className="max-w-5xl mx-auto px-6 py-16">
@@ -108,7 +108,6 @@ export default function BusinessListingsPage() {
 
       {/* LIST GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-
         {listings.map((listing) => (
           <div
             key={listing.id}
@@ -140,7 +139,6 @@ export default function BusinessListingsPage() {
             </div>
 
             <div className="flex items-center justify-between mt-auto gap-3">
-
               {/* EDIT */}
               <button
                 onClick={() =>
@@ -169,12 +167,11 @@ export default function BusinessListingsPage() {
               >
                 🗑 Delete
               </button>
-
             </div>
           </div>
         ))}
-
       </div>
+
     </div>
   );
 }

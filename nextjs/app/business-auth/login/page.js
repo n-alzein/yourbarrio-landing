@@ -1,57 +1,48 @@
 "use client";
 
-import { Suspense } from "react";          // ✅ Added
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
-function LoginPageInner() {                // ✅ Wrapped original component
+function BusinessLoginInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { supabase } = useAuth();
+  const { supabase, authUser, role, loadingUser } = useAuth();
 
   const [loading, setLoading] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const isBusinessLogin = searchParams.get("business") === "1";
-
+  /* --------------------------------------------------------------
+     AUTO-REDIRECT IF ALREADY LOGGED IN
+  -------------------------------------------------------------- */
   useEffect(() => {
-    async function checkSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    if (loadingUser) return;
 
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from("users")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
-
-        router.replace(
-          profile?.role === "business"
-            ? "/business/dashboard"
-            : "/customer/home"
-        );
-        return;
+    if (authUser) {
+      if (role === "business") {
+        router.replace("/business/dashboard");
+      } else {
+        router.replace("/customer/home"); // non-business users redirected
       }
-
-      setCheckingAuth(false);
     }
+  }, [authUser, role, loadingUser, router]);
 
-    checkSession();
-  }, []);
-
+  /* --------------------------------------------------------------
+     EMAIL + PASSWORD LOGIN  (FIXED)
+  -------------------------------------------------------------- */
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
-
+  
+    // 🔥 Tell AuthProvider this login belongs to a business account
+    localStorage.setItem("signup_role", "business");
+  
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+  
 
     if (error) {
       alert(error.message);
@@ -61,40 +52,74 @@ function LoginPageInner() {                // ✅ Wrapped original component
 
     const user = data.user;
 
-    const { data: profile } = await supabase
+    // 2) 🔥 Fetch role immediately from DB (reliable)
+    const { data: profile, error: profileErr } = await supabase
       .from("users")
       .select("role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (isBusinessLogin && profile.role !== "business") {
+    if (profileErr) {
+      console.error(profileErr);
+      alert("Failed to load user role.");
+      setLoading(false);
+      return;
+    }
+
+    // 3) Role check
+    if (profile?.role !== "business") {
       alert("Only business accounts can log in here.");
       await supabase.auth.signOut();
       setLoading(false);
       return;
     }
 
-    router.push(
-      profile.role === "business"
-        ? "/business/dashboard"
-        : "/customer/home"
-    );
-
+    // 4) Redirect (correctly)
+    router.replace("/business/dashboard");
     setLoading(false);
   }
 
-  if (checkingAuth) {
+  /* --------------------------------------------------------------
+     GOOGLE LOGIN
+     (business login disabled, still customer-only)
+  -------------------------------------------------------------- */
+  async function handleGoogleLogin() {
+    setLoading(true);
+
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+      const redirectTo = `${origin}/business-auth/login?oauth=1`;
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+
+    if (error) {
+      console.error("Google login error:", error);
+      alert("Failed to sign in with Google.");
+      setLoading(false);
+      return;
+    }
+  }
+
+  /* --------------------------------------------------------------
+     AUTH LOADING
+  -------------------------------------------------------------- */
+  if (loadingUser) {
     return <div className="min-h-screen bg-black" />;
   }
 
-  // === UI stays EXACTLY as you wrote ===
+  /* --------------------------------------------------------------
+     UI — EXACT SAME STYLE
+  -------------------------------------------------------------- */
   return (
     <div className="min-h-screen flex flex-col">
       <div className="w-full flex justify-center px-4 mt-24 grow text-white">
         <div
           className="
             max-w-md w-full 
-            max-h-[380px]
+            max-h-[420px]
             p-8
             rounded-2xl 
             bg-black/25
@@ -106,15 +131,14 @@ function LoginPageInner() {                // ✅ Wrapped original component
           "
         >
           <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
-            {isBusinessLogin ? "Business Login" : "Welcome Back"}
+            Business Login
           </h1>
 
           <p className="text-center text-white/70 mb-6">
-            {isBusinessLogin
-              ? "Sign in to manage your business"
-              : "Sign in to continue"}
+            Sign in to manage your business
           </p>
 
+          {/* EMAIL/PASSWORD FORM */}
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"
@@ -166,10 +190,27 @@ function LoginPageInner() {                // ✅ Wrapped original component
             </button>
           </form>
 
+          {/* GOOGLE LOGIN */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="
+              w-full mt-5 py-3 rounded-xl font-medium
+              bg-white/10 border border-white/20
+              hover:bg-white/20
+              flex items-center justify-center gap-2
+              transition
+            "
+          >
+            <img src="/google-icon.svg" className="h-5 w-5" alt="Google" />
+            Continue with Google
+          </button>
+
+          {/* SIGNUP LINK */}
           <p className="text-center text-white/70 text-sm mt-4">
             Don’t have an account?{" "}
             <a
-              href={isBusinessLogin ? "/business/register" : "/register"}
+              href="/business-auth/register"
               className="text-pink-400 font-medium hover:underline"
             >
               Sign up
@@ -191,13 +232,13 @@ function LoginPageInner() {                // ✅ Wrapped original component
   );
 }
 
-/* ============================================================
-   EXPORT — Suspense wrapper (fix for Vercel build)
-============================================================ */
+/* --------------------------------------------------------------
+   EXPORT WITH SUSPENSE — required for useSearchParams
+-------------------------------------------------------------- */
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
-      <LoginPageInner />
+      <BusinessLoginInner />
     </Suspense>
   );
 }

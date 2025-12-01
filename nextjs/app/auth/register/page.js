@@ -11,8 +11,6 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
 
   /* ============================================================
      BUSINESS MODE CONTROL
-     - If loaded via /business/register → force business mode
-     - Otherwise → always customer mode
   ============================================================ */
   const [businessMode, setBusinessMode] = useState(
     forcedBusinessMode || false
@@ -20,22 +18,16 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
 
   useEffect(() => {
     if (forcedBusinessMode) {
-      // Force business mode & set navbar label
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("businessNavMode", "1");
-      }
+      sessionStorage.setItem("businessNavMode", "1");
       setBusinessMode(true);
     } else {
-      // Coming from customer-side → always customer signup
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("businessNavMode");
-      }
+      sessionStorage.removeItem("businessNavMode");
       setBusinessMode(false);
     }
   }, [forcedBusinessMode]);
 
   /* ============================================================
-     HOOKS (must remain in this order)
+     HOOKS
   ============================================================ */
   const [hydrated, setHydrated] = useState(false);
   const [checkingUser, setCheckingUser] = useState(true);
@@ -49,7 +41,7 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
     setHydrated(true);
   }, []);
 
-  /* 2️⃣ Redirect if already logged in */
+  /* 2️⃣ Redirect if logged in */
   useEffect(() => {
     if (!hydrated) return;
 
@@ -66,7 +58,7 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
         const dest =
           profile?.role === "business"
             ? "/business/dashboard"
-            : "/dashboard";
+            : "/customer/home";
 
         window.location.href = dest;
       } else {
@@ -75,20 +67,19 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
     }
 
     checkUser();
-  }, [hydrated, supabase, router]);
+  }, [hydrated, supabase]);
 
   if (!hydrated || checkingUser) {
     return <div className="h-screen" />;
   }
 
   /* ============================================================
-     SIGNUP LOGIC
+     EMAIL + PASSWORD SIGNUP
   ============================================================ */
   async function handleRegister(e) {
     e.preventDefault();
     setLoading(true);
 
-    /* 1️⃣ Create AUTH user */
     const { data: signUpData, error } = await supabase.auth.signUp({
       email,
       password,
@@ -101,14 +92,12 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
     }
 
     const authUser = signUpData?.user;
-
     if (!authUser) {
       alert("Signup succeeded but no user returned. Try logging in.");
       setLoading(false);
       return;
     }
 
-    /* 2️⃣ Insert profile row */
     const finalRole = businessMode ? "business" : "customer";
 
     const { error: insertError } = await supabase.from("users").insert({
@@ -124,20 +113,46 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
       return;
     }
 
-    /* 3️⃣ Update navbar mode */
     if (finalRole === "business") {
       sessionStorage.setItem("businessNavMode", "1");
     } else {
       sessionStorage.removeItem("businessNavMode");
     }
 
-    /* 4️⃣ Redirect (HARD redirect to avoid blank screen) */
     const dest =
       finalRole === "business"
         ? "/business/dashboard"
-        : "/dashboard";
+        : "/customer/home";
 
     window.location.href = dest;
+  }
+
+  /* ============================================================
+     GOOGLE SIGNUP
+  ============================================================ */
+  async function handleGoogleSignup() {
+    setLoading(true);
+
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+
+    const redirectTo = businessMode
+      ? `${origin}/business/dashboard`
+      : `${origin}/customer/home`;
+
+    // Supabase will auto-create user in auth.users
+    // AuthProvider will auto-create row in public.users
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Failed to continue with Google.");
+      setLoading(false);
+      return;
+    }
   }
 
   /* ============================================================
@@ -146,22 +161,25 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="w-full flex justify-center px-4 mt-24 grow text-white">
-        <div className="
-          max-w-md w-full max-h-[400px]
+        <div
+          className="
+          max-w-md w-full max-h-[420px]
           p-8 rounded-2xl bg-black/25 backdrop-blur-xl border border-white/10
           overflow-y-auto shadow-[0_0_60px_-12px_rgba(0,0,0,0.4)]
           animate-fadeIn
-        ">
+        "
+        >
           <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
             {businessMode ? "Create Business Account" : "Create Account"}
           </h1>
 
           <p className="text-center text-white/70 mb-6">
             {businessMode
-              ? "Register your business"
-              : "Join YourBarrio in seconds"}
+              ? "Register your business in seconds"
+              : "Join YourBarrio instantly"}
           </p>
 
+          {/* --- EMAIL SIGNUP FORM --- */}
           <form onSubmit={handleRegister} className="space-y-4">
             <input
               type="email"
@@ -191,31 +209,42 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
               required
             />
 
-            {/* Role dropdown removed (automatic) */}
-
             <button
               type="submit"
               disabled={loading}
               className={`
                 w-full py-3 rounded-xl font-semibold text-white text-lg
                 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500
-                shadow-lg shadow-purple-500/30 hover:brightness-110
-                active:scale-[0.98] transition-all duration-200
+                shadow-lg hover:brightness-110 active:scale-[0.97]
+                transition-all duration-200
                 ${loading ? "opacity-60 cursor-not-allowed" : ""}
               `}
             >
-              {loading
-                ? "Registering..."
-                : businessMode
-                ? "Create Business Account"
-                : "Create Account"}
+              {loading ? "Creating..." : "Create Account"}
             </button>
           </form>
 
+          {/* --- GOOGLE SIGNUP BUTTON --- */}
+          <button
+            type="button"
+            onClick={handleGoogleSignup}
+            className="
+              w-full mt-5 py-3 rounded-xl font-medium
+              bg-white/10 border border-white/20
+              hover:bg-white/20
+              flex items-center justify-center gap-2
+              transition
+            "
+          >
+            <img src="/google-icon.svg" className="h-5 w-5" />
+            Continue with Google
+          </button>
+
+          {/* --- ALREADY HAVE ACCOUNT? --- */}
           <p className="text-center text-white/70 text-sm mt-4">
             Already have an account?{" "}
             <Link
-              href={businessMode ? "/business/login" : "/login"}
+              href={businessMode ? "/business/login" : "/auth/login"}
               className="text-pink-400 font-medium hover:underline"
             >
               Log in

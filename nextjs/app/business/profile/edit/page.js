@@ -36,7 +36,11 @@ export default function BusinessProfileEdit() {
     if (loadingUser) return;
 
     if (!authUser) {
-      router.push("/login");
+      router.push(if (!authUser) {
+        router.push("/business-auth/login");
+        return null;
+      }
+      );
       return;
     }
 

@@ -45,7 +45,7 @@ export default function BusinessHome() {
           </Link>
 
           <Link
-            href="/business/login"
+            href="/business-auth/login"
             className="px-8 py-4 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition"
           >
             Business Login

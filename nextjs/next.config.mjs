@@ -3,13 +3,9 @@ const nextConfig = {
   reactCompiler: true,
 
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "nbzqnjanqkzuwyxnkjtr.supabase.co",
-        port: "",
-        pathname: "/storage/v1/object/public/**",
-      },
+    domains: [
+      "lh3.googleusercontent.com",  // ← REQUIRED for Google avatars
+      "your-supabase-project-id.supabase.co", // (optional) for Supabase storage
     ],
   },
 };

@@ -27,9 +27,10 @@ export default function NewListingPage() {
   }
 
   if (!authUser) {
-    router.push("/login");
+    router.push("/business-auth/login");
     return null;
   }
+  
 
   async function uploadPhoto() {
     if (!photo) return null;
