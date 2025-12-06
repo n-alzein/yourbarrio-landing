@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
@@ -12,6 +12,14 @@ export default function CustomerNavbar() {
   const { user, role, loadingUser } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  // ⭐ Hydration guard fixes frozen buttons
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  if (!hydrated) return null;
 
   /* ---------------------------------------------------
      ⛔ DO NOT RENDER CUSTOMER NAV ON BUSINESS PAGES
@@ -24,18 +32,14 @@ export default function CustomerNavbar() {
   }
 
   /* ---------------------------------------------------
-     AVATAR (NO FETCH — DIRECTLY FROM AUTH PROVIDER)
+     AVATAR PRIORITY
   --------------------------------------------------- */
-// 1️⃣ SAFE Google avatar (permanent)
-const googleAvatar = user?.authUser?.user_metadata?.avatar_url || null;
+  const googleAvatar = user?.authUser?.user_metadata?.avatar_url || null;
 
-// 2️⃣ Priority: Supabase → Google → Placeholder
-const avatar =
-  user?.profile_photo_url?.trim() ||
-  googleAvatar ||
-  "/customer-placeholder.png";
-
-
+  const avatar =
+    user?.profile_photo_url?.trim() ||
+    googleAvatar ||
+    "/customer-placeholder.png";
 
   const isActive = (href) => pathname === href;
 
@@ -68,7 +72,7 @@ const avatar =
   return (
     <nav className="fixed top-0 inset-x-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
       <div className="max-w-7xl mx-auto px-8 flex items-center justify-between h-20">
-        
+
         {/* LEFT GROUP — LOGO + NAV LINKS */}
         <div className="flex items-center gap-10">
           <Link href="/customer/home">
@@ -115,7 +119,9 @@ const avatar =
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/20 shadow-xl">
+                <div
+                  className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/20 shadow-xl z-50"
+                >
                   <Link
                     href="/customer/profile"
                     className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-white/90"
@@ -134,16 +140,14 @@ const avatar =
                     Settings
                   </Link>
 
-                  <div
-  onClick={(e) => {
-    e.stopPropagation();       // ← prevents menu from closing too early
-  }}
->
-  <LogoutButton className="flex w-full items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/10 text-white/90">
-    <LogOut className="h-4 w-4" /> Logout
-  </LogoutButton>
-</div>
-
+                  {/* ⭐ FIXED: no stopPropagation, no wrapper div */}
+                  <LogoutButton
+                    className="flex w-full items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/10 text-white/90"
+                    onSuccess={() => setMenuOpen(false)}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </LogoutButton>
                 </div>
               )}
             </div>
