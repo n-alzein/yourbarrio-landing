@@ -32,7 +32,7 @@ export default function HomePage() {
 
               <div className="mt-7 flex flex-col sm:flex-row gap-3">
                 <a
-                  href="/register"
+                  href="/auth/register"
                   className="inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg shadow-purple-500/30 hover:brightness-110 active:scale-[0.98] transition"
                 >
                   Get Started
