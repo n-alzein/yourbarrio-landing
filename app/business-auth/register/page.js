@@ -21,13 +21,13 @@ function BusinessRegisterInner() {
   -------------------------------------------------------------- */
   useEffect(() => {
     if (loadingUser) return;
+    if (!authUser) return;
+    if (!role) return; // wait until role is loaded
 
-    if (authUser) {
-      if (role === "business") {
-        router.replace("/business/dashboard");
-      } else {
-        router.replace("/customer/home");
-      }
+    if (role === "business") {
+      router.replace("/business/dashboard");
+    } else {
+      router.replace("/customer/home");
     }
   }, [authUser, role, loadingUser, router]);
 

@@ -18,13 +18,13 @@ function BusinessLoginInner() {
   -------------------------------------------------------------- */
   useEffect(() => {
     if (loadingUser) return;
+    if (!authUser) return;
+    if (!role) return; // wait until role is loaded
 
-    if (authUser) {
-      if (role === "business") {
-        router.replace("/business/dashboard");
-      } else {
-        router.replace("/customer/home"); // non-business users redirected
-      }
+    if (role === "business") {
+      router.replace("/business/dashboard");
+    } else {
+      router.replace("/customer/home"); // non-business users redirected
     }
   }, [authUser, role, loadingUser, router]);
 
