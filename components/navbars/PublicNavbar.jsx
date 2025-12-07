@@ -53,7 +53,7 @@ export default function PublicNavbar() {
                 <img
                   src="/logo.png"
                   alt="YourBarrio Logo"
-                  className="h-10 md:h-32 w-auto"
+                  className="h-34 md:h-32 w-auto"
                 />
               </Link>
 

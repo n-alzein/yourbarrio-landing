@@ -56,6 +56,7 @@ export default function GoogleMapClient({
   cardClassName = "bg-white/5 border border-white/10 rounded-2xl p-4 text-white",
   mapClassName = "h-80 rounded-lg overflow-hidden",
   title = "Businesses Near You",
+  showBusinessErrors = true,
 }) {
   const { supabase } = useAuth();
   const mapRef = useRef(null);
@@ -157,7 +158,9 @@ export default function GoogleMapClient({
                 } catch (e) {
                   console.error("Supabase error fetching businesses:", bErr);
                 }
-                setError("Failed to load businesses (see console)");
+                if (showBusinessErrors) {
+                  setError("Failed to load businesses (see console)");
+                }
                 setLoading(false);
                 return;
               }

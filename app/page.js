@@ -66,6 +66,7 @@ export default function HomePage() {
                   cardClassName="p-0 bg-transparent border-0 text-white"
                   mapClassName="h-80 rounded-2xl overflow-hidden border border-white/10"
                   title="Explore nearby businesses"
+                  showBusinessErrors={false}
                 />
 
                 <div className="mt-6 rounded-2xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 p-4 border border-white/10">
