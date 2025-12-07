@@ -50,7 +50,13 @@ async function loadGoogleMaps(apiKey, mapId) {
   return window.__googleMapsLoaderPromise;
 }
 
-export default function GoogleMapClient({ radiusKm = 25 }) {
+export default function GoogleMapClient({
+  radiusKm = 25,
+  containerClassName = "w-full max-w-6xl mx-auto mt-12",
+  cardClassName = "bg-white/5 border border-white/10 rounded-2xl p-4 text-white",
+  mapClassName = "h-80 rounded-lg overflow-hidden",
+  title = "Businesses Near You",
+}) {
   const { supabase } = useAuth();
   const mapRef = useRef(null);
   const containerRef = useRef(null);
@@ -277,10 +283,10 @@ export default function GoogleMapClient({ radiusKm = 25 }) {
   }, [supabase, radiusKm]);
 
   return (
-    <div ref={containerRef} className="w-full max-w-6xl mx-auto mt-12">
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-white">
-        <div className="mb-3 font-medium">Businesses Near You</div>
-        <div className="h-80 rounded-lg overflow-hidden" ref={mapRef} id="google-map" />
+    <div ref={containerRef} className={containerClassName}>
+      <div className={cardClassName}>
+        {title ? <div className="mb-3 font-medium">{title}</div> : null}
+        <div className={mapClassName} ref={mapRef} id="google-map" />
         {loading && <div className="mt-2 text-sm text-white/70">Loading map...</div>}
         {error && <div className="mt-2 text-sm text-rose-400">{error}</div>}
       </div>

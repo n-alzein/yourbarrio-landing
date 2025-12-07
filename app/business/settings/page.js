@@ -131,20 +131,12 @@ export default function SettingsPage() {
      UI START
   ----------------------------------------------------------- */
   return (
-    <div className="min-h-screen pt-14 pb-20 text-white relative">
+    <div className="min-h-screen pt-0 pb-20 text-white relative">
 
       {/* BACKGROUND */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-[#05010d]" />
         <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
-      </div>
-
-      {/* HEADER */}
-      <div className="max-w-4xl mx-auto px-6 text-center mb-12">
-        <h1 className="text-4xl font-semibold">Settings</h1>
-        <p className="text-white/70 text-lg mt-2">
-          Manage your personal details, privacy, and preferences.
-        </p>
       </div>
 
       {/* MAIN CARD */}

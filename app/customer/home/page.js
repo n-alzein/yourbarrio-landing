@@ -22,7 +22,7 @@ export default function CustomerHomePage() {
     
 
   return (
-    <div className="min-h-screen text-white relative pt-32 px-6">
+    <div className="min-h-screen text-white relative pt-8 px-6">
 
       {/* 🔥 Background (same as About / Businesses pages) */}
       <div className="absolute inset-0 -z-10 overflow-hidden">

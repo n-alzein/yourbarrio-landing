@@ -1,6 +1,7 @@
 "use client";
 
 import PublicNavbar from "@/components/navbars/PublicNavbar";
+import GoogleMapClient from "@/components/GoogleMapClient";
 
 export default function HomePage() {
   return (
@@ -37,13 +38,6 @@ export default function HomePage() {
                 >
                   Get Started
                 </a>
-
-                <a
-                  href="/auth/register"
-                  className="inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold border border-white/20 bg-white/5 text-white/90 hover:bg-white/10 transition"
-                >
-                  Explore Businesses
-                </a>
               </div>
 
               <div className="mt-6 flex items-center gap-6 text-sm text-white/70">
@@ -66,31 +60,13 @@ export default function HomePage() {
             <div className="relative">
               <div className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-purple-500/30 via-pink-500/20 to-rose-500/30 blur-2xl" />
               <div className="relative rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-2xl">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-white/70">Trending near you</div>
-                  <div className="text-xs text-white/60">Updated now</div>
-                </div>
-
-                <div className="mt-5 grid gap-3">
-                  {[
-                    { title: "Café Solstice", tag: "Coffee • 0.3 mi" },
-                    { title: "Barrio Market", tag: "Groceries • 0.6 mi" },
-                    { title: "Luna Yoga Studio", tag: "Wellness • 1.1 mi" },
-                  ].map((x) => (
-                    <div
-                      key={x.title}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3"
-                    >
-                      <div>
-                        <div className="font-semibold">{x.title}</div>
-                        <div className="text-xs text-white/60 mt-0.5">{x.tag}</div>
-                      </div>
-                      <div className="text-xs rounded-full bg-white/10 px-2 py-1 text-white/80">
-                        View
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <GoogleMapClient
+                  radiusKm={25}
+                  containerClassName="w-full"
+                  cardClassName="p-0 bg-transparent border-0 text-white"
+                  mapClassName="h-80 rounded-2xl overflow-hidden border border-white/10"
+                  title="Explore nearby businesses"
+                />
 
                 <div className="mt-6 rounded-2xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 p-4 border border-white/10">
                   <div className="text-sm font-semibold">Want your business listed?</div>
@@ -99,7 +75,7 @@ export default function HomePage() {
                   </div>
                   <a
                     className="mt-3 inline-flex text-sm font-semibold underline underline-offset-4 hover:text-white"
-                    href="/register"
+                    href="http://localhost:3000/business"
                   >
                     Become a partner →
                   </a>

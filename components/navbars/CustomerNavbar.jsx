@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { ChevronDown, LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
+import ThemeToggle from "../ThemeToggle";
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
@@ -68,7 +69,7 @@ export default function CustomerNavbar() {
   --------------------------------------------------- */
   if (loadingUser) {
     return (
-      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-black/40 backdrop-blur-xl border-b border-white/10" />
+      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
     );
   }
 
@@ -76,7 +77,7 @@ export default function CustomerNavbar() {
      NAVBAR UI
   --------------------------------------------------- */
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
+    <nav className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock">
       <div className="max-w-7xl mx-auto px-8 flex items-center justify-between h-20">
 
         {/* LEFT GROUP — LOGO + NAV LINKS */}
@@ -99,6 +100,8 @@ export default function CustomerNavbar() {
 
         {/* RIGHT — AUTH STATE */}
         <div className="hidden md:flex items-center gap-8">
+          <ThemeToggle />
+
           {!user && (
             <>
               <NavItem href="/auth/login">Login</NavItem>
@@ -129,17 +132,8 @@ export default function CustomerNavbar() {
 
               {menuOpen && (
                 <div
-                  className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/20 shadow-xl z-50"
+                  className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-gradient-to-br from-purple-950/80 via-purple-900/70 to-fuchsia-900/70 backdrop-blur-xl border border-white/20 shadow-xl z-50"
                 >
-                  <Link
-                    href="/customer/profile"
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-white/90"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <User className="h-4 w-4" />
-                    Profile
-                  </Link>
-
                   <Link
                     href="/customer/settings"
                     className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-white/90"
@@ -182,11 +176,12 @@ export default function CustomerNavbar() {
 
       {/* MOBILE MENU */}
       {menuOpen && (
-        <div className="md:hidden bg-black/50 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
+        <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
           <NavItem href="/customer/home">Home</NavItem>
           <NavItem href="/customer/businesses">Businesses</NavItem>
           <NavItem href="/customer/saved">Saved</NavItem>
           <NavItem href="/customer/about">About</NavItem>
+          <ThemeToggle showLabel align="left" />
 
           {!user && (
             <>
@@ -202,7 +197,6 @@ export default function CustomerNavbar() {
 
           {user && (
             <>
-              <NavItem href="/customer/profile">Profile</NavItem>
               <NavItem href="/customer/settings">Settings</NavItem>
 
               <LogoutButton mobile />

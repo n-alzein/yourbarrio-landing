@@ -15,16 +15,44 @@
 @import "@fontsource/inter/700.css";
 @import "tailwindcss";
 
-
-
 /* ROOT COLORS */
-:root {
-  --background: transparent;
-  --foreground: #f8fafc;
-  
+:root,
+.theme-light {
+  --background: #faf5ff;
+  --foreground: #2a024d;
+  --text: #2a024d;
+  --primary: #8a2be2;
+  --secondary: #f3e8ff;
+  --muted: #5f4178;
+  --surface: rgba(255, 255, 255, 0.92);
+  --border: rgba(42, 2, 77, 0.12);
+  --overlay: rgba(138, 43, 226, 0.08);
+  --bg-solid: #f9f3ff;
+  --bg-gradient-start: #f4e8ff; /* lavender */
+  --bg-gradient-end: #ede0ff;   /* soft lilac */
+  --glow-1: rgba(138, 43, 226, 0.14);
+  --glow-2: rgba(243, 232, 255, 0.9);
+  --accent: #8a2be2;
+  --accent-hover: #7c3aed;
+  color-scheme: light;
+}
 
-  --accent: #7c3aed; /* premium purple */
-  --accent-hover: #6d28d9;
+.theme-dark {
+  --background: #0d061a;
+  --foreground: #f8fafc;
+  --text: #f8fafc;
+  --primary: #8a2be2;
+  --secondary: #f3e8ff;
+  --muted: #cbd5e1;
+  --surface: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.12);
+  --overlay: rgba(255, 255, 255, 0.06);
+  --bg-solid: #0d061a;
+  --bg-gradient-start: #2b0a4b;
+  --bg-gradient-end: #000000;
+  --glow-1: rgba(124, 58, 237, 0.30);
+  --glow-2: rgba(236, 72, 153, 0.25);
+  color-scheme: dark;
 }
 
 /* GLOBAL RESETS */
@@ -48,6 +76,56 @@ a {
 
 button {
   cursor: pointer;
+}
+
+.theme-light body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.theme-light .text-white {
+  color: var(--foreground) !important;
+}
+
+.theme-light [class*="text-white/"] {
+  color: var(--muted) !important;
+}
+
+.theme-light [class*="border-white"] {
+  border-color: var(--border) !important;
+}
+
+.theme-light .theme-lock .text-white {
+  color: #fff !important;
+}
+
+.theme-light .theme-lock [class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.theme-light .theme-lock [class*="border-white"] {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Light theme — force footer dark on branded pages */
+.theme-light footer.theme-lock {
+  background: #000;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.theme-light footer.theme-lock a {
+  color: #fff;
+}
+
+.theme-light footer.theme-lock a:hover {
+  color: #e5e5e5;
+}
+
+.theme-light footer.theme-lock p,
+.theme-light footer.theme-lock h4,
+.theme-light footer.theme-lock li {
+  color: #fff !important;
 }
 
 /* PREMIUM BUTTON */
@@ -95,7 +173,7 @@ button {
   z-index: -1;
   background: linear-gradient(
     135deg,
-    #7c3aed,
+    var(--primary),
     #2563eb,
     #db2777,
     #4f46e5
@@ -118,6 +196,30 @@ button {
 
 .animate-fade-in {
   animation: fadeIn 0.8s ease forwards;
+}
+
+/* ----------------------------------------------------- */
+/* Auth card theming                                    */
+/* ----------------------------------------------------- */
+.auth-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.theme-light .auth-card {
+  background: linear-gradient(135deg, rgba(244, 232, 255, 0.96), rgba(237, 224, 255, 0.94));
+  border: 1px solid rgba(138, 43, 226, 0.18);
+  box-shadow: 0 20px 60px rgba(138, 43, 226, 0.16);
+}
+
+.theme-light .auth-card input {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--foreground);
+  border-color: rgba(138, 43, 226, 0.18);
+}
+
+.theme-light .auth-card input::placeholder {
+  color: rgba(42, 2, 77, 0.55);
 }
 
 html, body {

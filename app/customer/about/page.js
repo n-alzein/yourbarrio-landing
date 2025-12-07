@@ -15,7 +15,7 @@ export default function AboutPage() {
       {/* Customer Navbar */}
       <CustomerNavbar />
 
-      <div className="min-h-screen text-white relative pt-28 px-6">
+      <div className="min-h-screen text-white relative pt-8 px-6">
 
         {/* Header Section */}
         <motion.div
@@ -107,9 +107,8 @@ export default function AboutPage() {
           </p>
 
           <a
-            href="/register"
-            className="
-              inline-block px-8 py-3 rounded-xl font-semibold text-white text-lg bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
+            href="/auth/register"
+            className="inline-block px-8 py-3 rounded-xl font-semibold text-white text-lg bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
           >
             Get Started
           </a>

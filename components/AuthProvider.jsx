@@ -2,7 +2,10 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import {
+  getBrowserSupabaseClient,
+  getCookieName,
+} from "@/lib/supabaseClient";
 
 const AuthContext = createContext();
 
@@ -103,7 +106,6 @@ export function AuthProvider({ children }) {
   ----------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
-    let ignoreFirstAuth = true;
 
     async function init() {
       const {
@@ -135,10 +137,8 @@ export function AuthProvider({ children }) {
     ----------------------------------------------------------------- */
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (ignoreFirstAuth) {
-          ignoreFirstAuth = false;
-          return;
-        }
+        // Skip only the synthetic initial event; handle real sign-ins immediately
+        if (event === "INITIAL_SESSION") return;
 
         if (sessionStorage.getItem("forceLogout") === "1") {
           sessionStorage.removeItem("forceLogout");
@@ -168,6 +168,34 @@ export function AuthProvider({ children }) {
   }, [supabase]);
 
   /* -----------------------------------------------------------------
+     HANDLE CROSS-TAB LOGIN (popup broadcasts business_auth_success)
+  ----------------------------------------------------------------- */
+  useEffect(() => {
+    async function handleStorage(event) {
+      if (event.key !== "business_auth_success") return;
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const rawUser = session?.user ?? null;
+      const user = sanitizeAuthUser(rawUser);
+      setAuthUser(user);
+
+      if (user) {
+        const p = await loadProfile(user.id);
+        setProfile(p);
+        await cacheGoogleAvatar(user, p);
+      }
+
+      setLoadingUser(false);
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [supabase]);
+
+  /* -----------------------------------------------------------------
      REFRESH PROFILE
   ----------------------------------------------------------------- */
   async function refreshProfile() {
@@ -180,16 +208,72 @@ export function AuthProvider({ children }) {
      LOGOUT
   ----------------------------------------------------------------- */
   async function logout() {
-    sessionStorage.setItem("forceLogout", "1");
+    try {
+      sessionStorage.setItem("forceLogout", "1");
+    } catch (err) {
+      console.warn("Could not set forceLogout flag", err);
+    }
 
-    await supabase.auth.signOut();
+    const client = supabaseRef.current || getBrowserSupabaseClient();
 
-    await new Promise((r) => setTimeout(r, 120));
+    const clearCookies = () => {
+      if (typeof document === "undefined") return;
+      const cookieName = getCookieName();
+      if (!cookieName) return;
+
+      const host = window.location.hostname;
+      const domains = [host];
+      if (host && !host.startsWith("localhost") && !host.startsWith("127.")) {
+        domains.push(`.${host}`);
+      }
+
+      // Clear without domain (works for localhost)
+      try {
+        document.cookie = `${cookieName}=; path=/; max-age=0; sameSite=lax`;
+      } catch (err) {
+        console.warn("Could not clear auth cookie (no domain)", err);
+      }
+
+      domains.forEach((domain) => {
+        try {
+          document.cookie = `${cookieName}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;
+        } catch (err) {
+          console.warn("Could not clear auth cookie for domain", domain, err);
+        }
+      });
+    };
+
+    try {
+      if (client) {
+        const { error } = await client.auth.signOut({ scope: "global" });
+        if (error) console.error("Supabase signOut error", error);
+      }
+    } catch (err) {
+      console.error("Client logout failed", err);
+    }
+
+    try {
+      await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.error("Server logout call failed", err);
+    }
+
+    clearCookies();
 
     setAuthUser(null);
     setProfile(null);
+    setLoadingUser(false);
 
-    router.replace("/");
+    if (typeof window !== "undefined") {
+      window.location.replace("/");
+      window.location.reload();
+    } else {
+      router.replace("/");
+      router.refresh();
+    }
   }
 
   return (

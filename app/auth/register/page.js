@@ -164,7 +164,7 @@ export default function RegisterPage({ isBusiness: forcedBusinessMode }) {
         <div
           className="
           max-w-md w-full max-h-[420px]
-          p-8 rounded-2xl bg-black/25 backdrop-blur-xl border border-white/10
+          p-8 rounded-2xl auth-card backdrop-blur-xl border border-white/10
           overflow-y-auto shadow-[0_0_60px_-12px_rgba(0,0,0,0.4)]
           animate-fadeIn
         "

@@ -2,14 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import ThemeToggle from "../ThemeToggle";
 
 export default function PublicNavbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // Hide navbar on business-auth pages
-  if (pathname.startsWith("/business-auth")) return null;
+  useEffect(() => {
+    // Prevent background scroll when the mobile menu is open
+    if (typeof document === "undefined") return;
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  // Hide navbar across app sections (business + customer) to avoid flicker on dashboards
+  if (
+    pathname.startsWith("/business") ||
+    pathname.startsWith("/business-auth") ||
+    pathname.startsWith("/customer")
+  ) {
+    return null;
+  }
 
   const isActive = (href) => pathname === href;
 
@@ -26,8 +42,8 @@ export default function PublicNavbar() {
   );
 
   return (
-    <nav className="fixed top-0 inset-x-0 z-50">
-      <div className="backdrop-blur-xl bg-black/40 border-b border-white/10 shadow-lg">
+    <nav className="fixed top-0 inset-x-0 z-50 theme-lock">
+      <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
         <div className="max-w-7xl mx-auto px-6 md:px-10">
           <div className="h-20 flex items-center justify-between">
 
@@ -49,6 +65,7 @@ export default function PublicNavbar() {
 
             {/* RIGHT SIDE */}
             <div className="hidden md:flex items-center gap-x-6">
+              <ThemeToggle className="hidden md:flex" />
 
               {/* FOR BUSINESS (Single Button, No Dropdown) */}
               <Link
@@ -72,10 +89,27 @@ export default function PublicNavbar() {
 
             {/* MOBILE MENU BUTTON */}
             <button
-              className="md:hidden text-white"
+              aria-label="Toggle menu"
+              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition"
               onClick={() => setOpen((o) => !o)}
             >
-              {open ? "✕" : "☰"}
+              <div className="flex flex-col gap-1.5">
+                <span
+                  className={`block h-0.5 w-6 rounded-full bg-white transition-transform ${
+                    open ? "translate-y-2 rotate-45" : ""
+                  }`}
+                />
+                <span
+                  className={`block h-0.5 w-4 rounded-full bg-white transition ${
+                    open ? "opacity-0" : ""
+                  }`}
+                />
+                <span
+                  className={`block h-0.5 w-6 rounded-full bg-white transition-transform ${
+                    open ? "-translate-y-2 -rotate-45" : ""
+                  }`}
+                />
+              </div>
             </button>
           </div>
         </div>
@@ -83,32 +117,54 @@ export default function PublicNavbar() {
 
       {/* MOBILE MENU */}
       {open && (
-        <div className="md:hidden backdrop-blur-xl bg-black/40 border-b border-white/20 shadow-xl">
-          <div className="px-6 py-4 flex flex-col gap-4 text-white">
+        <div className="md:hidden fixed inset-0 z-40">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute inset-x-0 top-20 px-4 pb-6">
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-purple-950/90 via-purple-900/80 to-fuchsia-900/80 shadow-2xl text-white">
+              <div className="px-6 pt-6 pb-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
+                <div className="flex flex-col gap-3 text-lg font-semibold">
+                  <NavItem href="/businesses">Discover businesses</NavItem>
+                  <NavItem href="/about">About YourBarrio</NavItem>
+                </div>
+              </div>
 
-            <NavItem href="/businesses">Businesses</NavItem>
-            <NavItem href="/about">About</NavItem>
+              <div className="h-px bg-white/10 mx-6" />
 
-            {/* FOR BUSINESS */}
-            <Link
-              href="/business"
-              className="px-4 py-2 border border-white/20 rounded-lg text-center font-semibold"
-              onClick={() => setOpen(false)}
-            >
-              For Business
-            </Link>
+              <div className="px-6 py-5 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Theme</div>
+                  <div className="text-xs text-white/60">Match your vibe</div>
+                </div>
+                <ThemeToggle showLabel={false} />
+              </div>
 
-            {/* Customer Login */}
-            <NavItem href="/auth/login">Log in</NavItem>
+              <div className="h-px bg-white/10 mx-6" />
 
-            {/* Customer Sign Up */}
-            <Link
-              href="/auth/register"
-              className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-lg text-center font-semibold"
-              onClick={() => setOpen(false)}
-            >
-              Sign Up
-            </Link>
+              <div className="px-6 py-6 flex flex-col gap-3">
+                <Link
+                  href="/auth/login"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                  onClick={() => setOpen(false)}
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/auth/register"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 shadow-lg shadow-fuchsia-900/40"
+                  onClick={() => setOpen(false)}
+                >
+                  Sign Up
+                </Link>
+              </div>
+
+              <div className="px-6 pb-6 text-xs text-white/60">
+                Trusted community for local businesses and neighbors.
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -9,6 +9,19 @@ export default function BusinessLayout({ children }) {
   const { authUser, role, loadingUser } = useAuth();
   const router = useRouter();
 
+  // Redirect the opener tab to dashboard when a popup login succeeds
+  useEffect(() => {
+    function handleStorage(event) {
+      if (event.key === "business_auth_success") {
+        router.replace("/business/dashboard");
+        router.refresh();
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [router]);
+
   useEffect(() => {
     if (loadingUser) return;
 

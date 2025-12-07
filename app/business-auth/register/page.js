@@ -1,13 +1,15 @@
 "use client";
 
 import { Suspense } from "react";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 function BusinessRegisterInner() {
   const router = useRouter();
   const { supabase, authUser, role, loadingUser } = useAuth();
+  const searchParams = useSearchParams();
+  const isPopup = searchParams?.get("popup") === "1";
 
   const [loading, setLoading] = useState(false);
 
@@ -15,6 +17,15 @@ function BusinessRegisterInner() {
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const finishBusinessAuth = useCallback(() => {
+    if (isPopup && typeof window !== "undefined") {
+      window.close();
+      return;
+    }
+
+    router.replace("/business/dashboard");
+  }, [isPopup, router]);
 
   /* --------------------------------------------------------------
      AUTO-REDIRECT IF ALREADY LOGGED IN
@@ -25,11 +36,11 @@ function BusinessRegisterInner() {
     if (!role) return; // wait until role is loaded
 
     if (role === "business") {
-      router.replace("/business/dashboard");
+      finishBusinessAuth();
     } else {
       router.replace("/customer/home");
     }
-  }, [authUser, role, loadingUser, router]);
+  }, [authUser, role, loadingUser, router, finishBusinessAuth]);
 
   /* --------------------------------------------------------------
      EMAIL/PASSWORD BUSINESS SIGNUP
@@ -87,8 +98,8 @@ function BusinessRegisterInner() {
       return;
     }
 
-    router.push("/business/dashboard");
     setLoading(false);
+    finishBusinessAuth();
   }
 
   /* --------------------------------------------------------------
@@ -126,7 +137,7 @@ function BusinessRegisterInner() {
       <div
         className="
           w-full max-w-md p-8 rounded-2xl
-          bg-black/25 backdrop-blur-xl
+          auth-card backdrop-blur-xl
           border border-white/10
           shadow-[0_0_40px_-12px_rgba(0,0,0,0.4)]
           animate-fadeIn

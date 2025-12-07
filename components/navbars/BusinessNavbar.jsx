@@ -1,22 +1,24 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
 import {
   ChevronDown,
   LayoutDashboard,
   LogOut,
   Settings,
-  User,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
+import ThemeToggle from "../ThemeToggle";
+import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 
 export default function BusinessNavbar() {
   const pathname = usePathname();
   const { user, role, loadingUser, supabase } = useAuth();
 
+  const [hydrated, setHydrated] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
   const displayName =
@@ -26,7 +28,10 @@ export default function BusinessNavbar() {
     user?.authUser?.user_metadata?.name ||
     "Account";
 
-  if (loadingUser) return null;
+  // Hydration guard prevents frozen dropdown interactions
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   /* Load avatar */
   useEffect(() => {
@@ -50,10 +55,20 @@ export default function BusinessNavbar() {
 
   const isActive = (href) => pathname === href;
 
-  const NavItem = ({ href, children }) => (
+  if (!hydrated || loadingUser) return null;
+
+  const handleBusinessAuthClick = (event, path) => {
+    event.preventDefault();
+    openBusinessAuthPopup(path);
+  };
+
+  const NavItem = ({ href, children, onClick }) => (
     <Link
       href={href}
-      onClick={() => setMenuOpen(false)}
+      onClick={(e) => {
+        onClick?.(e);
+        setMenuOpen(false);
+      }}
       className={`text-sm md:text-base transition ${
         isActive(href)
           ? "text-white font-semibold"
@@ -68,7 +83,7 @@ export default function BusinessNavbar() {
      NAVBAR
   --------------------------------------------------- */
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
+    <nav className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock">
       <div className="max-w-7xl mx-auto px-8 flex items-center justify-between h-20">
 
         {/* LEFT SIDE */}
@@ -113,15 +128,26 @@ export default function BusinessNavbar() {
 
         {/* RIGHT SIDE */}
         <div className="hidden md:flex items-center gap-8">
+          <ThemeToggle />
 
           {/* ❌ REMOVE Listings + Dashboard here — now only profile & logout */}
 
           {/* Logged OUT */}
           {!user && (
             <>
-              <NavItem href="/business-auth/login">Login</NavItem>
+              <NavItem
+                href="/business-auth/login"
+                onClick={(e) =>
+                  handleBusinessAuthClick(e, "/business-auth/login")
+                }
+              >
+                Login
+              </NavItem>
               <Link
                 href="/business-auth/register"
+                onClick={(e) =>
+                  handleBusinessAuthClick(e, "/business-auth/register")
+                }
                 className="px-5 py-2 rounded-xl bg-white text-black font-semibold"
               >
                 Sign Up
@@ -148,16 +174,7 @@ export default function BusinessNavbar() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/20 shadow-xl">
-                  
-                  <Link
-                    href="/business/profile"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-white/90"
-                  >
-                    <User className="h-4 w-4" /> Profile
-                  </Link>
-
+                <div className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-gradient-to-br from-purple-950/80 via-purple-900/70 to-fuchsia-900/70 backdrop-blur-xl border border-white/20 shadow-xl">
                   <Link
                     href="/business/settings"
                     onClick={() => setMenuOpen(false)}
@@ -167,7 +184,10 @@ export default function BusinessNavbar() {
                   </Link>
 
                   <div className="px-2 mt-1">
-                    <LogoutButton className="flex w-full items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/10 text-white/90">
+                    <LogoutButton
+                      className="flex w-full items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/10 text-white/90"
+                      onSuccess={() => setMenuOpen(false)}
+                    >
                       <LogOut className="h-4 w-4" /> Logout
                     </LogoutButton>
                   </div>
@@ -196,7 +216,8 @@ export default function BusinessNavbar() {
 
       {/* MOBILE MENU */}
       {menuOpen && (
-        <div className="md:hidden bg-black/60 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-6 text-white">
+        <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-6 text-white">
+          <ThemeToggle showLabel align="left" />
 
           {/* Logged-out */}
           {!user && <NavItem href="/business">Businesses</NavItem>}
@@ -213,9 +234,19 @@ export default function BusinessNavbar() {
 
           {!user ? (
             <>
-              <NavItem href="/business-auth/login">Login</NavItem>
+              <NavItem
+                href="/business-auth/login"
+                onClick={(e) =>
+                  handleBusinessAuthClick(e, "/business-auth/login")
+                }
+              >
+                Login
+              </NavItem>
               <Link
                 href="/business-auth/register"
+                onClick={(e) =>
+                  handleBusinessAuthClick(e, "/business-auth/register")
+                }
                 className="px-4 py-2 bg-white text-black rounded-lg text-center font-semibold"
               >
                 Sign Up
@@ -223,9 +254,8 @@ export default function BusinessNavbar() {
             </>
           ) : (
             <>
-              <NavItem href="/business/profile">Profile</NavItem>
               <NavItem href="/business/settings">Settings</NavItem>
-              <LogoutButton mobile />
+              <LogoutButton mobile onSuccess={() => setMenuOpen(false)} />
             </>
           )}
         </div>

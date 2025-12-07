@@ -1,17 +1,46 @@
 "use client";
 
 import { Suspense } from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 function BusinessLoginInner() {
   const router = useRouter();
   const { supabase, authUser, role, loadingUser } = useAuth();
+  const searchParams = useSearchParams();
+  const isPopup = searchParams?.get("popup") === "1";
 
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const finishBusinessAuth = useCallback(() => {
+    if (typeof window !== "undefined") {
+      try {
+        // Broadcast success so other tabs (the opener) can react
+        localStorage.setItem("business_auth_success", Date.now().toString());
+      } catch (err) {
+        console.warn("Could not broadcast business auth success", err);
+      }
+
+      if (isPopup) {
+        // Close popup when possible; fall back to in-tab redirect if blocked
+        window.close();
+
+        // Some browsers ignore close() if not opened by script
+        setTimeout(() => {
+          if (!window.closed) {
+            router.replace("/business/dashboard");
+          }
+        }, 150);
+
+        return;
+      }
+    }
+
+    router.replace("/business/dashboard");
+  }, [isPopup, router]);
 
   /* --------------------------------------------------------------
      AUTO-REDIRECT IF ALREADY LOGGED IN
@@ -22,11 +51,11 @@ function BusinessLoginInner() {
     if (!role) return; // wait until role is loaded
 
     if (role === "business") {
-      router.replace("/business/dashboard");
+      finishBusinessAuth();
     } else {
       router.replace("/customer/home"); // non-business users redirected
     }
-  }, [authUser, role, loadingUser, router]);
+  }, [authUser, role, loadingUser, router, finishBusinessAuth]);
 
   /* --------------------------------------------------------------
      EMAIL + PASSWORD LOGIN  (FIXED)
@@ -74,9 +103,9 @@ function BusinessLoginInner() {
       return;
     }
 
-    // 4) Redirect (correctly)
-    router.replace("/business/dashboard");
+    // 4) Redirect or close popup
     setLoading(false);
+    finishBusinessAuth();
   }
 
   /* --------------------------------------------------------------
@@ -121,8 +150,8 @@ function BusinessLoginInner() {
             max-w-md w-full 
             max-h-[420px]
             p-8
-            rounded-2xl 
-            bg-black/25
+            rounded-2xl
+            auth-card
             backdrop-blur-xl
             border border-white/10
             overflow-y-auto

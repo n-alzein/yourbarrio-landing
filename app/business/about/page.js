@@ -7,10 +7,16 @@ import {
   MapIcon,
   ChatBubbleBottomCenterIcon,
 } from "@heroicons/react/24/outline";
+import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 
 export default function BusinessAboutPage() {
+  const handlePopup = (event) => {
+    event.preventDefault();
+    openBusinessAuthPopup("/business-auth/register");
+  };
+
   return (
-    <div className="min-h-screen text-white relative pt-28 px-6">
+    <div className="min-h-screen text-white relative pt-8 px-6">
       {/* Header Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -88,6 +94,7 @@ export default function BusinessAboutPage() {
         </h2>
         <a
           href="/business-auth/register"
+          onClick={handlePopup}
           className="inline-block px-8 py-3 rounded-xl font-semibold text-white text-lg bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
         >
           Get Started →

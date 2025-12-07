@@ -3,10 +3,16 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 
 export default function BusinessHome() {
+  const handlePopup = (event, path) => {
+    event.preventDefault();
+    openBusinessAuthPopup(path);
+  };
+
   return (
-    <div className="min-h-screen text-white relative pt-32 px-6 pb-24">
+    <div className="min-h-screen text-white relative pt-8 px-6 pb-24">
 
       {/* ------------------------------------------------------------ */}
       {/* 🔥 SAME BACKGROUND AS ABOUT PAGE */}
@@ -39,6 +45,7 @@ export default function BusinessHome() {
         <div className="mt-10 flex flex-col md:flex-row gap-6 justify-center">
           <Link
             href="/business-auth/register"
+            onClick={(e) => handlePopup(e, "/business-auth/register")}
             className="px-8 py-4 bg-white text-black font-bold rounded-xl text-lg hover:bg-gray-200 active:scale-95 transition shadow-lg"
           >
             Create a Business Account
@@ -46,6 +53,7 @@ export default function BusinessHome() {
 
           <Link
             href="/business-auth/login"
+            onClick={(e) => handlePopup(e, "/business-auth/login")}
             className="px-8 py-4 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition"
           >
             Business Login
@@ -150,6 +158,7 @@ export default function BusinessHome() {
 
         <Link
           href="/business-auth/register"
+          onClick={(e) => handlePopup(e, "/business-auth/register")}
           className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
         >
           Get Started <ArrowRight className="h-5 w-5" />

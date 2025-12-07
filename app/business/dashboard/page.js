@@ -8,7 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 export default function BusinessDashboard() {
   const router = useRouter();
-  const { supabase, user, role, loadingUser } = useAuth();
+  const { supabase, user, authUser, role, loadingUser } = useAuth();
 
   const [hydrated, setHydrated] = useState(false);
   const [business, setBusiness] = useState(null);
@@ -43,9 +43,19 @@ export default function BusinessDashboard() {
   /* 3️⃣ Load business profile */
   /* ------------------------------------------- */
   useEffect(() => {
+    // Use profile from AuthProvider immediately to avoid blank screen while refetching
+    if (user && role === "business" && !business) {
+      setBusiness(user);
+    }
+  }, [user, role, business]);
+
+  useEffect(() => {
     if (!hydrated) return;
     if (loadingUser) return;
-    if (!user || role !== "business") return;
+    if (role !== "business") return;
+
+    const id = user?.id || authUser?.id;
+    if (!id) return;
 
     let active = true;
 
@@ -53,7 +63,7 @@ export default function BusinessDashboard() {
       const { data } = await supabase
         .from("users")
         .select("*")
-        .eq("id", user.id)
+        .eq("id", id)
         .single();
 
       if (active) setBusiness(data);
@@ -114,15 +124,27 @@ export default function BusinessDashboard() {
   /* ------------------------------------------- */
   /* 5️⃣ Block UI until ready */
   /* ------------------------------------------- */
-  if (!hydrated || loadingUser || !user || role !== "business" || !business) {
-    return <div className="h-screen" />;
+  if (!hydrated || loadingUser) return <div className="h-screen" />;
+
+  if (!business) {
+    return (
+      <div className="min-h-screen px-6 md:px-10 pt-10 text-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-10 animate-pulse">
+            <div className="h-6 w-40 bg-white/20 rounded mb-4" />
+            <div className="h-4 w-64 bg-white/15 rounded mb-2" />
+            <div className="h-4 w-52 bg-white/15 rounded" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   /* ------------------------------------------- */
   /* 6️⃣ UI with shared background */
   /* ------------------------------------------- */
   return (
-    <div className="min-h-screen px-6 md:px-10 pt-12 pb-20 relative text-white">
+    <div className="min-h-screen px-6 md:px-10 pt-0 pb-20 relative text-white">
 
       {/* 🔥 SAME BACKGROUND AS BUSINESSES & ABOUT */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -135,7 +157,7 @@ export default function BusinessDashboard() {
       <div className="max-w-6xl mx-auto">
 
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row items-center gap-6 mb-14 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-xl backdrop-blur-2xl">
+        <div className="flex flex-col md:flex-row items-center gap-6 mb-12 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-xl backdrop-blur-2xl">
 
           <Image
             src={business.profile_photo_url || "/business-placeholder.png"}
@@ -154,10 +176,10 @@ export default function BusinessDashboard() {
             )}
 
             <Link
-              href="/business/profile/edit"
+              href="/business/settings"
               className="mt-4 inline-flex px-5 py-2 rounded-xl bg-white/10 border border-white/15 text-white/80 hover:bg-white/20 hover:text-white transition"
             >
-              Edit Profile
+              Manage Settings
             </Link>
           </div>
         </div>

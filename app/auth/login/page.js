@@ -108,8 +108,8 @@ useEffect(() => {
             max-w-md w-full 
             max-h-[420px]
             p-8
-            rounded-2xl 
-            bg-black/25
+            rounded-2xl
+            auth-card
             backdrop-blur-xl
             border border-white/10
             overflow-y-auto
