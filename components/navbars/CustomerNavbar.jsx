@@ -41,6 +41,12 @@ export default function CustomerNavbar() {
     googleAvatar ||
     "/customer-placeholder.png";
 
+  const displayName =
+    user?.full_name ||
+    user?.authUser?.user_metadata?.full_name ||
+    user?.authUser?.user_metadata?.name ||
+    "Account";
+
   const isActive = (href) => pathname === href;
 
   const NavItem = ({ href, children }) => (
@@ -109,12 +115,15 @@ export default function CustomerNavbar() {
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-3"
               >
                 <img
                   src={avatar}
                   className="h-10 w-10 rounded-xl object-cover border border-white/20"
                 />
+                <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
+                  {displayName}
+                </span>
                 <ChevronDown className="h-4 w-4 text-white/70" />
               </button>
 

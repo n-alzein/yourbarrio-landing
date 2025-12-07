@@ -84,7 +84,30 @@ export default function BusinessOnboardingPage() {
 
       if (error) throw error;
 
-      // 3) Redirect to business profile
+      // 3) Attempt to geocode the address server-side and persist coords
+      try {
+        const geoRes = await fetch("/api/geocode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: form.address }),
+        });
+
+        if (geoRes.ok) {
+          const geo = await geoRes.json();
+          if (geo?.lat && geo?.lng) {
+            await supabase
+              .from("businesses")
+              .update({ latitude: geo.lat, longitude: geo.lng })
+              .eq("id", data.id);
+          }
+        } else {
+          console.warn("Geocode failed:", await geoRes.text());
+        }
+      } catch (e) {
+        console.warn("Geocode request error:", e);
+      }
+
+      // 4) Redirect to business profile
       router.push(`/business/${data.id}`);
     } catch (err) {
       console.error(err);

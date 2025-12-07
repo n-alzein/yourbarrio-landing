@@ -126,3 +126,28 @@ html, body {
   width: 100%;
   overflow-x: hidden !important;
 }
+
+/* Google Maps Advanced Marker styles */
+.yb-marker {
+  display: inline-block;
+}
+.yb-marker-inner {
+  background: white;
+  color: #111827;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.35);
+  transform: translateY(-6px);
+  white-space: nowrap;
+}
+
+.yb-user-marker {
+  width: 14px;
+  height: 14px;
+  background: #7c3aed;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 6px 12px rgba(2,6,23,0.25);
+  transform: translate(-50%, -50%);
+}

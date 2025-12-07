@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import GoogleMapClient from "@/components/GoogleMapClient";
 
 export default function CustomerHomePage() {
     const { user, loadingUser } = useAuth();
@@ -148,6 +149,10 @@ export default function CustomerHomePage() {
         </Link>
       </motion.div>
 
+      {/* ====================================================== */}
+      {/* MAP */}
+      {/* ====================================================== */}
+      <GoogleMapClient radiusKm={25} />
     </div>
   );
 }
