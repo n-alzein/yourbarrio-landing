@@ -50,7 +50,6 @@ export async function middleware(req) {
 
   if (path.startsWith("/customer") && !hasSession) {
     const redirectUrl = new URL("/", req.url);
-    redirectUrl.searchParams.set("modal", "customer-login");
     redirectUrl.searchParams.set("redirect", path + req.nextUrl.search);
     return NextResponse.redirect(redirectUrl, { headers: res.headers });
   }

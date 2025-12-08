@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Bookmark,
+  Building2,
+  ChevronDown,
+  Compass,
+  LogOut,
+  Settings,
+} from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
@@ -11,16 +18,43 @@ import { useModal } from "../modals/ModalProvider";
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
-  const { user, role, loadingUser } = useAuth();
+  const { user, loadingUser } = useAuth();
   const { openModal } = useModal();
 
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const dropdownRef = useRef(null);
 
   // ⭐ Hydration guard fixes frozen buttons
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  // Close menus when the route changes
+  useEffect(() => {
+    setProfileMenuOpen(false);
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Close dropdown on outside click for a more premium, lightweight feel
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const handleClick = (event) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target)
+      ) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("touchstart", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("touchstart", handleClick);
+    };
+  }, [profileMenuOpen]);
 
   if (!hydrated) return null;
 
@@ -50,7 +84,18 @@ export default function CustomerNavbar() {
     user?.authUser?.user_metadata?.name ||
     "Account";
 
+  const email =
+    user?.email ||
+    user?.authUser?.email ||
+    user?.authUser?.user_metadata?.email ||
+    null;
+
   const isActive = (href) => pathname === href;
+
+  const closeMenus = () => {
+    setMobileMenuOpen(false);
+    setProfileMenuOpen(false);
+  };
 
   const NavItem = ({ href, children }) => (
     <Link
@@ -60,11 +105,32 @@ export default function CustomerNavbar() {
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
       }`}
-      onClick={() => setMenuOpen(false)}
+      onClick={closeMenus}
     >
       {children}
     </Link>
   );
+
+  const quickActions = [
+    {
+      href: "/customer/home",
+      title: "Discover",
+      description: "See what's buzzing near you",
+      icon: Compass,
+    },
+    {
+      href: "/customer/businesses",
+      title: "Find businesses",
+      description: "Curated shops in your barrio",
+      icon: Building2,
+    },
+    {
+      href: "/customer/saved",
+      title: "Saved spots",
+      description: "Instant access to your favorites",
+      icon: Bookmark,
+    },
+  ];
 
   /* ---------------------------------------------------
      LOADING STATE
@@ -124,14 +190,14 @@ export default function CustomerNavbar() {
           )}
 
           {user && (
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-3"
+                onClick={() => setProfileMenuOpen((open) => !open)}
+                className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
               >
                 <img
                   src={avatar}
-                  className="h-10 w-10 rounded-xl object-cover border border-white/20"
+                  className="h-10 w-10 rounded-2xl object-cover border border-white/20"
                 />
                 <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
                   {displayName}
@@ -139,27 +205,65 @@ export default function CustomerNavbar() {
                 <ChevronDown className="h-4 w-4 text-white/70" />
               </button>
 
-              {menuOpen && (
+              {profileMenuOpen && (
                 <div
-                  className="absolute right-0 mt-3 w-48 py-2 rounded-xl bg-gradient-to-br from-purple-950/80 via-purple-900/70 to-fuchsia-900/70 backdrop-blur-xl border border-white/20 shadow-xl z-50"
+                  className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl z-50"
                 >
-                  <Link
-                    href="/customer/settings"
-                    className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 text-white/90"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <Settings className="h-4 w-4" />
-                    Settings
-                  </Link>
+                  <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
+                    <div className="flex items-center gap-3 px-4 py-4">
+                      <img
+                        src={avatar}
+                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                        alt="Profile avatar"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-white">{displayName}</p>
+                        {email && (
+                          <p className="text-xs text-white/60">{email}</p>
+                        )}
+                      </div>
+                    </div>
 
-                  {/* ⭐ FIXED: no stopPropagation, no wrapper div */}
-                  <LogoutButton
-                    className="flex w-full items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/10 text-white/90"
-                    onSuccess={() => setMenuOpen(false)}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Logout
-                  </LogoutButton>
+                    <div className="px-2 pb-1 pt-2 space-y-1">
+                      {quickActions.map(({ href, title, description, icon: Icon }) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={closeMenus}
+                          className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
+                        >
+                          <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white/90">{title}</p>
+                            <p className="text-xs text-white/60">{description}</p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+
+                    <div className="mt-2 border-t border-white/10 px-4 pt-3">
+                      <Link
+                        href="/customer/settings"
+                        onClick={closeMenus}
+                        className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Settings className="h-4 w-4" />
+                          Account settings
+                        </span>
+                        <span className="text-white/50 text-xs">⌘ ,</span>
+                      </Link>
+                      <LogoutButton
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
+                        onSuccess={closeMenus}
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Logout
+                      </LogoutButton>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -168,10 +272,10 @@ export default function CustomerNavbar() {
 
         {/* MOBILE MENU BUTTON */}
         <button
-          onClick={() => setMenuOpen(!menuOpen)}
+          onClick={() => setMobileMenuOpen((open) => !open)}
           className="md:hidden text-white"
         >
-          {menuOpen ? (
+          {mobileMenuOpen ? (
             <svg className="h-7 w-7" fill="none" stroke="currentColor">
               <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -184,7 +288,7 @@ export default function CustomerNavbar() {
       </div>
 
       {/* MOBILE MENU */}
-      {menuOpen && (
+      {mobileMenuOpen && (
         <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
           <NavItem href="/customer/home">Home</NavItem>
           <NavItem href="/customer/businesses">Businesses</NavItem>
@@ -197,7 +301,7 @@ export default function CustomerNavbar() {
               <button
                 type="button"
                 onClick={() => {
-                  setMenuOpen(false);
+                  setMobileMenuOpen(false);
                   openModal("customer-login");
                 }}
                 className="text-left text-white/70 hover:text-white"
@@ -207,7 +311,7 @@ export default function CustomerNavbar() {
               <button
                 type="button"
                 onClick={() => {
-                  setMenuOpen(false);
+                  setMobileMenuOpen(false);
                   openModal("customer-signup");
                 }}
                 className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold"

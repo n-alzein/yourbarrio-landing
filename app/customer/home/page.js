@@ -10,8 +10,19 @@ export default function CustomerHomePage() {
 
     if (loadingUser) {
       return (
-        <div className="min-h-screen flex items-center justify-center text-white pt-32">
-          Loading...
+        <div className="min-h-screen text-white relative pt-8 px-6">
+          <div className="absolute inset-0 -z-10 overflow-hidden">
+            <div className="absolute inset-0 bg-[#05010d]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
+            <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
+            <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+          </div>
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
+              <p className="text-lg text-white/80">Loading your account...</p>
+            </div>
+          </div>
         </div>
       );
     }
@@ -152,7 +163,7 @@ export default function CustomerHomePage() {
       {/* ====================================================== */}
       {/* MAP */}
       {/* ====================================================== */}
-      <GoogleMapClient radiusKm={25} />
+      <GoogleMapClient radiusKm={25} showBusinessErrors={false} />
     </div>
   );
 }

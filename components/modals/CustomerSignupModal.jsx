@@ -67,7 +67,8 @@ export default function CustomerSignupModal({ onClose }) {
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${origin}/customer/home` },
+      // Use shared OAuth callback to exchange code + create profile
+      options: { redirectTo: `${origin}/oauth/callback` },
     });
 
     if (oauthError) {

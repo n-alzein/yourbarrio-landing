@@ -243,23 +243,30 @@ export function AuthProvider({ children }) {
       });
     };
 
-    try {
-      if (client) {
-        const { error } = await client.auth.signOut({ scope: "global" });
-        if (error) console.error("Supabase signOut error", error);
-      }
-    } catch (err) {
-      console.error("Client logout failed", err);
+    const backgroundTasks = [];
+
+    if (client) {
+      // Kick off local + global signouts; don't block UI on these calls
+      backgroundTasks.push(
+        client
+          .auth
+          .signOut()
+          .catch((err) => console.error("Supabase local signOut error", err))
+      );
+      backgroundTasks.push(
+        client
+          .auth
+          .signOut({ scope: "global" })
+          .catch((err) => console.error("Supabase global signOut error", err))
+      );
     }
 
-    try {
-      await fetch("/api/logout", {
+    backgroundTasks.push(
+      fetch("/api/logout", {
         method: "POST",
         credentials: "include",
-      });
-    } catch (err) {
-      console.error("Server logout call failed", err);
-    }
+      }).catch((err) => console.error("Server logout call failed", err))
+    );
 
     clearCookies();
 
@@ -268,8 +275,7 @@ export function AuthProvider({ children }) {
     setLoadingUser(false);
 
     if (typeof window !== "undefined") {
-      window.location.replace("/");
-      window.location.reload();
+      window.location.assign("/");
     } else {
       router.replace("/");
       router.refresh();

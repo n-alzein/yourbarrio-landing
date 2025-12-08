@@ -10,6 +10,18 @@ export default function CustomerSavedPage() {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState([]);
 
+  useEffect(() => {
+    if (loadingUser) return;
+
+    if (!user?.id) {
+      setSaved([]);
+      setLoading(false);
+      return;
+    }
+
+    loadSaved();
+  }, [loadingUser, user?.id, supabase]);
+
   async function loadSaved() {
     setLoading(true);
   
@@ -63,7 +75,7 @@ export default function CustomerSavedPage() {
   if (loadingUser) return <div className="min-h-screen bg-black" />;
 
   return (
-    <div className="min-h-screen pt-32 px-6 text-white">
+    <div className="min-h-screen pt-0 px-6 text-white">
       <div className="max-w-6xl mx-auto">
 
         <h1 className="text-4xl font-extrabold mb-6 tracking-tight">

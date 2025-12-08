@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
+import { useTheme } from "../ThemeProvider";
 
 export default function PublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
+  const { hydrated, setTheme } = useTheme();
+  const hasForcedLight = useRef(false);
 
   useEffect(() => {
     // Prevent background scroll when the mobile menu is open
@@ -19,6 +22,21 @@ export default function PublicNavbar() {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!hydrated || hasForcedLight.current) return;
+
+    const onPublicLanding =
+      !pathname.startsWith("/business") &&
+      !pathname.startsWith("/business-auth") &&
+      !pathname.startsWith("/customer");
+
+    if (onPublicLanding) {
+      // Default public landing experience to light theme without blocking user toggles later
+      setTheme("light");
+      hasForcedLight.current = true;
+    }
+  }, [hydrated, pathname, setTheme]);
 
   // Hide navbar across app sections (business + customer) to avoid flicker on dashboards
   if (
@@ -60,7 +78,6 @@ export default function PublicNavbar() {
               </Link>
 
               <div className="hidden md:flex items-center gap-x-8">
-                <NavItem href="/businesses">Businesses</NavItem>
                 <NavItem href="/about">About</NavItem>
               </div>
             </div>
@@ -136,7 +153,6 @@ export default function PublicNavbar() {
               <div className="px-6 pt-6 pb-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
                 <div className="flex flex-col gap-3 text-lg font-semibold">
-                  <NavItem href="/businesses">Discover businesses</NavItem>
                   <NavItem href="/about">About YourBarrio</NavItem>
                 </div>
               </div>

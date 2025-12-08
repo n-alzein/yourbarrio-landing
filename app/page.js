@@ -3,9 +3,12 @@
 import PublicNavbar from "@/components/navbars/PublicNavbar";
 import GoogleMapClient from "@/components/GoogleMapClient";
 import { useModal } from "@/components/modals/ModalProvider";
+import { useTheme } from "@/components/ThemeProvider";
 
 export default function HomePage() {
   const { openModal } = useModal();
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
 
   return (
     <>
@@ -62,7 +65,13 @@ export default function HomePage() {
 
             {/* Right hero card */}
             <div className="relative">
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-purple-500/30 via-pink-500/20 to-rose-500/30 blur-2xl" />
+              <div
+                className={`absolute inset-0 rounded-3xl bg-gradient-to-tr blur-2xl ${
+                  isLight
+                    ? "from-indigo-500/20 via-sky-500/15 to-slate-800/20"
+                    : "from-purple-500/30 via-pink-500/20 to-rose-500/30"
+                }`}
+              />
               <div className="relative rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-2xl">
                 <GoogleMapClient
                   radiusKm={25}
@@ -73,7 +82,13 @@ export default function HomePage() {
                   showBusinessErrors={false}
                 />
 
-                <div className="mt-6 rounded-2xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 p-4 border border-white/10">
+                <div
+                  className={`mt-6 rounded-2xl bg-gradient-to-r p-4 border border-white/10 ${
+                    isLight
+                      ? "from-indigo-600/25 to-sky-600/25"
+                      : "from-purple-600/30 to-pink-600/30"
+                  }`}
+                >
                   <div className="text-sm font-semibold">Want your business listed?</div>
                   <div className="text-xs text-white/70 mt-1">
                     Join YourBarrio and reach locals instantly.
@@ -129,7 +144,13 @@ export default function HomePage() {
 
         {/* CTA */}
         <section className="max-w-7xl mx-auto px-6 py-14 md:py-20">
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-r from-purple-700/30 via-fuchsia-700/20 to-rose-700/30 p-8 md:p-12 text-center shadow-2xl">
+          <div
+            className={`rounded-3xl border border-white/10 bg-gradient-to-r p-8 md:p-12 text-center shadow-2xl ${
+              isLight
+                ? "from-indigo-600/20 via-sky-600/15 to-slate-700/20"
+                : "from-purple-700/30 via-fuchsia-700/20 to-rose-700/30"
+            }`}
+          >
             <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight">
               Ready to find what’s nearby?
             </h3>
