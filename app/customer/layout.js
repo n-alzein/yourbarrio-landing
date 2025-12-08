@@ -1,11 +1,11 @@
 "use client";
 
 import CustomerNavbar from "@/components/navbars/CustomerNavbar";
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
-export default function CustomerLayout({ children }) {
+function CustomerLayoutContent({ children }) {
   const { user, loadingUser } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -38,5 +38,13 @@ export default function CustomerLayout({ children }) {
         {children}
       </div>
     </>
+  );
+}
+
+export default function CustomerLayout(props) {
+  return (
+    <Suspense fallback={<div className="pt-20 min-h-screen" />}>
+      <CustomerLayoutContent {...props} />
+    </Suspense>
   );
 }
