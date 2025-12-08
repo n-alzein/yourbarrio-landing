@@ -2,6 +2,7 @@
 
 import PublicNavbar from "@/components/navbars/PublicNavbar";
 import { motion } from "framer-motion";
+import { useModal } from "@/components/modals/ModalProvider";
 
 import {
   LightBulbIcon,
@@ -10,6 +11,8 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function AboutPage() {
+  const { openModal } = useModal();
+
   return (
     <>
       {/* Public Navbar */}
@@ -106,12 +109,13 @@ export default function AboutPage() {
             strengthen local connections.
           </p>
 
-          <a
-            href="/auth/register"
+          <button
+            type="button"
+            onClick={() => openModal("customer-signup")}
             className="inline-block px-8 py-3 rounded-xl font-semibold text-white text-lg bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
           >
             Get Started
-          </a>
+          </button>
         </motion.div>
       </div>
     </>

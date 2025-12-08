@@ -5,6 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import Footer from "@/components/Footer";
 import PublicNavbar from "@/components/navbars/PublicNavbar";
+import { ModalProvider } from "@/components/modals/ModalProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = Geist({
@@ -34,29 +35,30 @@ export default function RootLayout({ children }) {
       >
         <ThemeProvider>
           <AuthProvider>
-            {/* GLOBAL BACKGROUND */}
-            <div className="absolute inset-0 -z-10 overflow-hidden h-full">
-              <div className="absolute inset-0" style={{ background: "var(--bg-solid)" }} />
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: "linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end))",
-                }}
-              />
-              <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
-              <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
-              <div className="animated-bg" />
-            </div>
+            <ModalProvider>
+              {/* GLOBAL BACKGROUND */}
+              <div className="absolute inset-0 -z-10 overflow-hidden h-full">
+                <div className="absolute inset-0" style={{ background: "var(--bg-solid)" }} />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: "linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end))",
+                  }}
+                />
+                <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
+                <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
+                <div className="animated-bg" />
+              </div>
 
-            {/* 🔥 ADD NAVBAR HERE */}
-            <PublicNavbar />
+              {/* 🔥 ADD NAVBAR HERE */}
+              <PublicNavbar />
 
-            {/* CONTENT */}
-            <div className="flex flex-col min-h-screen pt-20">
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-
+              {/* CONTENT */}
+              <div className="flex flex-col min-h-screen pt-20">
+                <main className="flex-1">{children}</main>
+                <Footer />
+              </div>
+            </ModalProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

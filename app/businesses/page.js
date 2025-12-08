@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import Link from "next/link";
 import PublicNavbar from "@/components/navbars/PublicNavbar";
+import { useModal } from "@/components/modals/ModalProvider";
 
 
 export default function PublicBusinessesPage() {
   const supabase = getBrowserSupabaseClient();
+  const { openModal } = useModal();
   const [businesses, setBusinesses] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -86,13 +87,14 @@ export default function PublicBusinessesPage() {
                 {biz.description || "No description provided."}
               </p>
 
-              <Link
-                href="/auth/register"
+              <button
+                type="button"
+                onClick={() => openModal("customer-signup")}
                 className="
                   inline-block mt-4 w-full text-center py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 font-semibold text-white hover:brightness-110 transition"
               >
                 Sign up to view more →
-              </Link>
+              </button>
             </div>
           </div>
         ))}
@@ -105,13 +107,14 @@ export default function PublicBusinessesPage() {
           Create an account to save businesses, get recommendations, and explore nearby deals.
         </p>
 
-        <Link
-          href="/auth/register"
+        <button
+          type="button"
+          onClick={() => openModal("customer-signup")}
           className="
             inline-flex items-center justify-center mt-5 px-6 py-3 rounded-xl bg-white text-black font-semibold text-lg hover:bg-white/90 transition"
         >
           Create a Free Account
-        </Link>
+        </button>
       </section>
     </main>
     </>

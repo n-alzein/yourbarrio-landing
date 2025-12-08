@@ -1,4 +1,10 @@
+"use client";
+
+import { useModal } from "./modals/ModalProvider";
+
 export default function Footer() {
+  const { openModal } = useModal();
+
   return (
     <footer className="mt-20 bg-white border-t border-slate-200 py-10 theme-lock">
       <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-10 text-slate-700">
@@ -28,7 +34,15 @@ export default function Footer() {
           <ul className="mt-3 space-y-2">
             <li><a href="/businesses" className="hover:text-indigo-600">Businesses</a></li>
             <li><a href="/about" className="hover:text-indigo-600">About</a></li>
-            <li><a href="/auth/login" className="hover:text-indigo-600">Login</a></li>
+            <li>
+              <button
+                type="button"
+                onClick={() => openModal("customer-login")}
+                className="hover:text-indigo-600"
+              >
+                Login
+              </button>
+            </li>
           </ul>
         </div>
 

@@ -9,8 +9,10 @@ export async function POST() {
   const cookieName = getCookieName();
 
   try {
+    const cookieStore = await cookies();
+
     const supabase = createRouteHandlerClient(
-      { cookies },
+      { cookies: () => cookieStore },
       cookieName ? { cookieOptions: { name: cookieName } } : undefined
     );
 
@@ -33,4 +35,3 @@ export async function POST() {
     return NextResponse.json({ success: false, error: "logout_failed" }, { status: 500 });
   }
 }
-

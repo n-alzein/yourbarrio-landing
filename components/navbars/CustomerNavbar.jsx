@@ -7,10 +7,12 @@ import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
+import { useModal } from "../modals/ModalProvider";
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
   const { user, role, loadingUser } = useAuth();
+  const { openModal } = useModal();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -104,13 +106,20 @@ export default function CustomerNavbar() {
 
           {!user && (
             <>
-              <NavItem href="/auth/login">Login</NavItem>
-              <Link
-                href="/auth/register"
+              <button
+                type="button"
+                onClick={() => openModal("customer-login")}
+                className="text-sm md:text-base transition text-white/70 hover:text-white"
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => openModal("customer-signup")}
                 className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold"
               >
                 Sign Up
-              </Link>
+              </button>
             </>
           )}
 
@@ -185,13 +194,26 @@ export default function CustomerNavbar() {
 
           {!user && (
             <>
-              <NavItem href="/auth/login">Login</NavItem>
-              <Link
-                href="/auth/register"
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  openModal("customer-login");
+                }}
+                className="text-left text-white/70 hover:text-white"
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  openModal("customer-signup");
+                }}
                 className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold"
               >
                 Sign Up
-              </Link>
+              </button>
             </>
           )}
 

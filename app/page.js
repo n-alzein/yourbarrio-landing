@@ -2,8 +2,11 @@
 
 import PublicNavbar from "@/components/navbars/PublicNavbar";
 import GoogleMapClient from "@/components/GoogleMapClient";
+import { useModal } from "@/components/modals/ModalProvider";
 
 export default function HomePage() {
+  const { openModal } = useModal();
+
   return (
     <>
       {/* Public Navbar */}
@@ -32,12 +35,13 @@ export default function HomePage() {
               </p>
 
               <div className="mt-7 flex flex-col sm:flex-row gap-3">
-                <a
-                  href="/auth/register"
+                <button
+                  type="button"
+                  onClick={() => openModal("customer-signup")}
                   className="inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg shadow-purple-500/30 hover:brightness-110 active:scale-[0.98] transition"
                 >
                   Get Started
-                </a>
+                </button>
               </div>
 
               <div className="mt-6 flex items-center gap-6 text-sm text-white/70">
@@ -133,12 +137,13 @@ export default function HomePage() {
               Create your account and start exploring your neighborhood today.
             </p>
             <div className="mt-6 flex justify-center">
-              <a
-                href="/register"
+              <button
+                type="button"
+                onClick={() => openModal("customer-signup")}
                 className="inline-flex items-center justify-center rounded-xl px-7 py-3 font-semibold bg-white text-black hover:bg-white/90 transition"
               >
                 Sign Up Free
-              </a>
+              </button>
             </div>
           </div>
         </section>

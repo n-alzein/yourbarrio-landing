@@ -90,29 +90,6 @@ export default function AboutPage() {
           </motion.div>
         </div>
 
-        {/* CTA */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
-          viewport={{ once: true }}
-          className="max-w-3xl mx-auto text-center mt-24 mb-20"
-        >
-          <h2 className="text-3xl md:text-4xl font-semibold mb-4">
-            Join Your Local Community
-          </h2>
-          <p className="text-white/80 text-lg mb-8">
-            Whether you're a resident or a business owner, YourBarrio helps
-            strengthen local connections.
-          </p>
-
-          <a
-            href="/auth/register"
-            className="inline-block px-8 py-3 rounded-xl font-semibold text-white text-lg bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
-          >
-            Get Started
-          </a>
-        </motion.div>
       </div>
     </>
   );

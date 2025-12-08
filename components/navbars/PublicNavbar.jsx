@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
+import { useModal } from "../modals/ModalProvider";
 
 export default function PublicNavbar() {
   const pathname = usePathname();
+  const { openModal } = useModal();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -76,15 +78,22 @@ export default function PublicNavbar() {
               </Link>
 
               {/* Customer Login */}
-              <NavItem href="/auth/login">Log in</NavItem>
+              <button
+                type="button"
+                onClick={() => openModal("customer-login")}
+                className="relative text-sm md:text-base font-medium transition-all text-white/70 hover:text-white"
+              >
+                Log in
+              </button>
 
               {/* Customer Sign Up */}
-              <Link
-                href="/auth/register"
+              <button
+                type="button"
+                onClick={() => openModal("customer-signup")}
                 className="px-5 py-2 rounded-xl font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white"
               >
                 Sign Up
-              </Link>
+              </button>
             </div>
 
             {/* MOBILE MENU BUTTON */}
@@ -145,20 +154,26 @@ export default function PublicNavbar() {
               <div className="h-px bg-white/10 mx-6" />
 
               <div className="px-6 py-6 flex flex-col gap-3">
-                <Link
-                  href="/auth/login"
+                <button
+                  type="button"
                   className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    openModal("customer-login");
+                  }}
                 >
                   Log in
-                </Link>
-                <Link
-                  href="/auth/register"
+                </button>
+                <button
+                  type="button"
                   className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 shadow-lg shadow-fuchsia-900/40"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    openModal("customer-signup");
+                  }}
                 >
                   Sign Up
-                </Link>
+                </button>
               </div>
 
               <div className="px-6 pb-6 text-xs text-white/60">
