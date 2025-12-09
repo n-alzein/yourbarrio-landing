@@ -1,169 +1,93 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import GoogleMapClient from "@/components/GoogleMapClient";
 
 export default function CustomerHomePage() {
-    const { user, loadingUser } = useAuth();
+  const { user, loadingUser } = useAuth();
 
-    if (loadingUser) {
-      return (
-        <div className="min-h-screen text-white relative pt-8 px-6">
-          <div className="absolute inset-0 -z-10 overflow-hidden">
-            <div className="absolute inset-0 bg-[#05010d]" />
-            <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
-            <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
-            <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
-          </div>
-          <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center space-y-3">
-              <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
-              <p className="text-lg text-white/80">Loading your account...</p>
-            </div>
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen text-white relative pt-8 px-6">
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute inset-0 bg-[#05010d]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
+          <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
+          <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+        </div>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
+            <p className="text-lg text-white/80">Loading your account...</p>
           </div>
         </div>
-      );
-    }
-    
-    const firstName = user?.full_name
-      ? user.full_name.split(" ")[0]
-      : "Welcome";
-    
+      </div>
+    );
+  }
+
+  const firstName = user?.full_name
+    ? user.full_name.split(" ")[0]
+    : "Welcome";
 
   return (
-    <div className="min-h-screen text-white relative pt-8 px-6">
+    <div className="min-h-screen text-white relative pt-0 px-6">
 
-      {/* 🔥 Background (same as About / Businesses pages) */}
+      {/* Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute inset-0 bg-[#05010d]" />
         <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
-
-        {/* Glows */}
         <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
         <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
       </div>
 
-      {/* ====================================================== */}
-      {/* HERO / GREETING */}
-      {/* ====================================================== */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="max-w-4xl mx-auto text-center mb-20"
-      >
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-          {firstName},{" "}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-            welcome back!
-          </span>
-        </h1>
-
-        <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto mt-4">
-          Discover your neighborhood’s best local businesses — curated with a clean, modern experience made just for you.
-        </p>
-      </motion.div>
-
-      {/* ====================================================== */}
-      {/* DASHBOARD CARDS */}
-      {/* ====================================================== */}
-
-      <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-10">
-
-        {/* Explore Businesses */}
+      <div className="max-w-6xl mx-auto">
         <motion.div
-          initial={{ opacity: 0, y: 25 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          viewport={{ once: true }}
+          className="flex flex-col gap-4 mb-10"
         >
-          <Link href="/customer/businesses">
-            <div className="group cursor-pointer p-8 rounded-2xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-xl hover:bg-white/20 transition">
-              <h3 className="text-2xl font-semibold mb-2">Explore Businesses</h3>
-              <p className="text-white/70">
-                Discover local restaurants, salons, services, and hidden gems near you.
-              </p>
-              <div className="mt-5 text-purple-300 group-hover:text-purple-200 font-medium">
-                Browse now →
-              </div>
-            </div>
-          </Link>
+          <div className="text-sm uppercase tracking-[0.22em] text-white/60">
+            Quick start
+          </div>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+              {firstName}, explore your barrio
+            </h1>
+            <span className="text-sm px-3 py-1 rounded-full border border-white/15 bg-white/5 text-white/80">
+              Live view, curated picks, instant access
+            </span>
+          </div>
         </motion.div>
 
-        {/* Saved Listings */}
         <motion.div
-          initial={{ opacity: 0, y: 25 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          viewport={{ once: true }}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.65, delay: 0.1 }}
+          className="rounded-3xl border border-white/12 bg-white/5 backdrop-blur-2xl shadow-2xl overflow-hidden"
         >
-          <Link href="/customer/saved">
-            <div className="group cursor-pointer p-8 rounded-2xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-xl hover:bg-white/20 transition">
-              <h3 className="text-2xl font-semibold mb-2">Saved Favorites</h3>
-              <p className="text-white/70">
-                Quickly access your bookmarked and favorite local spots.
-              </p>
-              <div className="mt-5 text-purple-300 group-hover:text-purple-200 font-medium">
-                View saved →
-              </div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 pt-6">
+            <div>
+              <div className="text-xs uppercase tracking-[0.25em] text-white/60">Map</div>
+              <div className="text-2xl font-semibold">See what’s open near you</div>
+              <p className="text-sm text-white/70 mt-1">Live discovery within 25km — drag, zoom, and tap to connect.</p>
             </div>
-          </Link>
+          </div>
+          <div className="p-4">
+            <GoogleMapClient
+              radiusKm={25}
+              showBusinessErrors={false}
+              containerClassName="w-full"
+              cardClassName="bg-transparent border-0 text-white"
+              mapClassName="h-[520px] rounded-2xl overflow-hidden border border-white/10"
+              title=""
+              enableCategoryFilter
+              enableSearch
+            />
+          </div>
         </motion.div>
-
-        {/* Profile */}
-        <motion.div
-          initial={{ opacity: 0, y: 25 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          viewport={{ once: true }}
-        >
-          <Link href="/profile">
-            <div className="group cursor-pointer p-8 rounded-2xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-xl hover:bg-white/20 transition">
-              <h3 className="text-2xl font-semibold mb-2">Your Profile</h3>
-              <p className="text-white/70">
-                Update your info, manage your account, and customize preferences.
-              </p>
-              <div className="mt-5 text-purple-300 group-hover:text-purple-200 font-medium">
-                Go to profile →
-              </div>
-            </div>
-          </Link>
-        </motion.div>
-
       </div>
-
-      {/* ====================================================== */}
-      {/* CTA */}
-      {/* ====================================================== */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7 }}
-        viewport={{ once: true }}
-        className="max-w-3xl mx-auto text-center mt-32 mb-20"
-      >
-        <h2 className="text-3xl md:text-4xl font-semibold mb-4">
-          Support Local. Explore Smart.
-        </h2>
-
-        <p className="text-white/80 text-lg mb-8">
-          YourBarrio connects you to authentic local businesses — beautifully and effortlessly.
-        </p>
-
-        <Link
-          href="/customer/businesses"
-          className="inline-block px-8 py-3 rounded-xl font-semibold text-white text-lg bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg hover:scale-105 active:scale-95 transition-all"
-        >
-          Explore Near You
-        </Link>
-      </motion.div>
-
-      {/* ====================================================== */}
-      {/* MAP */}
-      {/* ====================================================== */}
-      <GoogleMapClient radiusKm={25} showBusinessErrors={false} />
     </div>
   );
 }

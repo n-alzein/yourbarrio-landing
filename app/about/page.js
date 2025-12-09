@@ -1,8 +1,10 @@
 "use client";
 
-import PublicNavbar from "@/components/navbars/PublicNavbar";
 import { motion } from "framer-motion";
 import { useModal } from "@/components/modals/ModalProvider";
+import { useAuth } from "@/components/AuthProvider";
+import CustomerNavbar from "@/components/navbars/CustomerNavbar";
+import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 
 import {
   LightBulbIcon,
@@ -12,11 +14,22 @@ import {
 
 export default function AboutPage() {
   const { openModal } = useModal();
+  const { user, role, loadingUser } = useAuth();
+
+  const navbarShell = (
+    <div className="fixed top-0 inset-x-0 z-50 h-20 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
+  );
+
+  const renderNavbar = () => {
+    if (loadingUser) return navbarShell;
+    if (role === "business") return <BusinessNavbar />;
+    if (user) return <CustomerNavbar />;
+    return null;
+  };
 
   return (
     <>
-      {/* Public Navbar */}
-      <PublicNavbar />
+      {renderNavbar()}
 
       <div className="min-h-screen text-white relative pt-28 px-6">
 

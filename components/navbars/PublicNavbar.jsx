@@ -6,12 +6,14 @@ import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
 import { useTheme } from "../ThemeProvider";
+import { useAuth } from "../AuthProvider";
 
 export default function PublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
   const { hydrated, setTheme } = useTheme();
+  const { user, role, loadingUser } = useAuth();
   const hasForcedLight = useRef(false);
 
   useEffect(() => {
@@ -43,6 +45,14 @@ export default function PublicNavbar() {
     pathname.startsWith("/business") ||
     pathname.startsWith("/business-auth") ||
     pathname.startsWith("/customer")
+  ) {
+    return null;
+  }
+
+  // Hide public navbar on about/legal pages for authenticated users to avoid role flicker
+  if (
+    (pathname === "/privacy" || pathname === "/terms" || pathname === "/about") &&
+    (loadingUser || user || role)
   ) {
     return null;
   }

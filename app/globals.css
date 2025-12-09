@@ -128,6 +128,24 @@ button {
   color: #fff !important;
 }
 
+/* Light theme — keep navbars on dark gradient to match dark theme */
+.theme-light nav.theme-lock {
+  background: linear-gradient(90deg, rgba(15, 6, 32, 0.9), rgba(42, 8, 84, 0.8), rgba(74, 8, 83, 0.85)) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-light nav.theme-lock .text-white {
+  color: #fff !important;
+}
+
+.theme-light nav.theme-lock [class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.theme-light nav.theme-lock [class*="border-white"] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
 /* PREMIUM BUTTON */
 .btn-primary {
   background: var(--accent);
@@ -231,17 +249,44 @@ html, body {
 
 /* Google Maps Advanced Marker styles */
 .yb-marker {
-  display: inline-block;
+  display: inline-flex;
 }
-.yb-marker-inner {
-  background: white;
-  color: #111827;
-  padding: 6px 10px;
+.yb-marker-local {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e5e7eb;
+  padding: 6px;
   border-radius: 12px;
-  font-weight: 600;
-  box-shadow: 0 6px 18px rgba(2,6,23,0.35);
+  border: 1px solid rgba(156, 163, 175, 0.65);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
   transform: translateY(-6px);
   white-space: nowrap;
+}
+.yb-marker-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: linear-gradient(145deg, #9ca3af, #6b7280);
+  border: 2px solid #f3f4f6;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.32);
+}
+.yb-marker-label {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  transition: all 160ms ease;
+}
+.yb-marker:hover .yb-marker-label,
+.yb-marker:focus-visible .yb-marker-label {
+  opacity: 1;
+  max-width: 240px;
+  margin-left: 8px;
 }
 
 .yb-user-marker {

@@ -34,7 +34,7 @@ export default function BusinessDashboard() {
     }
 
     if (role !== "business") {
-      router.replace("/profile");
+      router.replace("/customer/settings");
       return;
     }
   }, [hydrated, loadingUser, user, role, router]);

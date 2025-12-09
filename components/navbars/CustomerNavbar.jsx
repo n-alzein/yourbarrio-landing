@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import {
   Bookmark,
   Building2,
@@ -18,7 +19,7 @@ import { useModal } from "../modals/ModalProvider";
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
-  const { user, loadingUser } = useAuth();
+  const { user, authUser, loadingUser } = useAuth();
   const { openModal } = useModal();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -71,7 +72,7 @@ export default function CustomerNavbar() {
   /* ---------------------------------------------------
      AVATAR PRIORITY
   --------------------------------------------------- */
-  const googleAvatar = user?.authUser?.user_metadata?.avatar_url || null;
+  const googleAvatar = authUser?.user_metadata?.avatar_url || null;
 
   const avatar =
     user?.profile_photo_url?.trim() ||
@@ -195,8 +196,11 @@ export default function CustomerNavbar() {
                 onClick={() => setProfileMenuOpen((open) => !open)}
                 className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
               >
-                <img
+                <Image
                   src={avatar}
+                  alt="Profile avatar"
+                  width={40}
+                  height={40}
                   className="h-10 w-10 rounded-2xl object-cover border border-white/20"
                 />
                 <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
@@ -211,10 +215,12 @@ export default function CustomerNavbar() {
                 >
                   <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
                     <div className="flex items-center gap-3 px-4 py-4">
-                      <img
+                      <Image
                         src={avatar}
-                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
                         alt="Profile avatar"
+                        width={48}
+                        height={48}
+                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
                       />
                       <div>
                         <p className="text-sm font-semibold text-white">{displayName}</p>

@@ -33,6 +33,8 @@ export default function Footer() {
           <h4 className="text-lg font-semibold">Navigation</h4>
           <ul className="mt-3 space-y-2">
             <li><a href="/about" className="hover:text-indigo-600">About</a></li>
+            <li><a href="/privacy" className="hover:text-indigo-600">Privacy</a></li>
+            <li><a href="/terms" className="hover:text-indigo-600">Terms</a></li>
             <li>
               <button
                 type="button"

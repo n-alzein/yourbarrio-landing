@@ -1,6 +1,5 @@
 "use client";
 
-import CustomerNavbar from "@/components/navbars/CustomerNavbar";
 import { motion } from "framer-motion";
 
 import {
@@ -12,9 +11,6 @@ import {
 export default function AboutPage() {
   return (
     <>
-      {/* Customer Navbar */}
-      <CustomerNavbar />
-
       <div className="min-h-screen text-white relative pt-8 px-6">
 
         {/* Header Section */}

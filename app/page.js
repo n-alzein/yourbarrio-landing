@@ -94,13 +94,13 @@ export default function HomePage() {
                     Join YourBarrio and reach locals instantly.
                   </div>
                   <a
-                    className="mt-3 inline-flex text-sm font-semibold underline underline-offset-4 hover:text-white"
-                    href="http://localhost:3000/business"
-                  >
-                    Become a partner →
-                  </a>
-                </div>
+                  className="mt-3 inline-flex text-sm font-semibold underline underline-offset-4 hover:text-white"
+                  href="/business"
+                >
+                  Become a partner →
+                </a>
               </div>
+            </div>
             </div>
           </div>
         </section>
