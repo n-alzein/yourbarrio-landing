@@ -92,10 +92,10 @@ export default function CustomerSavedPage() {
               Explore and save your favorite places.
             </p>
             <Link
-              href="/customer/businesses"
+              href="/customer/home"
               className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-lg font-semibold hover:brightness-110 transition"
             >
-              Discover Businesses
+              Discover Nearby
             </Link>
           </div>
         )}

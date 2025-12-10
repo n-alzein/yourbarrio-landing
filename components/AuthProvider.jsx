@@ -27,6 +27,13 @@ export function AuthProvider({ children }) {
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   /* -----------------------------------------------------------------
      FIX 429 ERROR — SANITIZE GOOGLE IDENTITIES
@@ -102,32 +109,64 @@ export function AuthProvider({ children }) {
   }
 
   /* -----------------------------------------------------------------
+     SAFE RESET / CLEAR
+  ----------------------------------------------------------------- */
+  const finishLoading = () => {
+    if (isMountedRef.current) setLoadingUser(false);
+  };
+
+  const resetState = () => {
+    if (!isMountedRef.current) return;
+    setAuthUser(null);
+    setProfile(null);
+  };
+
+  const clearBrokenSession = async () => {
+    try {
+      await supabase?.auth?.signOut();
+    } catch (err) {
+      console.warn("Supabase signOut failed while clearing session", err);
+    }
+    resetState();
+  };
+
+  /* -----------------------------------------------------------------
      INITIAL SESSION LOAD
   ----------------------------------------------------------------- */
   useEffect(() => {
-    let mounted = true;
-
     async function init() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const rawUser = session?.user ?? null;
-      if (!mounted) return;
-
-      const user = sanitizeAuthUser(rawUser);
-      setAuthUser(user);
-
-      if (user) {
-        const p = await loadProfile(user.id);
-        if (mounted) {
-          setProfile(p);
-
-          await cacheGoogleAvatar(user, p);
-        }
+      if (!supabase) {
+        finishLoading();
+        return;
       }
 
-      setLoadingUser(false);
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        const rawUser = session?.user ?? null;
+        if (!isMountedRef.current) return;
+
+        const user = sanitizeAuthUser(rawUser);
+        setAuthUser(user);
+
+        if (user) {
+          const p = await loadProfile(user.id);
+          if (isMountedRef.current) {
+            setProfile(p);
+
+            await cacheGoogleAvatar(user, p);
+          }
+        }
+      } catch (err) {
+        console.error("Auth init failed — clearing stale session", err);
+        await clearBrokenSession();
+      } finally {
+        finishLoading();
+      }
     }
 
     init();
@@ -135,34 +174,39 @@ export function AuthProvider({ children }) {
     /* -----------------------------------------------------------------
        AUTH LISTENER
     ----------------------------------------------------------------- */
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // Skip only the synthetic initial event; handle real sign-ins immediately
-        if (event === "INITIAL_SESSION") return;
+    const { data: listener } = supabase
+      ? supabase.auth.onAuthStateChange(async (event, session) => {
+          try {
+            // Skip only the synthetic initial event; handle real sign-ins immediately
+            if (event === "INITIAL_SESSION") return;
 
-        if (sessionStorage.getItem("forceLogout") === "1") {
-          sessionStorage.removeItem("forceLogout");
-          return;
-        }
+            if (sessionStorage.getItem("forceLogout") === "1") {
+              sessionStorage.removeItem("forceLogout");
+              return;
+            }
 
-        const rawUser = session?.user ?? null;
-        const user = sanitizeAuthUser(rawUser);
+            const rawUser = session?.user ?? null;
+            const user = sanitizeAuthUser(rawUser);
 
-        setAuthUser(user);
+            setAuthUser(user);
 
-        if (user) {
-          const p = await loadProfile(user.id);
-          setProfile(p);
+            if (user) {
+              const p = await loadProfile(user.id);
+              setProfile(p);
 
-          await cacheGoogleAvatar(user, p);
-        } else {
-          setProfile(null);
-        }
-      }
-    );
+              await cacheGoogleAvatar(user, p);
+            } else {
+              setProfile(null);
+            }
+          } catch (err) {
+            console.error("Auth listener failed — clearing session", err);
+            await clearBrokenSession();
+            finishLoading();
+          }
+        })
+      : { subscription: { unsubscribe: () => {} } };
 
     return () => {
-      mounted = false;
       listener.subscription.unsubscribe();
     };
   }, [supabase]);
@@ -173,22 +217,31 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     async function handleStorage(event) {
       if (event.key !== "business_auth_success") return;
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const rawUser = session?.user ?? null;
-      const user = sanitizeAuthUser(rawUser);
-      setAuthUser(user);
-
-      if (user) {
-        const p = await loadProfile(user.id);
-        setProfile(p);
-        await cacheGoogleAvatar(user, p);
+      if (!supabase) {
+        finishLoading();
+        return;
       }
 
-      setLoadingUser(false);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const rawUser = session?.user ?? null;
+        const user = sanitizeAuthUser(rawUser);
+        setAuthUser(user);
+
+        if (user) {
+          const p = await loadProfile(user.id);
+          setProfile(p);
+          await cacheGoogleAvatar(user, p);
+        }
+      } catch (err) {
+        console.error("Storage auth sync failed", err);
+        await clearBrokenSession();
+      }
+
+      finishLoading();
     }
 
     window.addEventListener("storage", handleStorage);

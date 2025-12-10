@@ -146,6 +146,19 @@ button {
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
+/* YB badge theme contrast */
+.yb-badge {
+  background: rgba(16, 185, 129, 0.18);
+  color: #bbf7d0;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.theme-light .yb-badge {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #34d399;
+}
+
 /* PREMIUM BUTTON */
 .btn-primary {
   background: var(--accent);

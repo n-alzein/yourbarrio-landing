@@ -102,6 +102,7 @@ const computeVisibleRadiusMeters = (mapInstance, fallbackMeters) => {
 };
 
 const FALLBACK_CENTER = { lat: 37.7749, lng: -122.4194 };
+const GEOCODE_TIMEOUT_MS = 1200;
 
 export default function GoogleMapClient({
   radiusKm = 25,
@@ -171,6 +172,13 @@ export default function GoogleMapClient({
     return client;
   };
 
+  const geocodeWithTimeout = async (address) => {
+    const timeout = new Promise((resolve) => {
+      setTimeout(() => resolve(null), GEOCODE_TIMEOUT_MS);
+    });
+    return Promise.race([geocodeAddress(address), timeout]);
+  };
+
   const geocodeAddress = async (address) => {
     if (!address) return null;
     const key = address.trim().toLowerCase();
@@ -233,26 +241,29 @@ export default function GoogleMapClient({
         (row) => row?.address && (row.role === "business" || row.business_name)
       );
 
-      const mapped = [];
-      for (const row of rows) {
-        const displayAddress = row.city ? `${row.address}, ${row.city}` : row.address;
-        const coords = await geocodeAddress(displayAddress);
-        if (!coords) continue;
+      const mapped = (await Promise.allSettled(
+        rows.map(async (row) => {
+          const displayAddress = row.city ? `${row.address}, ${row.city}` : row.address;
+          const coords = await geocodeWithTimeout(displayAddress);
+          if (!coords) return null;
 
-        mapped.push({
-          id: row.id,
-          name: row.business_name || row.full_name || "Local Business",
-          address: displayAddress,
-          coords,
-          categoryLabel: row.category
-            ? formatCategory(row.category.replace(/\s+/g, "_"))
-            : "Local Business",
-          source: "supabase_users",
-          imageUrl: row.profile_photo_url || null,
-          description: row.description || "",
-          website: row.website || "",
-        });
-      }
+          return {
+            id: row.id,
+            name: row.business_name || row.full_name || "Local Business",
+            address: displayAddress,
+            coords,
+            categoryLabel: row.category
+              ? formatCategory(row.category.replace(/\s+/g, "_"))
+              : "Local Business",
+            source: "supabase_users",
+            imageUrl: row.profile_photo_url || null,
+            description: row.description || "",
+            website: row.website || "",
+          };
+        })
+      ))
+        .map((res) => (res.status === "fulfilled" ? res.value : null))
+        .filter(Boolean);
 
       curatedBusinessesRef.current = mapped;
       return mapped;
@@ -741,8 +752,7 @@ export default function GoogleMapClient({
 
   useEffect(() => {
     if (!externalSearchTrigger) return;
-    if (!externalSearchTerm) return;
-    performSearch(externalSearchTerm);
+    performSearch(externalSearchTerm || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSearchTrigger]);
 
@@ -771,7 +781,36 @@ export default function GoogleMapClient({
   };
 
   const performSearch = async (term) => {
-    if (!term?.trim() || !mapInstanceRef.current) return;
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Empty search: refresh current view with all businesses in bounds
+    if (!term?.trim()) {
+      if (!loadAndPlaceMarkersRef.current) return;
+      const center = map.getCenter();
+      if (!center) return;
+      setSearchLoading(true);
+      setSearchError(null);
+      setSearchMessage(null);
+      detachMarker(searchMarkerRef.current);
+      try {
+        await loadAndPlaceMarkersRef.current(
+          center.lat(),
+          center.lng(),
+          map.getZoom(),
+          computeVisibleRadiusMeters(map, radiusKm * 1000)
+        );
+        setActiveCategory("All");
+        setSearchMessage("Showing all businesses nearby.");
+      } catch (err) {
+        console.error("Refresh search failed", err);
+        setSearchError("Could not refresh nearby businesses.");
+      } finally {
+        setSearchLoading(false);
+      }
+      return;
+    }
+
     setSearchLoading(true);
     setSearchError(null);
     setSearchMessage(null);

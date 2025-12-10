@@ -6,7 +6,6 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import {
   Bookmark,
-  Building2,
   ChevronDown,
   Compass,
   LogOut,
@@ -120,12 +119,6 @@ export default function CustomerNavbar() {
       icon: Compass,
     },
     {
-      href: "/customer/businesses",
-      title: "Find businesses",
-      description: "Curated shops in your barrio",
-      icon: Building2,
-    },
-    {
       href: "/customer/saved",
       title: "Saved spots",
       description: "Instant access to your favorites",
@@ -161,7 +154,6 @@ export default function CustomerNavbar() {
 
           <div className="hidden md:flex items-center gap-8">
             <NavItem href="/customer/home">Home</NavItem>
-            <NavItem href="/customer/businesses">Businesses</NavItem>
             <NavItem href="/customer/saved">Saved</NavItem>
             <NavItem href="/customer/about">About</NavItem>
           </div>
@@ -259,7 +251,6 @@ export default function CustomerNavbar() {
                           <Settings className="h-4 w-4" />
                           Account settings
                         </span>
-                        <span className="text-white/50 text-xs">⌘ ,</span>
                       </Link>
                       <LogoutButton
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
@@ -297,7 +288,6 @@ export default function CustomerNavbar() {
       {mobileMenuOpen && (
         <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
           <NavItem href="/customer/home">Home</NavItem>
-          <NavItem href="/customer/businesses">Businesses</NavItem>
           <NavItem href="/customer/saved">Saved</NavItem>
           <NavItem href="/customer/about">About</NavItem>
           <ThemeToggle showLabel align="left" />

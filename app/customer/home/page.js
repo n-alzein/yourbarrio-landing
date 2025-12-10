@@ -1,17 +1,22 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import GoogleMapClient from "@/components/GoogleMapClient";
 
 export default function CustomerHomePage() {
-  const { user, loadingUser } = useAuth();
+  const { user, loadingUser, supabase } = useAuth();
   const [search, setSearch] = useState("");
   const [mapBusinesses, setMapBusinesses] = useState([]);
   const [mapControls, setMapControls] = useState(null);
   const [searchTrigger, setSearchTrigger] = useState(0);
   const [showMapMobile, setShowMapMobile] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState(null);
+  const [activePanel, setActivePanel] = useState("map"); // "map" | "listings"
+  const [businessListings, setBusinessListings] = useState([]);
+  const [listingsLoading, setListingsLoading] = useState(false);
+  const [listingsError, setListingsError] = useState(null);
 
   const filteredBusinesses = useMemo(() => {
     const source = mapBusinesses;
@@ -34,14 +39,58 @@ export default function CustomerHomePage() {
 
   const handleSubmitSearch = (e) => {
     e.preventDefault();
-    if (!search.trim()) return;
     mapControls?.search?.(search.trim());
     setSearchTrigger((n) => n + 1);
   };
 
   const handleSelectBusiness = (biz) => {
+    setSelectedBusiness(biz);
+    setActivePanel("map");
+    setShowMapMobile(true);
     mapControls?.focusBusiness?.(biz);
   };
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (!selectedBusiness || selectedBusiness.source !== "supabase_users" || !supabase) {
+      setBusinessListings([]);
+      setListingsLoading(false);
+      setListingsError(null);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const loadListings = async () => {
+      setListingsLoading(true);
+      setListingsError(null);
+
+      const { data, error } = await supabase
+        .from("listings")
+        .select("*")
+        .eq("business_id", selectedBusiness.id)
+        .order("created_at", { ascending: false });
+
+      if (!isActive) return;
+
+      if (error) {
+        console.error("Failed to load business listings", error);
+        setListingsError("Could not load listings for this business.");
+        setBusinessListings([]);
+      } else {
+        setBusinessListings(data || []);
+      }
+
+      setListingsLoading(false);
+    };
+
+    loadListings();
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedBusiness, supabase]);
 
   if (loadingUser) {
     return (
@@ -132,7 +181,9 @@ export default function CustomerHomePage() {
                   {filteredBusinesses.map((biz) => (
                     <div
                       key={biz.id || biz.name}
-                      className="rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition shadow-sm cursor-pointer"
+                      className={`rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition shadow-sm cursor-pointer ${
+                        selectedBusiness?.id === biz.id ? "border-white/30 bg-white/10" : ""
+                      }`}
                       onClick={() => handleSelectBusiness(biz)}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -140,7 +191,7 @@ export default function CustomerHomePage() {
                           <div className="flex items-center gap-2">
                             <span className="text-base font-semibold">{biz.name}</span>
                             {biz.source === "supabase_users" ? (
-                              <span className="text-[10px] px-2 py-[2px] rounded-full bg-emerald-400/20 text-emerald-100 border border-emerald-300/30">
+                              <span className="yb-badge inline-flex items-center text-[10px] px-2 py-[2px] rounded-full border font-semibold">
                                 YB
                               </span>
                             ) : null}
@@ -171,20 +222,121 @@ export default function CustomerHomePage() {
               <div
                 className={`lg:col-span-3 ${showMapMobile ? "block" : "hidden lg:block"}`}
               >
-                <GoogleMapClient
-                  radiusKm={25}
-                  showBusinessErrors={false}
-                  containerClassName="w-full"
-                  cardClassName="bg-transparent border-0 text-white"
-                  mapClassName="h-[520px] rounded-2xl overflow-hidden border border-white/10"
-                  title=""
-                  enableCategoryFilter={false}
-                  enableSearch={false}
-                  onBusinessesChange={setMapBusinesses}
-                  onControlsReady={setMapControls}
-                  externalSearchTerm={search}
-                  externalSearchTrigger={searchTrigger}
-                />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-white/80">
+                    {selectedBusiness ? `Selected: ${selectedBusiness.name}` : "Map view"}
+                  </div>
+                  {selectedBusiness ? (
+                    selectedBusiness.source === "supabase_users" ? (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setActivePanel("map")}
+                          className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                            activePanel === "map"
+                              ? "bg-white text-black"
+                              : "text-white hover:bg-white/10"
+                          }`}
+                        >
+                          Map
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActivePanel("listings")}
+                          className={`px-3 py-1 text-xs font-semibold rounded-full transition ${
+                            activePanel === "listings"
+                              ? "bg-white text-black"
+                              : "text-white hover:bg-white/10"
+                          }`}
+                        >
+                          Listings
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-white/60">
+                        Listings available for YourBarrio businesses
+                      </span>
+                    )
+                  ) : null}
+                </div>
+
+                {activePanel === "listings" && selectedBusiness?.source === "supabase_users" ? (
+                  <div className="h-[520px] rounded-2xl border border-white/10 bg-white/5 overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <div className="text-sm font-semibold">{selectedBusiness.name}</div>
+                      <div className="text-xs text-white/60">
+                        Listings provided by this business
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-auto p-4 space-y-3">
+                      {listingsLoading ? (
+                        <div className="text-sm text-white/70">Loading listings...</div>
+                      ) : listingsError ? (
+                        <div className="text-sm text-red-200">{listingsError}</div>
+                      ) : businessListings.length ? (
+                        businessListings.map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-xl border border-white/10 bg-white/5 p-4 flex gap-3"
+                          >
+                            {item.photo_url ? (
+                              <img
+                                src={item.photo_url}
+                                alt={item.title}
+                                className="h-20 w-20 rounded-lg object-cover border border-white/10"
+                              />
+                            ) : (
+                              <div className="h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] text-white/60">
+                                No image
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold">{item.title}</div>
+                                  {item.category ? (
+                                    <div className="text-[11px] uppercase tracking-wide text-white/50 mt-1">
+                                      {item.category}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                {item.price ? (
+                                  <div className="text-sm font-semibold text-white/90">
+                                    ${item.price}
+                                  </div>
+                                ) : null}
+                              </div>
+                              {item.description ? (
+                                <p className="text-sm text-white/75 mt-2 leading-snug">
+                                  {item.description}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-white/70">
+                          This business hasn’t shared any listings yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <GoogleMapClient
+                    radiusKm={25}
+                    showBusinessErrors={false}
+                    containerClassName="w-full"
+                    cardClassName="bg-transparent border-0 text-white"
+                    mapClassName="h-[520px] rounded-2xl overflow-hidden border border-white/10"
+                    title=""
+                    enableCategoryFilter={false}
+                    enableSearch={false}
+                    onBusinessesChange={setMapBusinesses}
+                    onControlsReady={setMapControls}
+                    externalSearchTerm={search}
+                    externalSearchTrigger={searchTrigger}
+                  />
+                )}
               </div>
             </div>
           </div>
