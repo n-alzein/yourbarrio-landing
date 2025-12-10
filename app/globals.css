@@ -272,6 +272,17 @@ html, body {
   border: 2px solid #f3f4f6;
   box-shadow: 0 5px 12px rgba(0, 0, 0, 0.32);
 }
+.yb-marker-curated .yb-marker-local {
+  background: linear-gradient(155deg, rgba(16, 185, 129, 0.96), rgba(5, 150, 105, 0.94));
+  border-color: rgba(236, 253, 245, 0.8);
+  color: #032d20;
+  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.35);
+}
+.yb-marker-icon-green {
+  background: linear-gradient(145deg, #34d399, #059669);
+  border: 2px solid #ecfdf3;
+  box-shadow: 0 5px 12px rgba(16, 185, 129, 0.35);
+}
 .yb-marker-label {
   font-weight: 700;
   font-size: 13px;

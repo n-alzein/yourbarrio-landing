@@ -1,11 +1,47 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import GoogleMapClient from "@/components/GoogleMapClient";
 
 export default function CustomerHomePage() {
   const { user, loadingUser } = useAuth();
+  const [search, setSearch] = useState("");
+  const [mapBusinesses, setMapBusinesses] = useState([]);
+  const [mapControls, setMapControls] = useState(null);
+  const [searchTrigger, setSearchTrigger] = useState(0);
+  const [showMapMobile, setShowMapMobile] = useState(false);
+
+  const filteredBusinesses = useMemo(() => {
+    const source = mapBusinesses;
+    const q = search.trim().toLowerCase();
+    if (!q) return source;
+    return source.filter((biz) => {
+      const name = biz.name?.toLowerCase() || "";
+      const category =
+        biz.categoryLabel?.toLowerCase() ||
+        biz.category?.toLowerCase() ||
+        "";
+      const desc = biz.description?.toLowerCase() || "";
+      return (
+        name.includes(q) ||
+        category.includes(q) ||
+        desc.includes(q)
+      );
+    });
+  }, [mapBusinesses, search]);
+
+  const handleSubmitSearch = (e) => {
+    e.preventDefault();
+    if (!search.trim()) return;
+    mapControls?.search?.(search.trim());
+    setSearchTrigger((n) => n + 1);
+  };
+
+  const handleSelectBusiness = (biz) => {
+    mapControls?.focusBusiness?.(biz);
+  };
 
   if (loadingUser) {
     return (
@@ -43,25 +79,6 @@ export default function CustomerHomePage() {
 
       <div className="max-w-6xl mx-auto">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-col gap-4 mb-10"
-        >
-          <div className="text-sm uppercase tracking-[0.22em] text-white/60">
-            Quick start
-          </div>
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-              {firstName}, explore your barrio
-            </h1>
-            <span className="text-sm px-3 py-1 rounded-full border border-white/15 bg-white/5 text-white/80">
-              Live view, curated picks, instant access
-            </span>
-          </div>
-        </motion.div>
-
-        <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.65, delay: 0.1 }}
@@ -74,17 +91,102 @@ export default function CustomerHomePage() {
               <p className="text-sm text-white/70 mt-1">Live discovery within 25km — drag, zoom, and tap to connect.</p>
             </div>
           </div>
-          <div className="p-4">
-            <GoogleMapClient
-              radiusKm={25}
-              showBusinessErrors={false}
-              containerClassName="w-full"
-              cardClassName="bg-transparent border-0 text-white"
-              mapClassName="h-[520px] rounded-2xl overflow-hidden border border-white/10"
-              title=""
-              enableCategoryFilter
-              enableSearch
-            />
+          <div className="p-5">
+            <div className="flex items-center justify-between lg:hidden mb-3">
+              <div className="text-sm text-white/80">Browse results</div>
+              <button
+                type="button"
+                onClick={() => setShowMapMobile((v) => !v)}
+                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
+              >
+                {showMapMobile ? "Show list" : "Show map"}
+              </button>
+            </div>
+
+            <div className="grid lg:grid-cols-5 gap-4">
+              <div
+                className={`lg:col-span-2 flex flex-col gap-3 ${
+                  showMapMobile ? "hidden lg:flex" : "flex"
+                }`}
+              >
+                <form
+                  onSubmit={handleSubmitSearch}
+                  className="flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-3 py-2 shadow-sm"
+                >
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search coffee, groceries, salon..."
+                    className="w-full bg-transparent text-sm text-white placeholder:text-white/60 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="text-xs text-black bg-white rounded-full px-3 py-1 font-semibold hover:bg-white/90"
+                  >
+                    Search
+                  </button>
+                </form>
+
+                <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
+                  {filteredBusinesses.map((biz) => (
+                    <div
+                      key={biz.id || biz.name}
+                      className="rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition shadow-sm cursor-pointer"
+                      onClick={() => handleSelectBusiness(biz)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-semibold">{biz.name}</span>
+                            {biz.source === "supabase_users" ? (
+                              <span className="text-[10px] px-2 py-[2px] rounded-full bg-emerald-400/20 text-emerald-100 border border-emerald-300/30">
+                                YB
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-white/70 mt-1">
+                            {(biz.categoryLabel || biz.category || "Local spot")}
+                          </div>
+                          {biz.address ? (
+                            <div className="text-xs text-white/60 mt-1">{biz.address}</div>
+                          ) : null}
+                          {biz.description ? (
+                            <div className="text-sm text-white/80 mt-2 leading-snug">
+                              {biz.description}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!filteredBusinesses.length ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                      No matches yet. Try another search term.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div
+                className={`lg:col-span-3 ${showMapMobile ? "block" : "hidden lg:block"}`}
+              >
+                <GoogleMapClient
+                  radiusKm={25}
+                  showBusinessErrors={false}
+                  containerClassName="w-full"
+                  cardClassName="bg-transparent border-0 text-white"
+                  mapClassName="h-[520px] rounded-2xl overflow-hidden border border-white/10"
+                  title=""
+                  enableCategoryFilter={false}
+                  enableSearch={false}
+                  onBusinessesChange={setMapBusinesses}
+                  onControlsReady={setMapControls}
+                  externalSearchTerm={search}
+                  externalSearchTrigger={searchTrigger}
+                />
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>

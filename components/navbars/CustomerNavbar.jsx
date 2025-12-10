@@ -24,7 +24,7 @@ export default function CustomerNavbar() {
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+  const [hydrated, setHydrated] = useState(typeof window !== "undefined");
   const dropdownRef = useRef(null);
 
   // ⭐ Hydration guard fixes frozen buttons
@@ -136,7 +136,7 @@ export default function CustomerNavbar() {
   /* ---------------------------------------------------
      LOADING STATE
   --------------------------------------------------- */
-  if (loadingUser) {
+  if (loadingUser && !user && !authUser) {
     return (
       <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
     );

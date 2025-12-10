@@ -17,9 +17,9 @@ import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 
 export default function BusinessNavbar() {
   const pathname = usePathname();
-  const { user, role, loadingUser, supabase } = useAuth();
+  const { user, authUser, role, loadingUser, supabase } = useAuth();
 
-  const [hydrated, setHydrated] = useState(false);
+  const [hydrated, setHydrated] = useState(typeof window !== "undefined");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -27,8 +27,8 @@ export default function BusinessNavbar() {
   const displayName =
     user?.business_name ||
     user?.full_name ||
-    user?.authUser?.user_metadata?.full_name ||
-    user?.authUser?.user_metadata?.name ||
+    authUser?.user_metadata?.full_name ||
+    authUser?.user_metadata?.name ||
     "Account";
 
   // Hydration guard prevents frozen dropdown interactions
@@ -82,11 +82,17 @@ export default function BusinessNavbar() {
   const isActive = (href) => pathname === href;
   const email =
     user?.email ||
-    user?.authUser?.email ||
-    user?.authUser?.user_metadata?.email ||
+    authUser?.email ||
+    authUser?.user_metadata?.email ||
     null;
 
-  if (!hydrated || loadingUser) return null;
+  if (!hydrated) return null;
+
+  if (loadingUser && !user && !authUser) {
+    return (
+      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
+    );
+  }
 
   const handleBusinessAuthClick = (event, path) => {
     event.preventDefault();

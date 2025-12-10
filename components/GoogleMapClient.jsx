@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
 // Load Google Maps only once per page via a single script tag
 async function loadGoogleMaps(apiKey, mapId) {
@@ -100,6 +101,8 @@ const computeVisibleRadiusMeters = (mapInstance, fallbackMeters) => {
   return Math.max(100, diagKm * 1000);
 };
 
+const FALLBACK_CENTER = { lat: 37.7749, lng: -122.4194 };
+
 export default function GoogleMapClient({
   radiusKm = 25,
   containerClassName = "w-full max-w-6xl mx-auto mt-12",
@@ -109,6 +112,10 @@ export default function GoogleMapClient({
   showBusinessErrors = true,
   enableCategoryFilter = false,
   enableSearch = false,
+  onBusinessesChange,
+  onControlsReady,
+  externalSearchTerm,
+  externalSearchTrigger,
 }) {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
@@ -131,6 +138,16 @@ export default function GoogleMapClient({
   const [categories, setCategories] = useState([]);
   const [categoriesWithCounts, setCategoriesWithCounts] = useState([]);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [refreshNeeded, setRefreshNeeded] = useState(false);
+  const supabaseRef = useRef(null);
+  const geocodeCacheRef = useRef(new Map());
+  const curatedBusinessesRef = useRef([]);
+  const curatedFetchPromiseRef = useRef(null);
+  const activeInfoWindowRef = useRef(null);
+  const pendingViewRef = useRef(null);
+  const suppressNextIdleRef = useRef(false);
+  const markerIndexRef = useRef(new Map());
+  const userCenterRef = useRef(null);
 
   const detachMarker = (marker) => {
     if (!marker) return;
@@ -144,11 +161,114 @@ export default function GoogleMapClient({
   const clearBusinessMarkers = () => {
     businessMarkersRef.current.forEach(detachMarker);
     businessMarkersRef.current = [];
+    markerIndexRef.current.clear();
+  };
+
+  const getSupabaseClient = () => {
+    if (supabaseRef.current) return supabaseRef.current;
+    const client = getBrowserSupabaseClient();
+    supabaseRef.current = client;
+    return client;
+  };
+
+  const geocodeAddress = async (address) => {
+    if (!address) return null;
+    const key = address.trim().toLowerCase();
+    if (geocodeCacheRef.current.has(key)) {
+      return geocodeCacheRef.current.get(key);
+    }
+
+    const apiKey = apiKeyRef.current || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return null;
+
+    try {
+      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "places.id,places.location",
+        },
+        body: JSON.stringify({
+          textQuery: address,
+          maxResultCount: 1,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`searchText geocode failed ${res.status}`);
+      }
+
+      const data = await res.json();
+      const loc = data?.places?.[0]?.location;
+      if (loc?.latitude && loc?.longitude) {
+        const coords = { lat: loc.latitude, lng: loc.longitude };
+        geocodeCacheRef.current.set(key, coords);
+        return coords;
+      }
+    } catch (err) {
+      console.warn("Places searchText geocode failed for", address, err);
+    }
+
+    geocodeCacheRef.current.set(key, null);
+    return null;
+  };
+
+  const loadCuratedBusinesses = async () => {
+    if (curatedFetchPromiseRef.current) return curatedFetchPromiseRef.current;
+    const supabase = getSupabaseClient();
+    if (!supabase) return [];
+
+    curatedFetchPromiseRef.current = (async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id,business_name,full_name,category,address,city,role,profile_photo_url,description,website");
+
+      if (error) {
+        console.error("Failed to fetch Supabase businesses", error);
+        return [];
+      }
+
+      const rows = (data || []).filter(
+        (row) => row?.address && (row.role === "business" || row.business_name)
+      );
+
+      const mapped = [];
+      for (const row of rows) {
+        const displayAddress = row.city ? `${row.address}, ${row.city}` : row.address;
+        const coords = await geocodeAddress(displayAddress);
+        if (!coords) continue;
+
+        mapped.push({
+          id: row.id,
+          name: row.business_name || row.full_name || "Local Business",
+          address: displayAddress,
+          coords,
+          categoryLabel: row.category
+            ? formatCategory(row.category.replace(/\s+/g, "_"))
+            : "Local Business",
+          source: "supabase_users",
+          imageUrl: row.profile_photo_url || null,
+          description: row.description || "",
+          website: row.website || "",
+        });
+      }
+
+      curatedBusinessesRef.current = mapped;
+      return mapped;
+    })();
+
+    return curatedFetchPromiseRef.current;
   };
 
   const renderMarkers = (list, category) => {
     if (!mapInstanceRef.current) return;
     clearBusinessMarkers();
+
+    const escapeHtml = (value) =>
+      typeof value === "string"
+        ? value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        : value;
 
     const filtered =
       category === "All"
@@ -162,19 +282,43 @@ export default function GoogleMapClient({
 
     filtered.forEach((biz) => {
       if (!biz.coords) return;
+      const isCurated = biz.source === "supabase_users";
 
       const wrapper = document.createElement("div");
-      wrapper.className = "yb-marker";
+      wrapper.className = `yb-marker${isCurated ? " yb-marker-curated" : ""}`;
+      wrapper.setAttribute("gmp-hoverable", "true");
       const localWrap = document.createElement("div");
       localWrap.className = "yb-marker-local";
       const icon = document.createElement("div");
-      icon.className = "yb-marker-icon";
+      icon.className = `yb-marker-icon${isCurated ? " yb-marker-icon-green" : ""}`;
       const label = document.createElement("div");
       label.className = "yb-marker-label";
       label.textContent = biz.name;
       localWrap.appendChild(icon);
       localWrap.appendChild(label);
       wrapper.appendChild(localWrap);
+      const infoContent = (() => {
+        const safeName = escapeHtml(biz.name || "");
+        const safeCategory = escapeHtml(biz.categoryLabel || "");
+        const safeAddress = escapeHtml(biz.address || "");
+        const safeDesc = escapeHtml(biz.description || "");
+        const safeWebsite = escapeHtml(biz.website || "");
+        const img = biz.imageUrl
+          ? `<div style="margin-bottom:8px;"><img src="${biz.imageUrl}" alt="${safeName}" style="width:100%;max-height:120px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;" /></div>`
+          : "";
+        const websiteLink =
+          safeWebsite && /^https?:\/\//i.test(biz.website || "")
+            ? `<div style="margin-top:6px;font-size:12px;"><a href="${biz.website}" target="_blank" rel="noopener noreferrer">Website</a></div>`
+            : "";
+        return `<div style="color:#0f172a;max-width:240px;">
+          ${img}
+          <strong style="font-size:14px;">${safeName}</strong>
+          <div style="font-size:12px;margin-top:2px;">${safeCategory}${isCurated ? " · YourBarrio" : ""}</div>
+          <div style="font-size:12px;margin-top:4px;color:#334155;">${safeAddress}</div>
+          ${safeDesc ? `<div style="font-size:12px;margin-top:6px;color:#475569;">${safeDesc}</div>` : ""}
+          ${websiteLink}
+        </div>`;
+      })();
 
       if (canUseAdvanced) {
         const advMarker = new window.google.maps.marker.AdvancedMarkerElement({
@@ -185,34 +329,61 @@ export default function GoogleMapClient({
         });
 
         const info = new window.google.maps.InfoWindow({
-          content: `<div style="color:#0f172a"><strong>${biz.name}</strong><div style="font-size:12px">${biz.categoryLabel}</div><div style="font-size:12px">${biz.address || ""}</div></div>`,
+          content: infoContent,
         });
 
-        advMarker.addListener("click", () =>
-          info.open({ anchor: advMarker, map: mapInstanceRef.current })
-        );
+        const openInfo = () => {
+          if (activeInfoWindowRef.current && activeInfoWindowRef.current !== info) {
+            activeInfoWindowRef.current.close();
+          }
+          activeInfoWindowRef.current = info;
+          info.open({ anchor: advMarker, map: mapInstanceRef.current });
+        };
+
+        advMarker.addListener("mouseover", openInfo);
+        advMarker.addListener("mouseenter", openInfo);
+        advMarker.addListener("click", openInfo);
         businessMarkersRef.current.push(advMarker);
+        markerIndexRef.current.set(biz.id, { marker: advMarker, info, coords: biz.coords });
       } else {
+        const iconStyle = isCurated
+          ? {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 10,
+              fillColor: "#10b981",
+              fillOpacity: 1,
+              strokeColor: "#ecfdf3",
+              strokeWeight: 2,
+            }
+          : {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 9,
+              fillColor: "#6b7280",
+              fillOpacity: 1,
+              strokeColor: "#f3f4f6",
+              strokeWeight: 2,
+            };
         const m = new window.google.maps.Marker({
           position: biz.coords,
           map: mapInstanceRef.current,
           title: biz.name,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 9,
-            fillColor: "#6b7280",
-            fillOpacity: 1,
-            strokeColor: "#f3f4f6",
-            strokeWeight: 2,
-          },
+          icon: iconStyle,
         });
         const info = new window.google.maps.InfoWindow({
-          content: `<div style="color:#0f172a"><strong>${biz.name}</strong><div style="font-size:12px">${biz.categoryLabel}</div><div style="font-size:12px">${biz.address || ""}</div></div>`,
+          content: infoContent,
         });
-        m.addListener("click", () => info.open(mapInstanceRef.current, m));
-        m.addListener("mouseover", () => info.open(mapInstanceRef.current, m));
-        m.addListener("mouseout", () => info.close());
+        const openInfo = () => {
+          if (activeInfoWindowRef.current && activeInfoWindowRef.current !== info) {
+            activeInfoWindowRef.current.close();
+          }
+          activeInfoWindowRef.current = info;
+          info.open(mapInstanceRef.current, m);
+        };
+        m.addListener("mouseover", openInfo);
+        m.addListener("mouseenter", openInfo);
+        m.addListener("click", openInfo);
         businessMarkersRef.current.push(m);
+        markerIndexRef.current.set(biz.id, { marker: m, info, coords: biz.coords });
       }
     });
   };
@@ -253,7 +424,7 @@ export default function GoogleMapClient({
 
         // Create map centered on a default location until we get user location
         map = new google.maps.Map(mapRef.current, {
-          center: { lat: 37.7749, lng: -122.4194 },
+          center: FALLBACK_CENTER,
           zoom: 13,
           disableDefaultUI: false,
           ...(mapId ? { mapId } : {}), // mapId enables Advanced Markers / vector maps
@@ -261,7 +432,7 @@ export default function GoogleMapClient({
         mapInstanceRef.current = map;
 
         // get user location (with graceful fallback)
-        const defaultCenter = { lat: 37.7749, lng: -122.4194 };
+        const defaultCenter = FALLBACK_CENTER;
 
         const placeUserMarker = (centerLat, centerLng) => {
           if (centerLat === defaultCenter.lat && centerLng === defaultCenter.lng) return;
@@ -312,16 +483,16 @@ export default function GoogleMapClient({
               },
             },
           };
-          const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": apiKey,
-              "X-Goog-FieldMask":
-                "places.id,places.displayName.text,places.formattedAddress,places.location,places.types",
-            },
-            body: JSON.stringify(body),
-          });
+        const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask":
+                "places.id,places.displayName.text,places.formattedAddress,places.location,places.types,places.photos",
+          },
+          body: JSON.stringify(body),
+        });
           if (!res.ok) {
             const txt = await res.text();
             throw new Error(`Places (new) request failed: ${res.status} ${txt}`);
@@ -342,6 +513,7 @@ export default function GoogleMapClient({
           if (!isMounted) return;
           if (fetchInFlightRef.current) return;
 
+          suppressNextIdleRef.current = true; // avoid immediately marking view as stale after reload
           placeUserMarker(centerLat, centerLng);
           clearBusinessMarkers();
           setBusinesses([]);
@@ -366,10 +538,7 @@ export default function GoogleMapClient({
                 "Google Places request was denied. Check API key referrer restrictions and ensure Places API (New) is enabled."
               );
             }
-            setLoading(false);
-            fetchInFlightRef.current = false;
-            setBusinesses([]);
-            return;
+            places = [];
           }
 
           const businessesWithCoords = [];
@@ -393,6 +562,11 @@ export default function GoogleMapClient({
             if (!primaryType) continue; // skip non-retail/service entries
             const categoryKey = primaryType || "store";
             const categoryLabel = formatCategory(categoryKey);
+            const photoName = place.photos?.[0]?.name;
+            const photoUrl =
+              photoName && apiKeyRef.current
+                ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKeyRef.current}`
+                : null;
             businessesWithCoords.push({
               id: place.place_id || place.id,
               name: place.name || place.displayName?.text || "Unnamed",
@@ -401,12 +575,35 @@ export default function GoogleMapClient({
               categoryLabel,
               source: "google_places_new",
               zoom: zoomLevel || map?.getZoom?.(),
+              imageUrl: photoUrl,
             });
+          }
+
+          let curatedNearby = [];
+          try {
+            const curated = await loadCuratedBusinesses();
+            const searchBounds = map?.getBounds ? map.getBounds() : null;
+            const limit = radiusMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
+
+            curatedNearby = (curated || []).filter((biz) => {
+              if (!biz.coords) return false;
+              const distanceMeters =
+                haversine(centerLat, centerLng, biz.coords.lat, biz.coords.lng) * 1000;
+              const withinRadius = distanceMeters <= limit * 1.2;
+              const withinBounds = searchBounds
+                ? searchBounds.contains(new google.maps.LatLng(biz.coords.lat, biz.coords.lng))
+                : true;
+              return withinBounds || withinRadius;
+            });
+          } catch (curatedErr) {
+            console.warn("Curated business load failed", curatedErr);
           }
 
           if (!isMounted) return;
 
-          const categoryCounts = businessesWithCoords.reduce((acc, biz) => {
+          const combinedBusinesses = [...curatedNearby, ...businessesWithCoords];
+
+          const categoryCounts = combinedBusinesses.reduce((acc, biz) => {
             acc[biz.categoryLabel] = (acc[biz.categoryLabel] || 0) + 1;
             return acc;
           }, {});
@@ -415,12 +612,14 @@ export default function GoogleMapClient({
             name: cat,
             count: categoryCounts[cat] || 0,
           }));
-          setBusinesses(businessesWithCoords);
+          setBusinesses(combinedBusinesses);
           setCategories(uniqueCategories);
           setCategoriesWithCounts(categoriesList);
-          renderMarkers(businessesWithCoords, activeCategory);
+          renderMarkers(combinedBusinesses, activeCategory);
           setLoading(false);
           fetchInFlightRef.current = false;
+          setRefreshNeeded(false);
+          pendingViewRef.current = null;
         }
 
         if (navigator.geolocation) {
@@ -428,12 +627,14 @@ export default function GoogleMapClient({
             (pos) => {
               const userLat = pos.coords.latitude;
               const userLng = pos.coords.longitude;
+              userCenterRef.current = { lat: userLat, lng: userLng };
               map.setCenter({ lat: userLat, lng: userLng });
               loadAndPlaceMarkers(userLat, userLng, map.getZoom(), computeVisibleRadiusMeters(map, radiusKm * 1000));
             },
             (err) => {
               console.warn("Geolocation error", err);
               setError("Could not get your location. Showing nearby businesses around a default location.");
+              userCenterRef.current = null;
               map.setCenter(defaultCenter);
               loadAndPlaceMarkers(defaultCenter.lat, defaultCenter.lng, map.getZoom(), computeVisibleRadiusMeters(map, radiusKm * 1000));
             },
@@ -441,12 +642,17 @@ export default function GoogleMapClient({
           );
         } else {
           setError("Geolocation not supported. Showing default area.");
+          userCenterRef.current = null;
           map.setCenter(defaultCenter);
           loadAndPlaceMarkers(defaultCenter.lat, defaultCenter.lng, map.getZoom(), computeVisibleRadiusMeters(map, radiusKm * 1000));
         }
 
         let idleTimeout;
         idleListener = map.addListener("idle", () => {
+          if (suppressNextIdleRef.current) {
+            suppressNextIdleRef.current = false;
+            return;
+          }
           if (idleTimeout) clearTimeout(idleTimeout);
           idleTimeout = setTimeout(() => {
             const center = map.getCenter();
@@ -455,8 +661,12 @@ export default function GoogleMapClient({
             const lng = center.lng();
             const zoom = map.getZoom();
             if (!shouldRefetch(lat, lng, zoom)) return;
-            loadAndPlaceMarkers(lat, lng, zoom, computeVisibleRadiusMeters(map, radiusKm * 1000));
+            pendingViewRef.current = { lat, lng, zoom };
+            setRefreshNeeded(true);
           }, 450);
+        });
+        map.addListener("click", () => {
+          activeInfoWindowRef.current?.close();
         });
 
         // expose reload for search
@@ -468,6 +678,37 @@ export default function GoogleMapClient({
             ? loadAndPlaceMarkers(lat, lng, zoom, radiusMeters, includedTypes)
             : null;
         };
+
+        const focusBusiness = (biz) => {
+          if (!biz) return;
+          const rec = markerIndexRef.current.get(biz.id);
+          const mapToUse = mapInstanceRef.current;
+          if (!mapToUse) return;
+
+          if (rec?.marker) {
+            mapToUse.panTo(rec.coords || rec.marker.position);
+            mapToUse.setZoom(Math.max(mapToUse.getZoom(), 15));
+            if (activeInfoWindowRef.current && activeInfoWindowRef.current !== rec.info) {
+              activeInfoWindowRef.current.close();
+            }
+            activeInfoWindowRef.current = rec.info;
+            if (rec.info) {
+              if ("position" in rec.marker) {
+                rec.info.open(mapToUse, rec.marker);
+              } else {
+                rec.info.open({ anchor: rec.marker, map: mapToUse });
+              }
+            }
+          } else if (biz.coords) {
+            mapToUse.panTo(biz.coords);
+            mapToUse.setZoom(Math.max(mapToUse.getZoom(), 15));
+          }
+        };
+
+        onControlsReady?.({
+          search: performSearch,
+          focusBusiness,
+        });
       } catch (err) {
         console.error(err);
         setError(err.message || "Failed to load map");
@@ -492,9 +733,45 @@ export default function GoogleMapClient({
     renderMarkers(businesses, activeCategory);
   }, [activeCategory, businesses]);
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchTerm.trim() || !mapInstanceRef.current) return;
+  useEffect(() => {
+    if (typeof onBusinessesChange === "function") {
+      onBusinessesChange(businesses);
+    }
+  }, [businesses, onBusinessesChange]);
+
+  useEffect(() => {
+    if (!externalSearchTrigger) return;
+    if (!externalSearchTerm) return;
+    performSearch(externalSearchTerm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalSearchTrigger]);
+
+  const handleRefreshClick = () => {
+    const map = mapInstanceRef.current;
+    if (!map || !loadAndPlaceMarkersRef.current) return;
+    const center = map.getCenter();
+    if (!center) return;
+    const zoom = map.getZoom();
+    const radiusMeters = computeVisibleRadiusMeters(map, radiusKm * 1000);
+    suppressNextIdleRef.current = true;
+    setRefreshNeeded(false);
+    pendingViewRef.current = null;
+    loadAndPlaceMarkersRef.current(center.lat(), center.lng(), zoom, radiusMeters);
+  };
+
+  const handleRecenterClick = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const target = userCenterRef.current || FALLBACK_CENTER;
+    suppressNextIdleRef.current = true;
+    map.panTo(target);
+    if (map.getZoom() < 13) {
+      map.setZoom(13);
+    }
+  };
+
+  const performSearch = async (term) => {
+    if (!term?.trim() || !mapInstanceRef.current) return;
     setSearchLoading(true);
     setSearchError(null);
     setSearchMessage(null);
@@ -505,12 +782,12 @@ export default function GoogleMapClient({
       const map = mapInstanceRef.current;
       const center = map.getCenter();
       const radiusMeters = computeVisibleRadiusMeters(map, radiusKm * 1000);
-      const searchTypeKey = searchTerm.trim().toLowerCase().replace(/\s+/g, "_");
+      const searchTypeKey = term.trim().toLowerCase().replace(/\s+/g, "_");
       const limitedTypes =
         ALLOWED_RETAIL_TYPES.has(searchTypeKey) ? [searchTypeKey] : undefined;
 
       const body = {
-        textQuery: searchTerm.trim(),
+        textQuery: term.trim(),
         maxResultCount: 5,
         locationBias: {
           circle: {
@@ -605,6 +882,10 @@ export default function GoogleMapClient({
       setSearchLoading(false);
     }
   };
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    await performSearch(searchTerm);
+  };
 
   return (
     <div ref={containerRef} className={containerClassName}>
@@ -677,7 +958,42 @@ export default function GoogleMapClient({
             ) : null}
           </div>
         ) : null}
-        <div className={mapClassName} ref={mapRef} id="google-map" />
+        <div className="relative">
+          <div className={mapClassName} ref={mapRef} id="google-map" />
+          {refreshNeeded ? (
+            <div className="pointer-events-none absolute top-3 right-3">
+              <button
+                type="button"
+                onClick={handleRefreshClick}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/60 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur hover:bg-black/70"
+              >
+                Refresh markers
+              </button>
+            </div>
+          ) : null}
+          <div className="pointer-events-none absolute bottom-4 right-4">
+            <button
+              type="button"
+              aria-label="Recenter map"
+              onClick={handleRecenterClick}
+              className="pointer-events-auto h-12 w-12 rounded-full bg-white text-black flex items-center justify-center shadow-xl border border-black/10 hover:bg-white/90 active:scale-95 transition"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z" />
+                <path d="M12 3v2.5M12 18.5V21M21 12h-2.5M5.5 12H3" strokeLinecap="round" />
+                <circle cx="12" cy="12" r="8.25" strokeOpacity="0.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
         {loading && <div className="mt-2 text-sm text-white/70">Loading map...</div>}
         {error && <div className="mt-2 text-sm text-rose-400">{error}</div>}
       </div>

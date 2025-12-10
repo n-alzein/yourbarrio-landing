@@ -1,9 +1,19 @@
 "use client";
 
 import { useModal } from "./modals/ModalProvider";
+import { useAuth } from "./AuthProvider";
 
 export default function Footer() {
   const { openModal } = useModal();
+  const { user, authUser, role } = useAuth();
+
+  const resolvedRole = role || authUser?.app_metadata?.role || user?.role;
+  const aboutHref =
+    resolvedRole === "business"
+      ? "/business/about"
+      : user || authUser
+        ? "/customer/about"
+        : "/about";
 
   return (
     <footer className="mt-20 bg-white border-t border-slate-200 py-10 theme-lock">
@@ -32,18 +42,9 @@ export default function Footer() {
         <div>
           <h4 className="text-lg font-semibold">Navigation</h4>
           <ul className="mt-3 space-y-2">
-            <li><a href="/about" className="hover:text-indigo-600">About</a></li>
+            <li><a href={aboutHref} className="hover:text-indigo-600">About</a></li>
             <li><a href="/privacy" className="hover:text-indigo-600">Privacy</a></li>
             <li><a href="/terms" className="hover:text-indigo-600">Terms</a></li>
-            <li>
-              <button
-                type="button"
-                onClick={() => openModal("customer-login")}
-                className="hover:text-indigo-600"
-              >
-                Login
-              </button>
-            </li>
           </ul>
         </div>
 
