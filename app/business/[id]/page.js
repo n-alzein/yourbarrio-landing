@@ -18,6 +18,10 @@ export default function BusinessPublicPage({ params }) {
 
   useEffect(() => {
     async function loadBusiness() {
+      if (!supabase || !id) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
 
       const { data, error } = await supabase
@@ -34,14 +38,14 @@ export default function BusinessPublicPage({ params }) {
           business_id: id,
         });
       } else {
-        console.error(error);
+        console.error("Failed to load business", error);
       }
 
       setLoading(false);
     }
 
     loadBusiness();
-  }, [id]);
+  }, [id, supabase]);
 
   async function toggleSave() {
     if (!business) return;

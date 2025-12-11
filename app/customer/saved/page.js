@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -10,66 +10,61 @@ export default function CustomerSavedPage() {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState([]);
 
+  const loadSaved = useCallback(async () => {
+    // Supabase may not be ready immediately; fail fast to avoid stuck loading
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    const userId = user?.id;
+    if (!userId || typeof userId !== "string") {
+      setSaved([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data: savedRows, error } = await supabase
+        .from("saved_listings")
+        .select("listing_id")
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      const ids = savedRows?.map((row) => row.listing_id) || [];
+      if (ids.length === 0) {
+        setSaved([]);
+        return;
+      }
+
+      const { data: listings, error: listError } = await supabase
+        .from("listings")
+        .select("*")
+        .in("id", ids);
+
+      if (listError) throw listError;
+
+      setSaved(listings || []);
+    } catch (err) {
+      console.error("Saved listings load failed", err);
+      setSaved([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, user?.id]);
+
   useEffect(() => {
     if (loadingUser) return;
-
     if (!user?.id) {
       setSaved([]);
       setLoading(false);
       return;
     }
-
     loadSaved();
-  }, [loadingUser, user?.id, supabase]);
-
-  async function loadSaved() {
-    setLoading(true);
-  
-    // 🚨 HARD GUARD — prevents UUID errors 100%
-    const userId = user?.id;
-    if (!userId || typeof userId !== "string") {
-      console.warn("Saved listings: user.id missing, aborting.");
-      setSaved([]);
-      setLoading(false);
-      return;
-    }
-  
-    // 1️⃣ Fetch saved listing IDs
-    const { data: savedRows, error } = await supabase
-      .from("saved_listings")
-      .select("listing_id")
-      .eq("user_id", userId); // <-- ALWAYS safe now
-  
-    if (error) {
-      console.error("Saved listings error:", error);
-      setLoading(false);
-      return;
-    }
-  
-    const ids = savedRows?.map((row) => row.listing_id) || [];
-  
-    if (ids.length === 0) {
-      setSaved([]);
-      setLoading(false);
-      return;
-    }
-  
-    // 2️⃣ Fetch actual listing objects
-    const { data: listings, error: listError } = await supabase
-      .from("listings")
-      .select("*")
-      .in("id", ids);
-  
-    if (listError) {
-      console.error("Listings error:", listError);
-      setSaved([]);
-      setLoading(false);
-      return;
-    }
-  
-    setSaved(listings || []);
-    setLoading(false);
-  }
+  }, [loadingUser, user?.id, loadSaved]);
   
 
   if (loadingUser) return <div className="min-h-screen bg-black" />;
@@ -105,29 +100,33 @@ export default function CustomerSavedPage() {
             {saved.map((item) => (
               <Link
                 key={item.id}
-                href={`/business/${item.id}`}
+                href={`/listings/${item.id}`}
                 className="group bg-black/30 border border-white/10 rounded-2xl overflow-hidden shadow-lg backdrop-blur-xl hover:scale-[1.02] transition-all duration-300"
               >
                 <div className="relative h-48 w-full overflow-hidden">
                   <img
-                    src={item.cover_photo_url || "/business-placeholder.png"}
-                    alt={item.name}
+                    src={item.photo_url || "/business-placeholder.png"}
+                    alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
                   />
+                  <div className="absolute top-3 right-3 text-xs px-2 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur">
+                    Saved
+                  </div>
                 </div>
 
                 <div className="p-4">
                   <h3 className="text-xl font-bold mb-1">
-                    {item.name}
+                    {item.title}
                   </h3>
 
                   <p className="text-white/60 text-sm line-clamp-2">
-                    {item.description}
+                    {item.description || "A local listing from YourBarrio."}
                   </p>
 
-                  <p className="mt-3 text-sm text-pink-300 font-medium">
-                    {item.category}
-                  </p>
+                  <div className="mt-3 text-sm text-pink-300 font-medium flex items-center gap-2">
+                    <span>{item.category || "Listing"}</span>
+                    {item.price ? <span className="text-white/70">· ${item.price}</span> : null}
+                  </div>
                 </div>
               </Link>
             ))}

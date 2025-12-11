@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const isMountedRef = useRef(true);
+  const sessionRefreshInFlight = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -131,6 +132,41 @@ export function AuthProvider({ children }) {
   };
 
   /* -----------------------------------------------------------------
+     RE-VALIDATE SESSION (tab focus / returning from background)
+  ----------------------------------------------------------------- */
+  const syncSession = async () => {
+    if (!supabase || sessionRefreshInFlight.current) return;
+    sessionRefreshInFlight.current = true;
+
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) throw error;
+
+      if (!isMountedRef.current) return;
+
+      const user = sanitizeAuthUser(session?.user ?? null);
+      setAuthUser(user);
+
+      if (user) {
+        const p = await loadProfile(user.id);
+        setProfile(p);
+        await cacheGoogleAvatar(user, p);
+      } else {
+        setProfile(null);
+      }
+    } catch (err) {
+      console.error("Supabase session sync failed", err);
+      await clearBrokenSession();
+    } finally {
+      sessionRefreshInFlight.current = false;
+      finishLoading();
+    }
+  };
+
+  /* -----------------------------------------------------------------
      INITIAL SESSION LOAD
   ----------------------------------------------------------------- */
   useEffect(() => {
@@ -208,6 +244,28 @@ export function AuthProvider({ children }) {
 
     return () => {
       listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  /* -----------------------------------------------------------------
+     KEEP SESSION FRESH AFTER LONG IDLE PERIODS
+  ----------------------------------------------------------------- */
+  useEffect(() => {
+    if (!supabase) return;
+
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      syncSession();
+    };
+
+    const handleFocus = () => syncSession();
+
+    window.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [supabase]);
 

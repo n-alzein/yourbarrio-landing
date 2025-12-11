@@ -3,10 +3,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const { authUser, user, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
+  const router = useRouter();
+  const redirectPath = "/?redirect=/customer/settings";
 
   /* -----------------------------------------------------------
      HOOKS (always first — no conditional hooks)
@@ -22,6 +25,16 @@ export default function SettingsPage() {
     address: "",
     profile_photo_url: "",
   });
+
+  /* -----------------------------------------------------------
+     AUTH GUARD — redirect when session drops instead of blank UI
+  ----------------------------------------------------------- */
+  useEffect(() => {
+    if (loadingUser) return;
+    if (authUser) return;
+
+    router.replace(redirectPath);
+  }, [authUser, loadingUser, router, redirectPath]);
 
   /* -----------------------------------------------------------
      LOAD PROFILE INTO FORM
@@ -123,8 +136,28 @@ export default function SettingsPage() {
   /* -----------------------------------------------------------
      UI GUARD
   ----------------------------------------------------------- */
-  if (loadingUser || !authUser) {
+  if (loadingUser) {
     return <div className="min-h-screen bg-black" />;
+  }
+
+  if (!authUser) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
+        <div className="space-y-3 text-center">
+          <p className="text-lg font-semibold">Session expired</p>
+          <p className="text-sm text-white/70">
+            Please sign in again to get back to your account.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.replace(redirectPath)}
+            className="px-4 py-2 rounded-lg bg-white text-black font-semibold"
+          >
+            Go to login
+          </button>
+        </div>
+      </div>
+    );
   }
 
   /* -----------------------------------------------------------

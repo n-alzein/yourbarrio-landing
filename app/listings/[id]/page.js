@@ -1,63 +1,451 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { use, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Heart,
+  Shield,
+  ShoppingBag,
+  Star,
+  Truck,
+} from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function ListingDetails({ params }) {
-  const supabase = getBrowserSupabaseClient();
-  const id = params.id;
+  const { supabase, user } = useAuth();
+  const resolvedParams = params ? use(params) : {};
+  const id = resolvedParams?.id;
 
   const [listing, setListing] = useState(null);
   const [business, setBusiness] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [orderingMode, setOrderingMode] = useState("delivery");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      if (!supabase || !id) return;
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { data: item, error: listingError } = await supabase
+          .from("listings")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (listingError || !item) {
+          throw new Error("Listing not found");
+        }
+
+        if (!isMounted) return;
+        setListing(item);
+
+        const { data: biz } = await supabase
+          .from("users")
+          .select(
+            "id,business_name,full_name,category,city,address,website,phone,profile_photo_url"
+          )
+          .eq("id", item.business_id)
+          .maybeSingle();
+
+        if (isMounted) setBusiness(biz || null);
+      } catch (err) {
+        console.error("Failed to load listing", err);
+        if (isMounted) setError("We couldn’t load this item. Try again.");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
     load();
-  }, []);
 
-  async function load() {
-    const { data: item } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("id", id)
-      .single();
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase, id]);
 
-    setListing(item);
+  useEffect(() => {
+    let active = true;
+    const checkSaved = async () => {
+      if (!supabase || !user?.id || !id) {
+        setIsSaved(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("saved_listings")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("listing_id", id)
+        .maybeSingle();
+      if (!active) return;
+      setIsSaved(!!data);
+    };
+    checkSaved();
+    return () => {
+      active = false;
+    };
+  }, [supabase, user?.id, id]);
 
-    const { data: biz } = await supabase
-      .from("users")
-      .select("business_name, category, city, website, phone")
-      .eq("id", item.business_id)
-      .single();
+  const handleToggleSave = async () => {
+    if (!supabase || !id || !user?.id) {
+      setStatusMessage("Log in to save this item.");
+      return;
+    }
+    setSaveLoading(true);
+    setStatusMessage("");
+    try {
+      if (isSaved) {
+        await supabase
+          .from("saved_listings")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("listing_id", id);
+        setIsSaved(false);
+        setStatusMessage("Removed from saved.");
+      } else {
+        await supabase
+          .from("saved_listings")
+          .insert({ user_id: user.id, listing_id: id });
+        setIsSaved(true);
+        setStatusMessage("Saved to your list.");
+      }
+    } catch (err) {
+      console.error("Save toggle failed", err);
+      setStatusMessage("Could not update saved state.");
+    } finally {
+      setSaveLoading(false);
+    }
+  };
 
-    setBusiness(biz);
+  const formattedPrice = useMemo(() => {
+    if (!listing?.price) return null;
+    try {
+      return Number(listing.price).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    } catch {
+      return listing.price;
+    }
+  }, [listing?.price]);
+
+  const handleOrder = (mode) => {
+    setOrderingMode(mode);
+    setStatusMessage(
+      mode === "delivery"
+        ? "Delivery checkout is coming soon. We’ll confirm address and payment before submitting to the business."
+        : "Pickup reservation is coming soon. We’ll confirm time and location with the business."
+    );
+  };
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen px-4 md:px-8 lg:px-12 py-12"
+        style={{ background: "var(--background)", color: "var(--text)" }}
+      >
+        <div className="max-w-6xl mx-auto animate-pulse space-y-6">
+          <div className="h-4 w-32 rounded-full" style={{ background: "var(--surface)" }} />
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 h-[460px] rounded-2xl" style={{ background: "var(--surface)" }} />
+            <div className="h-[460px] rounded-2xl" style={{ background: "var(--surface)" }} />
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  if (!listing) return <p>Loading…</p>;
+  if (error) {
+    return (
+      <div
+        className="min-h-screen px-4 md:px-8 lg:px-12 py-12"
+        style={{ background: "var(--background)", color: "var(--text)" }}
+      >
+        <div className="max-w-3xl mx-auto">
+          <Link
+            href="/customer/home"
+            className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to results
+          </Link>
+          <div
+            className="mt-6 rounded-2xl p-6 shadow-sm"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-lg font-semibold">Something went wrong</p>
+            <p className="text-sm opacity-80 mt-2">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!listing) return null;
+
+  const heroImage =
+    listing.photo_url || business?.profile_photo_url || "/business-placeholder.png";
+  const storeName = business?.business_name || business?.full_name || "Local business";
+  const city = business?.city || "Your area";
+  const address = business?.address || null;
+  const category = business?.category || listing.category || "Local listing";
 
   return (
-    <div className="max-w-3xl mx-auto py-10">
-      <Image
-        src={listing.photo_url || "/business-placeholder.png"}
-        width={800}
-        height={600}
-        className="rounded-lg object-cover"
-        alt="Listing"
-      />
+    <div
+      className="min-h-screen px-4 md:px-8 lg:px-12 py-2 md:pt-0"
+      style={{ background: "var(--background)", color: "var(--text)" }}
+    >
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between opacity-80">
+          <Link
+            href="/customer/home"
+            className="inline-flex items-center gap-2 text-sm hover:opacity-100"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to discovery
+          </Link>
+          <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] opacity-80">
+            <BadgeCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+            Verified local listing
+          </div>
+        </div>
 
-      <h1 className="text-4xl font-bold mt-6">{listing.title}</h1>
-      <p className="text-2xl text-green-600 mt-2">${listing.price}</p>
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <div
+              className="rounded-3xl shadow-lg overflow-hidden"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <div className="relative">
+                <Image
+                  src={heroImage}
+                  alt={listing.title}
+                  width={1200}
+                  height={800}
+                  className="w-full h-[420px] object-cover"
+                  priority
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/10 to-white/20" />
+              </div>
+              <div className="p-5 space-y-3">
+                <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] opacity-75">
+                  <Shield className="h-4 w-4 opacity-90" />
+                  {category}
+                </div>
+                <h1 className="text-3xl font-semibold leading-tight">{listing.title}</h1>
+                <div className="flex items-center gap-3 text-sm opacity-80">
+                  <div className="inline-flex items-center gap-1">
+                    <Star className="h-4 w-4 text-amber-400" />
+                    <span>Local favorite</span>
+                  </div>
+                  <span className="h-1 w-1 rounded-full bg-slate-300" />
+                  <span>{city}</span>
+                  {address ? (
+                    <>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span className="truncate">{address}</span>
+                    </>
+                  ) : null}
+                </div>
+                <p className="text-sm leading-relaxed opacity-90">
+                  {listing.description || "A local item from YourBarrio businesses."}
+                </p>
+              </div>
+            </div>
 
-      <p className="mt-4">{listing.description}</p>
+            <div
+              className="rounded-3xl p-5 space-y-4 shadow-lg"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm uppercase tracking-[0.18em] opacity-70">
+                  Store details
+                </p>
+                <div className="inline-flex items-center gap-2 text-xs opacity-80">
+                  <BadgeCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+                  YourBarrio business
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-lg font-semibold">{storeName}</p>
+                  <p className="text-sm opacity-80">{city}</p>
+                  {category ? (
+                    <p className="text-xs opacity-70 mt-1">{category}</p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-3 text-sm opacity-90">
+                  {business?.website ? (
+                    <Link
+                      href={business.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-4 hover:opacity-100"
+                    >
+                      Visit website
+                    </Link>
+                  ) : null}
+                  {business?.phone ? (
+                    <Link
+                      href={`tel:${business.phone}`}
+                      className="inline-flex items-center gap-2 rounded-full px-3 py-2"
+                      style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                    >
+                      <PhoneIcon /> Call
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
 
-      <div className="mt-6 border-t pt-6">
-        <h2 className="text-xl font-semibold">Business Information</h2>
-        <p>{business?.business_name}</p>
-        <p>{business?.city}</p>
-        <p>{business?.category}</p>
-        <p>{business?.website}</p>
-        <p>{business?.phone}</p>
+          <aside className="space-y-4">
+            <div
+              className="rounded-3xl p-5 shadow-lg"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm opacity-75">Price</p>
+                  <div className="text-3xl font-semibold">
+                    {formattedPrice ? `$${formattedPrice}` : "Contact store"}
+                  </div>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                    Local delivery & pickup available
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleSave}
+                  className="rounded-full p-2 -mr-2"
+                  aria-pressed={isSaved}
+                  aria-label={isSaved ? "Unsave listing" : "Save listing"}
+                  disabled={saveLoading}
+                >
+                  <Heart
+                    className={`h-5 w-5 ${isSaved ? "text-rose-400" : "opacity-70"}`}
+                    fill={isSaved ? "currentColor" : "none"}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm opacity-90">
+                  <Truck className="h-4 w-4 opacity-70" />
+                  <span>Delivery within your area</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm opacity-90">
+                  <ShoppingBag className="h-4 w-4 opacity-70" />
+                  <span>Pickup at the business</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm opacity-90">
+                  <Shield className="h-4 w-4 opacity-70" />
+                  <span>Backed by YourBarrio protections</span>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <label className="text-xs uppercase tracking-[0.16em] opacity-70">
+                  Quantity
+                </label>
+                <select
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  className="w-full rounded-xl px-3 py-2 text-sm font-semibold"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <option key={idx + 1} value={idx + 1}>
+                      {idx + 1}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOrder("delivery")}
+                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                      orderingMode === "delivery"
+                        ? "bg-indigo-600 text-white shadow"
+                        : "border text-[color:var(--text)]"
+                    }`}
+                    style={orderingMode === "delivery" ? {} : { background: "var(--surface)", borderColor: "var(--border)" }}
+                  >
+                    Request delivery
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOrder("pickup")}
+                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                      orderingMode === "pickup"
+                        ? "bg-indigo-600 text-white shadow"
+                        : "border text-[color:var(--text)]"
+                    }`}
+                    style={orderingMode === "pickup" ? {} : { background: "var(--surface)", borderColor: "var(--border)" }}
+                  >
+                    Request pickup
+                  </button>
+                </div>
+
+                {statusMessage ? (
+                  <div
+                    className="text-xs rounded-xl px-3 py-2"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  >
+                    {statusMessage}
+                  </div>
+                ) : (
+                  <div className="text-xs opacity-80">
+                    We’ll confirm address or pickup time in the next step. Charges apply after
+                    business confirms.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div
+              className="rounded-2xl p-4 space-y-3 shadow"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <p className="text-sm font-semibold">What to expect</p>
+              <ul className="text-sm opacity-90 space-y-2 list-disc list-inside">
+                <li>Messaging with the business to confirm details</li>
+                <li>Local delivery windows shared after confirmation</li>
+                <li>Pickup instructions sent by the business</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.81.37 1.6.72 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.23a2 2 0 0 1 2.11-.45c.74.35 1.53.6 2.34.72A2 2 0 0 1 22 16.92Z" />
+    </svg>
   );
 }
