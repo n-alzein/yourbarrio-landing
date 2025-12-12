@@ -2,7 +2,6 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -16,7 +15,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 export default function ListingDetails({ params }) {
   const { supabase, user } = useAuth();
-  const resolvedParams = params ? use(params) : {};
+  const resolvedParams = use(params);
   const id = resolvedParams?.id;
 
   const [listing, setListing] = useState(null);
@@ -28,6 +27,7 @@ export default function ListingDetails({ params }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [heroSrc, setHeroSrc] = useState("/business-placeholder.png");
 
   useEffect(() => {
     let isMounted = true;
@@ -42,14 +42,14 @@ export default function ListingDetails({ params }) {
           .from("listings")
           .select("*")
           .eq("id", id)
-          .single();
+          .maybeSingle();
 
-        if (listingError || !item) {
-          throw new Error("Listing not found");
-        }
+        if (listingError) throw listingError;
+        if (!item) throw new Error("Listing not found");
 
         if (!isMounted) return;
         setListing(item);
+        setHeroSrc(item.photo_url?.trim() || "/business-placeholder.png");
 
         const { data: biz } = await supabase
           .from("users")
@@ -193,8 +193,6 @@ export default function ListingDetails({ params }) {
 
   if (!listing) return null;
 
-  const heroImage =
-    listing.photo_url || business?.profile_photo_url || "/business-placeholder.png";
   const storeName = business?.business_name || business?.full_name || "Local business";
   const city = business?.city || "Your area";
   const address = business?.address || null;
@@ -202,11 +200,11 @@ export default function ListingDetails({ params }) {
 
   return (
     <div
-      className="min-h-screen px-4 md:px-8 lg:px-12 py-2 md:pt-0"
+      className="min-h-screen px-4 md:px-8 lg:px-12 py-4 md:pt-3"
       style={{ background: "var(--background)", color: "var(--text)" }}
     >
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between opacity-80">
+        <div className="flex items-center justify-between opacity-80 mt-2 mb-2">
           <Link
             href="/customer/home"
             className="inline-flex items-center gap-2 text-sm hover:opacity-100"
@@ -226,13 +224,17 @@ export default function ListingDetails({ params }) {
               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
             >
               <div className="relative">
-                <Image
-                  src={heroImage}
+                <img
+                  src={heroSrc || "/business-placeholder.png"}
                   alt={listing.title}
-                  width={1200}
-                  height={800}
                   className="w-full h-[420px] object-cover"
-                  priority
+                  loading="lazy"
+                  onError={() => {
+                    if (heroSrc !== "/business-placeholder.png") {
+                      setHeroSrc("/business-placeholder.png");
+                    }
+                  }}
+                  referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/10 to-white/20" />
               </div>

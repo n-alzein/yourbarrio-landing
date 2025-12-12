@@ -103,6 +103,9 @@ const computeVisibleRadiusMeters = (mapInstance, fallbackMeters) => {
 
 const FALLBACK_CENTER = { lat: 37.7749, lng: -122.4194 };
 const GEOCODE_TIMEOUT_MS = 1200;
+const MAX_GEOCODES_PER_SESSION = 20;
+const REQUEST_KEY_PRECISION = 4;
+const REQUEST_DEDUP_MS = 4000;
 
 export default function GoogleMapClient({
   radiusKm = 25,
@@ -149,6 +152,9 @@ export default function GoogleMapClient({
   const suppressNextIdleRef = useRef(false);
   const markerIndexRef = useRef(new Map());
   const userCenterRef = useRef(null);
+  const geocodeBudgetRef = useRef(MAX_GEOCODES_PER_SESSION);
+  const lastFetchKeyRef = useRef(null);
+  const lastFetchAtRef = useRef(0);
 
   const detachMarker = (marker) => {
     if (!marker) return;
@@ -190,6 +196,12 @@ export default function GoogleMapClient({
     if (!apiKey) return null;
 
     try {
+      if (geocodeBudgetRef.current <= 0) {
+        geocodeCacheRef.current.set(key, null);
+        return null;
+      }
+      geocodeBudgetRef.current -= 1;
+
       const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
         method: "POST",
         headers: {
@@ -230,7 +242,7 @@ export default function GoogleMapClient({
     curatedFetchPromiseRef.current = (async () => {
       const { data, error } = await supabase
         .from("users")
-        .select("id,business_name,full_name,category,address,city,role,profile_photo_url,description,website");
+        .select("id,business_name,full_name,category,address,city,role,profile_photo_url,description,website,latitude,longitude");
 
       if (error) {
         console.error("Failed to fetch Supabase businesses", error);
@@ -244,7 +256,11 @@ export default function GoogleMapClient({
       const mapped = (await Promise.allSettled(
         rows.map(async (row) => {
           const displayAddress = row.city ? `${row.address}, ${row.city}` : row.address;
-          const coords = await geocodeWithTimeout(displayAddress);
+          const hasCoords =
+            typeof row.latitude === "number" && typeof row.longitude === "number";
+          const coords = hasCoords
+            ? { lat: row.latitude, lng: row.longitude }
+            : await geocodeWithTimeout(displayAddress);
           if (!coords) return null;
 
           return {
@@ -494,16 +510,16 @@ export default function GoogleMapClient({
               },
             },
           };
-        const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask":
+          const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": apiKey,
+              "X-Goog-FieldMask":
                 "places.id,places.displayName.text,places.formattedAddress,places.location,places.types,places.photos",
-          },
-          body: JSON.stringify(body),
-        });
+            },
+            body: JSON.stringify(body),
+          });
           if (!res.ok) {
             const txt = await res.text();
             throw new Error(`Places (new) request failed: ${res.status} ${txt}`);
@@ -526,111 +542,137 @@ export default function GoogleMapClient({
 
           suppressNextIdleRef.current = true; // avoid immediately marking view as stale after reload
           placeUserMarker(centerLat, centerLng);
-          clearBusinessMarkers();
-          setBusinesses([]);
-          setLoading(true);
-          fetchInFlightRef.current = true;
-          lastFetchRef.current = {
-            lat: centerLat,
-            lng: centerLng,
-            zoom: zoomLevel ?? map?.getZoom?.(),
-          };
 
-          const bounds = map?.getBounds ? map.getBounds() : null;
-          const radiusMeters = radiusOverrideMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
-
-          let places = [];
           try {
-            places = await fetchPlacesNew({ lat: centerLat, lng: centerLng, radiusMeters, includedTypes: includedTypesOverride });
-          } catch (errNew) {
-            console.error("Places (new) fetch failed", errNew);
-            if (showBusinessErrors) {
-              setError(
-                "Google Places request was denied. Check API key referrer restrictions and ensure Places API (New) is enabled."
-              );
+            const bounds = map?.getBounds ? map.getBounds() : null;
+            const radiusMeters =
+              radiusOverrideMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
+
+            const requestKey = [
+              typeof centerLat === "number" ? centerLat.toFixed(REQUEST_KEY_PRECISION) : "",
+              typeof centerLng === "number" ? centerLng.toFixed(REQUEST_KEY_PRECISION) : "",
+              Math.round(radiusMeters || 0),
+              zoomLevel ?? map?.getZoom?.() ?? "",
+              (includedTypesOverride || []).slice().sort().join(","),
+            ].join("|");
+            const now = Date.now();
+            if (
+              requestKey &&
+              requestKey === lastFetchKeyRef.current &&
+              now - lastFetchAtRef.current < REQUEST_DEDUP_MS
+            ) {
+              setLoading(false);
+              setRefreshNeeded(false);
+              pendingViewRef.current = null;
+              return;
             }
-            places = [];
-          }
+            lastFetchKeyRef.current = requestKey;
+            lastFetchAtRef.current = now;
 
-          const businessesWithCoords = [];
-          for (const place of places || []) {
-            // map both legacy and new payloads
-            const loc =
-              place.geometry?.location ||
-              (place.location
-                ? {
-                    lat: () => place.location.latitude,
-                    lng: () => place.location.longitude,
-                  }
-                : null);
-            if (!loc) continue;
-            const pts = { lat: typeof loc.lat === "function" ? loc.lat() : loc.lat, lng: typeof loc.lng === "function" ? loc.lng() : loc.lng };
-            if (bounds && !bounds.contains(new google.maps.LatLng(pts.lat, pts.lng))) {
-              continue;
+            clearBusinessMarkers();
+            setBusinesses([]);
+            setLoading(true);
+            fetchInFlightRef.current = true;
+            lastFetchRef.current = {
+              lat: centerLat,
+              lng: centerLng,
+              zoom: zoomLevel ?? map?.getZoom?.(),
+            };
+
+            let places = [];
+            try {
+              places = await fetchPlacesNew({ lat: centerLat, lng: centerLng, radiusMeters, includedTypes: includedTypesOverride });
+            } catch (errNew) {
+              console.error("Places (new) fetch failed", errNew);
+              if (showBusinessErrors) {
+                setError(
+                  "Google Places request was denied. Check API key referrer restrictions and ensure Places API (New) is enabled."
+                );
+              }
+              places = [];
             }
-            const typeList = place.types || [];
-            const primaryType = typeList.find((t) => t && ALLOWED_RETAIL_TYPES.has(t));
-            if (!primaryType) continue; // skip non-retail/service entries
-            const categoryKey = primaryType || "store";
-            const categoryLabel = formatCategory(categoryKey);
-            const photoName = place.photos?.[0]?.name;
-            const photoUrl =
-              photoName && apiKeyRef.current
-                ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKeyRef.current}`
-                : null;
-            businessesWithCoords.push({
-              id: place.place_id || place.id,
-              name: place.name || place.displayName?.text || "Unnamed",
-              address: place.vicinity || place.formatted_address || place.formattedAddress || "",
-              coords: pts,
-              categoryLabel,
-              source: "google_places_new",
-              zoom: zoomLevel || map?.getZoom?.(),
-              imageUrl: photoUrl,
-            });
+
+            const businessesWithCoords = [];
+            for (const place of places || []) {
+              // map both legacy and new payloads
+              const loc =
+                place.geometry?.location ||
+                (place.location
+                  ? {
+                      lat: () => place.location.latitude,
+                      lng: () => place.location.longitude,
+                    }
+                  : null);
+              if (!loc) continue;
+              const pts = { lat: typeof loc.lat === "function" ? loc.lat() : loc.lat, lng: typeof loc.lng === "function" ? loc.lng() : loc.lng };
+              if (bounds && !bounds.contains(new google.maps.LatLng(pts.lat, pts.lng))) {
+                continue;
+              }
+              const typeList = place.types || [];
+              const primaryType = typeList.find((t) => t && ALLOWED_RETAIL_TYPES.has(t));
+              if (!primaryType) continue; // skip non-retail/service entries
+              const categoryKey = primaryType || "store";
+              const categoryLabel = formatCategory(categoryKey);
+              const photoName = place.photos?.[0]?.name;
+              const photoUrl =
+                photoName && apiKeyRef.current
+                  ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKeyRef.current}`
+                  : null;
+              businessesWithCoords.push({
+                id: place.place_id || place.id,
+                name: place.name || place.displayName?.text || "Unnamed",
+                address: place.vicinity || place.formatted_address || place.formattedAddress || "",
+                coords: pts,
+                categoryLabel,
+                source: "google_places_new",
+                zoom: zoomLevel || map?.getZoom?.(),
+                imageUrl: photoUrl,
+              });
+            }
+
+            let curatedNearby = [];
+            try {
+              const curated = await loadCuratedBusinesses();
+              const searchBounds = map?.getBounds ? map.getBounds() : null;
+              const limit = radiusMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
+
+              curatedNearby = (curated || []).filter((biz) => {
+                if (!biz.coords) return false;
+                const distanceMeters =
+                  haversine(centerLat, centerLng, biz.coords.lat, biz.coords.lng) * 1000;
+                const withinRadius = distanceMeters <= limit * 1.2;
+                const withinBounds = searchBounds
+                  ? searchBounds.contains(new google.maps.LatLng(biz.coords.lat, biz.coords.lng))
+                  : true;
+                return withinBounds || withinRadius;
+              });
+            } catch (curatedErr) {
+              console.warn("Curated business load failed", curatedErr);
+            }
+
+            if (!isMounted) return;
+
+            const combinedBusinesses = [...curatedNearby, ...businessesWithCoords];
+
+            const categoryCounts = combinedBusinesses.reduce((acc, biz) => {
+              acc[biz.categoryLabel] = (acc[biz.categoryLabel] || 0) + 1;
+              return acc;
+            }, {});
+            const uniqueCategories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
+            const categoriesList = uniqueCategories.map((cat) => ({
+              name: cat,
+              count: categoryCounts[cat] || 0,
+            }));
+            setBusinesses(combinedBusinesses);
+            setCategories(uniqueCategories);
+            setCategoriesWithCounts(categoriesList);
+            renderMarkers(combinedBusinesses, activeCategory);
+            setLoading(false);
+            setRefreshNeeded(false);
+            pendingViewRef.current = null;
+          } finally {
+            fetchInFlightRef.current = false;
           }
-
-          let curatedNearby = [];
-          try {
-            const curated = await loadCuratedBusinesses();
-            const searchBounds = map?.getBounds ? map.getBounds() : null;
-            const limit = radiusMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
-
-            curatedNearby = (curated || []).filter((biz) => {
-              if (!biz.coords) return false;
-              const distanceMeters =
-                haversine(centerLat, centerLng, biz.coords.lat, biz.coords.lng) * 1000;
-              const withinRadius = distanceMeters <= limit * 1.2;
-              const withinBounds = searchBounds
-                ? searchBounds.contains(new google.maps.LatLng(biz.coords.lat, biz.coords.lng))
-                : true;
-              return withinBounds || withinRadius;
-            });
-          } catch (curatedErr) {
-            console.warn("Curated business load failed", curatedErr);
-          }
-
-          if (!isMounted) return;
-
-          const combinedBusinesses = [...curatedNearby, ...businessesWithCoords];
-
-          const categoryCounts = combinedBusinesses.reduce((acc, biz) => {
-            acc[biz.categoryLabel] = (acc[biz.categoryLabel] || 0) + 1;
-            return acc;
-          }, {});
-          const uniqueCategories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
-          const categoriesList = uniqueCategories.map((cat) => ({
-            name: cat,
-            count: categoryCounts[cat] || 0,
-          }));
-          setBusinesses(combinedBusinesses);
-          setCategories(uniqueCategories);
-          setCategoriesWithCounts(categoriesList);
-          renderMarkers(combinedBusinesses, activeCategory);
-          setLoading(false);
-          fetchInFlightRef.current = false;
-          setRefreshNeeded(false);
-          pendingViewRef.current = null;
         }
 
         if (navigator.geolocation) {

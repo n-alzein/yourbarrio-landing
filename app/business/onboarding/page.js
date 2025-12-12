@@ -1,8 +1,11 @@
 "use client";
 
-import { useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+
+const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 // ------------------------------
 // State + reducer (must be ABOVE component)
@@ -30,6 +33,9 @@ export default function BusinessOnboardingPage() {
   const [form, dispatch] = useReducer(formReducer, initialForm);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [mapsError, setMapsError] = useState("");
+  const addressInputRef = useRef(null);
+  const pickedLocationRef = useRef(null); // stores { lat, lng } from Places
 
   function updateField(field, value) {
     dispatch({ field, value });
@@ -45,6 +51,94 @@ export default function BusinessOnboardingPage() {
 
     return parts.join("");
   }
+
+  // Lazily load Google Maps Places and wire autocomplete to the address field
+  useEffect(() => {
+    if (!MAPS_API_KEY) {
+      setMapsError("Google Maps API key missing; address autocomplete unavailable.");
+      return;
+    }
+
+    let destroyed = false;
+    let autocomplete;
+
+    const loadMaps = () => {
+      // Reuse existing loader promise if present
+      if (!window.__ybMapsLoader) {
+        window.__ybMapsLoader = new Promise((resolve, reject) => {
+          // Avoid duplicate script tags
+          const existing = Array.from(document.scripts || []).find((s) =>
+            s.src?.includes("maps.googleapis.com/maps/api/js")
+          );
+          if (existing && existing.src.includes("key=")) {
+            existing.addEventListener("load", () => resolve(window.google));
+            existing.addEventListener("error", reject);
+            return;
+          }
+          if (existing && !existing.src.includes("key=")) {
+            existing.remove();
+          }
+
+          const params = new URLSearchParams({
+            key: MAPS_API_KEY,
+            libraries: "places",
+          });
+
+          const script = document.createElement("script");
+          script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+          script.async = true;
+          script.defer = true;
+          script.onload = () => resolve(window.google);
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+
+      return window.__ybMapsLoader;
+    };
+
+    loadMaps()
+      .then((google) => {
+        if (destroyed || !addressInputRef.current || !google?.maps?.places) return;
+
+        autocomplete = new google.maps.places.Autocomplete(
+          addressInputRef.current,
+          {
+            types: ["address"],
+            fields: ["formatted_address", "geometry"],
+          }
+        );
+
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          const formatted = place?.formatted_address;
+          const loc = place?.geometry?.location;
+
+          if (formatted) {
+            updateField("address", formatted);
+          }
+
+          if (loc) {
+            pickedLocationRef.current = {
+              lat: typeof loc.lat === "function" ? loc.lat() : loc.lat,
+              lng: typeof loc.lng === "function" ? loc.lng() : loc.lng,
+            };
+          } else {
+            pickedLocationRef.current = null;
+          }
+        });
+      })
+      .catch((err) => {
+        console.warn("Failed to load Google Maps", err);
+        if (!destroyed) {
+          setMapsError("Address autocomplete failed to load.");
+        }
+      });
+
+    return () => {
+      destroyed = true;
+    };
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -67,51 +161,35 @@ export default function BusinessOnboardingPage() {
         return;
       }
 
-      // 2) Create business entry
-      const { data, error } = await supabase
-        .from("businesses")
-        .insert({
-          id: user.id,
+      // 2) Create or update business entry via server (service role bypasses RLS)
+      const res = await fetch("/api/businesses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
           name: form.businessName,
           category: form.category,
           description: form.description,
           address: form.address,
           phone: form.phone,
           website: form.website,
-        })
-        .select("id")
-        .single();
+          latitude: pickedLocationRef.current?.lat ?? null,
+          longitude: pickedLocationRef.current?.lng ?? null,
+        }),
+      });
 
-      if (error) throw error;
-
-      // 3) Attempt to geocode the address server-side and persist coords
-      try {
-        const geoRes = await fetch("/api/geocode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: form.address }),
-        });
-
-        if (geoRes.ok) {
-          const geo = await geoRes.json();
-          if (geo?.lat && geo?.lng) {
-            await supabase
-              .from("businesses")
-              .update({ latitude: geo.lat, longitude: geo.lng })
-              .eq("id", data.id);
-          }
-        } else {
-          console.warn("Geocode failed:", await geoRes.text());
-        }
-      } catch (e) {
-        console.warn("Geocode request error:", e);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Failed to save business");
       }
 
-      // 4) Redirect to business profile
-      router.push(`/business/${data.id}`);
+      const payload = await res.json();
+
+      // 3) Redirect to business profile
+      router.push(`/business/${payload.id}`);
     } catch (err) {
-      console.error(err);
-      setMessage("Something went wrong. Please try again.");
+      console.error("Business onboarding failed", err);
+      setMessage(err?.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -158,11 +236,11 @@ export default function BusinessOnboardingPage() {
               <option value="" disabled>
                 Select a category
               </option>
-              <option value="Food & Drink">Food & Drink</option>
-              <option value="Health & Beauty">Health & Beauty</option>
-              <option value="Retail">Retail</option>
-              <option value="Fitness">Fitness</option>
-              <option value="Services">Services</option>
+              {BUSINESS_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat} className="text-black">
+                  {cat}
+                </option>
+              ))}
             </select>
           </div>
 

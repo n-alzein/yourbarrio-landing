@@ -19,12 +19,32 @@ function BusinessRegisterInner() {
   const [password, setPassword] = useState("");
 
   const finishBusinessAuth = useCallback(() => {
-    if (isPopup && typeof window !== "undefined") {
-      window.close();
-      return;
+    const target = "/business/onboarding";
+
+    if (typeof window !== "undefined") {
+      try {
+        // Notify opener tab that business auth succeeded and where to send them
+        localStorage.setItem("business_auth_redirect", target);
+        localStorage.setItem("business_auth_success", Date.now().toString());
+      } catch (err) {
+        console.warn("Could not broadcast business auth success", err);
+      }
+
+      if (isPopup) {
+        // Close popup when possible; fall back to in-tab redirect if blocked
+        window.close();
+
+        setTimeout(() => {
+          if (!window.closed) {
+            router.replace(target);
+          }
+        }, 150);
+
+        return;
+      }
     }
 
-    router.replace("/business/dashboard");
+    router.replace(target);
   }, [isPopup, router]);
 
   /* --------------------------------------------------------------

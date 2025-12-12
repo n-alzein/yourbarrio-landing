@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 
 export default function EditListingPage() {
   const router = useRouter();
@@ -232,11 +233,11 @@ export default function EditListingPage() {
             required
           >
             <option value="" className="text-black">Select Category</option>
-            <option value="clothing" className="text-black">Clothing</option>
-            <option value="Food" className="text-black">Food</option>
-            <option value="Beauty" className="text-black">Beauty</option>
-            <option value="Training" className="text-black">Training</option>
-            <option value="Services" className="text-black">Services</option>
+            {BUSINESS_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat} className="text-black">
+                {cat}
+              </option>
+            ))}
           </select>
 
           {/* BUTTONS SIDE BY SIDE */}

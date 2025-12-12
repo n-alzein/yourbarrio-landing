@@ -13,7 +13,14 @@ export default function BusinessLayout({ children }) {
   useEffect(() => {
     function handleStorage(event) {
       if (event.key === "business_auth_success") {
-        router.replace("/business/dashboard");
+        const redirectTarget =
+          localStorage.getItem("business_auth_redirect") ||
+          "/business/dashboard";
+
+        // Clear hint so future logins don't reuse it
+        localStorage.removeItem("business_auth_redirect");
+
+        router.replace(redirectTarget);
         router.refresh();
       }
     }

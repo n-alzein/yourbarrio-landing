@@ -44,7 +44,8 @@ export default function PublicNavbar() {
   if (
     pathname.startsWith("/business") ||
     pathname.startsWith("/business-auth") ||
-    pathname.startsWith("/customer")
+    pathname.startsWith("/customer") ||
+    pathname.startsWith("/listings")
   ) {
     return null;
   }

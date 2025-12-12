@@ -175,13 +175,7 @@ export default function BusinessNavbar() {
             {!user && <NavItem href="/business">Businesses</NavItem>}
 
             {/* Logged-in business nav (LEFT SIDE) */}
-            {user && role === "business" && (
-              <>
-                <NavItem href="/business/dashboard">Dashboard</NavItem>
-                <NavItem href="/business/listings">Listings</NavItem>
-                <NavItem href="/business/about">About</NavItem>
-              </>
-            )}
+            {user && role === "business" && null}
 
             {/* Logged-out → show About */}
             {!user && <NavItem href="/business/about">About</NavItem>}

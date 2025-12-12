@@ -504,7 +504,7 @@ export default function CustomerHomePage() {
         ) : null}
 
         {!search && (
-          <div className="space-y-4">
+          <div className="space-y-4 mt-4 lg:mt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
@@ -518,46 +518,55 @@ export default function CustomerHomePage() {
               ) : null}
             </div>
 
-            <div className="space-y-5">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {groupedListings.map(({ category, items }) => (
-                <div key={category} className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                    <div className="text-sm font-semibold text-white/90">
-                      {category}
+                <div
+                  key={category}
+                  className="relative overflow-hidden rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl shadow-lg p-5 flex flex-col gap-3 min-h-[180px]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{category}</p>
+                      <p className="text-xs text-white/60">{items.length} items</p>
                     </div>
-                    <div className="text-xs text-white/60">{items.length} items</div>
+                    {items[0] ? (
+                      <Link
+                        href={`/listings/${items[0].id}`}
+                        className="inline-flex items-center justify-center text-[10px] px-2 py-[3px] rounded-full border border-white/20 bg-white/10 hover:border-white/40"
+                      >
+                        View
+                      </Link>
+                    ) : null}
                   </div>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
-                    {items.map((item) => (
+                  <div className="grid grid-cols-3 gap-2.5 mt-auto">
+                    {items.slice(0, 3).map((item) => (
                       <Link
                         key={item.id}
                         href={`/listings/${item.id}`}
-                        className="rounded-xl border border-white/10 bg-white/5 p-3 hover:border-white/30 hover:bg-white/10 transition flex gap-3"
+                        className="h-24 rounded-xl bg-white/10 border border-white/10 overflow-hidden hover:border-white/30"
                       >
                         {item.photo_url ? (
                           <img
                             src={item.photo_url}
                             alt={item.title}
-                            className="h-16 w-16 rounded-lg object-cover border border-white/10"
+                            className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="h-16 w-16 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] text-white/60">
+                          <div className="h-full w-full flex items-center justify-center text-[10px] text-white/60">
                             No image
                           </div>
                         )}
-                        <div className="flex-1">
-                          <div className="text-sm font-semibold">{item.title}</div>
-                          {item.price ? (
-                            <div className="text-xs text-white/75">${item.price}</div>
-                          ) : null}
-                          {item.description ? (
-                            <p className="text-xs text-white/60 line-clamp-2 mt-1">
-                              {item.description}
-                            </p>
-                          ) : null}
-                        </div>
                       </Link>
                     ))}
+                    {items.length < 3
+                      ? Array.from({ length: 3 - items.length }).map((_, idx) => (
+                          <div
+                            // eslint-disable-next-line react/no-array-index-key
+                            key={`placeholder-${category}-${idx}`}
+                            className="h-24 rounded-xl bg-white/5 border border-white/10"
+                          />
+                        ))
+                      : null}
                   </div>
                 </div>
               ))}
