@@ -219,15 +219,10 @@ export default function CustomerNavbar() {
     setProfileMenuOpen(false);
   };
 
-  const hardNavigate = (href) => {
+  const go = (href) => {
     if (!href) return;
     closeMenus();
-    // Use a direct location change to avoid any client-side stall/delay
-    if (typeof window !== "undefined") {
-      window.location.href = href;
-    } else {
-      router.replace(href);
-    }
+    router.push(href);
   };
 
   const NavItem = ({ href, children }) => (
@@ -238,7 +233,10 @@ export default function CustomerNavbar() {
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
       }`}
-      onClick={() => hardNavigate(href)}
+      onClick={(e) => {
+        e.preventDefault();
+        go(href);
+      }}
     >
       {children}
     </Link>
@@ -313,7 +311,10 @@ export default function CustomerNavbar() {
         <div className="flex items-center gap-6 md:gap-10 flex-1">
           <Link
             href="/customer/home"
-            onClick={() => hardNavigate("/customer/home")}
+            onClick={(e) => {
+              e.preventDefault();
+              go("/customer/home");
+            }}
             aria-label="Go to home"
           >
             <img
@@ -516,7 +517,10 @@ export default function CustomerNavbar() {
                         <Link
                           key={href}
                           href={href}
-                          onClick={() => hardNavigate(href)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            go(href);
+                          }}
                           className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
                         >
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
@@ -533,7 +537,10 @@ export default function CustomerNavbar() {
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
                       <Link
                         href="/customer/settings"
-                        onClick={() => hardNavigate("/customer/settings")}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          go("/customer/settings");
+                        }}
                         className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
                       >
                         <span className="flex items-center gap-2">

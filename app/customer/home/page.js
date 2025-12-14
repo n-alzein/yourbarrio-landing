@@ -510,7 +510,10 @@ export default function CustomerHomePage() {
                 <Link
                   key={item.id}
                   href={`/customer/listings/${item.id}`}
-                  onClick={() => hardNavigate(`/customer/listings/${item.id}`)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.assign(`/customer/listings/${item.id}`);
+                  }}
                   className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto"
                 >
                   {coverFor(item.photo_url) ? (
@@ -627,7 +630,10 @@ export default function CustomerHomePage() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
+            <div
+              className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3"
+              style={{ pointerEvents: "auto", touchAction: "auto" }}
+            >
               <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
                 <div>
                   <div className="text-sm font-semibold text-white/85 truncate">
@@ -750,7 +756,10 @@ export default function CustomerHomePage() {
                       </div>
                       <Link
                         href={`/listings/${visibleItems[0].id}`}
-                        onClick={() => hardNavigate(`/listings/${visibleItems[0].id}`)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.location.assign(`/listings/${visibleItems[0].id}`);
+                        }}
                         className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto"
                       >
                         View
@@ -762,7 +771,10 @@ export default function CustomerHomePage() {
                         <Link
                           key={item.id}
                           href={`/listings/${item.id}`}
-                          onClick={() => hardNavigate(`/listings/${item.id}`)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            window.location.assign(`/listings/${item.id}`);
+                          }}
                           className="relative group h-40 bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto"
                         >
                           <img

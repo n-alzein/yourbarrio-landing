@@ -1061,7 +1061,12 @@ export default function GoogleMapClient({
       style: "mapbox://styles/mapbox/streets-v12",
       center: [initialCenter.lng, initialCenter.lat],
       zoom: 13,
-      cooperativeGestures: true,
+      cooperativeGestures: false,
+      dragPan: true,
+      dragRotate: false,
+      scrollZoom: true,
+      touchZoomRotate: true,
+      interactive: true,
     });
 
     mapInstanceRef.current = map;
