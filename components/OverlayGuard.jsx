@@ -19,6 +19,14 @@ function disableStrayOverlays() {
   const minHeight = Math.max(0, window.innerHeight * 0.7);
 
   const candidates = Array.from(document.querySelectorAll("*")).filter((el) => {
+    // Honor opt-out for legitimate overlays (modals, etc.)
+    if (
+      el.getAttribute("data-allow-overlay") === "1" ||
+      el.closest?.("[data-allow-overlay='1']")
+    ) {
+      return false;
+    }
+
     const rect = el.getBoundingClientRect();
     if (rect.width < minWidth || rect.height < minHeight) return false;
 
