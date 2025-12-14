@@ -27,7 +27,10 @@ export async function middleware(req) {
 
   const hasSession = Boolean(session);
   const isBusinessPublicPage =
-    path === "/business" || path === "/business/about";
+    path === "/business" ||
+    path === "/business/" ||
+    path === "/business/about" ||
+    path === "/business/about/";
 
   // Keep logged-in users off the public landing page
   if (path === "/" && hasSession) {
@@ -54,10 +57,9 @@ export async function middleware(req) {
     return NextResponse.redirect(redirectUrl, { headers: res.headers });
   }
 
-  if (path.startsWith("/business") && !isBusinessPublicPage && !hasSession) {
-    const redirectUrl = new URL("/business-auth/login", req.url);
-    redirectUrl.searchParams.set("redirect", path + req.nextUrl.search);
-    return NextResponse.redirect(redirectUrl, { headers: res.headers });
+  // Allow business routes to render unauthenticated (handled client-side)
+  if (path.startsWith("/business") && !hasSession) {
+    return res;
   }
 
   return res;

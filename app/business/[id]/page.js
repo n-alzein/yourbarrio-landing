@@ -97,7 +97,7 @@ export default function BusinessPublicPage({ params }) {
       <div className="max-w-5xl mx-auto px-6 -mt-20 relative z-10">
         {/* BUSINESS CARD */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
             <Image
               src={business.logo_url || "/placeholder-logo.png"}
               alt={business.name}
@@ -106,14 +106,14 @@ export default function BusinessPublicPage({ params }) {
               className="rounded-xl border border-white/20"
             />
 
-            <div>
+            <div className="space-y-1">
               <h1 className="text-3xl font-bold">{business.name}</h1>
               <p className="text-white/70">{business.category}</p>
             </div>
 
             <button
               onClick={toggleSave}
-              className={`ml-auto px-4 py-2 rounded-xl font-semibold transition ${
+              className={`w-full sm:w-auto sm:ml-auto px-4 py-2 rounded-xl font-semibold transition ${
                 saved
                   ? "bg-rose-500 hover:bg-rose-600"
                   : "bg-purple-600 hover:bg-purple-700"

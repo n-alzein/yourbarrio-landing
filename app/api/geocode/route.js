@@ -8,14 +8,18 @@ export async function POST(request) {
       return NextResponse.json({ error: "address required" }, { status: 400 });
     }
 
-    const key = process.env.GOOGLE_GEOCODING_API_KEY;
-    if (!key) {
-      return NextResponse.json({ error: "server geocoding key missing" }, { status: 500 });
+    const token = process.env.MAPBOX_GEOCODING_TOKEN;
+    if (!token) {
+      return NextResponse.json({ error: "server geocoding token missing" }, { status: 500 });
     }
 
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+    const params = new URLSearchParams({
+      access_token: token,
+      limit: "1",
+    });
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
       address
-    )}&key=${key}`;
+    )}.json?${params.toString()}`;
 
     const res = await fetch(url);
     if (!res.ok) {
@@ -23,12 +27,21 @@ export async function POST(request) {
     }
 
     const data = await res.json();
-    if (!data || data.status !== "OK" || !data.results || data.results.length === 0) {
+    const feature = Array.isArray(data?.features) ? data.features[0] : null;
+    const center = feature?.center;
+
+    if (
+      !feature ||
+      !Array.isArray(center) ||
+      center.length < 2 ||
+      typeof center[0] !== "number" ||
+      typeof center[1] !== "number"
+    ) {
       return NextResponse.json({ error: "ZERO_RESULTS", details: data }, { status: 404 });
     }
 
-    const loc = data.results[0].geometry.location;
-    return NextResponse.json({ lat: loc.lat, lng: loc.lng });
+    const [lng, lat] = center;
+    return NextResponse.json({ lat, lng });
   } catch (err) {
     return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }

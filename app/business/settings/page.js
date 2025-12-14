@@ -9,7 +9,7 @@ export default function SettingsPage() {
   const { authUser, user, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
   const router = useRouter();
-  const redirectPath = "/business-auth/login?redirect=/business/settings";
+  const redirectPath = "/business";
 
   /* -----------------------------------------------------------
      HOOKS (always first — no conditional hooks)

@@ -47,7 +47,7 @@ export default function HomePage() {
                 </button>
               </div>
 
-              <div className="mt-6 flex items-center gap-6 text-sm text-white/70">
+              <div className="mt-6 flex flex-wrap items-center gap-3 md:gap-6 text-sm text-white/70">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   Live near you
@@ -75,11 +75,14 @@ export default function HomePage() {
               <div className="relative rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-2xl">
                 <GoogleMapClient
                   radiusKm={25}
+                  preferUserCenter
                   containerClassName="w-full"
                   cardClassName="p-0 bg-transparent border-0 text-white"
                   mapClassName="h-80 rounded-2xl overflow-hidden border border-white/10"
                   title="Explore nearby businesses"
                   showBusinessErrors={false}
+                  placesMode="manual"
+                  disableGooglePlaces
                 />
 
                 <div

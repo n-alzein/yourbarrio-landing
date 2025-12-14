@@ -1,7 +1,54 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
+
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS =
+  Number.parseInt(process.env.SEARCH_RATE_LIMIT_MAX || "", 10) || 20;
+const CACHE_TTL_MS = 60 * 1000;
+const rateBuckets = new Map();
+const responseCache = new Map();
 
 const sanitize = (value) => (value || "").replace(/[%_]/g, "").trim();
+
+const getClientIp = (request) => {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+};
+
+const isRateLimited = (ip) => {
+  if (!ip) return false;
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const bucket = rateBuckets.get(ip) || [];
+  const recent = bucket.filter((ts) => ts > windowStart);
+  recent.push(now);
+  rateBuckets.set(ip, recent);
+  return recent.length > RATE_LIMIT_MAX_REQUESTS;
+};
+
+const getCachedResponse = (key) => {
+  if (!key) return null;
+  const cached = responseCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.payload;
+  }
+  if (cached) {
+    responseCache.delete(key);
+  }
+  return null;
+};
+
+const setCachedResponse = (key, payload) => {
+  if (!key) return;
+  responseCache.set(key, {
+    payload,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+};
 
 async function searchListings(supabase, term) {
   const safe = sanitize(term);
@@ -30,7 +77,7 @@ async function searchListings(supabase, term) {
     price: row.price,
     category: row.category,
     city: row.city,
-    photo_url: row.photo_url,
+    photo_url: primaryPhotoUrl(row.photo_url),
     business_id: row.business_id,
     source: "supabase_listing",
   }));
@@ -69,7 +116,14 @@ async function searchBusinesses(supabase, term) {
   }));
 }
 
+const PLACES_DISABLED =
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
+  (process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DISABLE_PLACES !== "false");
+
 async function searchGooglePlaces(term) {
+  if (PLACES_DISABLED) return [];
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
     process.env.GOOGLE_MAPS_API_KEY;
@@ -113,6 +167,7 @@ async function searchGooglePlaces(term) {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("q") || "").trim();
+  const cacheKey = query.toLowerCase();
 
   if (!query) {
     return NextResponse.json({
@@ -121,6 +176,22 @@ export async function GET(request) {
       places: [],
       message: "empty query",
     });
+  }
+
+  const ip = getClientIp(request);
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      {
+        error: "rate_limit_exceeded",
+        message: "Too many search requests. Please wait a moment.",
+      },
+      { status: 429 }
+    );
+  }
+
+  const cached = getCachedResponse(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
   }
 
   let supabase = null;
@@ -136,9 +207,13 @@ export async function GET(request) {
     searchGooglePlaces(query),
   ]);
 
-  return NextResponse.json({
+  const payload = {
     items,
     businesses,
     places,
-  });
+  };
+
+  setCachedResponse(cacheKey, payload);
+
+  return NextResponse.json(payload);
 }

@@ -18,22 +18,22 @@
 /* ROOT COLORS */
 :root,
 .theme-light {
-  --background: #faf5ff;
-  --foreground: #2a024d;
-  --text: #2a024d;
-  --primary: #8a2be2;
-  --secondary: #f3e8ff;
-  --muted: #5f4178;
-  --surface: rgba(255, 255, 255, 0.92);
-  --border: rgba(42, 2, 77, 0.12);
-  --overlay: rgba(138, 43, 226, 0.08);
-  --bg-solid: #f9f3ff;
-  --bg-gradient-start: #f4e8ff; /* lavender */
-  --bg-gradient-end: #ede0ff;   /* soft lilac */
-  --glow-1: rgba(138, 43, 226, 0.14);
-  --glow-2: rgba(243, 232, 255, 0.9);
-  --accent: #8a2be2;
-  --accent-hover: #7c3aed;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --text: #0f172a;
+  --primary: #0f172a;
+  --secondary: #f8fafc;
+  --muted: #475569;
+  --surface: rgba(255, 255, 255, 0.96);
+  --border: rgba(15, 23, 42, 0.1);
+  --overlay: rgba(15, 23, 42, 0.05);
+  --bg-solid: #f8fafc;
+  --bg-gradient-start: #f8fafc; /* soft gray */
+  --bg-gradient-end: #eef2ff;   /* pale indigo tint */
+  --glow-1: rgba(79, 70, 229, 0.1);
+  --glow-2: rgba(14, 165, 233, 0.08);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
   color-scheme: light;
 }
 

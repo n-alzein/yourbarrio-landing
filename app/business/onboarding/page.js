@@ -6,6 +6,13 @@ import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 
 const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const PLACES_MODE =
+  process.env.NEXT_PUBLIC_PLACES_MODE || process.env.PLACES_MODE || "prod";
+const PLACES_DISABLED =
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
+  (process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DISABLE_PLACES !== "false");
 
 // ------------------------------
 // State + reducer (must be ABOVE component)
@@ -54,8 +61,8 @@ export default function BusinessOnboardingPage() {
 
   // Lazily load Google Maps Places and wire autocomplete to the address field
   useEffect(() => {
-    if (!MAPS_API_KEY) {
-      setMapsError("Google Maps API key missing; address autocomplete unavailable.");
+    if (!MAPS_API_KEY || PLACES_DISABLED || PLACES_MODE === "dev") {
+      setMapsError("Address autocomplete is disabled in this environment.");
       return;
     }
 

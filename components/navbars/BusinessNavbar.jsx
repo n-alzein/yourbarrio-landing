@@ -15,6 +15,25 @@ import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 
+function NavItem({ href, children, onClick, isActive, closeMenus }) {
+  return (
+    <Link
+      href={href}
+      onClick={(e) => {
+        onClick?.(e);
+        closeMenus?.();
+      }}
+      className={`text-sm md:text-base transition ${
+        isActive?.(href)
+          ? "text-white font-semibold"
+          : "text-white/70 hover:text-white"
+      }`}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function BusinessNavbar() {
   const pathname = usePathname();
   const { user, authUser, role, loadingUser, supabase } = useAuth();
@@ -62,7 +81,10 @@ export default function BusinessNavbar() {
   /* Load avatar */
   useEffect(() => {
     async function loadPhoto() {
-      if (!user) return setPhotoUrl(null);
+      if (!user || !supabase) {
+        setPhotoUrl(null);
+        return;
+      }
 
       const { data } = await supabase
         .from("users")
@@ -104,23 +126,6 @@ export default function BusinessNavbar() {
     setMobileMenuOpen(false);
   };
 
-  const NavItem = ({ href, children, onClick }) => (
-    <Link
-      href={href}
-      onClick={(e) => {
-        onClick?.(e);
-        closeMenus();
-      }}
-      className={`text-sm md:text-base transition ${
-        isActive(href)
-          ? "text-white font-semibold"
-          : "text-white/70 hover:text-white"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-
   const quickActions = [
     {
       href: "/business/dashboard",
@@ -133,12 +138,6 @@ export default function BusinessNavbar() {
       title: "Manage listings",
       description: "Keep offers & hours fresh",
       icon: Store,
-    },
-    {
-      href: "/business/settings",
-      title: "Business settings",
-      description: "Team access, billing & more",
-      icon: Settings,
     },
   ];
 
@@ -172,13 +171,29 @@ export default function BusinessNavbar() {
           {/* LEFT NAV LINKS */}
           <div className="hidden md:flex items-center gap-8 ml-8">
             {/* Show /business only when logged OUT */}
-            {!user && <NavItem href="/business">Businesses</NavItem>}
+            {!user && (
+              <NavItem
+                href="/business"
+                isActive={isActive}
+                closeMenus={closeMenus}
+              >
+                Businesses
+              </NavItem>
+            )}
 
             {/* Logged-in business nav (LEFT SIDE) */}
             {user && role === "business" && null}
 
             {/* Logged-out → show About */}
-            {!user && <NavItem href="/business/about">About</NavItem>}
+            {!user && (
+              <NavItem
+                href="/business/about"
+                isActive={isActive}
+                closeMenus={closeMenus}
+              >
+                About
+              </NavItem>
+            )}
           </div>
         </div>
 
@@ -194,6 +209,8 @@ export default function BusinessNavbar() {
                 onClick={(e) =>
                   handleBusinessAuthClick(e, "/business-auth/login")
                 }
+                isActive={isActive}
+                closeMenus={closeMenus}
               >
                 Login
               </NavItem>
@@ -315,15 +332,29 @@ export default function BusinessNavbar() {
         <ThemeToggle showLabel align="left" />
 
         {/* Logged-out */}
-        {!user && <NavItem href="/business">Businesses</NavItem>}
-        {!user && <NavItem href="/business/about">About</NavItem>}
+        {!user && (
+          <NavItem
+            href="/business"
+            isActive={isActive}
+            closeMenus={closeMenus}
+          >
+            Businesses
+          </NavItem>
+        )}
+        {!user && (
+          <NavItem
+            href="/business/about"
+            isActive={isActive}
+            closeMenus={closeMenus}
+          >
+            About
+          </NavItem>
+        )}
 
         {/* Logged-in business menu */}
         {user && role === "business" && (
           <>
-            <NavItem href="/business/dashboard">Dashboard</NavItem>
-            <NavItem href="/business/listings">Listings</NavItem>
-            <NavItem href="/business/about">About</NavItem>
+            {null}
           </>
         )}
 
@@ -334,6 +365,8 @@ export default function BusinessNavbar() {
               onClick={(e) =>
                 handleBusinessAuthClick(e, "/business-auth/login")
               }
+              isActive={isActive}
+              closeMenus={closeMenus}
             >
               Login
             </NavItem>
@@ -349,7 +382,13 @@ export default function BusinessNavbar() {
           </>
         ) : (
           <>
-            <NavItem href="/business/settings">Settings</NavItem>
+            <NavItem
+              href="/business/settings"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              Settings
+            </NavItem>
             <LogoutButton mobile onSuccess={() => setMobileMenuOpen(false)} />
           </>
         )}

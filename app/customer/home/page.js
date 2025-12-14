@@ -7,14 +7,35 @@ import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import GoogleMapClient from "@/components/GoogleMapClient";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
 export default function CustomerHomePage() {
   const searchParams = useSearchParams();
   const { user, loadingUser, supabase } = useAuth();
   const [search, setSearch] = useState("");
-  const [mapBusinesses, setMapBusinesses] = useState([]);
+  const initialYb = (() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = sessionStorage.getItem("yb_customer_home_businesses");
+      const parsed = cached ? JSON.parse(cached) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+  const initialListings = (() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = sessionStorage.getItem("yb_customer_home_listings");
+      const parsed = cached ? JSON.parse(cached) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+  const [mapBusinesses, setMapBusinesses] = useState(initialYb);
   const [mapControls, setMapControls] = useState(null);
-  const [searchTrigger, setSearchTrigger] = useState(0);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [hybridItems, setHybridItems] = useState([]);
   const [hybridItemsLoading, setHybridItemsLoading] = useState(false);
@@ -22,14 +43,50 @@ export default function CustomerHomePage() {
   const [businessListings, setBusinessListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState(null);
-  const [allListings, setAllListings] = useState([]);
-  const [allListingsLoading, setAllListingsLoading] = useState(false);
-  const lastUrlSearchRef = useRef("");
+  const [allListings, setAllListings] = useState(initialListings);
+  const [allListingsLoading, setAllListingsLoading] = useState(
+    initialListings.length === 0
+  );
+  const [hasLoadedListings, setHasLoadedListings] = useState(
+    initialListings.length > 0
+  );
+  const [ybBusinesses, setYbBusinesses] = useState(initialYb);
+  const [ybBusinessesLoading, setYbBusinessesLoading] = useState(
+    initialYb.length === 0
+  );
+  const [hasLoadedYb, setHasLoadedYb] = useState(initialYb.length > 0);
+  const [ybBusinessesError, setYbBusinessesError] = useState(null);
   const galleryRef = useRef(null);
-  const mapReadySearchRef = useRef(false);
+  const coverFor = (value) => primaryPhotoUrl(value) || null;
+  const sampleBusinesses = [
+    {
+      id: "sample-1",
+      name: "Barrio Cafe",
+      category: "Cafe",
+      categoryLabel: "Cafe",
+      address: "123 Sample St, San Francisco",
+      description: "Neighborhood coffee and light bites.",
+      website: "",
+      imageUrl: "",
+      source: "sample",
+      coords: { lat: 37.7749, lng: -122.4194 },
+    },
+    {
+      id: "sample-2",
+      name: "Barrio Market",
+      category: "Market",
+      categoryLabel: "Market",
+      address: "456 Grove Ave, San Francisco",
+      description: "Local grocery staples and fresh produce.",
+      website: "",
+      imageUrl: "",
+      source: "sample",
+      coords: { lat: 37.779, lng: -122.423 },
+    },
+  ];
 
   const filteredBusinesses = useMemo(() => {
-    const source = mapBusinesses;
+    const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
     const q = search.trim().toLowerCase();
     if (!q) return source;
     return source.filter((biz) => {
@@ -45,7 +102,7 @@ export default function CustomerHomePage() {
         desc.includes(q)
       );
     });
-  }, [mapBusinesses, search]);
+  }, [mapBusinesses, search, ybBusinesses]);
 
   const handleSelectBusiness = (biz) => {
     setSelectedBusiness(biz);
@@ -59,29 +116,162 @@ export default function CustomerHomePage() {
   };
 
   useEffect(() => {
-    const urlQuery = (searchParams?.get("q") || "").trim();
-    setSearch(urlQuery);
-    if (!mapControls) return;
-    if (urlQuery === lastUrlSearchRef.current) return;
-    lastUrlSearchRef.current = urlQuery;
-    mapControls.search?.(urlQuery);
-    setSearchTrigger((n) => n + 1);
-  }, [searchParams, mapControls]);
+    let active = true;
+    const loadYb = async () => {
+      setYbBusinessesLoading((prev) => (hasLoadedYb ? prev : true));
+      setYbBusinessesError(null);
+      const client = supabase ?? getBrowserSupabaseClient();
+      try {
+        let rows = [];
+
+        // Try server-fed public endpoint first (uses service role when available)
+        try {
+          const res = await fetch("/api/public-businesses");
+          const payload = await res.json();
+          if (res.ok && Array.isArray(payload?.businesses)) {
+            rows = payload.businesses;
+          }
+        } catch (errApi) {
+          console.warn("public-businesses endpoint failed", errApi);
+        }
+
+        // Fallback to direct Supabase query with anon key if endpoint returned nothing
+        if (!rows.length && client) {
+          const { data, error } = await client
+            .from("users")
+            .select(
+              "id,business_name,full_name,category,city,address,description,website,profile_photo_url,latitude,longitude,lat,lng,role"
+            )
+            .eq("role", "business")
+            .limit(400);
+          if (error) {
+            console.warn("Supabase fallback failed", error);
+          } else {
+            rows = data || [];
+          }
+        }
+
+        if (!active) return;
+
+        if (!rows.length) {
+          setYbBusinesses(sampleBusinesses);
+          setHasLoadedYb(true);
+          setYbBusinessesError("Showing sample businesses — real data unavailable.");
+        } else {
+          const parseNum = (val) => {
+            if (typeof val === "number" && Number.isFinite(val)) return val;
+            const parsed = parseFloat(val);
+            return Number.isFinite(parsed) ? parsed : null;
+          };
+          const jitterCoord = (index) => {
+            const base = { lat: 33.7701, lng: -118.1937 }; // Long Beach core
+            const step = 0.0025;
+            const offsetLat = ((index % 6) - 3) * step;
+            const offsetLng = (((Math.floor(index / 6) % 6) - 3) * step);
+            return { lat: base.lat + offsetLat, lng: base.lng + offsetLng };
+          };
+          const mapped = rows
+            .map((row, idx) => {
+              const address = row.city ? `${row.address || ""}${row.address ? ", " : ""}${row.city}` : row.address || "";
+              const lat = parseNum(row.latitude ?? row.lat ?? row.location_lat);
+              const lng = parseNum(row.longitude ?? row.lng ?? row.location_lng);
+              const hasCoords = typeof lat === "number" && typeof lng === "number" && lat !== 0 && lng !== 0;
+              return {
+                id: row.id,
+                name: row.business_name || row.name || row.full_name || "Local business",
+                category: row.category || "Local business",
+                categoryLabel: row.category || "Local business",
+                address,
+                description: row.description || row.bio || "",
+                website: row.website || "",
+                imageUrl: row.profile_photo_url || row.photo_url || "",
+                source: "supabase_users",
+                coords: hasCoords ? { lat, lng } : null,
+              };
+            })
+            .filter(Boolean);
+          const next = mapped.length ? mapped : sampleBusinesses;
+          setYbBusinesses(next);
+          setHasLoadedYb(true);
+
+          if (typeof window !== "undefined") {
+            try {
+              sessionStorage.setItem(
+                "yb_customer_home_businesses",
+                JSON.stringify(next)
+              );
+            } catch {
+              /* ignore cache errors */
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load YourBarrio businesses", err);
+        if (!active) return;
+        setYbBusinesses(sampleBusinesses);
+        setHasLoadedYb(true);
+        setYbBusinessesError("Could not load businesses yet. Showing sample locations.");
+      } finally {
+        if (active) setYbBusinessesLoading(false);
+      }
+    };
+
+    loadYb();
+
+    return () => {
+      active = false;
+    };
+  }, [supabase, hasLoadedYb]);
 
   useEffect(() => {
-    if (!mapControls || mapReadySearchRef.current) return;
     const urlQuery = (searchParams?.get("q") || "").trim();
-    mapControls.search?.(urlQuery);
-    setSearchTrigger((n) => n + 1);
-    mapReadySearchRef.current = true;
-  }, [mapControls, searchParams]);
+    setSearch(urlQuery);
+  }, [searchParams]);
+
+  // Guard against long/hung requests leaving loading on
+  useEffect(() => {
+    if (!ybBusinessesLoading) return;
+    const timer = setTimeout(() => setYbBusinessesLoading(false), 8000);
+    return () => clearTimeout(timer);
+  }, [ybBusinessesLoading]);
+
+  useEffect(() => {
+    if (!allListingsLoading) return;
+    const timer = setTimeout(() => setAllListingsLoading(false), 8000);
+    return () => clearTimeout(timer);
+  }, [allListingsLoading]);
+
+  // Keep map businesses in sync with fetched YB businesses (for list display)
+  useEffect(() => {
+    if (ybBusinesses.length) {
+      setMapBusinesses(ybBusinesses);
+    }
+  }, [ybBusinesses]);
+
+  // After both map controls and businesses are ready, refresh markers once
+  useEffect(() => {
+    if (mapControls) {
+      mapControls.refresh?.();
+    }
+  }, [mapControls]);
+
+  // Refresh map when fresh YB businesses with coords arrive
+  useEffect(() => {
+    if (mapControls && mapBusinesses.length) {
+      mapControls.refresh?.();
+    }
+  }, [mapControls, mapBusinesses]);
 
   useEffect(() => {
     let active = true;
     const loadAll = async () => {
-      if (!supabase) return;
-      setAllListingsLoading(true);
-      const { data, error } = await supabase
+      const client = supabase ?? getBrowserSupabaseClient();
+      if (!client) {
+        setAllListingsLoading(false);
+        return;
+      }
+      setAllListingsLoading((prev) => (hasLoadedListings ? prev : true));
+      const { data, error } = await client
         .from("listings")
         .select("*")
         .order("created_at", { ascending: false })
@@ -91,7 +281,19 @@ export default function CustomerHomePage() {
         console.error("Load all listings failed", error);
         setAllListings([]);
       } else {
-        setAllListings(data || []);
+        const next = data || [];
+        setAllListings(next);
+        setHasLoadedListings(true);
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              "yb_customer_home_listings",
+              JSON.stringify(next)
+            );
+          } catch {
+            /* ignore cache errors */
+          }
+        }
       }
       setAllListingsLoading(false);
     };
@@ -99,7 +301,7 @@ export default function CustomerHomePage() {
     return () => {
       active = false;
     };
-  }, [supabase]);
+  }, [supabase, hasLoadedListings]);
 
   const groupedListings = useMemo(() => {
     const groups = {};
@@ -118,7 +320,8 @@ export default function CustomerHomePage() {
     let isActive = true;
     const term = search.trim();
 
-    if (!supabase) return undefined;
+    const client = supabase ?? getBrowserSupabaseClient();
+    if (!client) return undefined;
 
     if (!term) {
       setHybridItems([]);
@@ -138,7 +341,7 @@ export default function CustomerHomePage() {
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("listings")
         .select(
           "id,title,description,price,category,city,photo_url,business_id,created_at"
@@ -171,7 +374,8 @@ export default function CustomerHomePage() {
   useEffect(() => {
     let isActive = true;
 
-    if (!selectedBusiness || selectedBusiness.source !== "supabase_users" || !supabase) {
+    const client = supabase ?? getBrowserSupabaseClient();
+    if (!selectedBusiness || selectedBusiness.source !== "supabase_users" || !client) {
       setBusinessListings([]);
       setListingsLoading(false);
       setListingsError(null);
@@ -184,7 +388,7 @@ export default function CustomerHomePage() {
       setListingsLoading(true);
       setListingsError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("listings")
         .select("*")
         .eq("business_id", selectedBusiness.id)
@@ -230,7 +434,7 @@ export default function CustomerHomePage() {
   }
 
   return (
-    <div className="min-h-screen text-white relative px-6 pb-2 pt-0 md:pt-1">
+    <div className="min-h-screen text-white relative px-6 pb-2 pt-2 md:pt-3 -mt-8 md:-mt-12">
 
       {/* Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -261,7 +465,7 @@ export default function CustomerHomePage() {
 
         {search ? (
           <div className="rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl shadow-xl px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.22em] text-white/60">
                   AI picks
@@ -304,9 +508,9 @@ export default function CustomerHomePage() {
                   href={`/customer/listings/${item.id}`}
                   className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3"
                 >
-                  {item.photo_url ? (
+                  {coverFor(item.photo_url) ? (
                     <img
-                      src={item.photo_url}
+                      src={coverFor(item.photo_url)}
                       alt={item.title}
                       className="h-20 w-20 object-cover rounded-lg border border-white/10"
                     />
@@ -316,7 +520,7 @@ export default function CustomerHomePage() {
                     </div>
                   )}
                   <div className="flex-1 pr-2 py-2">
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="text-sm font-semibold leading-snug">
                         {item.title}
                       </div>
@@ -345,7 +549,7 @@ export default function CustomerHomePage() {
         {/* Header with gallery + map (compact) */}
         <div className="grid lg:grid-cols-5 gap-4">
           <div className="lg:col-span-3 col-span-5 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
               <div className="text-sm uppercase tracking-[0.18em] text-white/60">Browse spots</div>
               <div className="flex items-center gap-2">
                 <button
@@ -379,7 +583,7 @@ export default function CustomerHomePage() {
                   }`}
                   onClick={() => handleSelectBusiness(biz)}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-base font-semibold">{biz.name}</span>
@@ -410,16 +614,20 @@ export default function CustomerHomePage() {
                 </button>
               ))}
               {!filteredBusinesses.length ? (
-                <div className="text-sm text-white/70">No matches found.</div>
+                <div className="text-sm text-white/70">
+                  {ybBusinessesLoading ? "Loading businesses..." : ybBusinessesError || "No matches found."}
+                </div>
               ) : null}
             </div>
           </div>
 
           <div className="lg:col-span-2 col-span-5">
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-semibold text-white/85 truncate">
-                  {selectedBusiness ? selectedBusiness.name : "Map"}
+              <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white/85 truncate">
+                    {selectedBusiness ? selectedBusiness.name : "Map"}
+                  </div>
                 </div>
               </div>
               <GoogleMapClient
@@ -431,10 +639,11 @@ export default function CustomerHomePage() {
                 title=""
                 enableCategoryFilter={false}
                 enableSearch={false}
+                placesMode="manual"
+                disableGooglePlaces
+                prefilledBusinesses={mapBusinesses}
                 onBusinessesChange={setMapBusinesses}
                 onControlsReady={setMapControls}
-                externalSearchTerm={search}
-                externalSearchTrigger={searchTrigger}
               />
             </div>
           </div>
@@ -442,7 +651,7 @@ export default function CustomerHomePage() {
 
         {selectedBusiness?.source === "supabase_users" ? (
           <div className="rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl overflow-hidden flex flex-col shadow-xl">
-            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-sm font-semibold">{selectedBusiness.name}</div>
                 <div className="text-xs text-white/60">Listings from this business</div>
@@ -459,9 +668,9 @@ export default function CustomerHomePage() {
                     key={item.id}
                     className="rounded-xl border border-white/10 bg-white/5 p-4 flex gap-3"
                   >
-                    {item.photo_url ? (
+                    {coverFor(item.photo_url) ? (
                       <img
-                        src={item.photo_url}
+                        src={coverFor(item.photo_url)}
                         alt={item.title}
                         className="h-20 w-20 rounded-lg object-cover border border-white/10"
                       />
@@ -471,7 +680,7 @@ export default function CustomerHomePage() {
                       </div>
                     )}
                     <div className="flex-1">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold">{item.title}</div>
                           {item.category ? (
@@ -504,8 +713,8 @@ export default function CustomerHomePage() {
         ) : null}
 
         {!search && (
-          <div className="space-y-4 mt-4 lg:mt-6">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 mt-4 lg:mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
                 <p className="text-lg font-semibold">Browse by category</p>
@@ -518,58 +727,58 @@ export default function CustomerHomePage() {
               ) : null}
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {groupedListings.map(({ category, items }) => (
-                <div
-                  key={category}
-                  className="relative overflow-hidden rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl shadow-lg p-5 flex flex-col gap-3 min-h-[180px]"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{category}</p>
-                      <p className="text-xs text-white/60">{items.length} items</p>
-                    </div>
-                    {items[0] ? (
+            <div className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory">
+              {groupedListings.map(({ category, items }) => {
+                const withPhotos = items.filter((item) => coverFor(item.photo_url));
+                const visibleItems = withPhotos.slice(0, 4);
+                if (!visibleItems.length) return null;
+
+                return (
+                  <div
+                    key={category}
+                    className="snap-start min-w-[340px] max-w-[360px] bg-white/5 border border-white/12 backdrop-blur-xl shadow-lg rounded-xl p-3 flex flex-col gap-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="text-base font-semibold text-white">{category}</p>
+                        <p className="text-xs text-white/60">{visibleItems.length} items</p>
+                      </div>
                       <Link
-                        href={`/listings/${items[0].id}`}
-                        className="inline-flex items-center justify-center text-[10px] px-2 py-[3px] rounded-full border border-white/20 bg-white/10 hover:border-white/40"
+                        href={`/listings/${visibleItems[0].id}`}
+                        className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40"
                       >
                         View
                       </Link>
-                    ) : null}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2.5 mt-auto">
-                    {items.slice(0, 3).map((item) => (
-                      <Link
-                        key={item.id}
-                        href={`/listings/${item.id}`}
-                        className="h-24 rounded-xl bg-white/10 border border-white/10 overflow-hidden hover:border-white/30"
-                      >
-                        {item.photo_url ? (
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {visibleItems.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`/listings/${item.id}`}
+                          className="relative group h-40 bg-white/8 border border-white/10 overflow-hidden hover:border-white/30"
+                        >
                           <img
-                            src={item.photo_url}
+                            src={coverFor(item.photo_url)}
                             alt={item.title}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                           />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-[10px] text-white/60">
-                            No image
-                          </div>
-                        )}
-                      </Link>
-                    ))}
-                    {items.length < 3
-                      ? Array.from({ length: 3 - items.length }).map((_, idx) => (
-                          <div
-                            // eslint-disable-next-line react/no-array-index-key
-                            key={`placeholder-${category}-${idx}`}
-                            className="h-24 rounded-xl bg-white/5 border border-white/10"
-                          />
-                        ))
-                      : null}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                        </Link>
+                      ))}
+                      {visibleItems.length < 4
+                        ? Array.from({ length: 4 - visibleItems.length }).map((_, idx) => (
+                            <div
+                              // eslint-disable-next-line react/no-array-index-key
+                              key={`placeholder-${category}-${idx}`}
+                              className="h-40 bg-white/5 border border-white/10"
+                            />
+                          ))
+                        : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

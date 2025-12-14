@@ -44,6 +44,7 @@ export default function CustomerNavbar() {
   const dropdownRef = useRef(null);
   const searchBoxRef = useRef(null);
   const searchRequestIdRef = useRef(0);
+  const lastQueryRef = useRef("");
 
   // ⭐ Hydration guard fixes frozen buttons
   useEffect(() => {
@@ -65,11 +66,18 @@ export default function CustomerNavbar() {
   // Hybrid search — fetch AI-style blend of items + businesses
   useEffect(() => {
     const term = searchTerm.trim();
-    if (term.length < 2) {
+    if (term.length < 3) {
       setSearchResults({ items: [], businesses: [], places: [] });
       setSearchError(null);
       setSearchLoading(false);
       setSuggestionsOpen(false);
+      lastQueryRef.current = "";
+      return;
+    }
+
+    const normalized = term.toLowerCase();
+    if (normalized === lastQueryRef.current) {
+      setSuggestionsOpen(true);
       return;
     }
 
@@ -82,12 +90,24 @@ export default function CustomerNavbar() {
       fetch(`/api/search?q=${encodeURIComponent(term)}`, {
         signal: controller.signal,
       })
-        .then((res) => {
-          if (!res.ok) throw new Error("search_failed");
+        .then(async (res) => {
+          if (!res.ok) {
+            let message = "search_failed";
+            try {
+              const body = await res.json();
+              message = body?.message || body?.error || message;
+            } catch {
+              // best effort
+            }
+            const err = new Error(message);
+            err.code = res.status;
+            throw err;
+          }
           return res.json();
         })
         .then((data) => {
           if (searchRequestIdRef.current !== requestId) return;
+          lastQueryRef.current = normalized;
           setSearchResults({
             items: data?.items || [],
             businesses: data?.businesses || [],
@@ -99,14 +119,20 @@ export default function CustomerNavbar() {
           if (controller.signal.aborted) return;
           console.warn("Navbar search failed", err);
           if (searchRequestIdRef.current !== requestId) return;
-          setSearchError("Search is warming up. Try again in a moment.");
+          const isRateLimited =
+            err?.code === 429 || err?.message === "rate_limit_exceeded";
+          setSearchError(
+            isRateLimited
+              ? "You are searching too fast. Please wait a moment."
+              : err?.message || "Search is warming up. Try again in a moment."
+          );
         })
         .finally(() => {
           if (searchRequestIdRef.current === requestId) {
             setSearchLoading(false);
           }
         });
-    }, 150);
+    }, 450);
 
     return () => {
       clearTimeout(handle);
@@ -216,7 +242,7 @@ export default function CustomerNavbar() {
     },
     {
       href: "/customer/saved",
-      title: "Saved spots",
+      title: "Saved items",
       description: "Instant access to your favorites",
       icon: Bookmark,
     },

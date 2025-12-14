@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
 export default function PublicListingsPage() {
   const supabase = getBrowserSupabaseClient();
@@ -31,7 +32,9 @@ export default function PublicListingsPage() {
           <Link key={item.id} href={`/listing/${item.id}`}>
             <div className="rounded-lg border overflow-hidden">
               <Image
-                src={item.photo_url || "/business-placeholder.png"}
+                src={
+                  primaryPhotoUrl(item.photo_url) || "/business-placeholder.png"
+                }
                 alt="Listing"
                 width={400}
                 height={300}

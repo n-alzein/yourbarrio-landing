@@ -29,12 +29,12 @@ export default function BusinessDashboard() {
     if (loadingUser) return;
 
     if (!user) {
-      router.replace("/business-auth/login");
+      router.replace("/business");
       return;
     }
 
     if (role !== "business") {
-      router.replace("/customer/settings");
+      router.replace("/customer/home");
       return;
     }
   }, [hydrated, loadingUser, user, role, router]);
@@ -53,6 +53,7 @@ export default function BusinessDashboard() {
     if (!hydrated) return;
     if (loadingUser) return;
     if (role !== "business") return;
+    if (!supabase) return;
 
     const id = user?.id || authUser?.id;
     if (!id) return;
@@ -60,11 +61,16 @@ export default function BusinessDashboard() {
     let active = true;
 
     async function loadBusiness() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("users")
         .select("*")
         .eq("id", id)
         .single();
+
+      if (error) {
+        console.error("Failed to load business", error);
+        return;
+      }
 
       if (active) setBusiness(data);
     }
@@ -73,7 +79,7 @@ export default function BusinessDashboard() {
     return () => {
       active = false;
     };
-  }, [hydrated, loadingUser, user, role, supabase]);
+  }, [hydrated, loadingUser, user, role, supabase, authUser?.id]);
 
   /* ------------------------------------------- */
   /* 4️⃣ Load stats AFTER business exists */
@@ -81,6 +87,7 @@ export default function BusinessDashboard() {
   useEffect(() => {
     if (!hydrated) return;
     if (!business) return;
+    if (!supabase) return;
 
     async function loadStats() {
       const [viewsRes, savesRes, msgRes, reviewsRes] = await Promise.all([

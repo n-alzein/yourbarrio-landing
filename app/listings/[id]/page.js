@@ -12,6 +12,7 @@ import {
   Truck,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
 
 export default function ListingDetails({ params }) {
   const { supabase, user } = useAuth();
@@ -49,7 +50,9 @@ export default function ListingDetails({ params }) {
 
         if (!isMounted) return;
         setListing(item);
-        setHeroSrc(item.photo_url?.trim() || "/business-placeholder.png");
+        setHeroSrc(
+          primaryPhotoUrl(item.photo_url) || "/business-placeholder.png"
+        );
 
         const { data: biz } = await supabase
           .from("users")
@@ -197,6 +200,7 @@ export default function ListingDetails({ params }) {
   const city = business?.city || "Your area";
   const address = business?.address || null;
   const category = business?.category || listing.category || "Local listing";
+  const galleryPhotos = extractPhotoUrls(listing.photo_url);
 
   return (
     <div
@@ -204,7 +208,7 @@ export default function ListingDetails({ params }) {
       style={{ background: "var(--background)", color: "var(--text)" }}
     >
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between opacity-80 mt-2 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 opacity-80 mt-2 mb-2">
           <Link
             href="/customer/home"
             className="inline-flex items-center gap-2 text-sm hover:opacity-100"
@@ -220,9 +224,36 @@ export default function ListingDetails({ params }) {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <div
-              className="rounded-3xl shadow-lg overflow-hidden"
+              className="rounded-3xl shadow-lg overflow-hidden relative"
               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
             >
+              {galleryPhotos.length > 1 ? (
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
+                  {galleryPhotos.map((photo, idx) => {
+                    const active = heroSrc === photo;
+                    return (
+                      <button
+                        key={`${photo}-${idx}`}
+                        type="button"
+                        onClick={() => setHeroSrc(photo)}
+                        className={`h-16 w-16 rounded-xl overflow-hidden border bg-white/5 transition shadow-sm ${
+                          active
+                            ? "border-white/80 ring-2 ring-white/70"
+                            : "border-white/20 hover:border-white/50"
+                        }`}
+                        aria-label={`View photo ${idx + 1}`}
+                      >
+                        <img
+                          src={photo}
+                          alt={`Listing photo ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               <div className="relative">
                 <img
                   src={heroSrc || "/business-placeholder.png"}
@@ -244,7 +275,7 @@ export default function ListingDetails({ params }) {
                   {category}
                 </div>
                 <h1 className="text-3xl font-semibold leading-tight">{listing.title}</h1>
-                <div className="flex items-center gap-3 text-sm opacity-80">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm opacity-80 min-w-0">
                   <div className="inline-flex items-center gap-1">
                     <Star className="h-4 w-4 text-amber-400" />
                     <span>Local favorite</span>
@@ -254,10 +285,10 @@ export default function ListingDetails({ params }) {
                   {address ? (
                     <>
                       <span className="h-1 w-1 rounded-full bg-slate-300" />
-                      <span className="truncate">{address}</span>
+                      <span className="truncate max-w-full">{address}</span>
                     </>
                   ) : null}
-                </div>
+              </div>
                 <p className="text-sm leading-relaxed opacity-90">
                   {listing.description || "A local item from YourBarrio businesses."}
                 </p>
@@ -268,7 +299,7 @@ export default function ListingDetails({ params }) {
               className="rounded-3xl p-5 space-y-4 shadow-lg"
               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm uppercase tracking-[0.18em] opacity-70">
                   Store details
                 </p>
@@ -315,7 +346,7 @@ export default function ListingDetails({ params }) {
               className="rounded-3xl p-5 shadow-lg"
               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm opacity-75">Price</p>
                   <div className="text-3xl font-semibold">

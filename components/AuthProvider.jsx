@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
   const [loadingUser, setLoadingUser] = useState(true);
   const isMountedRef = useRef(true);
   const sessionRefreshInFlight = useRef(false);
+  const lastRoleRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -216,9 +217,11 @@ export function AuthProvider({ children }) {
             // Skip only the synthetic initial event; handle real sign-ins immediately
             if (event === "INITIAL_SESSION") return;
 
-            if (sessionStorage.getItem("forceLogout") === "1") {
+            const forced = sessionStorage.getItem("forceLogout") === "1";
+            if (forced) {
               sessionStorage.removeItem("forceLogout");
-              return;
+              // Ignore stray sign-outs, but allow real sign-ins to proceed
+              if (event !== "SIGNED_IN") return;
             }
 
             const rawUser = session?.user ?? null;
@@ -315,10 +318,26 @@ export function AuthProvider({ children }) {
     if (p) setProfile(p);
   }
 
+  useEffect(() => {
+    const role =
+      profile?.role ||
+      authUser?.user_metadata?.role ||
+      authUser?.role ||
+      null;
+    if (role) lastRoleRef.current = role;
+  }, [profile?.role, authUser?.user_metadata?.role, authUser?.role]);
+
   /* -----------------------------------------------------------------
      LOGOUT
   ----------------------------------------------------------------- */
   async function logout() {
+    const lastRole =
+      lastRoleRef.current ||
+      profile?.role ||
+      authUser?.user_metadata?.role ||
+      null;
+    const currentPath =
+      typeof window !== "undefined" ? window.location.pathname : "";
     try {
       sessionStorage.setItem("forceLogout", "1");
     } catch (err) {
@@ -385,10 +404,15 @@ export function AuthProvider({ children }) {
     setProfile(null);
     setLoadingUser(false);
 
+    const target =
+      lastRole === "business" || currentPath.startsWith("/business")
+        ? "/business"
+        : "/";
+
     if (typeof window !== "undefined") {
-      window.location.assign("/");
+      window.location.assign(target);
     } else {
-      router.replace("/");
+      router.replace(target);
       router.refresh();
     }
   }

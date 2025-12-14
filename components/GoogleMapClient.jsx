@@ -1,45 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-
-// Load Google Maps only once per page via a single script tag
-async function loadGoogleMaps(apiKey, mapId) {
-  if (typeof window === "undefined") throw new Error("No window");
-  if (window.google && window.google.maps) return window.google;
-
-  if (!window.__googleMapsLoaderPromise) {
-    window.__googleMapsLoaderPromise = new Promise((resolve, reject) => {
-      const params = new URLSearchParams({
-        key: apiKey,
-        libraries: "marker",
-        v: "weekly",
-      });
-      if (mapId) params.set("map_ids", mapId);
-
-      // avoid duplicate tags; if an existing one lacks a key, replace it
-      const existing = Array.from(document.scripts || []).find((s) => s.src && s.src.includes("maps.googleapis.com/maps/api/js"));
-      if (existing) {
-        if (existing.src.includes("key=")) {
-          existing.addEventListener("load", () => resolve(window.google));
-          existing.addEventListener("error", reject);
-          return;
-        }
-        existing.remove();
-      }
-
-      const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => resolve(window.google);
-      script.onerror = (err) => reject(err);
-      document.head.appendChild(script);
-    });
-  }
-
-  return window.__googleMapsLoaderPromise;
-}
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 // helper: compute distance in km
 function haversine(lat1, lon1, lat2, lon2) {
@@ -51,8 +14,10 @@ function haversine(lat1, lon1, lat2, lon2) {
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -89,23 +54,24 @@ const formatCategory = (type) => {
     .join(" ");
 };
 
-const computeVisibleRadiusMeters = (mapInstance, fallbackMeters) => {
-  if (!mapInstance || !mapInstance.getBounds || !mapInstance.getCenter) {
-    return Math.max(100, fallbackMeters || 1000);
-  }
-  const bounds = mapInstance.getBounds();
-  const center = mapInstance.getCenter();
-  if (!bounds || !center) return Math.max(100, fallbackMeters || 1000);
-  const ne = bounds.getNorthEast();
-  const diagKm = haversine(center.lat(), center.lng(), ne.lat(), ne.lng());
-  return Math.max(100, diagKm * 1000);
-};
-
-const FALLBACK_CENTER = { lat: 37.7749, lng: -122.4194 };
+// Default to Long Beach to avoid centering in the ocean if geolocation or data is missing
+const FALLBACK_CENTER = { lat: 33.7701, lng: -118.1937 };
 const GEOCODE_TIMEOUT_MS = 1200;
 const MAX_GEOCODES_PER_SESSION = 20;
 const REQUEST_KEY_PRECISION = 4;
 const REQUEST_DEDUP_MS = 4000;
+const PLACES_DISABLED =
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
+  (process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DISABLE_PLACES !== "false");
+const PLACES_MIN_INTERVAL_MS =
+  Number.parseInt(process.env.NEXT_PUBLIC_PLACES_MIN_INTERVAL_MS || "", 10) ||
+  15000;
+const PLACES_MAX_RESULTS =
+  Number.parseInt(process.env.NEXT_PUBLIC_PLACES_MAX_RESULTS || "", 10) || 5;
+
+const LAST_CENTER_KEY = "yb_last_center";
 
 export default function GoogleMapClient({
   radiusKm = 25,
@@ -116,6 +82,10 @@ export default function GoogleMapClient({
   showBusinessErrors = true,
   enableCategoryFilter = false,
   enableSearch = false,
+  placesMode = "auto", // "auto" (default) or "manual" to require explicit enable
+  disableGooglePlaces = false, // hard kill-switch to never call Google
+  preferUserCenter = false, // if true, keep map near user/fallback even when prefilled data is far
+  prefilledBusinesses = null, // optional array of businesses to render without fetching
   onBusinessesChange,
   onControlsReady,
   externalSearchTerm,
@@ -123,43 +93,157 @@ export default function GoogleMapClient({
 }) {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const mapInstanceRef = useRef(null);
   const businessMarkersRef = useRef([]);
   const userMarkerRef = useRef(null);
   const searchMarkerRef = useRef(null);
-  const mapIdRef = useRef(null);
   const lastFetchRef = useRef({ lat: null, lng: null, zoom: null });
   const fetchInFlightRef = useRef(false);
-  const apiKeyRef = useRef(null);
   const loadAndPlaceMarkersRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchMessage, setSearchMessage] = useState(null);
   const [searchError, setSearchError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [businesses, setBusinesses] = useState([]);
+  const [mapReady, setMapReady] = useState(false);
   const [categories, setCategories] = useState([]);
   const [categoriesWithCounts, setCategoriesWithCounts] = useState([]);
   const [activeCategory, setActiveCategory] = useState("All");
   const [refreshNeeded, setRefreshNeeded] = useState(false);
-  const supabaseRef = useRef(null);
   const geocodeCacheRef = useRef(new Map());
   const curatedBusinessesRef = useRef([]);
   const curatedFetchPromiseRef = useRef(null);
-  const activeInfoWindowRef = useRef(null);
+  const activePopupRef = useRef(null);
   const pendingViewRef = useRef(null);
-  const suppressNextIdleRef = useRef(false);
+  const suppressNextMoveRef = useRef(false);
   const markerIndexRef = useRef(new Map());
   const userCenterRef = useRef(null);
   const geocodeBudgetRef = useRef(MAX_GEOCODES_PER_SESSION);
   const lastFetchKeyRef = useRef(null);
   const lastFetchAtRef = useRef(0);
+  const placesSessionTokenRef = useRef(null);
+  const placesEnabledRef = useRef(!disableGooglePlaces && placesMode !== "manual");
+  const [placesEnabledState, setPlacesEnabledState] = useState(
+    placesEnabledRef.current
+  );
+  const persistedCenterRef = useRef(null);
+  const prefilledBusinessesRef = useRef(prefilledBusinesses || []);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    prefilledBusinessesRef.current = Array.isArray(prefilledBusinesses)
+      ? prefilledBusinesses
+      : [];
+  }, [prefilledBusinesses]);
+
+  useEffect(() => () => {
+    isMountedRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LAST_CENTER_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed.lat === "number" &&
+        typeof parsed.lng === "number" &&
+        Number.isFinite(parsed.lat) &&
+        Number.isFinite(parsed.lng)
+      ) {
+        persistedCenterRef.current = parsed;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }, []);
+
+  const computeVisibleRadiusMeters = (fallbackMeters) => {
+    const map = mapInstanceRef.current;
+    if (!map) return Math.max(100, fallbackMeters || 1000);
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+    if (!bounds || !center) return Math.max(100, fallbackMeters || 1000);
+    const ne = bounds.getNorthEast();
+    const diagKm = haversine(center.lat, center.lng, ne.lat, ne.lng);
+    return Math.max(100, diagKm * 1000);
+  };
+
+  const getPrefilledCenter = () => {
+    const list = prefilledBusinessesRef.current || [];
+    const withCoords = list.find(
+      (biz) =>
+        biz?.coords &&
+        typeof biz.coords.lat === "number" &&
+        typeof biz.coords.lng === "number" &&
+        !(biz.coords.lat === 0 && biz.coords.lng === 0)
+    );
+    return withCoords?.coords || null;
+  };
+
+  const getFirstPrefilledCoord = () => {
+    const list = prefilledBusinessesRef.current || [];
+    const found = list.find(
+      (biz) =>
+        biz?.coords &&
+        typeof biz.coords.lat === "number" &&
+        typeof biz.coords.lng === "number" &&
+        !(biz.coords.lat === 0 && biz.coords.lng === 0)
+    );
+    return found?.coords || null;
+  };
+
+  const ensurePlacesSessionToken = () => {
+    if (placesSessionTokenRef.current) return placesSessionTokenRef.current;
+    const token =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    placesSessionTokenRef.current = token;
+    return token;
+  };
+
+  const resetPlacesSessionToken = () => {
+    placesSessionTokenRef.current = null;
+  };
+
+  const enforceCenter = (center) => {
+    if (
+      !center ||
+      typeof center.lat !== "number" ||
+      typeof center.lng !== "number" ||
+      !Number.isFinite(center.lat) ||
+      !Number.isFinite(center.lng) ||
+      (center.lat === 0 && center.lng === 0)
+    ) {
+      return FALLBACK_CENTER;
+    }
+    return center;
+  };
+
+  const getSafeCenter = (lat, lng) => {
+    const isFiniteNum = (val) => typeof val === "number" && Number.isFinite(val);
+    if (isFiniteNum(lat) && isFiniteNum(lng) && !(lat === 0 && lng === 0)) {
+      return { lat, lng };
+    }
+    if (userCenterRef.current) return userCenterRef.current;
+    const prefilled = getPrefilledCenter();
+    if (prefilled) return prefilled;
+    return FALLBACK_CENTER;
+  };
+
+  const getDefaultCenter = () => {
+    if (persistedCenterRef.current) return enforceCenter(persistedCenterRef.current);
+    return getSafeCenter(userCenterRef.current?.lat, userCenterRef.current?.lng);
+  };
 
   const detachMarker = (marker) => {
     if (!marker) return;
-    if (typeof marker.setMap === "function") {
-      marker.setMap(null);
+    if (typeof marker.remove === "function") {
+      marker.remove();
     } else if ("map" in marker) {
       marker.map = null;
     }
@@ -169,13 +253,6 @@ export default function GoogleMapClient({
     businessMarkersRef.current.forEach(detachMarker);
     businessMarkersRef.current = [];
     markerIndexRef.current.clear();
-  };
-
-  const getSupabaseClient = () => {
-    if (supabaseRef.current) return supabaseRef.current;
-    const client = getBrowserSupabaseClient();
-    supabaseRef.current = client;
-    return client;
   };
 
   const geocodeWithTimeout = async (address) => {
@@ -192,9 +269,6 @@ export default function GoogleMapClient({
       return geocodeCacheRef.current.get(key);
     }
 
-    const apiKey = apiKeyRef.current || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return null;
-
     try {
       if (geocodeBudgetRef.current <= 0) {
         geocodeCacheRef.current.set(key, null);
@@ -202,32 +276,26 @@ export default function GoogleMapClient({
       }
       geocodeBudgetRef.current -= 1;
 
-      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      const res = await fetch("/api/geocode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": "places.id,places.location",
         },
-        body: JSON.stringify({
-          textQuery: address,
-          maxResultCount: 1,
-        }),
+        body: JSON.stringify({ address }),
       });
 
       if (!res.ok) {
-        throw new Error(`searchText geocode failed ${res.status}`);
+        throw new Error(`geocode failed ${res.status}`);
       }
 
       const data = await res.json();
-      const loc = data?.places?.[0]?.location;
-      if (loc?.latitude && loc?.longitude) {
-        const coords = { lat: loc.latitude, lng: loc.longitude };
+      if (typeof data?.lat === "number" && typeof data?.lng === "number") {
+        const coords = { lat: data.lat, lng: data.lng };
         geocodeCacheRef.current.set(key, coords);
         return coords;
       }
     } catch (err) {
-      console.warn("Places searchText geocode failed for", address, err);
+      console.warn("Geocode failed for", address, err);
     }
 
     geocodeCacheRef.current.set(key, null);
@@ -236,60 +304,98 @@ export default function GoogleMapClient({
 
   const loadCuratedBusinesses = async () => {
     if (curatedFetchPromiseRef.current) return curatedFetchPromiseRef.current;
-    const supabase = getSupabaseClient();
-    if (!supabase) return [];
-
     curatedFetchPromiseRef.current = (async () => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id,business_name,full_name,category,address,city,role,profile_photo_url,description,website,latitude,longitude");
+      try {
+        const res = await fetch("/api/public-businesses");
+        const payload = await res.json();
+        if (!res.ok) {
+          console.warn("Curated businesses fetch failed", payload?.error || payload);
+          return [];
+        }
+        const rows = Array.isArray(payload?.businesses) ? payload.businesses : [];
 
-      if (error) {
-        console.error("Failed to fetch Supabase businesses", error);
+        const filtered = rows.filter((row) => {
+          const hasAddr = Boolean(row?.address);
+          const hasCoords =
+            typeof row?.latitude === "number" ||
+            typeof row?.longitude === "number" ||
+            typeof row?.lat === "number" ||
+            typeof row?.lng === "number" ||
+            (typeof row?.latitude === "string" && row.latitude.trim() !== "") ||
+            (typeof row?.longitude === "string" && row.longitude.trim() !== "");
+          return hasAddr || hasCoords;
+        });
+
+        const mapped = (
+          await Promise.allSettled(
+            filtered.map(async (row) => {
+              const displayAddress = row.city
+                ? `${row.address || ""}${row.address ? ", " : ""}${row.city}`
+                : row.address;
+
+              const parseNum = (val) => {
+                if (typeof val === "number" && !Number.isNaN(val)) return val;
+                const parsed = parseFloat(val);
+                return Number.isFinite(parsed) ? parsed : null;
+              };
+
+              const latCandidate = parseNum(row.latitude ?? row.lat);
+              const lngCandidate = parseNum(row.longitude ?? row.lng);
+              const hasCoords =
+                typeof latCandidate === "number" && typeof lngCandidate === "number";
+
+              const coords =
+                hasCoords && latCandidate !== null && lngCandidate !== null
+                  ? { lat: latCandidate, lng: lngCandidate }
+                  : await geocodeWithTimeout(displayAddress);
+              if (!coords) return null;
+
+              const name =
+                row.business_name || row.name || row.full_name || "Local Business";
+              return {
+                id: row.id,
+                name,
+                address: displayAddress,
+                coords,
+                categoryLabel: row.category
+                  ? formatCategory(row.category.replace(/\s+/g, "_"))
+                  : "Local Business",
+                source: "supabase_users",
+                imageUrl: row.profile_photo_url || null,
+                description: row.description || "",
+                website: row.website || "",
+              };
+            })
+          )
+        )
+          .map((res) => (res.status === "fulfilled" ? res.value : null))
+          .filter(Boolean);
+
+        // Deduplicate by ID to avoid double rendering if the same business exists in both tables
+        const deduped = [];
+        const seen = new Set();
+        for (const biz of mapped) {
+          const key = biz.id || biz.name;
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          deduped.push(biz);
+        }
+
+        curatedBusinessesRef.current = deduped;
+        return deduped;
+      } catch (err) {
+        console.error("Failed to fetch curated businesses", err);
+        curatedBusinessesRef.current = [];
         return [];
       }
-
-      const rows = (data || []).filter(
-        (row) => row?.address && (row.role === "business" || row.business_name)
-      );
-
-      const mapped = (await Promise.allSettled(
-        rows.map(async (row) => {
-          const displayAddress = row.city ? `${row.address}, ${row.city}` : row.address;
-          const hasCoords =
-            typeof row.latitude === "number" && typeof row.longitude === "number";
-          const coords = hasCoords
-            ? { lat: row.latitude, lng: row.longitude }
-            : await geocodeWithTimeout(displayAddress);
-          if (!coords) return null;
-
-          return {
-            id: row.id,
-            name: row.business_name || row.full_name || "Local Business",
-            address: displayAddress,
-            coords,
-            categoryLabel: row.category
-              ? formatCategory(row.category.replace(/\s+/g, "_"))
-              : "Local Business",
-            source: "supabase_users",
-            imageUrl: row.profile_photo_url || null,
-            description: row.description || "",
-            website: row.website || "",
-          };
-        })
-      ))
-        .map((res) => (res.status === "fulfilled" ? res.value : null))
-        .filter(Boolean);
-
-      curatedBusinessesRef.current = mapped;
-      return mapped;
     })();
 
     return curatedFetchPromiseRef.current;
   };
 
   const renderMarkers = (list, category) => {
-    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
     clearBusinessMarkers();
 
     const escapeHtml = (value) =>
@@ -304,16 +410,13 @@ export default function GoogleMapClient({
 
     if (!filtered.length) return;
 
-    const canUseAdvanced =
-      mapIdRef.current && window.google?.maps?.marker?.AdvancedMarkerElement;
-
     filtered.forEach((biz) => {
       if (!biz.coords) return;
       const isCurated = biz.source === "supabase_users";
 
       const wrapper = document.createElement("div");
       wrapper.className = `yb-marker${isCurated ? " yb-marker-curated" : ""}`;
-      wrapper.setAttribute("gmp-hoverable", "true");
+      wrapper.setAttribute("tabindex", "0");
       const localWrap = document.createElement("div");
       localWrap.className = "yb-marker-local";
       const icon = document.createElement("div");
@@ -324,6 +427,7 @@ export default function GoogleMapClient({
       localWrap.appendChild(icon);
       localWrap.appendChild(label);
       wrapper.appendChild(localWrap);
+
       const infoContent = (() => {
         const safeName = escapeHtml(biz.name || "");
         const safeCategory = escapeHtml(biz.categoryLabel || "");
@@ -347,486 +451,411 @@ export default function GoogleMapClient({
         </div>`;
       })();
 
-      if (canUseAdvanced) {
-        const advMarker = new window.google.maps.marker.AdvancedMarkerElement({
-          position: biz.coords,
-          map: mapInstanceRef.current,
-          title: biz.name,
-          content: wrapper,
-        });
+      const popup = new mapboxgl.Popup({ offset: 16, closeButton: true }).setHTML(infoContent);
+      popup.on("open", () => {
+        if (activePopupRef.current && activePopupRef.current !== popup) {
+          activePopupRef.current.remove();
+        }
+        activePopupRef.current = popup;
+      });
 
-        const info = new window.google.maps.InfoWindow({
-          content: infoContent,
-        });
+      const marker = new mapboxgl.Marker({ element: wrapper, anchor: "bottom" })
+        .setLngLat([biz.coords.lng, biz.coords.lat])
+        .setPopup(popup)
+        .addTo(map);
 
-        const openInfo = () => {
-          if (activeInfoWindowRef.current && activeInfoWindowRef.current !== info) {
-            activeInfoWindowRef.current.close();
-          }
-          activeInfoWindowRef.current = info;
-          info.open({ anchor: advMarker, map: mapInstanceRef.current });
-        };
+      wrapper.addEventListener("click", () => {
+        popup.addTo(map);
+      });
+      wrapper.addEventListener("mouseenter", () => {
+        popup.addTo(map);
+      });
 
-        advMarker.addListener("mouseover", openInfo);
-        advMarker.addListener("mouseenter", openInfo);
-        advMarker.addListener("click", openInfo);
-        businessMarkersRef.current.push(advMarker);
-        markerIndexRef.current.set(biz.id, { marker: advMarker, info, coords: biz.coords });
-      } else {
-        const iconStyle = isCurated
-          ? {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: "#10b981",
-              fillOpacity: 1,
-              strokeColor: "#ecfdf3",
-              strokeWeight: 2,
-            }
-          : {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 9,
-              fillColor: "#6b7280",
-              fillOpacity: 1,
-              strokeColor: "#f3f4f6",
-              strokeWeight: 2,
-            };
-        const m = new window.google.maps.Marker({
-          position: biz.coords,
-          map: mapInstanceRef.current,
-          title: biz.name,
-          icon: iconStyle,
-        });
-        const info = new window.google.maps.InfoWindow({
-          content: infoContent,
-        });
-        const openInfo = () => {
-          if (activeInfoWindowRef.current && activeInfoWindowRef.current !== info) {
-            activeInfoWindowRef.current.close();
-          }
-          activeInfoWindowRef.current = info;
-          info.open(mapInstanceRef.current, m);
-        };
-        m.addListener("mouseover", openInfo);
-        m.addListener("mouseenter", openInfo);
-        m.addListener("click", openInfo);
-        businessMarkersRef.current.push(m);
-        markerIndexRef.current.set(biz.id, { marker: m, info, coords: biz.coords });
-      }
+      businessMarkersRef.current.push(marker);
+      markerIndexRef.current.set(biz.id, { marker, popup, coords: biz.coords });
     });
   };
 
-  useEffect(() => {
-    let map;
-    let isMounted = true;
-    let idleListener;
+  const fetchPlacesNew = async ({ lat, lng, radiusMeters, includedTypes }) => {
+    if (PLACES_DISABLED || disableGooglePlaces || !placesEnabledRef.current) return [];
+    const radius = radiusMeters ?? Math.max(100, radiusKm * 1000);
+    const retailTypes =
+      includedTypes && includedTypes.length
+        ? includedTypes
+        : Array.from(ALLOWED_RETAIL_TYPES).filter(
+            (t) =>
+              t !== "grocery_or_supermarket" &&
+              t !== "cosmetics_store" &&
+              t !== "drugstore" &&
+              t !== "gift_shop" &&
+              t !== "butcher_shop" &&
+              t !== "market"
+          );
+    const res = await fetch("/api/places", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "nearby",
+        lat,
+        lng,
+        radiusMeters: radius,
+        includedTypes: retailTypes,
+        maxResultCount: Math.max(1, Math.min(PLACES_MAX_RESULTS, 20)),
+        sessionToken: ensurePlacesSessionToken(),
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Places (new) request failed: ${res.status} ${txt}`);
+    }
+    const data = await res.json();
+    if (data.disabled) return [];
+    return data.places || [];
+  };
 
-    async function init() {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
-      if (!apiKey) {
-        setError("Google Maps API key missing. Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.");
+  const shouldRefetch = (lat, lng, zoom) => {
+    if (lastFetchRef.current.lat === null) return true;
+    const dist = haversine(lat, lng, lastFetchRef.current.lat, lastFetchRef.current.lng);
+    if (dist > 0.5) return true; // re-fetch if moved >500m
+    if (zoom !== lastFetchRef.current.zoom) return true;
+    return false;
+  };
+
+  const loadAndPlaceMarkers = async (
+    centerLat,
+    centerLng,
+    zoomLevel,
+    radiusOverrideMeters,
+    includedTypesOverride
+  ) => {
+    if (!isMountedRef.current) return;
+    if (fetchInFlightRef.current) return;
+
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const safeCenter = enforceCenter(getSafeCenter(centerLat, centerLng));
+    suppressNextMoveRef.current = true;
+
+    const radiusMeters =
+      radiusOverrideMeters || computeVisibleRadiusMeters(radiusKm * 1000);
+
+    const requestKey = [
+      typeof safeCenter.lat === "number" ? safeCenter.lat.toFixed(REQUEST_KEY_PRECISION) : "",
+      typeof safeCenter.lng === "number" ? safeCenter.lng.toFixed(REQUEST_KEY_PRECISION) : "",
+      Math.round(radiusMeters || 0),
+      zoomLevel ?? map?.getZoom?.() ?? "",
+      (includedTypesOverride || []).slice().sort().join(","),
+    ].join("|");
+    const now = Date.now();
+    const dedupMs = Math.max(REQUEST_DEDUP_MS, PLACES_MIN_INTERVAL_MS);
+    if (
+      requestKey &&
+      requestKey === lastFetchKeyRef.current &&
+      now - lastFetchAtRef.current < dedupMs
+    ) {
+      setLoading(false);
+      setRefreshNeeded(false);
+      pendingViewRef.current = null;
+      return;
+    }
+    lastFetchKeyRef.current = requestKey;
+    lastFetchAtRef.current = now;
+
+    clearBusinessMarkers();
+    setBusinesses([]);
+    setLoading(true);
+    fetchInFlightRef.current = true;
+    lastFetchRef.current = {
+      lat: safeCenter.lat,
+      lng: safeCenter.lng,
+      zoom: zoomLevel ?? map?.getZoom?.(),
+    };
+
+    try {
+      map.setCenter([safeCenter.lng, safeCenter.lat]);
+      if (map.getZoom() < 12) map.setZoom(13);
+
+      const currentPrefilled = prefilledBusinessesRef.current || [];
+      if (Array.isArray(currentPrefilled) && currentPrefilled.length) {
+        const localList = currentPrefilled.slice();
+        let withCoords = localList.filter(
+          (biz) =>
+            biz?.coords &&
+            typeof biz.coords.lat === "number" &&
+            typeof biz.coords.lng === "number" &&
+            !(biz.coords.lat === 0 && biz.coords.lng === 0)
+        );
+        if (!withCoords.length) {
+          const base = enforceCenter(safeCenter);
+          const step = 0.0035;
+          withCoords = [
+            {
+              id: "yb-sample-prefill-1",
+              name: "Local Business",
+              address: "Nearby",
+              coords: { lat: base.lat + step, lng: base.lng - step },
+              categoryLabel: "Local Business",
+              source: "sample",
+            },
+            {
+              id: "yb-sample-prefill-2",
+              name: "Neighborhood Shop",
+              address: "Nearby",
+              coords: { lat: base.lat - step * 0.6, lng: base.lng + step * 0.9 },
+              categoryLabel: "Shop",
+              source: "sample",
+            },
+          ];
+        }
+        if (map && withCoords.length) {
+          const userCenter = userCenterRef.current;
+          try {
+            const bounds = new mapboxgl.LngLatBounds();
+            withCoords.forEach((biz) => bounds.extend([biz.coords.lng, biz.coords.lat]));
+            let centerToUse = null;
+            if (userCenter) {
+              const maxDistKm = Math.min(Math.max(radiusKm * 2, 30), 200);
+              const minDist = withCoords.reduce((min, biz) => {
+                const d = haversine(
+                  userCenter.lat,
+                  userCenter.lng,
+                  biz.coords.lat,
+                  biz.coords.lng
+                );
+                return Math.min(min, d);
+              }, Infinity);
+              centerToUse = preferUserCenter || minDist <= maxDistKm ? userCenter : null;
+            }
+            if (!centerToUse && preferUserCenter) {
+              centerToUse = enforceCenter(getDefaultCenter());
+            }
+            if (centerToUse) {
+              const enforced = enforceCenter(centerToUse);
+              map.setCenter([enforced.lng, enforced.lat]);
+              if (map.getZoom() < 13) map.setZoom(13);
+            } else {
+              map.fitBounds(bounds, { padding: 48, maxZoom: 15 });
+            }
+            suppressNextMoveRef.current = true;
+          } catch (fitErr) {
+            console.warn("Could not fit map to prefilled businesses", fitErr);
+          }
+        }
+        setBusinesses(localList);
+        const categoryCounts = localList.reduce((acc, biz) => {
+          const key = biz.categoryLabel || biz.category || "Local Business";
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        const uniqueCategories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
+        const categoriesList = uniqueCategories.map((cat) => ({
+          name: cat,
+          count: categoryCounts[cat] || 0,
+        }));
+        setCategories(uniqueCategories);
+        setCategoriesWithCounts(categoriesList);
+        renderMarkers(withCoords, activeCategory);
+
+        const firstCoord = getFirstPrefilledCoord();
+        const centerCandidate = enforceCenter(
+          userCenterRef.current ||
+            (centerLat && centerLng ? { lat: centerLat, lng: centerLng } : null) ||
+            firstCoord
+        );
+        map.setCenter([centerCandidate.lng, centerCandidate.lat]);
+        if (map.getZoom() < 13) map.setZoom(13);
+
         setLoading(false);
+        setRefreshNeeded(false);
+        pendingViewRef.current = null;
         return;
       }
 
-      // Debug logs to help diagnose loader / API key issues
+      let places = [];
       try {
-        console.debug("GoogleMapClient: apiKey present?", !!apiKey);
-        console.debug("GoogleMapClient: window.google before load:", typeof window !== "undefined" ? window.google : "no-window");
-        const scriptSrcs = Array.from(document.scripts || [])
-          .map((s) => s.src)
-          .filter((src) => src && src.includes("maps.googleapis.com"));
-        console.debug("GoogleMapClient: existing maps script tags:", scriptSrcs);
-      } catch (e) {
-        console.warn("GoogleMapClient debug log failed", e);
-      }
-
-      try {
-        const google = await loadGoogleMaps(apiKey, mapId);
-        console.debug("GoogleMapClient: google after load:", google, "google.maps?", !!(google && google.maps));
-
-        apiKeyRef.current = apiKey;
-
-        mapIdRef.current = mapId;
-
-        // Create map centered on a default location until we get user location
-        map = new google.maps.Map(mapRef.current, {
-          center: FALLBACK_CENTER,
-          zoom: 13,
-          disableDefaultUI: false,
-          ...(mapId ? { mapId } : {}), // mapId enables Advanced Markers / vector maps
+        places = await fetchPlacesNew({
+          lat: safeCenter.lat,
+          lng: safeCenter.lng,
+          radiusMeters,
+          includedTypes: includedTypesOverride,
         });
-        mapInstanceRef.current = map;
-
-        // get user location (with graceful fallback)
-        const defaultCenter = FALLBACK_CENTER;
-
-        const placeUserMarker = (centerLat, centerLng) => {
-          if (centerLat === defaultCenter.lat && centerLng === defaultCenter.lng) return;
-          detachMarker(userMarkerRef.current);
-          const userEl = document.createElement("div");
-          userEl.className = "yb-user-marker";
-          const canUseAdvanced = mapIdRef.current && window.google?.maps?.marker?.AdvancedMarkerElement;
-          if (canUseAdvanced) {
-            userMarkerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
-              position: { lat: centerLat, lng: centerLng },
-              map,
-              title: "You",
-              content: userEl,
-            });
-          } else {
-            userMarkerRef.current = new window.google.maps.Marker({
-              position: { lat: centerLat, lng: centerLng },
-              map,
-              title: "You",
-              icon: {
-                path: window.google.maps.SymbolPath.CIRCLE,
-                scale: 8,
-                fillColor: "#7c3aed",
-                fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: "white",
-              },
-            });
-          }
-        };
-
-        const fetchPlacesNew = async ({ lat, lng, radiusMeters, includedTypes }) => {
-          const apiKey = apiKeyRef.current;
-          if (!apiKey) throw new Error("API key missing");
-          const radius = radiusMeters ?? Math.max(100, radiusKm * 1000);
-          const retailTypes = includedTypes && includedTypes.length
-            ? includedTypes
-            : Array.from(ALLOWED_RETAIL_TYPES).filter(
-                (t) => t !== "grocery_or_supermarket" && t !== "cosmetics_store" && t !== "drugstore" && t !== "gift_shop" && t !== "butcher_shop" && t !== "market"
-              );
-          const body = {
-            includedTypes: retailTypes,
-            maxResultCount: 20,
-            locationRestriction: {
-              circle: {
-                center: { latitude: lat, longitude: lng },
-                radius,
-              },
-            },
-          };
-          const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": apiKey,
-              "X-Goog-FieldMask":
-                "places.id,places.displayName.text,places.formattedAddress,places.location,places.types,places.photos",
-            },
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`Places (new) request failed: ${res.status} ${txt}`);
-          }
-          const data = await res.json();
-          return data.places || [];
-        };
-
-        const shouldRefetch = (lat, lng, zoom) => {
-          if (lastFetchRef.current.lat === null) return true;
-          const dist = haversine(lat, lng, lastFetchRef.current.lat, lastFetchRef.current.lng);
-          if (dist > 0.5) return true; // re-fetch if moved >500m
-          if (zoom !== lastFetchRef.current.zoom) return true;
-          return false;
-        };
-
-        async function loadAndPlaceMarkers(centerLat, centerLng, zoomLevel, radiusOverrideMeters, includedTypesOverride) {
-          if (!isMounted) return;
-          if (fetchInFlightRef.current) return;
-
-          suppressNextIdleRef.current = true; // avoid immediately marking view as stale after reload
-          placeUserMarker(centerLat, centerLng);
-
-          try {
-            const bounds = map?.getBounds ? map.getBounds() : null;
-            const radiusMeters =
-              radiusOverrideMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
-
-            const requestKey = [
-              typeof centerLat === "number" ? centerLat.toFixed(REQUEST_KEY_PRECISION) : "",
-              typeof centerLng === "number" ? centerLng.toFixed(REQUEST_KEY_PRECISION) : "",
-              Math.round(radiusMeters || 0),
-              zoomLevel ?? map?.getZoom?.() ?? "",
-              (includedTypesOverride || []).slice().sort().join(","),
-            ].join("|");
-            const now = Date.now();
-            if (
-              requestKey &&
-              requestKey === lastFetchKeyRef.current &&
-              now - lastFetchAtRef.current < REQUEST_DEDUP_MS
-            ) {
-              setLoading(false);
-              setRefreshNeeded(false);
-              pendingViewRef.current = null;
-              return;
-            }
-            lastFetchKeyRef.current = requestKey;
-            lastFetchAtRef.current = now;
-
-            clearBusinessMarkers();
-            setBusinesses([]);
-            setLoading(true);
-            fetchInFlightRef.current = true;
-            lastFetchRef.current = {
-              lat: centerLat,
-              lng: centerLng,
-              zoom: zoomLevel ?? map?.getZoom?.(),
-            };
-
-            let places = [];
-            try {
-              places = await fetchPlacesNew({ lat: centerLat, lng: centerLng, radiusMeters, includedTypes: includedTypesOverride });
-            } catch (errNew) {
-              console.error("Places (new) fetch failed", errNew);
-              if (showBusinessErrors) {
-                setError(
-                  "Google Places request was denied. Check API key referrer restrictions and ensure Places API (New) is enabled."
-                );
-              }
-              places = [];
-            }
-
-            const businessesWithCoords = [];
-            for (const place of places || []) {
-              // map both legacy and new payloads
-              const loc =
-                place.geometry?.location ||
-                (place.location
-                  ? {
-                      lat: () => place.location.latitude,
-                      lng: () => place.location.longitude,
-                    }
-                  : null);
-              if (!loc) continue;
-              const pts = { lat: typeof loc.lat === "function" ? loc.lat() : loc.lat, lng: typeof loc.lng === "function" ? loc.lng() : loc.lng };
-              if (bounds && !bounds.contains(new google.maps.LatLng(pts.lat, pts.lng))) {
-                continue;
-              }
-              const typeList = place.types || [];
-              const primaryType = typeList.find((t) => t && ALLOWED_RETAIL_TYPES.has(t));
-              if (!primaryType) continue; // skip non-retail/service entries
-              const categoryKey = primaryType || "store";
-              const categoryLabel = formatCategory(categoryKey);
-              const photoName = place.photos?.[0]?.name;
-              const photoUrl =
-                photoName && apiKeyRef.current
-                  ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${apiKeyRef.current}`
-                  : null;
-              businessesWithCoords.push({
-                id: place.place_id || place.id,
-                name: place.name || place.displayName?.text || "Unnamed",
-                address: place.vicinity || place.formatted_address || place.formattedAddress || "",
-                coords: pts,
-                categoryLabel,
-                source: "google_places_new",
-                zoom: zoomLevel || map?.getZoom?.(),
-                imageUrl: photoUrl,
-              });
-            }
-
-            let curatedNearby = [];
-            try {
-              const curated = await loadCuratedBusinesses();
-              const searchBounds = map?.getBounds ? map.getBounds() : null;
-              const limit = radiusMeters || computeVisibleRadiusMeters(map, radiusKm * 1000);
-
-              curatedNearby = (curated || []).filter((biz) => {
-                if (!biz.coords) return false;
-                const distanceMeters =
-                  haversine(centerLat, centerLng, biz.coords.lat, biz.coords.lng) * 1000;
-                const withinRadius = distanceMeters <= limit * 1.2;
-                const withinBounds = searchBounds
-                  ? searchBounds.contains(new google.maps.LatLng(biz.coords.lat, biz.coords.lng))
-                  : true;
-                return withinBounds || withinRadius;
-              });
-            } catch (curatedErr) {
-              console.warn("Curated business load failed", curatedErr);
-            }
-
-            if (!isMounted) return;
-
-            const combinedBusinesses = [...curatedNearby, ...businessesWithCoords];
-
-            const categoryCounts = combinedBusinesses.reduce((acc, biz) => {
-              acc[biz.categoryLabel] = (acc[biz.categoryLabel] || 0) + 1;
-              return acc;
-            }, {});
-            const uniqueCategories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
-            const categoriesList = uniqueCategories.map((cat) => ({
-              name: cat,
-              count: categoryCounts[cat] || 0,
-            }));
-            setBusinesses(combinedBusinesses);
-            setCategories(uniqueCategories);
-            setCategoriesWithCounts(categoriesList);
-            renderMarkers(combinedBusinesses, activeCategory);
-            setLoading(false);
-            setRefreshNeeded(false);
-            pendingViewRef.current = null;
-          } finally {
-            fetchInFlightRef.current = false;
-          }
-        }
-
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const userLat = pos.coords.latitude;
-              const userLng = pos.coords.longitude;
-              userCenterRef.current = { lat: userLat, lng: userLng };
-              map.setCenter({ lat: userLat, lng: userLng });
-              loadAndPlaceMarkers(userLat, userLng, map.getZoom(), computeVisibleRadiusMeters(map, radiusKm * 1000));
-            },
-            (err) => {
-              console.warn("Geolocation error", err);
-              setError("Could not get your location. Showing nearby businesses around a default location.");
-              userCenterRef.current = null;
-              map.setCenter(defaultCenter);
-              loadAndPlaceMarkers(defaultCenter.lat, defaultCenter.lng, map.getZoom(), computeVisibleRadiusMeters(map, radiusKm * 1000));
-            },
-            { enableHighAccuracy: true, maximumAge: 1000 * 60 * 5 }
+      } catch (errNew) {
+        console.error("Places (new) fetch failed", errNew);
+        if (showBusinessErrors) {
+          setError(
+            PLACES_DISABLED
+              ? "Google Places calls are disabled in testing mode."
+              : "Google Places request was denied. Check API key referrer restrictions and ensure Places API (New) is enabled."
           );
-        } else {
-          setError("Geolocation not supported. Showing default area.");
-          userCenterRef.current = null;
-          map.setCenter(defaultCenter);
-          loadAndPlaceMarkers(defaultCenter.lat, defaultCenter.lng, map.getZoom(), computeVisibleRadiusMeters(map, radiusKm * 1000));
         }
-
-        let idleTimeout;
-        idleListener = map.addListener("idle", () => {
-          if (suppressNextIdleRef.current) {
-            suppressNextIdleRef.current = false;
-            return;
-          }
-          if (idleTimeout) clearTimeout(idleTimeout);
-          idleTimeout = setTimeout(() => {
-            const center = map.getCenter();
-            if (!center) return;
-            const lat = center.lat();
-            const lng = center.lng();
-            const zoom = map.getZoom();
-            if (!shouldRefetch(lat, lng, zoom)) return;
-            pendingViewRef.current = { lat, lng, zoom };
-            setRefreshNeeded(true);
-          }, 450);
-        });
-        map.addListener("click", () => {
-          activeInfoWindowRef.current?.close();
-        });
-
-        // expose reload for search
-        loadAndPlaceMarkersRef.current = (lat, lng, zoom, radiusMeters, includedTypes) => {
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.setCenter({ lat, lng });
-          }
-          return typeof lat === "number" && typeof lng === "number"
-            ? loadAndPlaceMarkers(lat, lng, zoom, radiusMeters, includedTypes)
-            : null;
-        };
-
-        const focusBusiness = (biz) => {
-          if (!biz) return;
-          const rec = markerIndexRef.current.get(biz.id);
-          const mapToUse = mapInstanceRef.current;
-          if (!mapToUse) return;
-
-          if (rec?.marker) {
-            mapToUse.panTo(rec.coords || rec.marker.position);
-            mapToUse.setZoom(Math.max(mapToUse.getZoom(), 15));
-            if (activeInfoWindowRef.current && activeInfoWindowRef.current !== rec.info) {
-              activeInfoWindowRef.current.close();
-            }
-            activeInfoWindowRef.current = rec.info;
-            if (rec.info) {
-              if ("position" in rec.marker) {
-                rec.info.open(mapToUse, rec.marker);
-              } else {
-                rec.info.open({ anchor: rec.marker, map: mapToUse });
-              }
-            }
-          } else if (biz.coords) {
-            mapToUse.panTo(biz.coords);
-            mapToUse.setZoom(Math.max(mapToUse.getZoom(), 15));
-          }
-        };
-
-        onControlsReady?.({
-          search: performSearch,
-          focusBusiness,
-        });
-      } catch (err) {
-        console.error(err);
-        setError(err.message || "Failed to load map");
-        setLoading(false);
+        places = [];
       }
-    }
 
-    init();
+      const bounds = map?.getBounds ? map.getBounds() : null;
+      const businessesWithCoords = [];
+      for (const place of places || []) {
+        const loc = place.location || place.geometry?.location || null;
+        if (!loc) continue;
+        const pts = {
+          lat: typeof loc.lat === "function" ? loc.lat() : loc.lat ?? loc.latitude,
+          lng: typeof loc.lng === "function" ? loc.lng() : loc.lng ?? loc.longitude,
+        };
+        if (bounds && !bounds.contains([pts.lng, pts.lat])) {
+          continue;
+        }
+        const typeList = place.types || [];
+        const primaryType = typeList.find((t) => t && ALLOWED_RETAIL_TYPES.has(t));
+        if (!primaryType) continue;
+        const categoryKey = primaryType || "store";
+        const categoryLabel = formatCategory(categoryKey);
+        const photoName = place.photos?.[0]?.name;
+        const photoUrl = photoName
+          ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}`
+          : null;
+        businessesWithCoords.push({
+          id: place.place_id || place.id,
+          name: place.name || place.displayName?.text || "Unnamed",
+          address: place.vicinity || place.formatted_address || place.formattedAddress || "",
+          coords: pts,
+          categoryLabel,
+          source: "google_places_new",
+          zoom: zoomLevel || map?.getZoom?.(),
+          imageUrl: photoUrl,
+        });
+      }
 
-    return () => {
-      isMounted = false;
-      clearBusinessMarkers();
-      detachMarker(userMarkerRef.current);
-      if (idleListener) idleListener.remove();
+      let curatedNearby = [];
+      try {
+        const curated = await loadCuratedBusinesses();
+        curatedNearby = (curated || []).filter((biz) => biz?.coords);
+      } catch (curatedErr) {
+        console.warn("Curated business load failed", curatedErr);
+      }
+
+      const combinedBusinesses = [...curatedNearby, ...businessesWithCoords];
+      let finalBusinesses = combinedBusinesses;
+
+      if (!finalBusinesses.length) {
+        const base = enforceCenter(safeCenter);
+        const step = 0.0035;
+        finalBusinesses = [
+          {
+            id: "yb-sample-1",
+            name: "Barrio Cafe",
+            address: "Downtown",
+            coords: { lat: base.lat + step, lng: base.lng - step },
+            categoryLabel: "Cafe",
+            source: "sample",
+          },
+          {
+            id: "yb-sample-2",
+            name: "Neighborhood Market",
+            address: "Local St.",
+            coords: { lat: base.lat - step * 0.6, lng: base.lng + step * 1.1 },
+            categoryLabel: "Market",
+            source: "sample",
+          },
+          {
+            id: "yb-sample-3",
+            name: "Community Shop",
+            address: "Main Ave",
+            coords: { lat: base.lat + step * 0.4, lng: base.lng + step * 0.8 },
+            categoryLabel: "Shop",
+            source: "sample",
+          },
+        ];
+      }
+
+      if (PLACES_DISABLED || ((!places || places.length === 0) && curatedNearby.length)) {
+        try {
+          const anchorCenter = preferUserCenter
+            ? enforceCenter(userCenterRef.current || getDefaultCenter())
+            : null;
+
+          if (anchorCenter) {
+            map.setCenter([anchorCenter.lng, anchorCenter.lat]);
+            if (map.getZoom() < 13) map.setZoom(13);
+            suppressNextMoveRef.current = true;
+          } else {
+            const fitBounds = new mapboxgl.LngLatBounds();
+            curatedNearby.forEach((biz) => fitBounds.extend([biz.coords.lng, biz.coords.lat]));
+            if (!fitBounds.isEmpty()) {
+              map.fitBounds(fitBounds, { padding: 48, maxZoom: 15 });
+              suppressNextMoveRef.current = true;
+            }
+          }
+        } catch (fitErr) {
+          console.warn("Failed to fit map to curated businesses", fitErr);
+        }
+      }
+
+      const categoryCounts = finalBusinesses.reduce((acc, biz) => {
+        acc[biz.categoryLabel] = (acc[biz.categoryLabel] || 0) + 1;
+        return acc;
+      }, {});
+      const uniqueCategories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
+      const categoriesList = uniqueCategories.map((cat) => ({
+        name: cat,
+        count: categoryCounts[cat] || 0,
+      }));
+      setBusinesses(finalBusinesses);
+      setCategories(uniqueCategories);
+      setCategoriesWithCounts(categoriesList);
+      renderMarkers(finalBusinesses, activeCategory);
+      if (preferUserCenter && map) {
+        const anchorCenter = enforceCenter(
+          userCenterRef.current ||
+            getDefaultCenter()
+        );
+        map.setCenter([anchorCenter.lng, anchorCenter.lat]);
+        if (map.getZoom() < 13) map.setZoom(13);
+      }
+      setLoading(false);
+      setRefreshNeeded(false);
+      pendingViewRef.current = null;
+    } catch (err) {
+      console.error("Map load failed", err);
+      setError(err.message || "Failed to load map data.");
+      setLoading(false);
+      setRefreshNeeded(false);
+      pendingViewRef.current = null;
+    } finally {
       fetchInFlightRef.current = false;
-      loadAndPlaceMarkersRef.current = null;
-    };
-  }, [radiusKm]);
-
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    renderMarkers(businesses, activeCategory);
-  }, [activeCategory, businesses]);
-
-  useEffect(() => {
-    if (typeof onBusinessesChange === "function") {
-      onBusinessesChange(businesses);
     }
-  }, [businesses, onBusinessesChange]);
-
-  useEffect(() => {
-    if (!externalSearchTrigger) return;
-    performSearch(externalSearchTerm || "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalSearchTrigger]);
+  };
 
   const handleRefreshClick = () => {
     const map = mapInstanceRef.current;
     if (!map || !loadAndPlaceMarkersRef.current) return;
-    const center = map.getCenter();
-    if (!center) return;
+    const preferred = userCenterRef.current || getFirstPrefilledCoord();
+    const center = preferred || map.getCenter();
+    const safe = enforceCenter(
+      preferred || getSafeCenter(center?.lat ?? center?.lat?.(), center?.lng ?? center?.lng?.())
+    );
+    map.setCenter([safe.lng, safe.lat]);
     const zoom = map.getZoom();
-    const radiusMeters = computeVisibleRadiusMeters(map, radiusKm * 1000);
-    suppressNextIdleRef.current = true;
+    const radiusMeters = computeVisibleRadiusMeters(radiusKm * 1000);
+    suppressNextMoveRef.current = true;
     setRefreshNeeded(false);
     pendingViewRef.current = null;
-    loadAndPlaceMarkersRef.current(center.lat(), center.lng(), zoom, radiusMeters);
+    loadAndPlaceMarkersRef.current(safe.lat, safe.lng, zoom, radiusMeters);
   };
 
   const handleRecenterClick = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
     const target = userCenterRef.current || FALLBACK_CENTER;
-    suppressNextIdleRef.current = true;
-    map.panTo(target);
-    if (map.getZoom() < 13) {
-      map.setZoom(13);
-    }
+    suppressNextMoveRef.current = true;
+    map.flyTo({ center: [target.lng, target.lat], zoom: Math.max(map.getZoom(), 13) });
   };
 
   const performSearch = async (term) => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
 
-    // Empty search: refresh current view with all businesses in bounds
     if (!term?.trim()) {
       if (!loadAndPlaceMarkersRef.current) return;
       const center = map.getCenter();
@@ -837,10 +866,10 @@ export default function GoogleMapClient({
       detachMarker(searchMarkerRef.current);
       try {
         await loadAndPlaceMarkersRef.current(
-          center.lat(),
-          center.lng(),
+          center.lat,
+          center.lng,
           map.getZoom(),
-          computeVisibleRadiusMeters(map, radiusKm * 1000)
+          computeVisibleRadiusMeters(radiusKm * 1000)
         );
         setActiveCategory("All");
         setSearchMessage("Showing all businesses nearby.");
@@ -858,35 +887,37 @@ export default function GoogleMapClient({
     setSearchMessage(null);
     detachMarker(searchMarkerRef.current);
     try {
-      const apiKey = apiKeyRef.current;
-      if (!apiKey) throw new Error("API key missing");
-      const map = mapInstanceRef.current;
+      if (PLACES_DISABLED || disableGooglePlaces) {
+        setSearchError("Search is disabled while Places API is paused.");
+        setSearchLoading(false);
+        return;
+      }
+      if (!placesEnabledRef.current) {
+        setSearchError("Enable Google Places to search the map.");
+        setSearchLoading(false);
+        return;
+      }
       const center = map.getCenter();
-      const radiusMeters = computeVisibleRadiusMeters(map, radiusKm * 1000);
+      const radiusMeters = computeVisibleRadiusMeters(radiusKm * 1000);
       const searchTypeKey = term.trim().toLowerCase().replace(/\s+/g, "_");
-      const limitedTypes =
-        ALLOWED_RETAIL_TYPES.has(searchTypeKey) ? [searchTypeKey] : undefined;
+      const limitedTypes = ALLOWED_RETAIL_TYPES.has(searchTypeKey) ? [searchTypeKey] : undefined;
 
-      const body = {
-        textQuery: term.trim(),
-        maxResultCount: 5,
-        locationBias: {
-          circle: {
-            center: { latitude: center?.lat?.(), longitude: center?.lng?.() },
-            radius: radiusMeters,
-          },
-        },
-      };
-
-      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      const res = await fetch("/api/places", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask":
-            "places.id,places.displayName.text,places.formattedAddress,places.location,places.types",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          mode: "text",
+          textQuery: term.trim(),
+          locationBias: {
+            lat: center?.lat,
+            lng: center?.lng,
+            radiusMeters,
+          },
+          maxResultCount: 5,
+          sessionToken: ensurePlacesSessionToken(),
+        }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -902,11 +933,8 @@ export default function GoogleMapClient({
 
       const { latitude, longitude } = place.location;
       const target = { lat: latitude, lng: longitude };
-      map.panTo(target);
-      map.setZoom(Math.max(map.getZoom(), 15));
+      map.flyTo({ center: [target.lng, target.lat], zoom: Math.max(map.getZoom(), 15) });
 
-      // drop a temporary search marker
-      const canUseAdvanced = mapIdRef.current && window.google?.maps?.marker?.AdvancedMarkerElement;
       const markerContent = document.createElement("div");
       markerContent.className = "yb-marker";
       const inner = document.createElement("div");
@@ -921,34 +949,15 @@ export default function GoogleMapClient({
       markerContent.appendChild(inner);
 
       detachMarker(searchMarkerRef.current);
-      if (canUseAdvanced) {
-        searchMarkerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
-          position: target,
-          map,
-          title: place.displayName?.text || "Selected",
-          content: markerContent,
-        });
-      } else {
-        searchMarkerRef.current = new window.google.maps.Marker({
-          position: target,
-          map,
-          title: place.displayName?.text || "Selected",
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 9,
-            fillColor: "#6b7280",
-            fillOpacity: 1,
-            strokeColor: "#f3f4f6",
-            strokeWeight: 2,
-          },
-        });
-      }
+      searchMarkerRef.current = new mapboxgl.Marker({ element: markerContent, anchor: "bottom" })
+        .setLngLat([target.lng, target.lat])
+        .addTo(map);
 
       await loadAndPlaceMarkersRef.current?.(
         latitude,
         longitude,
         map.getZoom(),
-        computeVisibleRadiusMeters(map, radiusKm * 1000),
+        computeVisibleRadiusMeters(radiusKm * 1000),
         limitedTypes
       );
       if (limitedTypes?.length) {
@@ -956,6 +965,7 @@ export default function GoogleMapClient({
         setActiveCategory(label);
       }
       setSearchMessage(place.displayName?.text || "Moved to result");
+      resetPlacesSessionToken();
     } catch (err) {
       console.error(err);
       setSearchError(err.message || "Search failed");
@@ -963,15 +973,369 @@ export default function GoogleMapClient({
       setSearchLoading(false);
     }
   };
+
   const handleSearch = async (e) => {
     e.preventDefault();
     await performSearch(searchTerm);
   };
 
+  const enablePlaces = async () => {
+    if (PLACES_DISABLED || disableGooglePlaces) return;
+    placesEnabledRef.current = true;
+    setPlacesEnabledState(true);
+    lastFetchKeyRef.current = null;
+    lastFetchAtRef.current = 0;
+    resetPlacesSessionToken();
+    const map = mapInstanceRef.current;
+    if (!map || !loadAndPlaceMarkersRef.current) return;
+    const center = map.getCenter();
+    if (!center) return;
+    suppressNextMoveRef.current = true;
+    await loadAndPlaceMarkersRef.current(
+      center.lat,
+      center.lng,
+      map.getZoom(),
+      computeVisibleRadiusMeters(radiusKm * 1000)
+    );
+  };
+
+  const disablePlaces = async () => {
+    placesEnabledRef.current = false;
+    setPlacesEnabledState(false);
+    lastFetchKeyRef.current = null;
+    lastFetchAtRef.current = 0;
+    resetPlacesSessionToken();
+    const map = mapInstanceRef.current;
+    if (!map || !loadAndPlaceMarkersRef.current) return;
+    const center = map.getCenter();
+    if (!center) return;
+    suppressNextMoveRef.current = true;
+    await loadAndPlaceMarkersRef.current(
+      center.lat,
+      center.lng,
+      map.getZoom(),
+      computeVisibleRadiusMeters(radiusKm * 1000)
+    );
+  };
+
+  const focusBusiness = (biz) => {
+    if (!biz) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const rec = markerIndexRef.current.get(biz.id);
+    if (rec?.marker) {
+      map.flyTo({
+        center: [rec.coords.lng, rec.coords.lat],
+        zoom: Math.max(map.getZoom(), 15),
+      });
+      if (activePopupRef.current && activePopupRef.current !== rec.popup) {
+        activePopupRef.current.remove();
+      }
+      if (rec.popup) {
+        rec.popup.addTo(map);
+        activePopupRef.current = rec.popup;
+      }
+    } else if (biz.coords) {
+      map.flyTo({
+        center: [biz.coords.lng, biz.coords.lat],
+        zoom: Math.max(map.getZoom(), 15),
+      });
+    }
+  };
+
+  useEffect(() => {
+    let map;
+    let moveEndHandler;
+
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) {
+      setError("Mapbox access token missing. Set NEXT_PUBLIC_MAPBOX_TOKEN.");
+      setLoading(false);
+      return undefined;
+    }
+    mapboxgl.accessToken = token;
+
+    const initialCenter = getDefaultCenter();
+    map = new mapboxgl.Map({
+      container: mapRef.current,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [initialCenter.lng, initialCenter.lat],
+      zoom: 13,
+      cooperativeGestures: true,
+    });
+
+    mapInstanceRef.current = map;
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+    const handleLoaded = () => setLoading(false);
+    map.on("load", handleLoaded);
+
+    const placeUserMarker = (centerLat, centerLng) => {
+      detachMarker(userMarkerRef.current);
+      const userEl = document.createElement("div");
+      userEl.className = "yb-user-marker";
+      userMarkerRef.current = new mapboxgl.Marker({ element: userEl })
+        .setLngLat([centerLng, centerLat])
+        .addTo(map);
+    };
+
+    const startWithCenter = (lat, lng) => {
+      map.setCenter([lng, lat]);
+      map.setZoom(13);
+      loadAndPlaceMarkersRef.current?.(lat, lng, map.getZoom(), computeVisibleRadiusMeters(radiusKm * 1000));
+    };
+
+    const onReady = () => {
+      map.resize();
+      loadAndPlaceMarkersRef.current = loadAndPlaceMarkers;
+      onControlsReady?.({
+        search: performSearch,
+        focusBusiness,
+        enablePlaces,
+        disablePlaces,
+        placesEnabled: () => placesEnabledRef.current,
+        refresh: handleRefreshClick,
+      });
+      setMapReady(true);
+
+      const primed = prefilledBusinessesRef.current || [];
+      if (Array.isArray(primed) && primed.length && loadAndPlaceMarkersRef.current) {
+        const first = getFirstPrefilledCoord() || getPrefilledCenter() || enforceCenter(getDefaultCenter());
+        suppressNextMoveRef.current = true;
+        loadAndPlaceMarkersRef.current(
+          first.lat,
+          first.lng,
+          map.getZoom(),
+          computeVisibleRadiusMeters(radiusKm * 1000)
+        );
+      }
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const userLat = pos.coords.latitude;
+            const userLng = pos.coords.longitude;
+            userCenterRef.current = { lat: userLat, lng: userLng };
+            persistedCenterRef.current = { lat: userLat, lng: userLng };
+            try {
+              localStorage.setItem(
+                LAST_CENTER_KEY,
+                JSON.stringify(persistedCenterRef.current)
+              );
+            } catch (_) {
+              /* ignore */
+            }
+            placeUserMarker(userLat, userLng);
+            startWithCenter(userLat, userLng);
+          },
+          (err) => {
+            console.warn("Geolocation error", err);
+            setError(
+              "Could not get your location. Showing nearby businesses around a default location."
+            );
+            userCenterRef.current = null;
+            const centerToUse = getDefaultCenter();
+            startWithCenter(centerToUse.lat, centerToUse.lng);
+          },
+          { enableHighAccuracy: true, maximumAge: 1000 * 60 * 5 }
+        );
+      } else {
+        setError("Geolocation not supported. Showing default area.");
+        userCenterRef.current = null;
+        const centerToUse = enforceCenter(getDefaultCenter());
+        startWithCenter(centerToUse.lat, centerToUse.lng);
+      }
+    };
+
+    if (map.loaded()) {
+      onReady();
+    } else {
+      map.on("load", onReady);
+    }
+
+    moveEndHandler = () => {
+      if (suppressNextMoveRef.current) {
+        suppressNextMoveRef.current = false;
+        return;
+      }
+      const center = map.getCenter();
+      if (!center) return;
+      const lat = center.lat;
+      const lng = center.lng;
+      const zoom = map.getZoom();
+      if (!shouldRefetch(lat, lng, zoom)) return;
+      pendingViewRef.current = { lat, lng, zoom };
+      setRefreshNeeded(true);
+    };
+
+    map.on("moveend", moveEndHandler);
+    map.on("click", () => {
+      activePopupRef.current?.remove();
+    });
+
+    return () => {
+      moveEndHandler && map.off("moveend", moveEndHandler);
+      map.off("load", handleLoaded);
+      map.remove();
+      clearBusinessMarkers();
+      detachMarker(userMarkerRef.current);
+      detachMarker(searchMarkerRef.current);
+      loadAndPlaceMarkersRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [radiusKm]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    renderMarkers(businesses, activeCategory);
+
+    const map = mapInstanceRef.current;
+    const center = map.getCenter();
+    if (center) {
+      const candidate = { lat: center.lat, lng: center.lng };
+      if (Number.isFinite(candidate.lat) && Number.isFinite(candidate.lng)) {
+        persistedCenterRef.current = candidate;
+        try {
+          localStorage.setItem(LAST_CENTER_KEY, JSON.stringify(candidate));
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory, businesses]);
+
+  useEffect(() => {
+    if (typeof onBusinessesChange === "function") {
+      onBusinessesChange(businesses);
+    }
+  }, [businesses, onBusinessesChange]);
+
+  useEffect(() => {
+    if (!externalSearchTrigger) return;
+    performSearch(externalSearchTerm || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalSearchTrigger]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || !loadAndPlaceMarkersRef.current) return;
+    if (!Array.isArray(prefilledBusinesses) || !prefilledBusinesses.length) return;
+    if (!mapReady) return;
+
+    // Force next load to run (bypass dedup) when prefilled set changes
+    lastFetchKeyRef.current = null;
+    lastFetchAtRef.current = 0;
+
+    const preferred = userCenterRef.current || getFirstPrefilledCoord();
+    const center = preferred || mapInstanceRef.current.getCenter();
+    const safe = enforceCenter(
+      preferred || getSafeCenter(center?.lat ?? center?.lat?.(), center?.lng ?? center?.lng?.())
+    );
+    const radiusMeters = computeVisibleRadiusMeters(radiusKm * 1000);
+    suppressNextMoveRef.current = true;
+    loadAndPlaceMarkersRef.current(safe.lat, safe.lng, mapInstanceRef.current.getZoom(), radiusMeters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledBusinesses, radiusKm, mapReady]);
+
+  // Client-side geocode for prefilled businesses missing coords (best-effort)
+  useEffect(() => {
+    const list = prefilledBusinessesRef.current || [];
+    const missing = list.filter((biz) => !biz?.coords && (biz.address || biz.city));
+    if (!missing.length) return;
+    if (!mapReady) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      const updated = [...list];
+      let changed = false;
+      const limit = 15;
+      for (const biz of missing.slice(0, limit)) {
+        if (cancelled) return;
+        const addressLine = [biz.address, biz.city, biz.state, biz.country]
+          .filter(Boolean)
+          .join(", ");
+        const coords = await geocodeAddress(addressLine);
+        if (coords) {
+          const idx = updated.findIndex((b) => b.id === biz.id);
+          if (idx >= 0) {
+            updated[idx] = {
+              ...updated[idx],
+              coords,
+              latitude: coords.lat,
+              longitude: coords.lng,
+              lat: coords.lat,
+              lng: coords.lng,
+            };
+            changed = true;
+          }
+        }
+      }
+
+      if (changed && !cancelled) {
+        prefilledBusinessesRef.current = updated;
+        setBusinesses((prev) =>
+          prev.map((b) => {
+            const replacement = updated.find((u) => u.id === b.id);
+            return replacement || b;
+          })
+        );
+        const map = mapInstanceRef.current;
+        if (map && loadAndPlaceMarkersRef.current) {
+          const center = map.getCenter();
+          const safe = enforceCenter(
+            getSafeCenter(center?.lat ?? center?.lat?.(), center?.lng ?? center?.lng?.())
+          );
+          suppressNextMoveRef.current = true;
+          loadAndPlaceMarkersRef.current(
+            safe.lat,
+            safe.lng,
+            map.getZoom(),
+            computeVisibleRadiusMeters(radiusKm * 1000)
+          );
+        }
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledBusinesses]);
+
+  // Hard render for prefilled mode to ensure markers appear even without Places
+  useEffect(() => {
+    if (!disableGooglePlaces) return;
+    if (!mapReady || !mapInstanceRef.current) return;
+    const list = prefilledBusinessesRef.current || [];
+    if (!list.length) return;
+    const withCoords = list.filter(
+      (biz) =>
+        biz?.coords &&
+        typeof biz.coords.lat === "number" &&
+        typeof biz.coords.lng === "number" &&
+        biz.coords.lat !== 0 &&
+        biz.coords.lng !== 0
+    );
+    if (withCoords.length) {
+      setBusinesses(list);
+      renderMarkers(list, activeCategory);
+      const first = withCoords[0];
+      mapInstanceRef.current.setCenter({ lng: first.coords.lng, lat: first.coords.lat });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory, disableGooglePlaces, mapReady, prefilledBusinesses]);
+
   return (
     <div ref={containerRef} className={containerClassName}>
       <div className={cardClassName}>
         {title ? <div className="mb-3 font-medium">{title}</div> : null}
+        {placesMode === "manual" && !disableGooglePlaces ? (
+          <div className="mb-2 text-[11px] text-white/70">
+            Google Places {placesEnabledState ? "enabled for this session" : "paused until you opt in"}.
+          </div>
+        ) : null}
         {enableSearch ? (
           <form onSubmit={handleSearch} className="mb-3 flex flex-col gap-2">
             <div className="flex gap-2">
@@ -1040,18 +1404,7 @@ export default function GoogleMapClient({
           </div>
         ) : null}
         <div className="relative">
-          <div className={mapClassName} ref={mapRef} id="google-map" />
-          {refreshNeeded ? (
-            <div className="pointer-events-none absolute top-3 right-3">
-              <button
-                type="button"
-                onClick={handleRefreshClick}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/60 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur hover:bg-black/70"
-              >
-                Refresh markers
-              </button>
-            </div>
-          ) : null}
+          <div className={mapClassName} ref={mapRef} id="mapbox-map" />
           <div className="pointer-events-none absolute bottom-4 right-4">
             <button
               type="button"

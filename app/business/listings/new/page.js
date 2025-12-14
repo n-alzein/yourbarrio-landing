@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
@@ -16,8 +16,128 @@ export default function NewListingPage() {
     category: "",
   });
 
-  const [photo, setPhoto] = useState(null);
-  const [uploadName, setUploadName] = useState("");
+  const [photos, setPhotos] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const MAX_PHOTOS = 10;
+
+  const photoPreviews = useMemo(
+    () => photos.map((file) => URL.createObjectURL(file)),
+    [photos]
+  );
+
+  useEffect(
+    () => () => {
+      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+    },
+    [photoPreviews]
+  );
+
+  useEffect(() => {
+    if (!loadingUser && !authUser) {
+      router.push("/business");
+    }
+  }, [authUser, loadingUser, router]);
+
+  const handleAddPhotos = (files) => {
+    const incoming = Array.from(files || []);
+    if (!incoming.length) return;
+
+    setPhotos((prev) => {
+      const combined = [...prev, ...incoming].slice(0, MAX_PHOTOS);
+      return combined;
+    });
+  };
+
+  const handleRemovePhoto = (index) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  async function uploadPhotos() {
+    if (!photos.length) return [];
+    if (!supabase) throw new Error("Connection not ready. Try again.");
+
+    const uploaded = [];
+    for (const file of photos) {
+      const fileName = `${authUser.id}-${Date.now()}-${crypto
+        .randomUUID?.()
+        ?.slice(0, 6) || Math.random().toString(36).slice(2, 8)}-${file.name}`;
+
+      const { data, error } = await supabase.storage
+        .from("listing-photos")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type || "image/jpeg",
+        });
+
+      if (error) {
+        console.error("Photo upload failed", error);
+        throw new Error("Failed to upload one of the photos");
+      }
+
+      const { data: url } = supabase.storage
+        .from("listing-photos")
+        .getPublicUrl(fileName);
+
+      if (url?.publicUrl) {
+        uploaded.push(url.publicUrl);
+      }
+    }
+
+    return uploaded;
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    if (!supabase) {
+      alert("Connection not ready. Please try again.");
+      return;
+    }
+
+    if (!photos.length) {
+      alert("Please add at least one photo (up to 10).");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const photo_urls = await uploadPhotos();
+
+      const { data: business, error: bizError } = await supabase
+        .from("users")
+        .select("city")
+        .eq("id", authUser.id)
+        .single();
+
+      if (bizError) {
+        throw bizError;
+      }
+
+      const { error } = await supabase.from("listings").insert({
+        business_id: authUser.id,
+        title: form.title,
+        description: form.description,
+        price: form.price,
+        category: form.category,
+        city: business?.city || null,
+        photo_url: photo_urls.length ? JSON.stringify(photo_urls) : null,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      router.push("/business/listings");
+    } catch (err) {
+      console.error("Publish listing failed", err);
+      alert(err.message || "Failed to publish listing. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loadingUser) {
     return (
@@ -28,62 +148,19 @@ export default function NewListingPage() {
   }
 
   if (!authUser) {
-    router.push("/business-auth/login");
-    return null;
-  }
-  
-
-  async function uploadPhoto() {
-    if (!photo) return null;
-
-    const fileName = `${authUser.id}-${Date.now()}-${photo.name}`;
-    const { data, error } = await supabase.storage
-      .from("listing-photos")
-      .upload(fileName, photo, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: photo.type || "image/jpeg",
-      });
-
-    if (error) {
-      alert("Failed to upload photo");
-      return null;
-    }
-
-    const { data: url } = supabase.storage
-      .from("listing-photos")
-      .getPublicUrl(fileName);
-
-    return url.publicUrl;
+    return (
+      <p className="text-white text-center py-20">
+        Redirecting to login...
+      </p>
+    );
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-
-    const photo_url = await uploadPhoto();
-
-    const { data: business } = await supabase
-      .from("business_profiles")
-      .select("city")
-      .eq("owner_id", authUser.id)
-      .single();
-
-    const { error } = await supabase.from("listings").insert({
-      business_id: authUser.id,
-      title: form.title,
-      description: form.description,
-      price: form.price,
-      category: form.category,
-      city: business?.city || null,
-      photo_url,
-    });
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    router.push("/business/listings");
+  if (!supabase) {
+    return (
+      <p className="text-white text-center py-20">
+        Connecting to your account...
+      </p>
+    );
   }
 
   return (
@@ -110,50 +187,54 @@ export default function NewListingPage() {
       >
         <form onSubmit={handleSubmit} className="space-y-10">
 
-          {/* PHOTO UPLOAD SQUARE FIRST */}
-          <div className="flex justify-center">
-            <label
-              className="
-                w-64 h-64
-                flex flex-col items-center justify-center
-                rounded-3xl 
-                border-2 border-dashed border-white/40 
-                bg-white/5 
-                text-gray-200 
-                cursor-pointer 
-                hover:bg-white/10
-                overflow-hidden
-                transition
-              "
-            >
-              {photo ? (
-                <img
-                  src={URL.createObjectURL(photo)}
-                  alt="Preview"
-                  className="w-full h-full object-cover rounded-3xl"
-                />
-              ) : (
-                <>
-                  <span className="text-lg">Upload Listing Photo</span>
-                  {uploadName && (
-                    <p className="mt-2 text-sm text-gray-300">
-                      {uploadName}
-                    </p>
-                  )}
-                </>
-              )}
+          {/* PHOTO UPLOAD GRID */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-white/80">
+              <span className="font-semibold">Photos ({photos.length}/{MAX_PHOTOS})</span>
+              <span className="text-sm text-white/60">Add up to 10 photos</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {photoPreviews.map((src, idx) => (
+                <div key={src} className="relative group">
+                  <img
+                    src={src}
+                    alt={`Listing photo ${idx + 1}`}
+                    className="w-full h-36 object-cover rounded-2xl border border-white/15"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePhoto(idx)}
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/60 text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition"
+                    aria-label="Remove photo"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
 
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  setPhoto(e.target.files[0]);
-                  setUploadName(e.target.files[0]?.name);
-                }}
-                required
-              />
-            </label>
+              {photos.length < MAX_PHOTOS && (
+                <label
+                  className="
+                    h-36 flex flex-col items-center justify-center
+                    rounded-2xl border-2 border-dashed border-white/30 
+                    bg-white/5 text-gray-200 cursor-pointer hover:bg-white/10 transition
+                  "
+                >
+                  <span className="text-sm font-semibold">Add photos</span>
+                  <span className="text-xs text-white/70">PNG, JPG</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      handleAddPhotos(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
           </div>
 
           <h2 className="text-2xl text-white font-semibold">
@@ -211,17 +292,19 @@ export default function NewListingPage() {
               className="flex-1 py-5 rounded-2xl backdrop-blur-md bg-white/10 
                          border border-white/20 text-white text-lg font-medium
                          hover:bg-white/20 hover:border-white/30 transition"
+              disabled={saving}
             >
               Cancel
             </button>
 
             <button
               type="submit"
+              disabled={saving}
               className="flex-1 py-5 rounded-2xl bg-gradient-to-r from-blue-600 
                          to-indigo-600 text-white text-lg font-semibold 
                          shadow-xl hover:opacity-90 transition"
             >
-              Publish Listing
+              {saving ? "Publishing..." : "Publish Listing"}
             </button>
           </div>
 
