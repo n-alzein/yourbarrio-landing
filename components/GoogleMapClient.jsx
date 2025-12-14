@@ -1067,6 +1067,7 @@ export default function GoogleMapClient({
       scrollZoom: true,
       touchZoomRotate: true,
       interactive: true,
+      attributionControl: false,
     });
 
     mapInstanceRef.current = map;
@@ -1409,7 +1410,12 @@ export default function GoogleMapClient({
           </div>
         ) : null}
         <div className="relative">
-          <div className={mapClassName} ref={mapRef} id="mapbox-map" />
+      <div
+        className={mapClassName}
+        ref={mapRef}
+        id="mapbox-map"
+        style={{ pointerEvents: "auto", touchAction: "auto" }}
+      />
           <div className="pointer-events-none absolute bottom-4 right-4">
             <button
               type="button"

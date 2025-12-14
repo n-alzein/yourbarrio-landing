@@ -507,7 +507,7 @@ export default function CustomerHomePage() {
 
             <div className="grid sm:grid-cols-2 gap-3 mt-3">
               {hybridItems.map((item) => (
-                <Link
+                <a
                   key={item.id}
                   href={`/customer/listings/${item.id}`}
                   onClick={(e) => {
@@ -548,7 +548,7 @@ export default function CustomerHomePage() {
                       </p>
                     ) : null}
                   </div>
-                </Link>
+                </a>
               ))}
             </div>
           </div>
@@ -644,7 +644,7 @@ export default function CustomerHomePage() {
               <GoogleMapClient
                 radiusKm={25}
                 showBusinessErrors={false}
-                containerClassName="w-full"
+                containerClassName="w-full pointer-events-auto"
                 cardClassName="bg-transparent border-0 text-white"
                 mapClassName="h-64 sm:h-72 lg:h-[240px] rounded-2xl overflow-hidden border border-white/12 shadow-lg pointer-events-auto touch-pan-y touch-manipulation"
                 title=""
@@ -754,7 +754,7 @@ export default function CustomerHomePage() {
                         <p className="text-base font-semibold text-white">{category}</p>
                         <p className="text-xs text-white/60">{visibleItems.length} items</p>
                       </div>
-                      <Link
+                      <a
                         href={`/listings/${visibleItems[0].id}`}
                         onClick={(e) => {
                           e.preventDefault();
@@ -763,12 +763,12 @@ export default function CustomerHomePage() {
                         className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto"
                       >
                         View
-                      </Link>
+                      </a>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       {visibleItems.map((item) => (
-                        <Link
+                        <a
                           key={item.id}
                           href={`/listings/${item.id}`}
                           onClick={(e) => {
@@ -783,7 +783,7 @@ export default function CustomerHomePage() {
                             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                        </Link>
+                        </a>
                       ))}
                       {visibleItems.length < 4
                         ? Array.from({ length: 4 - visibleItems.length }).map((_, idx) => (
