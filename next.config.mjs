@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactCompiler: true,
-
+  // Disable the experimental React Compiler in prod; it can interfere with event handling
+  // on some builds. Flip on locally by setting NEXT_PUBLIC_REACT_COMPILER=true if needed.
+  reactCompiler: process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_REACT_COMPILER !== "false",
   images: {
     remotePatterns: [
       {
