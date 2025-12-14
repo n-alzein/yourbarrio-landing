@@ -13,41 +13,8 @@ function resetBodyScroll() {
 // Defensive: if a full-viewport overlay gets stuck (e.g., modal/backdrop),
 // turn off its pointer events so links become clickable again.
 function disableStrayOverlays() {
-  if (typeof document === "undefined") return;
-
-  const minWidth = Math.max(0, window.innerWidth * 0.7);
-  const minHeight = Math.max(0, window.innerHeight * 0.7);
-
-  const candidates = Array.from(document.querySelectorAll("*")).filter((el) => {
-    // Honor opt-out for legitimate overlays (modals, etc.)
-    if (
-      el.getAttribute("data-allow-overlay") === "1" ||
-      el.closest?.("[data-allow-overlay='1']")
-    ) {
-      return false;
-    }
-
-    const rect = el.getBoundingClientRect();
-    if (rect.width < minWidth || rect.height < minHeight) return false;
-
-    const style = window.getComputedStyle(el);
-    if (!["fixed", "absolute", "sticky"].includes(style.position)) return false;
-
-    // Only target backdrops/overlays, not the main app shell
-    const z = Number.parseInt(style.zIndex, 10);
-    if (!Number.isFinite(z) || z < 20) return false;
-
-    // Skip navbars and the root app container
-    if (el.tagName.toLowerCase() === "nav") return false;
-    if (el.id === "__next") return false;
-
-    return true;
-  });
-
-  candidates.forEach((el) => {
-    el.style.pointerEvents = "none";
-    el.style.touchAction = "auto";
-  });
+  // Previously disabled stray overlays; now we keep this a no-op to avoid
+  // interfering with interactive elements like maps or modals.
 }
 
 export default function OverlayGuard() {
@@ -70,7 +37,7 @@ export default function OverlayGuard() {
     const interval = window.setInterval(() => {
       resetBodyScroll();
       disableStrayOverlays();
-    }, 2500);
+    }, 3000);
 
     return () => {
       window.removeEventListener("keydown", handleKey);

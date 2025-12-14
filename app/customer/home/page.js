@@ -643,7 +643,7 @@ export default function CustomerHomePage() {
                 showBusinessErrors={false}
                 containerClassName="w-full"
                 cardClassName="bg-transparent border-0 text-white"
-                mapClassName="h-64 sm:h-72 lg:h-[240px] rounded-2xl overflow-hidden border border-white/12 shadow-lg"
+                mapClassName="h-64 sm:h-72 lg:h-[240px] rounded-2xl overflow-hidden border border-white/12 shadow-lg pointer-events-auto touch-pan-y touch-manipulation"
                 title=""
                 enableCategoryFilter={false}
                 enableSearch={false}
