@@ -219,18 +219,42 @@ export default function CustomerNavbar() {
     setProfileMenuOpen(false);
   };
 
+  const hardNavigate = (href) => {
+    if (!href) return;
+    closeMenus();
+    const target =
+      typeof window !== "undefined" && href.startsWith("/")
+        ? href
+        : href;
+    try {
+      router.push(target);
+      router.refresh();
+    } catch (err) {
+      window.location.assign(target);
+      return;
+    }
+    // Fallback if client navigation is blocked
+    setTimeout(() => {
+      if (typeof window === "undefined") return;
+      const current = window.location.pathname + window.location.search;
+      if (current !== target) {
+        window.location.assign(target);
+      }
+    }, 150);
+  };
+
   const NavItem = ({ href, children }) => (
-    <Link
-      href={href}
+    <button
+      type="button"
       className={`text-sm md:text-base transition ${
         isActive(href)
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
       }`}
-      onClick={closeMenus}
+      onClick={() => hardNavigate(href)}
     >
       {children}
-    </Link>
+    </button>
   );
 
   const quickActions = [
@@ -258,13 +282,11 @@ export default function CustomerNavbar() {
     const value = (query || "").trim();
     const params = new URLSearchParams();
     if (value) params.set("q", value);
-    closeMenus();
+    const target = params.toString()
+      ? `/customer/home?${params.toString()}`
+      : "/customer/home";
     setSuggestionsOpen(false);
-    router.push(
-      params.toString()
-        ? `/customer/home?${params.toString()}`
-        : "/customer/home"
-    );
+    hardNavigate(target);
   };
 
   const handleSubmitSearch = (event) => {
@@ -276,10 +298,9 @@ export default function CustomerNavbar() {
     const next = (value || "").trim();
     if (!next) return;
     setSearchTerm(next);
+    setSuggestionsOpen(false);
     if (itemId) {
-      closeMenus();
-      setSuggestionsOpen(false);
-      router.push(`/customer/listings/${itemId}`);
+      hardNavigate(`/customer/listings/${itemId}`);
       return;
     }
     navigateToSearch(next);
@@ -303,13 +324,17 @@ export default function CustomerNavbar() {
 
         {/* LEFT GROUP — LOGO + SEARCH */}
         <div className="flex items-center gap-6 md:gap-10 flex-1">
-          <Link href="/customer/home">
+          <button
+            type="button"
+            onClick={() => hardNavigate("/customer/home")}
+            aria-label="Go to home"
+          >
             <img
               src="/logo.png"
               className="h-34 w-auto cursor-pointer select-none"
               alt="YourBarrio"
             />
-          </Link>
+          </button>
 
           <div
             ref={searchBoxRef}
@@ -501,11 +526,11 @@ export default function CustomerNavbar() {
 
                     <div className="px-2 pb-1 pt-2 space-y-1">
                       {quickActions.map(({ href, title, description, icon: Icon }) => (
-                        <Link
+                        <button
                           key={href}
-                          href={href}
-                          onClick={closeMenus}
+                          type="button"
                           className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
+                          onClick={() => hardNavigate(href)}
                         >
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
                             <Icon className="h-5 w-5" />
@@ -514,21 +539,21 @@ export default function CustomerNavbar() {
                             <p className="text-sm font-semibold text-white/90">{title}</p>
                             <p className="text-xs text-white/60">{description}</p>
                           </div>
-                        </Link>
+                        </button>
                       ))}
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                      <Link
-                        href="/customer/settings"
-                        onClick={closeMenus}
+                      <button
+                        type="button"
                         className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                        onClick={() => hardNavigate("/customer/settings")}
                       >
                         <span className="flex items-center gap-2">
                           <Settings className="h-4 w-4" />
                           Account settings
                         </span>
-                      </Link>
+                      </button>
                       <LogoutButton
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
                         onSuccess={closeMenus}
