@@ -13,11 +13,15 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { useParams } from "next/navigation";
 
 export default function ListingDetails({ params }) {
   const { supabase, user } = useAuth();
-  const resolvedParams = use(params);
-  const id = resolvedParams?.id;
+  const routeParams = useParams();
+  const resolvedParams =
+    params && typeof params.then === "function" ? use(params) : params;
+  const id = routeParams?.id || resolvedParams?.id;
 
   const [listing, setListing] = useState(null);
   const [business, setBusiness] = useState(null);
@@ -34,12 +38,18 @@ export default function ListingDetails({ params }) {
     let isMounted = true;
 
     async function load() {
-      if (!supabase || !id) return;
+      if (!id) return;
+      const client = supabase ?? getBrowserSupabaseClient();
+      if (!client) {
+        setError("We couldn’t connect. Try again.");
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
 
       try {
-        const { data: item, error: listingError } = await supabase
+        const { data: item, error: listingError } = await client
           .from("listings")
           .select("*")
           .eq("id", id)
@@ -54,7 +64,7 @@ export default function ListingDetails({ params }) {
           primaryPhotoUrl(item.photo_url) || "/business-placeholder.png"
         );
 
-        const { data: biz } = await supabase
+        const { data: biz } = await client
           .from("users")
           .select(
             "id,business_name,full_name,category,city,address,website,phone,profile_photo_url"
@@ -81,11 +91,12 @@ export default function ListingDetails({ params }) {
   useEffect(() => {
     let active = true;
     const checkSaved = async () => {
-      if (!supabase || !user?.id || !id) {
+      const client = supabase ?? getBrowserSupabaseClient();
+      if (!client || !user?.id || !id) {
         setIsSaved(false);
         return;
       }
-      const { data } = await supabase
+      const { data } = await client
         .from("saved_listings")
         .select("id")
         .eq("user_id", user.id)

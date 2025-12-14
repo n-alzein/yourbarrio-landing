@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import PublicNavbar from "@/components/navbars/PublicNavbar";
 import { ModalProvider } from "@/components/modals/ModalProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import OverlayGuard from "@/components/OverlayGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default function RootLayout({ children }) {
         ].join(" ")}
       >
         <ThemeProvider>
+          <OverlayGuard />
           <AuthProvider>
             <ModalProvider>
               {/* GLOBAL BACKGROUND */}

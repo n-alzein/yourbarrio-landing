@@ -612,6 +612,7 @@ export default function CustomerNavbar() {
 
           {user && (
             <>
+              <NavItem href="/customer/saved">Saved</NavItem>
               <NavItem href="/customer/settings">Settings</NavItem>
 
               <LogoutButton mobile />

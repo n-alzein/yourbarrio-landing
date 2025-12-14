@@ -434,7 +434,7 @@ export default function CustomerHomePage() {
   }
 
   return (
-    <div className="min-h-screen text-white relative px-6 pb-2 pt-2 md:pt-3 -mt-8 md:-mt-12">
+    <div className="min-h-screen text-white relative px-4 sm:px-6 pb-4 pt-2 md:pt-3 -mt-4 md:-mt-12">
 
       {/* Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -444,7 +444,7 @@ export default function CustomerHomePage() {
         <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
       </div>
 
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="w-full max-w-6xl mx-auto space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -547,8 +547,8 @@ export default function CustomerHomePage() {
         ) : null}
 
         {/* Header with gallery + map (compact) */}
-        <div className="grid lg:grid-cols-5 gap-4">
-          <div className="lg:col-span-3 col-span-5 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
             <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
               <div className="text-sm uppercase tracking-[0.18em] text-white/60">Browse spots</div>
               <div className="flex items-center gap-2">
@@ -621,7 +621,7 @@ export default function CustomerHomePage() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 col-span-5">
+          <div className="lg:col-span-2">
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
               <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
                 <div>
@@ -635,7 +635,7 @@ export default function CustomerHomePage() {
                 showBusinessErrors={false}
                 containerClassName="w-full"
                 cardClassName="bg-transparent border-0 text-white"
-                mapClassName="h-[180px] rounded-2xl overflow-hidden border border-white/12 shadow-lg"
+                mapClassName="h-64 sm:h-72 lg:h-[240px] rounded-2xl overflow-hidden border border-white/12 shadow-lg"
                 title=""
                 enableCategoryFilter={false}
                 enableSearch={false}
