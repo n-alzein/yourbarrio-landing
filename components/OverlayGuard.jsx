@@ -59,7 +59,15 @@ export default function OverlayGuard() {
     };
 
     window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    const interval = window.setInterval(() => {
+      resetBodyScroll();
+      disableStrayOverlays();
+    }, 2500);
+
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.clearInterval(interval);
+    };
   }, []);
 
   return null;
