@@ -1068,6 +1068,7 @@ export default function GoogleMapClient({
       touchZoomRotate: true,
       interactive: true,
       attributionControl: false,
+      pitchWithRotate: false,
     });
 
     mapInstanceRef.current = map;

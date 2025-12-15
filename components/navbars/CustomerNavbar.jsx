@@ -219,29 +219,18 @@ export default function CustomerNavbar() {
     setProfileMenuOpen(false);
   };
 
-  const go = (href) => {
-    if (!href) return;
-    closeMenus();
-    // Use native navigation to avoid any client router stall
-    if (typeof window !== "undefined") {
-      window.location.href = href;
-    } else {
-      router.replace(href);
-    }
-  };
-
   const NavItem = ({ href, children }) => (
-    <a
+    <Link
       href={href}
       className={`text-sm md:text-base transition ${
         isActive(href)
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
       }`}
-      onClick={() => go(href)}
+      onClick={closeMenus}
     >
       {children}
-    </a>
+    </Link>
   );
 
   const quickActions = [
@@ -273,7 +262,7 @@ export default function CustomerNavbar() {
       ? `/customer/home?${params.toString()}`
       : "/customer/home";
     setSuggestionsOpen(false);
-    hardNavigate(target);
+    router.push(target);
   };
 
   const handleSubmitSearch = (event) => {
@@ -311,17 +300,18 @@ export default function CustomerNavbar() {
 
         {/* LEFT GROUP — LOGO + SEARCH */}
         <div className="flex items-center gap-6 md:gap-10 flex-1">
-          <a
+          <Link
             href="/customer/home"
-            onClick={() => go("/customer/home")}
+            onClick={closeMenus}
             aria-label="Go to home"
+            prefetch={false}
           >
             <img
               src="/logo.png"
               className="h-34 w-auto cursor-pointer select-none"
               alt="YourBarrio"
             />
-          </a>
+          </Link>
 
           <div
             ref={searchBoxRef}
@@ -513,10 +503,10 @@ export default function CustomerNavbar() {
 
                     <div className="px-2 pb-1 pt-2 space-y-1">
                       {quickActions.map(({ href, title, description, icon: Icon }) => (
-                        <a
+                        <Link
                           key={href}
                           href={href}
-                          onClick={() => go(href)}
+                          onClick={closeMenus}
                           className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
                         >
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
@@ -526,21 +516,21 @@ export default function CustomerNavbar() {
                             <p className="text-sm font-semibold text-white/90">{title}</p>
                             <p className="text-xs text-white/60">{description}</p>
                           </div>
-                        </a>
+                        </Link>
                       ))}
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                      <a
+                      <Link
                         href="/customer/settings"
-                        onClick={() => go("/customer/settings")}
+                        onClick={closeMenus}
                         className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
                       >
                         <span className="flex items-center gap-2">
                           <Settings className="h-4 w-4" />
                           Account settings
                         </span>
-                      </a>
+                      </Link>
                       <LogoutButton
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
                         onSuccess={closeMenus}

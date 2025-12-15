@@ -58,10 +58,6 @@ export default function CustomerHomePage() {
   const [ybBusinessesError, setYbBusinessesError] = useState(null);
   const galleryRef = useRef(null);
   const coverFor = (value) => primaryPhotoUrl(value) || null;
-  const hardNavigate = (href) => {
-    if (!href || typeof window === "undefined") return;
-    window.location.assign(href);
-  };
   const sampleBusinesses = [
     {
       id: "sample-1",
@@ -507,13 +503,9 @@ export default function CustomerHomePage() {
 
             <div className="grid sm:grid-cols-2 gap-3 mt-3">
               {hybridItems.map((item) => (
-                <a
+                <Link
                   key={item.id}
                   href={`/customer/listings/${item.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.location.assign(`/customer/listings/${item.id}`);
-                  }}
                   className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto"
                 >
                   {coverFor(item.photo_url) ? (
@@ -548,7 +540,7 @@ export default function CustomerHomePage() {
                       </p>
                     ) : null}
                   </div>
-                </a>
+                </Link>
               ))}
             </div>
           </div>
@@ -754,27 +746,19 @@ export default function CustomerHomePage() {
                         <p className="text-base font-semibold text-white">{category}</p>
                         <p className="text-xs text-white/60">{visibleItems.length} items</p>
                       </div>
-                      <a
+                      <Link
                         href={`/listings/${visibleItems[0].id}`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          window.location.assign(`/listings/${visibleItems[0].id}`);
-                        }}
                         className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto"
                       >
                         View
-                      </a>
+                      </Link>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       {visibleItems.map((item) => (
-                        <a
+                        <Link
                           key={item.id}
                           href={`/listings/${item.id}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            window.location.assign(`/listings/${item.id}`);
-                          }}
                           className="relative group h-40 bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto"
                         >
                           <img
@@ -783,7 +767,7 @@ export default function CustomerHomePage() {
                             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                        </a>
+                        </Link>
                       ))}
                       {visibleItems.length < 4
                         ? Array.from({ length: 4 - visibleItems.length }).map((_, idx) => (
