@@ -328,6 +328,8 @@ export default function CustomerNavbar() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
                 <input
+                  id="customer-nav-search"
+                  name="search"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onFocus={() => setSuggestionsOpen(hasHybridResults || searchTerm.trim().length > 0)}
@@ -572,6 +574,8 @@ export default function CustomerNavbar() {
           >
             <Search className="h-4 w-4 text-white/70" />
             <input
+              id="customer-nav-search-mobile"
+              name="search"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"

@@ -170,6 +170,8 @@ function BusinessLoginInner() {
           {/* EMAIL/PASSWORD FORM */}
           <form onSubmit={handleLogin} className="space-y-4">
             <input
+              id="business-login-email"
+              name="email"
               type="email"
               placeholder="Email"
               className="
@@ -187,6 +189,8 @@ function BusinessLoginInner() {
             />
 
             <input
+              id="business-login-password"
+              name="password"
               type="password"
               placeholder="Password"
               className="

@@ -4,7 +4,6 @@ import "./globals.css";
 
 import { AuthProvider } from "@/components/AuthProvider";
 import Footer from "@/components/Footer";
-import PublicNavbar from "@/components/navbars/PublicNavbar";
 import { ModalProvider } from "@/components/modals/ModalProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import OverlayGuard from "@/components/OverlayGuard";
@@ -49,11 +48,8 @@ export default function RootLayout({ children }) {
                 />
                 <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
                 <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
-                <div className="animated-bg" />
+              <div className="animated-bg" />
               </div>
-
-              {/* 🔥 ADD NAVBAR HERE */}
-              <PublicNavbar />
 
               {/* CONTENT */}
               <div className="flex flex-col min-h-screen pt-20">

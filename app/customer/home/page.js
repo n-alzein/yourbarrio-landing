@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import React from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
@@ -10,9 +11,52 @@ import GoogleMapClient from "@/components/GoogleMapClient";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
-export default function CustomerHomePage() {
+class CustomerHomeErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, message: error?.message || "Something went wrong." };
+  }
+
+  componentDidCatch(error, info) {
+    // eslint-disable-next-line no-console
+    console.error("Customer home crashed", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center px-6 text-white">
+          <div className="max-w-md w-full space-y-4 text-center bg-white/5 border border-white/10 rounded-2xl p-6">
+            <h2 className="text-xl font-semibold">Something went wrong</h2>
+            <p className="text-white/70 text-sm">
+              {this.state.message || "The page failed to load. Please try again."}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                this.setState({ hasError: false, message: "" });
+                if (typeof window !== "undefined") window.location.reload();
+              }}
+              className="w-full py-3 rounded-xl font-semibold bg-white text-black hover:bg-white/90 transition"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function CustomerHomePageInner() {
   const searchParams = useSearchParams();
-  const { user, loadingUser, supabase } = useAuth();
+  const { user, authUser, loadingUser, supabase } = useAuth();
   const [search, setSearch] = useState("");
   const initialYb = (() => {
     if (typeof window === "undefined") return [];
@@ -414,7 +458,7 @@ export default function CustomerHomePage() {
     };
   }, [selectedBusiness, supabase]);
 
-  if (loadingUser) {
+  if (loadingUser && !authUser && !user) {
     return (
       <div className="min-h-screen text-white relative px-6 pt-3">
         <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -790,5 +834,13 @@ export default function CustomerHomePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CustomerHomePage() {
+  return (
+    <CustomerHomeErrorBoundary>
+      <CustomerHomePageInner />
+    </CustomerHomeErrorBoundary>
   );
 }

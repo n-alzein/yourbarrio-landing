@@ -95,8 +95,10 @@ export default function CustomerLoginModal({ onClose }) {
     >
       <form onSubmit={handleLogin} className="space-y-4">
         <div className="space-y-2">
-          <label className="text-sm text-slate-700">Email</label>
+          <label htmlFor="customer-login-email" className="text-sm text-slate-700">Email</label>
           <input
+            id="customer-login-email"
+            name="email"
             type="email"
             required
             autoComplete="email"
@@ -114,8 +116,10 @@ export default function CustomerLoginModal({ onClose }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm text-slate-700">Password</label>
+          <label htmlFor="customer-login-password" className="text-sm text-slate-700">Password</label>
           <input
+            id="customer-login-password"
+            name="password"
             type="password"
             required
             autoComplete="current-password"

@@ -51,10 +51,9 @@ export async function middleware(req) {
     });
   }
 
+  // Allow customer routes to handle auth client-side to avoid false redirects
   if (path.startsWith("/customer") && !hasSession) {
-    const redirectUrl = new URL("/", req.url);
-    redirectUrl.searchParams.set("redirect", path + req.nextUrl.search);
-    return NextResponse.redirect(redirectUrl, { headers: res.headers });
+    return res;
   }
 
   // Allow business routes to render unauthenticated (handled client-side)

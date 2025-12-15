@@ -11,16 +11,21 @@ export async function POST(request) {
   const data = await request.json();
   const { name, email, message } = data;
 
-  await sendEmail({
+  const result = await sendEmail({
     to: "n.alzein@gmail.com",
-    from: "YourBarrio <onboarding@resend.dev>",   // 👈 temporary working option
+    from: "YourBarrio <onboarding@resend.dev>", // temporary fallback sender
     subject: "New Contact Submission",
     html: `
       <p>Name: ${name}</p>
       <p>Email: ${email}</p>
       <p>${message}</p>
-    `
+    `,
   });
+
+  if (result?.error) {
+    console.error("Send email failed", result.error);
+    return Response.json({ success: false, error: "email_failed" }, { status: 500 });
+  }
 
   return Response.json({ success: true });
 }

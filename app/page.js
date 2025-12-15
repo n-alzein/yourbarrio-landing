@@ -1,14 +1,27 @@
 "use client";
 
+import { useEffect } from "react";
 import PublicNavbar from "@/components/navbars/PublicNavbar";
 import GoogleMapClient from "@/components/GoogleMapClient";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useTheme } from "@/components/ThemeProvider";
+import { useAuth } from "@/components/AuthProvider";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
   const { openModal } = useModal();
   const { theme, hydrated } = useTheme();
+  const { user, authUser, loadingUser } = useAuth();
+  const router = useRouter();
   const isLight = hydrated ? theme === "light" : true;
+
+  // Client-side guard: if already signed in, push to customer home to avoid public navbar
+  useEffect(() => {
+    if (loadingUser) return;
+    if (user || authUser) {
+      router.replace("/customer/home");
+    }
+  }, [authUser, loadingUser, router, user]);
 
   return (
     <>

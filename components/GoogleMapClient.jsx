@@ -1047,6 +1047,12 @@ export default function GoogleMapClient({
     let map;
     let moveEndHandler;
 
+    if (!mapRef.current) {
+      setError("Map container missing.");
+      setLoading(false);
+      return undefined;
+    }
+
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     if (!token) {
       setError("Mapbox access token missing. Set NEXT_PUBLIC_MAPBOX_TOKEN.");
@@ -1055,21 +1061,34 @@ export default function GoogleMapClient({
     }
     mapboxgl.accessToken = token;
 
-    const initialCenter = getDefaultCenter();
-    map = new mapboxgl.Map({
-      container: mapRef.current,
-      style: "mapbox://styles/mapbox/streets-v12",
-      center: [initialCenter.lng, initialCenter.lat],
-      zoom: 13,
-      cooperativeGestures: false,
-      dragPan: true,
-      dragRotate: false,
-      scrollZoom: true,
-      touchZoomRotate: true,
-      interactive: true,
-      attributionControl: false,
-      pitchWithRotate: false,
-    });
+    if (!mapboxgl.supported({ failIfMajorPerformanceCaveat: true })) {
+      setError("Interactive map is not supported on this device. Showing a fallback view instead.");
+      setLoading(false);
+      return undefined;
+    }
+
+    try {
+      const initialCenter = getDefaultCenter();
+      map = new mapboxgl.Map({
+        container: mapRef.current,
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [initialCenter.lng, initialCenter.lat],
+        zoom: 13,
+        cooperativeGestures: false,
+        dragPan: true,
+        dragRotate: false,
+        scrollZoom: true,
+        touchZoomRotate: true,
+        interactive: true,
+        attributionControl: false,
+        pitchWithRotate: false,
+      });
+    } catch (err) {
+      console.error("Mapbox failed to initialize", err);
+      setError("Interactive map failed to load on this device.");
+      setLoading(false);
+      return undefined;
+    }
 
     mapInstanceRef.current = map;
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -1348,6 +1367,8 @@ export default function GoogleMapClient({
             <div className="flex gap-2">
               <input
                 type="text"
+                id="map-search"
+                name="map-search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search nearby places"

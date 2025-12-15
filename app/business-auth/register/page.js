@@ -195,6 +195,8 @@ function BusinessRegisterInner() {
         <form onSubmit={handleRegister} className="space-y-4">
 
           <input
+            id="business-register-name"
+            name="businessName"
             type="text"
             placeholder="Business Name"
             className="
@@ -210,6 +212,8 @@ function BusinessRegisterInner() {
           />
 
           <input
+            id="business-register-email"
+            name="email"
             type="email"
             placeholder="Email"
             className="
@@ -225,6 +229,8 @@ function BusinessRegisterInner() {
           />
 
           <input
+            id="business-register-password"
+            name="password"
             type="password"
             placeholder="Password"
             className="
