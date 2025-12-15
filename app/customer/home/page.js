@@ -506,7 +506,8 @@ export default function CustomerHomePage() {
                 <a
                   key={item.id}
                   href={`/customer/listings/${item.id}`}
-                  className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto"
+                  className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto touch-manipulation"
+                  target="_self"
                 >
                   {coverFor(item.photo_url) ? (
                     <img
@@ -748,7 +749,8 @@ export default function CustomerHomePage() {
                       </div>
                       <a
                         href={`/listings/${visibleItems[0].id}`}
-                        className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto"
+                        className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto touch-manipulation"
+                        target="_self"
                       >
                         View
                       </a>
@@ -759,7 +761,8 @@ export default function CustomerHomePage() {
                         <a
                           key={item.id}
                           href={`/listings/${item.id}`}
-                          className="relative group h-40 bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto"
+                          className="relative group h-40 bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto touch-manipulation"
+                          target="_self"
                         >
                           <img
                             src={coverFor(item.photo_url)}

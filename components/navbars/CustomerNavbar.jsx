@@ -304,6 +304,7 @@ export default function CustomerNavbar() {
             href="/customer/home"
             onClick={closeMenus}
             aria-label="Go to home"
+            className="touch-manipulation"
           >
             <img
               src="/logo.png"
@@ -506,7 +507,7 @@ export default function CustomerNavbar() {
                           key={href}
                           href={href}
                           onClick={closeMenus}
-                          className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
+                          className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation"
                         >
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
                             <Icon className="h-5 w-5" />
@@ -523,7 +524,7 @@ export default function CustomerNavbar() {
                       <a
                         href="/customer/settings"
                         onClick={closeMenus}
-                        className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                        className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10 touch-manipulation"
                       >
                         <span className="flex items-center gap-2">
                           <Settings className="h-4 w-4" />

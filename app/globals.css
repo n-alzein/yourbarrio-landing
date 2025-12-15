@@ -237,6 +237,12 @@ button {
   pointer-events: auto !important;
 }
 
+/* Reduce double-tap delay on mobile for links/buttons */
+a,
+button {
+  touch-action: manipulation;
+}
+
 /* ----------------------------------------------------- */
 /* Auth card theming                                    */
 /* ----------------------------------------------------- */
