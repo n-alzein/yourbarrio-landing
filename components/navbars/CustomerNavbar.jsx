@@ -300,18 +300,17 @@ export default function CustomerNavbar() {
 
         {/* LEFT GROUP — LOGO + SEARCH */}
         <div className="flex items-center gap-6 md:gap-10 flex-1">
-          <Link
+          <a
             href="/customer/home"
             onClick={closeMenus}
             aria-label="Go to home"
-            prefetch={false}
           >
             <img
               src="/logo.png"
               className="h-34 w-auto cursor-pointer select-none"
               alt="YourBarrio"
             />
-          </Link>
+          </a>
 
           <div
             ref={searchBoxRef}
@@ -503,7 +502,7 @@ export default function CustomerNavbar() {
 
                     <div className="px-2 pb-1 pt-2 space-y-1">
                       {quickActions.map(({ href, title, description, icon: Icon }) => (
-                        <Link
+                        <a
                           key={href}
                           href={href}
                           onClick={closeMenus}
@@ -516,12 +515,12 @@ export default function CustomerNavbar() {
                             <p className="text-sm font-semibold text-white/90">{title}</p>
                             <p className="text-xs text-white/60">{description}</p>
                           </div>
-                        </Link>
+                        </a>
                       ))}
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                      <Link
+                      <a
                         href="/customer/settings"
                         onClick={closeMenus}
                         className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
@@ -530,7 +529,7 @@ export default function CustomerNavbar() {
                           <Settings className="h-4 w-4" />
                           Account settings
                         </span>
-                      </Link>
+                      </a>
                       <LogoutButton
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
                         onSuccess={closeMenus}

@@ -1415,7 +1415,7 @@ export default function GoogleMapClient({
         className={mapClassName}
         ref={mapRef}
         id="mapbox-map"
-        style={{ pointerEvents: "auto", touchAction: "auto" }}
+        style={{ pointerEvents: "auto", touchAction: "auto", position: "relative", zIndex: 1 }}
       />
           <div className="pointer-events-none absolute bottom-4 right-4">
             <button
