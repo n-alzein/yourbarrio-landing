@@ -6,14 +6,12 @@ import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
 import { useTheme } from "../ThemeProvider";
-import { useAuth } from "../AuthProvider";
 
 export default function PublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
   const { hydrated, setTheme } = useTheme();
-  const { user, role, loadingUser } = useAuth();
   const hasForcedLight = useRef(false);
 
   useEffect(() => {
@@ -40,27 +38,6 @@ export default function PublicNavbar() {
     }
   }, [hydrated, pathname, setTheme]);
 
-  // Hide navbar across app sections and for any signed-in state to avoid flicker on dashboards
-  if (
-    loadingUser ||
-    user ||
-    role ||
-    pathname.startsWith("/business") ||
-    pathname.startsWith("/business-auth") ||
-    pathname.startsWith("/customer") ||
-    pathname.startsWith("/listings")
-  ) {
-    return null;
-  }
-
-  // Hide public navbar on about/legal pages for authenticated users to avoid role flicker
-  if (
-    (pathname === "/privacy" || pathname === "/terms" || pathname === "/about") &&
-    (loadingUser || user || role)
-  ) {
-    return null;
-  }
-
   const isActive = (href) => pathname === href;
 
   const NavItem = ({ href, children }) => (
@@ -78,7 +55,7 @@ export default function PublicNavbar() {
   return (
     <nav className="fixed top-0 inset-x-0 z-50 theme-lock" data-public-nav>
       <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 md:px-10">
+        <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14">
           <div className="h-20 flex items-center justify-between">
 
             {/* LEFT SIDE */}

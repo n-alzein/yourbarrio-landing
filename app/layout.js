@@ -28,7 +28,7 @@ export default function RootLayout({ children }) {
     <html lang="en" className="theme-light" data-scroll-behavior="smooth">
       <body
         className={[
-          "relative min-h-screen overflow-x-hidden w-full max-w-full antialiased text-white",
+          "relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col pt-20",
           geistSans.variable,
           geistMono.variable
         ].join(" ")}
@@ -48,14 +48,12 @@ export default function RootLayout({ children }) {
                 />
                 <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
                 <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
-              <div className="animated-bg" />
+                <div className="animated-bg" />
               </div>
 
               {/* CONTENT */}
-              <div className="flex flex-col min-h-screen pt-20">
-                <main className="flex-1">{children}</main>
-                <Footer />
-              </div>
+              <main className="flex-1 w-full min-h-screen">{children}</main>
+              <Footer />
             </ModalProvider>
           </AuthProvider>
         </ThemeProvider>
