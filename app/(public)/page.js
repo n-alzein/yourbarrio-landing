@@ -96,7 +96,7 @@ export default function HomePage() {
             {/* Right hero card */}
             <div className="relative">
               <div
-                className={`absolute inset-0 rounded-3xl bg-gradient-to-tr blur-2xl ${
+                className={`absolute inset-0 rounded-3xl bg-gradient-to-tr blur-2xl pointer-events-none ${
                   isLight
                     ? "from-indigo-500/20 via-sky-500/15 to-slate-800/20"
                     : "from-purple-500/30 via-pink-500/20 to-rose-500/30"

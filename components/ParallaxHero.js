@@ -9,7 +9,7 @@ export default function ParallaxHero({ children }) {
   const y = useTransform(scrollY, [0, 500], [0, 120]);
 
   return (
-    <motion.div style={{ y }} className="absolute inset-0 opacity-90">
+    <motion.div style={{ y }} className="absolute inset-0 opacity-90 pointer-events-none">
       {children}
     </motion.div>
   );

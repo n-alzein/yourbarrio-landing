@@ -60,6 +60,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -72,6 +73,7 @@ html, body {
 a {
   color: inherit;
   text-decoration: none;
+  cursor: pointer;
 }
 
 button {
@@ -116,10 +118,6 @@ button {
 
 .theme-light footer.theme-lock a {
   color: #fff;
-}
-
-.theme-light footer.theme-lock a:hover {
-  color: #e5e5e5;
 }
 
 .theme-light footer.theme-lock p,
@@ -169,12 +167,6 @@ button {
   display: inline-block;
   transition: 0.2s ease;
   font-size: 1rem;
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(124, 58, 237, 0.2);
 }
 
 /* PREMIUM SECTION TITLES */
@@ -320,11 +312,28 @@ html, body {
   overflow: hidden;
   transition: all 160ms ease;
 }
-.yb-marker:hover .yb-marker-label,
 .yb-marker:focus-visible .yb-marker-label {
   opacity: 1;
   max-width: 240px;
   margin-left: 8px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .theme-light footer.theme-lock a:hover {
+    color: #e5e5e5;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(124, 58, 237, 0.2);
+  }
+
+  .yb-marker:hover .yb-marker-label {
+    opacity: 1;
+    max-width: 240px;
+    margin-left: 8px;
+  }
 }
 
 .yb-user-marker {
