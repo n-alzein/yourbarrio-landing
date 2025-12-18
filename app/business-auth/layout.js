@@ -1,4 +1,10 @@
 // app/business-auth/layout.js
+import { Suspense } from "react";
+
+function BusinessAuthFallback() {
+  return <div className="w-full max-w-2xl min-h-[420px]" />;
+}
+
 export default function BusinessAuthLayout({ children }) {
   return (
     <div className="relative min-h-screen flex items-center justify-center text-white">
@@ -10,7 +16,7 @@ export default function BusinessAuthLayout({ children }) {
         <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
       </div>
 
-      {children}
+      <Suspense fallback={<BusinessAuthFallback />}>{children}</Suspense>
     </div>
   );
 }

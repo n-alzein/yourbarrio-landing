@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import PublicNavbar from "@/components/navbars/PublicNavbar";
 import GoogleMapClient from "@/components/GoogleMapClient";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useTheme } from "@/components/ThemeProvider";
@@ -25,10 +24,28 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Public Navbar */}
-      <PublicNavbar />
+      {/* Private beta banner */}
+      <div className="fixed top-20 inset-x-0 z-40">
+        <div className="bg-gradient-to-r from-amber-500 via-amber-500 to-amber-400 text-slate-950 border-b border-amber-300 shadow-lg shadow-amber-900/25">
+          <div className="max-w-7xl mx-auto px-6 md:px-10 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex items-center gap-3 text-sm md:text-base font-semibold">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-lg">
+                🚧
+              </span>
+              <span>YourBarrio is currently in private beta</span>
+              <span className="px-2.5 py-1 text-xs font-bold uppercase tracking-wide rounded-full bg-slate-900/80 text-amber-100 border border-slate-900/60">
+                Limited access
+              </span>
+            </div>
 
-      <main className="relative min-h-screen text-white pt-28">
+            <div className="text-xs md:text-sm text-slate-900/80">
+              Some experiences and listings are still rolling out while we onboard early neighbors.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main className="relative min-h-screen text-white pt-44">
 
         {/* HERO */}
         <section className="max-w-7xl mx-auto px-6 pb-16 md:pb-24">

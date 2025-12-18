@@ -11,9 +11,6 @@ import {
   HandThumbUpIcon,
   LifebuoyIcon,
 } from "@heroicons/react/24/outline";
-import CustomerNavbar from "@/components/navbars/CustomerNavbar";
-import BusinessNavbar from "@/components/navbars/BusinessNavbar";
-import { useAuth } from "@/components/AuthProvider";
 
 const fade = {
   initial: { opacity: 0, y: 18 },
@@ -22,22 +19,8 @@ const fade = {
 };
 
 export default function TermsPage() {
-  const { user, role, loadingUser } = useAuth();
-
-  const navbarShell = (
-    <div className="fixed top-0 inset-x-0 z-50 h-20 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
-  );
-
-  const renderNavbar = () => {
-    if (loadingUser) return navbarShell;
-    if (role === "business") return <BusinessNavbar />;
-    if (user) return <CustomerNavbar />;
-    return null;
-  };
-
   return (
     <>
-      {renderNavbar()}
       <div className="min-h-screen text-white relative pt-28 pb-16 px-6">
       {/* HERO */}
       <motion.div {...fade} className="max-w-5xl mx-auto text-center mb-16">

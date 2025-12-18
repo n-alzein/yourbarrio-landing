@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  Suspense,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
@@ -95,7 +96,9 @@ export function ModalProvider({ children }) {
       {children}
       {mounted && ModalComponent
         ? createPortal(
-            <ModalComponent {...modal.props} onClose={closeModal} />,
+            <Suspense fallback={null}>
+              <ModalComponent {...modal.props} onClose={closeModal} />
+            </Suspense>,
             document.body
           )
         : null}

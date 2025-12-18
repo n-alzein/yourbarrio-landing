@@ -3,7 +3,11 @@
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
+
+function BusinessRouteShell({ children = null }) {
+  return <div className="pt-8 md:pt-10 min-h-screen">{children}</div>;
+}
 
 export default function BusinessLayout({ children }) {
   const { authUser, role, loadingUser } = useAuth();
@@ -45,9 +49,9 @@ export default function BusinessLayout({ children }) {
   if (loadingUser) return <div className="min-h-screen" />;
 
   return (
-    <>
+    <Suspense fallback={<BusinessRouteShell />}>
       <BusinessNavbar />
-      <div className="pt-8 md:pt-10 min-h-screen">{children}</div>
-    </>
+      <BusinessRouteShell>{children}</BusinessRouteShell>
+    </Suspense>
   );
 }

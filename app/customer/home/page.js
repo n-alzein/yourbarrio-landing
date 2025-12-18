@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -101,7 +100,15 @@ function CustomerHomePageInner() {
   const [hasLoadedYb, setHasLoadedYb] = useState(initialYb.length > 0);
   const [ybBusinessesError, setYbBusinessesError] = useState(null);
   const galleryRef = useRef(null);
+  const [photoValidity, setPhotoValidity] = useState({});
   const coverFor = (value) => primaryPhotoUrl(value) || null;
+  const recordPhotoStatus = (url, status) => {
+    if (!url) return;
+    setPhotoValidity((prev) => {
+      if (prev[url] === status) return prev;
+      return { ...prev, [url]: status };
+    });
+  };
   const sampleBusinesses = [
     {
       id: "sample-1",
@@ -777,9 +784,18 @@ function CustomerHomePageInner() {
 
             <div className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory">
               {groupedListings.map(({ category, items }) => {
-                const withPhotos = items.filter((item) => coverFor(item.photo_url));
-                const visibleItems = withPhotos.slice(0, 4);
-                if (!visibleItems.length) return null;
+                const withPhotos = items
+                  .map((item) => ({ ...item, cover: coverFor(item.photo_url) }))
+                  .filter((item) => item.cover);
+                const validCandidates = withPhotos.filter(
+                  (item) => photoValidity[item.cover] !== "invalid"
+                );
+                if (!validCandidates.length) return null;
+                const showSingle = validCandidates.length < 4;
+                const visibleItems = showSingle
+                  ? validCandidates.slice(0, 1)
+                  : validCandidates.slice(0, 4);
+                const firstItem = visibleItems[0];
 
                 return (
                   <div
@@ -789,10 +805,12 @@ function CustomerHomePageInner() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="space-y-1">
                         <p className="text-base font-semibold text-white">{category}</p>
-                        <p className="text-xs text-white/60">{visibleItems.length} items</p>
+                        <p className="text-xs text-white/60">
+                          {validCandidates.length} items
+                        </p>
                       </div>
                       <a
-                        href={`/listings/${visibleItems[0].id}`}
+                        href={`/listings/${firstItem.id}`}
                         className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto touch-manipulation"
                         target="_self"
                       >
@@ -800,31 +818,29 @@ function CustomerHomePageInner() {
                       </a>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      {visibleItems.map((item) => (
-                        <a
-                          key={item.id}
-                          href={`/listings/${item.id}`}
-                          className="relative group h-40 bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto touch-manipulation"
-                          target="_self"
-                        >
-                          <img
-                            src={coverFor(item.photo_url)}
-                            alt={item.title}
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                        </a>
-                      ))}
-                      {visibleItems.length < 4
-                        ? Array.from({ length: 4 - visibleItems.length }).map((_, idx) => (
-                            <div
-                              // eslint-disable-next-line react/no-array-index-key
-                              key={`placeholder-${category}-${idx}`}
-                              className="h-40 bg-white/5 border border-white/10"
+                    <div className="grid grid-cols-2 gap-3 auto-rows-[160px]">
+                      {visibleItems.map((item, index) => {
+                        const isHero = showSingle && index === 0;
+                        return (
+                          <a
+                            key={item.id}
+                            href={`/listings/${item.id}`}
+                            className={`relative group bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto touch-manipulation ${
+                              isHero ? "col-span-2 row-span-2 min-h-[320px]" : "min-h-[160px]"
+                            }`}
+                            target="_self"
+                          >
+                            <img
+                              src={item.cover}
+                              alt={item.title}
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                              onLoad={() => recordPhotoStatus(item.cover, "valid")}
+                              onError={() => recordPhotoStatus(item.cover, "invalid")}
                             />
-                          ))
-                        : null}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                          </a>
+                        );
+                      })}
                     </div>
                   </div>
                 );
