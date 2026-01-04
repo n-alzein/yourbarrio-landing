@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 
 // helper: compute distance in km
 function haversine(lat1, lon1, lat2, lon2) {
@@ -91,6 +92,8 @@ export default function GoogleMapClient({
   externalSearchTerm,
   externalSearchTrigger,
 }) {
+  // DEBUG_CLICK_DIAG
+  const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
   const mapRef = useRef(null);
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -250,6 +253,7 @@ export default function GoogleMapClient({
   };
 
   const clearBusinessMarkers = () => {
+    markerIndexRef.current.forEach((rec) => detachMarker(rec.marker));
     businessMarkersRef.current.forEach(detachMarker);
     businessMarkersRef.current = [];
     markerIndexRef.current.clear();
@@ -393,26 +397,118 @@ export default function GoogleMapClient({
     return curatedFetchPromiseRef.current;
   };
 
+  const createPopupContent = (biz) => {
+    const safeText = (value) =>
+      typeof value === "string"
+        ? value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        : "";
+
+    const wrapper = document.createElement("div");
+    wrapper.style.color = "#0f172a";
+    wrapper.style.maxWidth = "240px";
+    const imgContainer = document.createElement("div");
+    const resolvedSrc = resolveImageSrc(biz.imageUrl, "/business-placeholder.png");
+    if (resolvedSrc) {
+      const img = document.createElement("img");
+      img.src = resolvedSrc;
+      img.alt = safeText(biz.name || "");
+      img.style.width = "100%";
+      img.style.maxHeight = "120px";
+      img.style.objectFit = "cover";
+      img.style.borderRadius = "10px";
+      img.style.border = "1px solid #e5e7eb";
+      img.style.marginBottom = "8px";
+      img.onerror = () => {
+        if (img.src === "/business-placeholder.png") return;
+        markImageFailed(img.src || biz.imageUrl);
+        img.src = "/business-placeholder.png";
+      };
+      imgContainer.appendChild(img);
+    }
+
+    if (imgContainer.childElementCount) {
+      wrapper.appendChild(imgContainer);
+    }
+
+    const title = document.createElement("strong");
+    title.style.fontSize = "14px";
+    title.textContent = safeText(biz.name || "Local Business");
+    wrapper.appendChild(title);
+
+    const category = document.createElement("div");
+    category.style.fontSize = "12px";
+    category.style.marginTop = "2px";
+    category.textContent = `${safeText(biz.categoryLabel || "Local Business")}${
+      biz.source === "supabase_users" ? " · YourBarrio" : ""
+    }`;
+    wrapper.appendChild(category);
+
+    if (biz.address) {
+      const address = document.createElement("div");
+      address.style.fontSize = "12px";
+      address.style.marginTop = "4px";
+      address.style.color = "#334155";
+      address.textContent = safeText(biz.address);
+      wrapper.appendChild(address);
+    }
+
+    if (biz.description) {
+      const desc = document.createElement("div");
+      desc.style.fontSize = "12px";
+      desc.style.marginTop = "6px";
+      desc.style.color = "#475569";
+      desc.textContent = safeText(biz.description);
+      wrapper.appendChild(desc);
+    }
+
+    if (biz.website && /^https?:\/\//i.test(biz.website)) {
+      const website = document.createElement("div");
+      website.style.fontSize = "12px";
+      website.style.marginTop = "6px";
+      const link = document.createElement("a");
+      link.href = biz.website;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Website";
+      website.appendChild(link);
+      wrapper.appendChild(website);
+    }
+
+    return wrapper;
+  };
+
   const renderMarkers = (list, category) => {
     const map = mapInstanceRef.current;
     if (!map) return;
-    clearBusinessMarkers();
-
-    const escapeHtml = (value) =>
-      typeof value === "string"
-        ? value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        : value;
 
     const filtered =
       category === "All"
         ? list
         : list.filter((biz) => biz.categoryLabel === category);
 
-    if (!filtered.length) return;
+    const keep = new Set();
 
     filtered.forEach((biz) => {
+      const key = biz.id || biz.name;
+      if (!key || !biz.coords) return;
+      keep.add(key);
       if (!biz.coords) return;
+
       const isCurated = biz.source === "supabase_users";
+      const existing = markerIndexRef.current.get(key);
+      if (existing) {
+        if (
+          existing.coords?.lat !== biz.coords.lat ||
+          existing.coords?.lng !== biz.coords.lng
+        ) {
+          existing.marker?.setLngLat([biz.coords.lng, biz.coords.lat]);
+          existing.coords = biz.coords;
+        }
+        if (existing.contentUpdater) {
+          existing.contentUpdater(biz);
+        }
+        return;
+      }
 
       const wrapper = document.createElement("div");
       wrapper.className = `yb-marker${isCurated ? " yb-marker-curated" : ""}`;
@@ -428,30 +524,8 @@ export default function GoogleMapClient({
       localWrap.appendChild(label);
       wrapper.appendChild(localWrap);
 
-      const infoContent = (() => {
-        const safeName = escapeHtml(biz.name || "");
-        const safeCategory = escapeHtml(biz.categoryLabel || "");
-        const safeAddress = escapeHtml(biz.address || "");
-        const safeDesc = escapeHtml(biz.description || "");
-        const safeWebsite = escapeHtml(biz.website || "");
-        const img = biz.imageUrl
-          ? `<div style="margin-bottom:8px;"><img src="${biz.imageUrl}" alt="${safeName}" style="width:100%;max-height:120px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;" /></div>`
-          : "";
-        const websiteLink =
-          safeWebsite && /^https?:\/\//i.test(biz.website || "")
-            ? `<div style="margin-top:6px;font-size:12px;"><a href="${biz.website}" target="_blank" rel="noopener noreferrer">Website</a></div>`
-            : "";
-        return `<div style="color:#0f172a;max-width:240px;">
-          ${img}
-          <strong style="font-size:14px;">${safeName}</strong>
-          <div style="font-size:12px;margin-top:2px;">${safeCategory}${isCurated ? " · YourBarrio" : ""}</div>
-          <div style="font-size:12px;margin-top:4px;color:#334155;">${safeAddress}</div>
-          ${safeDesc ? `<div style="font-size:12px;margin-top:6px;color:#475569;">${safeDesc}</div>` : ""}
-          ${websiteLink}
-        </div>`;
-      })();
-
-      const popup = new mapboxgl.Popup({ offset: 16, closeButton: true }).setHTML(infoContent);
+      const popupContent = createPopupContent(biz);
+      const popup = new mapboxgl.Popup({ offset: 16, closeButton: true }).setDOMContent(popupContent);
       popup.on("open", () => {
         if (activePopupRef.current && activePopupRef.current !== popup) {
           activePopupRef.current.remove();
@@ -464,6 +538,11 @@ export default function GoogleMapClient({
         .setPopup(popup)
         .addTo(map);
 
+      const updateContent = (nextBiz) => {
+        const newContent = createPopupContent(nextBiz);
+        popup.setDOMContent(newContent);
+      };
+
       wrapper.addEventListener("click", () => {
         popup.addTo(map);
       });
@@ -472,7 +551,18 @@ export default function GoogleMapClient({
       });
 
       businessMarkersRef.current.push(marker);
-      markerIndexRef.current.set(biz.id, { marker, popup, coords: biz.coords });
+      markerIndexRef.current.set(key, {
+        marker,
+        popup,
+        coords: biz.coords,
+        contentUpdater: updateContent,
+      });
+    });
+
+    markerIndexRef.current.forEach((rec, key) => {
+      if (keep.has(key)) return;
+      detachMarker(rec.marker);
+      markerIndexRef.current.delete(key);
     });
   };
 
@@ -564,8 +654,7 @@ export default function GoogleMapClient({
     lastFetchKeyRef.current = requestKey;
     lastFetchAtRef.current = now;
 
-    clearBusinessMarkers();
-    setBusinesses([]);
+    // Keep existing markers on screen while loading new data to avoid rebuild loops
     setLoading(true);
     fetchInFlightRef.current = true;
     lastFetchRef.current = {
@@ -1047,6 +1136,10 @@ export default function GoogleMapClient({
     let map;
     let moveEndHandler;
 
+    if (mapInstanceRef.current) {
+      return undefined;
+    }
+
     if (!mapRef.current) {
       setError("Map container missing.");
       setLoading(false);
@@ -1135,37 +1228,44 @@ export default function GoogleMapClient({
         );
       }
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const userLat = pos.coords.latitude;
-            const userLng = pos.coords.longitude;
-            userCenterRef.current = { lat: userLat, lng: userLng };
-            persistedCenterRef.current = { lat: userLat, lng: userLng };
-            try {
-              localStorage.setItem(
-                LAST_CENTER_KEY,
-                JSON.stringify(persistedCenterRef.current)
+      try {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const userLat = pos.coords.latitude;
+              const userLng = pos.coords.longitude;
+              userCenterRef.current = { lat: userLat, lng: userLng };
+              persistedCenterRef.current = { lat: userLat, lng: userLng };
+              try {
+                localStorage.setItem(
+                  LAST_CENTER_KEY,
+                  JSON.stringify(persistedCenterRef.current)
+                );
+              } catch (_) {
+                /* ignore */
+              }
+              placeUserMarker(userLat, userLng);
+              startWithCenter(userLat, userLng);
+            },
+            (err) => {
+              console.warn("Geolocation error", err);
+              setError(
+                "Could not get your location. Showing nearby businesses around a default location."
               );
-            } catch (_) {
-              /* ignore */
-            }
-            placeUserMarker(userLat, userLng);
-            startWithCenter(userLat, userLng);
-          },
-          (err) => {
-            console.warn("Geolocation error", err);
-            setError(
-              "Could not get your location. Showing nearby businesses around a default location."
-            );
-            userCenterRef.current = null;
-            const centerToUse = getDefaultCenter();
-            startWithCenter(centerToUse.lat, centerToUse.lng);
-          },
-          { enableHighAccuracy: true, maximumAge: 1000 * 60 * 5 }
-        );
-      } else {
-        setError("Geolocation not supported. Showing default area.");
+              userCenterRef.current = null;
+              const centerToUse = getDefaultCenter();
+              startWithCenter(centerToUse.lat, centerToUse.lng);
+            },
+            { enableHighAccuracy: true, maximumAge: 1000 * 60 * 5 }
+          );
+        } else {
+          setError("Geolocation not supported. Showing default area.");
+          userCenterRef.current = null;
+          const centerToUse = enforceCenter(getDefaultCenter());
+          startWithCenter(centerToUse.lat, centerToUse.lng);
+        }
+      } catch (geoErr) {
+        console.warn("Geolocation unavailable", geoErr);
         userCenterRef.current = null;
         const centerToUse = enforceCenter(getDefaultCenter());
         startWithCenter(centerToUse.lat, centerToUse.lng);
@@ -1206,6 +1306,7 @@ export default function GoogleMapClient({
       detachMarker(userMarkerRef.current);
       detachMarker(searchMarkerRef.current);
       loadAndPlaceMarkersRef.current = null;
+      mapInstanceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [radiusKm]);
@@ -1354,7 +1455,11 @@ export default function GoogleMapClient({
   }, [activeCategory, disableGooglePlaces, mapReady, prefilledBusinesses]);
 
   return (
-    <div ref={containerRef} className={containerClassName}>
+    <div
+      ref={containerRef}
+      className={containerClassName}
+      data-clickdiag={clickDiagEnabled ? "map-container" : undefined}
+    >
       <div className={cardClassName}>
         {title ? <div className="mb-3 font-medium">{title}</div> : null}
         {placesMode === "manual" && !disableGooglePlaces ? (

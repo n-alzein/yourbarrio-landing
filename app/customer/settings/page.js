@@ -4,6 +4,10 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import {
+  getAuthProviderLabel,
+  getPrimaryAuthProvider,
+} from "@/lib/getAuthProvider";
 
 export default function SettingsPage() {
   const { authUser, user, supabase, loadingUser, logout, refreshProfile } =
@@ -132,6 +136,53 @@ export default function SettingsPage() {
         address: user.address || "",
         profile_photo_url: user.profile_photo_url || "",
       });
+
+  const primaryProvider = getPrimaryAuthProvider(authUser);
+  const providerLabel = getAuthProviderLabel(authUser);
+  const providerName = primaryProvider
+    ? primaryProvider === "email"
+      ? "Email"
+      : primaryProvider.charAt(0).toUpperCase() + primaryProvider.slice(1)
+    : "Email";
+
+  /* -----------------------------------------------------------
+     DEBUG (dev only) — trace provider sources
+  ----------------------------------------------------------- */
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+
+    const storedLoginMethod = (() => {
+      try {
+        return localStorage.getItem("loginMethod");
+      } catch {
+        return null;
+      }
+    })();
+
+    const storedProvider = (() => {
+      try {
+        return localStorage.getItem("provider");
+      } catch {
+        return null;
+      }
+    })();
+
+    console.debug("[Settings:customer] auth provider debug", {
+      resolvedProvider: primaryProvider,
+      providerLabel,
+      sessionUserId: authUser?.id,
+      sessionUserEmail: authUser?.email,
+      app_metadata: authUser?.app_metadata,
+      user_metadata: authUser?.user_metadata,
+      profileProvider: {
+        provider: user?.provider,
+        auth_provider: user?.auth_provider,
+        signup_method: user?.signup_method,
+      },
+      storedLoginMethod,
+      storedProvider,
+    });
+  }, [authUser, user, primaryProvider, providerLabel]);
 
   /* -----------------------------------------------------------
      UI GUARD
@@ -282,8 +333,10 @@ export default function SettingsPage() {
 
             <div className="bg-white/5 p-4 rounded-xl border border-white/10 flex items-center justify-between">
               <div>
-                <p className="text-base text-white/90">Google</p>
-                <p className="text-white/60 text-sm">Signed in via Google OAuth</p>
+                <p className="text-base text-white/90">{providerName}</p>
+                <p className="text-white/60 text-sm">
+                  Signed in via {providerLabel}
+                </p>
               </div>
 
               <button

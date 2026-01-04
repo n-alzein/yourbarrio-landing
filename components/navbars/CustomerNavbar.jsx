@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import {
   Bookmark,
@@ -28,6 +28,7 @@ export default function CustomerNavbar() {
   const searchParams = useSearchParams();
   const { user, authUser, loadingUser } = useAuth();
   const { openModal } = useModal();
+  const [, startTransition] = useTransition();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -42,9 +43,58 @@ export default function CustomerNavbar() {
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const dropdownPanelRef = useRef(null);
   const searchBoxRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const navSavedRef = useRef(null);
+  const navSettingsRef = useRef(null);
   const searchRequestIdRef = useRef(0);
   const lastQueryRef = useRef("");
+  // DEBUG_CLICK_DIAG / NAV_TRACE
+  const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
+  const navTraceEnabled =
+    clickDiagEnabled || process.env.NEXT_PUBLIC_NAV_TRACE === "1";
+  const routerPatchedRef = useRef(false);
+  useEffect(() => {
+    if (!navTraceEnabled || routerPatchedRef.current) return undefined;
+    routerPatchedRef.current = true;
+    const originalPush = router.push;
+    router.push = (...args) => {
+      // eslint-disable-next-line no-console
+      console.log("[NAV_TRACE] router.push CALLED", args, new Error().stack);
+      // eslint-disable-next-line no-console
+      console.log("[CLICK_DIAG] router.push CALLED", args, new Error().stack);
+      try {
+        return originalPush(...args);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[NAV_TRACE] router.push error", err);
+        throw err;
+      }
+    };
+    return () => {
+      router.push = originalPush;
+    };
+  }, [navTraceEnabled, router, clickDiagEnabled]);
+  const diagClick = (label) => (event) => {
+    if (!clickDiagEnabled) return;
+    // eslint-disable-next-line no-console
+    console.log("[CLICK_DIAG] REACT_ONCLICK", label, {
+      defaultPrevented: event.defaultPrevented,
+      target: event.target?.tagName,
+      currentTarget: event.currentTarget?.tagName,
+      pathname,
+      profileMenuOpen,
+      loadingUser,
+      hasUser: !!user,
+      hasAuthUser: !!authUser,
+      href: event.currentTarget?.getAttribute?.("href") || null,
+    });
+    queueMicrotask(() => {
+      // eslint-disable-next-line no-console
+      console.log("[CLICK_DIAG] REACT_ONCLICK_POST", { label, href: window.location.href });
+    });
+  };
 
   // ⭐ Hydration guard fixes frozen buttons
   useEffect(() => {
@@ -56,6 +106,140 @@ export default function CustomerNavbar() {
     setProfileMenuOpen(false);
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    document.documentElement.dataset.navMenuOpen = profileMenuOpen ? "1" : "0";
+    return () => {
+      delete document.documentElement.dataset.navMenuOpen;
+    };
+  }, [profileMenuOpen]);
+
+  // DEBUG_CLICK_DIAG: trace search focus behavior on home
+  useEffect(() => {
+    if (!clickDiagEnabled || !pathname?.startsWith("/customer/home")) return undefined;
+    const input = searchInputRef.current;
+    if (!input) return undefined;
+    const handler = (event) => {
+      try {
+        const { clientX, clientY } = event;
+        const rect = input.getBoundingClientRect();
+        setTimeout(() => {
+          const active = document.activeElement === input;
+          const topAtClick = document.elementFromPoint(clientX, clientY);
+          const centerTop = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          const styles =
+            topAtClick && typeof window !== "undefined"
+              ? window.getComputedStyle(topAtClick)
+              : null;
+          // eslint-disable-next-line no-console
+          console.log("[CLICK_DIAG] search focus check", {
+            active,
+            topAtClick: topAtClick?.className || topAtClick?.tagName,
+            centerTop: centerTop?.className || centerTop?.tagName,
+            styles: styles
+              ? {
+                  position: styles.position,
+                  zIndex: styles.zIndex,
+                  pointerEvents: styles.pointerEvents,
+                  opacity: styles.opacity,
+                  transform: styles.transform,
+                }
+              : null,
+          });
+        }, 50);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[CLICK_DIAG] search focus check error", err);
+      }
+    };
+    input.addEventListener("pointerdown", handler, { passive: true, capture: true });
+    return () => {
+      input.removeEventListener("pointerdown", handler, { passive: true, capture: true });
+    };
+  }, [clickDiagEnabled, pathname]);
+
+  // DEBUG_CLICK_DIAG: global tracer on home to detect cancellations
+  useEffect(() => {
+    if (!clickDiagEnabled || !pathname?.startsWith("/customer/home")) return undefined;
+    const logEventCapture = (event) => {
+      try {
+        // eslint-disable-next-line no-console
+        console.log("[CLICK_DIAG] HOME_TRACE", {
+          type: event.type,
+          phase: "capture",
+          defaultPrevented: event.defaultPrevented,
+          cancelBubble: event.cancelBubble,
+          target: event.target?.tagName,
+          className: event.target?.className,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    const logEventBubble = (event) => {
+      try {
+        // eslint-disable-next-line no-console
+        console.log("[CLICK_DIAG] HOME_TRACE", {
+          type: event.type,
+          phase: "bubble",
+          defaultPrevented: event.defaultPrevented,
+          cancelBubble: event.cancelBubble,
+          target: event.target?.tagName,
+          className: event.target?.className,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    const types = ["pointerdown", "click", "keydown"];
+    types.forEach((t) => {
+      document.addEventListener(t, logEventCapture, { capture: true, passive: true });
+      document.addEventListener(t, logEventBubble, { passive: true });
+    });
+    return () => {
+      types.forEach((t) => {
+        document.removeEventListener(t, logEventCapture, { capture: true, passive: true });
+        document.removeEventListener(t, logEventBubble, { passive: true });
+      });
+    };
+  }, [clickDiagEnabled, pathname]);
+
+  useEffect(() => {
+    if (!clickDiagEnabled || !profileMenuOpen) return undefined;
+    const panel = dropdownPanelRef.current;
+    const navEl = dropdownRef.current;
+    try {
+      const panelRect = panel?.getBoundingClientRect();
+      const navRect = navEl?.getBoundingClientRect();
+      const samplePoint = panelRect
+        ? { x: panelRect.left + 10, y: panelRect.top + 10 }
+        : null;
+      const topAtPanel = samplePoint
+        ? document.elementFromPoint(samplePoint.x, samplePoint.y)
+        : null;
+      const zNav =
+        navEl && typeof window !== "undefined"
+          ? window.getComputedStyle(navEl).zIndex
+          : null;
+      const zPanel =
+        panel && typeof window !== "undefined"
+          ? window.getComputedStyle(panel).zIndex
+          : null;
+      // eslint-disable-next-line no-console
+      console.log("[CLICK_DIAG] dropdown metrics", {
+        navRect,
+        panelRect,
+        navZ: zNav,
+        panelZ: zPanel,
+        topAtPanel: topAtPanel?.className || topAtPanel?.tagName,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[CLICK_DIAG] dropdown metrics error", err);
+    }
+    return undefined;
+  }, [clickDiagEnabled, profileMenuOpen]);
 
   // Keep the search bar in sync with the current URL query
   useEffect(() => {
@@ -219,18 +403,62 @@ export default function CustomerNavbar() {
     setProfileMenuOpen(false);
   };
 
+  const logNavDebug = (href, method) => {
+    if (process.env.NODE_ENV === "production") return;
+    if (href === "/customer/saved" || href === "/customer/settings") {
+      // eslint-disable-next-line no-console
+      console.info("[nav-debug]", { from: pathname, href, method });
+    }
+  };
+
+  const handleNavigate = (href, method = "router.push") => {
+    if (!href) return;
+    logNavDebug(href, method);
+    startTransition(() => {
+      try {
+        router.push(href);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[NAV_TRACE] router.push error", err);
+        throw err;
+      }
+    });
+  };
+
+  // DEBUG_CLICK_DIAG
+  useEffect(() => {
+    if (!clickDiagEnabled) return undefined;
+    const savedEl = navSavedRef.current;
+    const settingsEl = navSettingsRef.current;
+    if (savedEl) savedEl.dataset.clickdiagBound = "nav-saved";
+    if (settingsEl) settingsEl.dataset.clickdiagBound = "nav-settings";
+    return () => {
+      if (savedEl) delete savedEl.dataset.clickdiagBound;
+      if (settingsEl) delete settingsEl.dataset.clickdiagBound;
+    };
+  }, [clickDiagEnabled]);
+
+  const handleNavCapture = (event) => {
+    if (!clickDiagEnabled) return;
+    // eslint-disable-next-line no-console
+    console.log("[CLICK_DIAG] navbar capture", {
+      target: event.target,
+      currentTarget: event.currentTarget,
+    });
+  };
+
   const NavItem = ({ href, children }) => (
-    <Link
-      href={href}
+    <button
+      type="button"
+      onClick={() => handleNavigate(href, "nav-item")}
       className={`text-sm md:text-base transition ${
         isActive(href)
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
       }`}
-      onClick={closeMenus}
     >
       {children}
-    </Link>
+    </button>
   );
 
   const quickActions = [
@@ -245,6 +473,7 @@ export default function CustomerNavbar() {
       title: "Saved items",
       description: "Instant access to your favorites",
       icon: Bookmark,
+      diag: "nav-saved",
     },
   ];
 
@@ -287,7 +516,7 @@ export default function CustomerNavbar() {
   --------------------------------------------------- */
   if (loadingUser && !user && !authUser) {
     return (
-      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
+      <nav className="fixed top-0 inset-x-0 z-[5000] h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto" />
     );
   }
 
@@ -295,12 +524,16 @@ export default function CustomerNavbar() {
      NAVBAR UI
   --------------------------------------------------- */
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock">
+    <nav
+      className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
+      data-clickdiag={clickDiagEnabled ? "navbar" : undefined}
+      onClickCapture={handleNavCapture}
+    >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
 
         {/* LEFT GROUP — LOGO + SEARCH */}
         <div className="flex items-center gap-6 md:gap-10 flex-1">
-          <a
+          <Link
             href="/customer/home"
             onClick={closeMenus}
             aria-label="Go to home"
@@ -311,7 +544,7 @@ export default function CustomerNavbar() {
               className="h-34 w-auto cursor-pointer select-none"
               alt="YourBarrio"
             />
-          </a>
+          </Link>
 
           <div
             ref={searchBoxRef}
@@ -330,6 +563,7 @@ export default function CustomerNavbar() {
                 <input
                   id="customer-nav-search"
                   name="search"
+                  ref={searchInputRef}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onFocus={() => setSuggestionsOpen(hasHybridResults || searchTerm.trim().length > 0)}
@@ -464,9 +698,14 @@ export default function CustomerNavbar() {
           )}
 
           {user && (
-            <div className="relative" ref={dropdownRef}>
+            <div
+              className="relative"
+              ref={dropdownRef}
+              data-clickdiag={clickDiagEnabled ? "dropdown" : undefined}
+            >
               <button
                 onClick={() => setProfileMenuOpen((open) => !open)}
+                data-clickdiag={clickDiagEnabled ? "navbar-user" : undefined}
                 className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
               >
                 <Image
@@ -484,7 +723,9 @@ export default function CustomerNavbar() {
 
               {profileMenuOpen && (
                 <div
-                  className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl z-50"
+                  className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl z-[5100]"
+                  data-clickdiag={clickDiagEnabled ? "dropdown" : undefined}
+                  ref={dropdownPanelRef}
                 >
                   <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
                     <div className="flex items-center gap-3 px-4 py-4">
@@ -504,12 +745,28 @@ export default function CustomerNavbar() {
                     </div>
 
                     <div className="px-2 pb-1 pt-2 space-y-1">
-                      {quickActions.map(({ href, title, description, icon: Icon }) => (
-                        <a
+                      {quickActions.map(({ href, title, description, icon: Icon, diag }) => (
+                        <Link
                           key={href}
                           href={href}
-                          onClick={closeMenus}
-                          className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation"
+                          onClick={(e) => {
+                            if (clickDiagEnabled && e.defaultPrevented) {
+                              // eslint-disable-next-line no-console
+                              console.warn("[CLICK_DIAG] nav link defaultPrevented", {
+                                href,
+                                stack: new Error().stack,
+                              });
+                            }
+                            if (diag === "nav-saved") {
+                              diagClick("NAV_SAVED_BUBBLE")(e);
+                            }
+                          }}
+                          data-clickdiag={clickDiagEnabled ? diag || undefined : undefined}
+                          data-clickdiag-bound={clickDiagEnabled && diag ? diag : undefined}
+                          ref={diag === "nav-saved" ? navSavedRef : undefined}
+                          onClickCapture={diag === "nav-saved" ? diagClick("NAV_SAVED_CAPTURE") : undefined}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation text-left"
+                          data-safe-nav={href === "/customer/saved" ? "1" : undefined}
                         >
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
                             <Icon className="h-5 w-5" />
@@ -518,21 +775,35 @@ export default function CustomerNavbar() {
                             <p className="text-sm font-semibold text-white/90">{title}</p>
                             <p className="text-xs text-white/60">{description}</p>
                           </div>
-                        </a>
+                        </Link>
                       ))}
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                      <a
+                      <Link
                         href="/customer/settings"
-                        onClick={closeMenus}
-                        className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10 touch-manipulation"
+                        onClick={(e) => {
+                          if (clickDiagEnabled && e.defaultPrevented) {
+                            // eslint-disable-next-line no-console
+                            console.warn("[CLICK_DIAG] nav link defaultPrevented", {
+                              href: "/customer/settings",
+                              stack: new Error().stack,
+                            });
+                          }
+                          diagClick("NAV_SETTINGS_BUBBLE")(e);
+                        }}
+                        className="flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10 touch-manipulation text-left"
+                        data-clickdiag={clickDiagEnabled ? "nav-settings" : undefined}
+                        data-clickdiag-bound={clickDiagEnabled ? "nav-settings" : undefined}
+                        ref={navSettingsRef}
+                        onClickCapture={diagClick("NAV_SETTINGS_CAPTURE")}
+                        data-safe-nav="1"
                       >
                         <span className="flex items-center gap-2">
                           <Settings className="h-4 w-4" />
                           Account settings
                         </span>
-                      </a>
+                      </Link>
                       <LogoutButton
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
                         onSuccess={closeMenus}

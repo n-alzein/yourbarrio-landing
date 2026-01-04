@@ -6,6 +6,12 @@ import {
   getBrowserSupabaseClient,
   getCookieName,
 } from "@/lib/supabaseClient";
+import {
+  initDebugNav,
+  logAuthTelemetry,
+  logLogout,
+} from "@/lib/debugNav";
+import DebugNavOverlay from "./DebugNavOverlay";
 
 const AuthContext = createContext();
 
@@ -36,6 +42,27 @@ export function AuthProvider({ children }) {
       isMountedRef.current = false;
     };
   }, []);
+
+  /* -----------------------------------------------------------------
+     DEBUG NAV INIT
+  ----------------------------------------------------------------- */
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      initDebugNav();
+    }
+  }, []);
+
+  /* -----------------------------------------------------------------
+     AUTH TELEMETRY (debug only)
+  ----------------------------------------------------------------- */
+  useEffect(() => {
+    logAuthTelemetry({
+      loadingUser,
+      authUserId: authUser?.id ?? null,
+      role: profile?.role ?? null,
+      hasProfile: Boolean(profile),
+    });
+  }, [loadingUser, authUser?.id, profile?.role, profile]);
 
   /* -----------------------------------------------------------------
      FIX 429 ERROR — SANITIZE GOOGLE IDENTITIES
@@ -98,16 +125,27 @@ export function AuthProvider({ children }) {
   /* -----------------------------------------------------------------
      LOAD PROFILE
   ----------------------------------------------------------------- */
-  async function loadProfile(userId) {
-    if (!userId) return null;
+  async function loadProfile(userId, { signal } = {}) {
+    if (!userId || signal?.aborted) return { profile: null, aborted: true };
 
-    const { data } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
 
-    return data ?? null;
+      if (signal?.aborted) return { profile: null, aborted: true };
+      if (error) {
+        console.warn("Profile load failed", error);
+        return { profile: null, error };
+      }
+      return { profile: data ?? null, error: null };
+    } catch (err) {
+      if (signal?.aborted) return { profile: null, aborted: true };
+      console.warn("Profile load threw", err);
+      return { profile: null, error: err };
+    }
   }
 
   /* -----------------------------------------------------------------
@@ -153,8 +191,10 @@ export function AuthProvider({ children }) {
 
       if (user) {
         const p = await loadProfile(user.id);
-        setProfile(p);
-        await cacheGoogleAvatar(user, p);
+        if (!p?.aborted && !p?.error) {
+          setProfile(p.profile);
+          await cacheGoogleAvatar(user, p.profile);
+        }
       } else {
         setProfile(null);
       }
@@ -171,6 +211,8 @@ export function AuthProvider({ children }) {
      INITIAL SESSION LOAD
   ----------------------------------------------------------------- */
   useEffect(() => {
+    const controller = new AbortController();
+
     async function init() {
       if (!supabase) {
         finishLoading();
@@ -191,11 +233,11 @@ export function AuthProvider({ children }) {
         setAuthUser(user);
 
         if (user) {
-          const p = await loadProfile(user.id);
-          if (isMountedRef.current) {
-            setProfile(p);
+          const p = await loadProfile(user.id, { signal: controller.signal });
+          if (isMountedRef.current && !p?.aborted && !p?.error) {
+            setProfile(p.profile);
 
-            await cacheGoogleAvatar(user, p);
+            await cacheGoogleAvatar(user, p.profile);
           }
         }
       } catch (err) {
@@ -231,9 +273,11 @@ export function AuthProvider({ children }) {
 
             if (user) {
               const p = await loadProfile(user.id);
-              setProfile(p);
+              if (!p?.aborted && !p?.error) {
+                setProfile(p.profile);
 
-              await cacheGoogleAvatar(user, p);
+                await cacheGoogleAvatar(user, p.profile);
+              }
             } else {
               setProfile(null);
             }
@@ -246,6 +290,7 @@ export function AuthProvider({ children }) {
       : { subscription: { unsubscribe: () => {} } };
 
     return () => {
+      controller.abort();
       listener.subscription.unsubscribe();
     };
   }, [supabase]);
@@ -294,8 +339,10 @@ export function AuthProvider({ children }) {
 
         if (user) {
           const p = await loadProfile(user.id);
-          setProfile(p);
-          await cacheGoogleAvatar(user, p);
+          if (!p?.aborted && !p?.error) {
+            setProfile(p.profile);
+            await cacheGoogleAvatar(user, p.profile);
+          }
         }
       } catch (err) {
         console.error("Storage auth sync failed", err);
@@ -315,7 +362,7 @@ export function AuthProvider({ children }) {
   async function refreshProfile() {
     if (!authUser?.id) return;
     const p = await loadProfile(authUser.id);
-    if (p) setProfile(p);
+    if (p && !p.error && !p.aborted) setProfile(p.profile);
   }
 
   useEffect(() => {
@@ -331,6 +378,7 @@ export function AuthProvider({ children }) {
      LOGOUT
   ----------------------------------------------------------------- */
   async function logout() {
+    logLogout("logout invoked");
     const lastRole =
       lastRoleRef.current ||
       profile?.role ||
@@ -430,6 +478,7 @@ export function AuthProvider({ children }) {
       }}
     >
       {children}
+      <DebugNavOverlay />
     </AuthContext.Provider>
   );
 }

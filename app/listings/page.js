@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
-import Image from "next/image";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import SafeImage from "@/components/SafeImage";
 
 export default function PublicListingsPage() {
   const supabase = getBrowserSupabaseClient();
@@ -31,14 +31,13 @@ export default function PublicListingsPage() {
         {listings.map((item) => (
           <Link key={item.id} href={`/listing/${item.id}`}>
             <div className="rounded-lg border overflow-hidden">
-              <Image
-                src={
-                  primaryPhotoUrl(item.photo_url) || "/business-placeholder.png"
-                }
+              <SafeImage
+                src={primaryPhotoUrl(item.photo_url)}
                 alt="Listing"
                 width={400}
                 height={300}
                 className="object-cover h-48 w-full"
+                fallbackSrc="/business-placeholder.png"
               />
               <div className="p-4">
                 <h2 className="font-semibold">{item.title}</h2>

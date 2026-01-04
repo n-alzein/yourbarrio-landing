@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { useModal } from "./ModalProvider";
 
 export default function CustomerSignupModal({ onClose }) {
-  const router = useRouter();
   const { supabase } = useAuth();
   const { openModal } = useModal();
 
@@ -53,8 +51,52 @@ export default function CustomerSignupModal({ onClose }) {
     }
 
     onClose?.();
-    router.push("/customer/home");
-    router.refresh();
+
+    const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+
+      if (debugAuth) {
+        console.log("[customer-signup] refreshing cookies with tokens");
+      }
+
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: session?.access_token,
+          refresh_token: session?.refresh_token,
+        }),
+      });
+
+      const refreshed = res.headers.get("x-auth-refresh-user") === "1";
+      if (debugAuth) {
+        console.log(
+          "[customer-signup] refresh user header",
+          res.headers.get("x-auth-refresh-user")
+        );
+      }
+
+      if (!refreshed) {
+        setError(
+          "Signup succeeded but session could not be persisted in Safari. Please try again."
+        );
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Auth refresh call failed", err);
+      setError(
+        "Signup succeeded but session could not be persisted in Safari. Please try again."
+      );
+      setLoading(false);
+      return;
+    }
+
+    window.location.assign("/customer/home");
     setLoading(false);
   }
 

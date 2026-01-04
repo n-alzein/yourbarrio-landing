@@ -1,4 +1,14 @@
 "use client";
+/*
+  HOME_BISECT FLAGS (toggle to isolate blockers on /customer/home):
+    NEXT_PUBLIC_HOME_BISECT_MAP (default 1)
+    NEXT_PUBLIC_HOME_BISECT_HOME_AUDIT (default 1)
+    NEXT_PUBLIC_HOME_BISECT_PD_TRACER (default 1)
+    NEXT_PUBLIC_HOME_BISECT_SAFE_NAV (default 0)
+    NEXT_PUBLIC_HOME_BISECT_TILE_DIAG (default 1)
+  Protocol: build prod, toggle one flag to 0 (or SAFE_NAV to 1), rebuild, and observe whether anchor clicks still get defaultPrevented. If a flag fixes it, the associated module is the culprit.
+*/
+
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -6,9 +16,26 @@ import React from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import GoogleMapClient from "@/components/GoogleMapClient";
+import dynamic from "next/dynamic";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import SafeImage from "@/components/SafeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { installPreventDefaultTracer } from "@/lib/tracePreventDefault";
+import { installHomeNavInstrumentation } from "@/lib/navInstrumentation";
+const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
+function HomeGuardFallback({ children }) {
+  return <>{children}</>;
+}
+const GoogleMapClient = dynamic(() => import("@/components/GoogleMapClient"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3 text-white/70 text-sm">
+      Loading map…
+    </div>
+  ),
+});
+const SafeNavFallback = dynamic(() => import("@/components/nav/SafeNavFallback"), { ssr: false });
+import GuaranteedNavCapture from "@/components/nav/GuaranteedNavCapture";
 
 class CustomerHomeErrorBoundary extends React.Component {
   constructor(props) {
@@ -57,6 +84,15 @@ function CustomerHomePageInner() {
   const searchParams = useSearchParams();
   const { user, authUser, loadingUser, supabase } = useAuth();
   const [search, setSearch] = useState("");
+  // DEBUG_CLICK_DIAG
+  const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
+  const homeBisect = {
+    map: process.env.NEXT_PUBLIC_HOME_BISECT_MAP !== "0",
+    homeAudit: process.env.NEXT_PUBLIC_HOME_BISECT_HOME_AUDIT !== "0",
+    pdTracer: process.env.NEXT_PUBLIC_HOME_BISECT_PD_TRACER !== "0",
+    safeNav: process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1",
+    tileDiag: process.env.NEXT_PUBLIC_HOME_BISECT_TILE_DIAG !== "0",
+  };
   const initialYb = (() => {
     if (typeof window === "undefined") return [];
     try {
@@ -102,6 +138,178 @@ function CustomerHomePageInner() {
   const authReady = !loadingUser || !!authUser || !!user;
   const galleryRef = useRef(null);
   const [photoValidity, setPhotoValidity] = useState({});
+
+  useEffect(() => {
+    if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
+    const cleanup = installPreventDefaultTracer();
+    return cleanup;
+  }, [clickDiagEnabled, homeBisect.pdTracer]);
+
+  useEffect(() => {
+    if (!clickDiagEnabled) return undefined;
+    installHomeNavInstrumentation({ enabled: true });
+    return undefined;
+  }, [clickDiagEnabled]);
+
+  useEffect(() => {
+    if (!clickDiagEnabled) return undefined;
+    const timer = setTimeout(() => {
+      const shell = document.querySelector(".home-map-shell");
+      if (!shell) return;
+      const viewport = document.querySelector(".home-map-viewport");
+      const nav = document.querySelector("nav.fixed") || document.querySelector("nav");
+      const tiles = document.querySelector('[data-home-tiles="1"]');
+      const overlaps = (a, b) => {
+        if (!a || !b) return false;
+        return !(
+          a.right <= b.left ||
+          a.left >= b.right ||
+          a.bottom <= b.top ||
+          a.top >= b.bottom
+        );
+      };
+      const shellRect = shell.getBoundingClientRect();
+      const viewportRect = viewport?.getBoundingClientRect();
+      const navRect = nav?.getBoundingClientRect();
+      const tilesRect = tiles?.getBoundingClientRect();
+      const styles = [];
+      let node = shell;
+      for (let i = 0; i < 4 && node; i += 1) {
+        const cs = window.getComputedStyle(node);
+        styles.push({
+          tag: node.tagName?.toLowerCase() || "unknown",
+          className: (node.className || "").toString(),
+          position: cs.position,
+          zIndex: cs.zIndex,
+          pointerEvents: cs.pointerEvents,
+          opacity: cs.opacity,
+          transform: cs.transform,
+          filter: cs.filter,
+          isolation: cs.isolation,
+          contain: cs.contain,
+        });
+        node = node.parentElement;
+      }
+
+      // eslint-disable-next-line no-console
+      console.log("[HOME_MAP_ASSERT]", {
+        shellRect,
+        viewportRect,
+        navRect,
+        tilesRect,
+        styles,
+      });
+
+      if (navRect && shellRect.top < navRect.bottom) {
+        // eslint-disable-next-line no-console
+        console.warn("[HOME_MAP_ASSERT] map overlaps navbar region", { shellRect, navRect });
+      }
+      if (tilesRect && overlaps(shellRect, tilesRect)) {
+        // eslint-disable-next-line no-console
+        console.warn("[HOME_MAP_ASSERT] map overlaps tiles container", { shellRect, tilesRect });
+      }
+      if (
+        viewportRect &&
+        (viewportRect.width > shellRect.width + 1 || viewportRect.height > shellRect.height + 1)
+      ) {
+        // eslint-disable-next-line no-console
+        console.warn("[HOME_MAP_ASSERT] viewport exceeds shell bounds", {
+          shellRect,
+          viewportRect,
+        });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [clickDiagEnabled]);
+
+  useEffect(() => {
+    if (!clickDiagEnabled || !homeBisect.homeAudit) return undefined;
+    const stringifyNode = (node) => {
+      if (!node) return "null";
+      if (node === document) return "document";
+      if (node === window) return "window";
+      if (!node.tagName) return node.nodeName || "unknown";
+      const tag = node.tagName.toLowerCase();
+      const cls = (node.className || "").toString().trim().split(/\s+/).filter(Boolean).slice(0, 2).join(".");
+      return `${tag}${cls ? `.${cls}` : ""}`;
+    };
+    const audit = (event) => {
+      try {
+        const { clientX = 0, clientY = 0 } = event;
+        const top = document.elementFromPoint(clientX, clientY);
+        const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+        const anchor = event.target?.closest?.("a[href]");
+        // eslint-disable-next-line no-console
+        console.log("[CLICK_DIAG] HOME_AUDIT", {
+          type: event.type,
+          phase: "capture",
+          defaultPrevented: event.defaultPrevented,
+          cancelBubble: event.cancelBubble,
+          target: stringifyNode(event.target),
+          top: stringifyNode(top),
+          anchor: anchor?.getAttribute?.("href") || null,
+          path: path.slice(0, 6).map(stringifyNode),
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    const anchorPrevented = (event) => {
+      const a = event.target?.closest?.("a[href]");
+      if (!a) return;
+      queueMicrotask(() => {
+        if (event.defaultPrevented) {
+          // eslint-disable-next-line no-console
+          console.warn("[ANCHOR_PREVENTED]", {
+            href: a.getAttribute?.("href"),
+            stack: new Error().stack,
+          });
+        }
+      });
+    };
+    document.addEventListener("click", audit, { capture: true, passive: true });
+    document.addEventListener("pointerdown", audit, { capture: true, passive: true });
+    document.addEventListener("click", anchorPrevented, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener("click", audit, { capture: true, passive: true });
+      document.removeEventListener("pointerdown", audit, { capture: true, passive: true });
+      document.removeEventListener("click", anchorPrevented, { capture: true, passive: true });
+    };
+  }, [clickDiagEnabled, homeBisect.homeAudit]);
+  useEffect(() => {
+    if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
+    const cleanup = installPreventDefaultTracer();
+    return cleanup;
+  }, [clickDiagEnabled, homeBisect.pdTracer]);
+  const handleHomeCapture = (event) => {
+    if (!clickDiagEnabled || !homeBisect.tileDiag) return;
+    // eslint-disable-next-line no-console
+    console.log("[CLICK_DIAG] home grid capture", {
+      target: event.target,
+      currentTarget: event.currentTarget,
+    });
+  };
+  const diagTileClick =
+    (label, tileId) =>
+      (event) => {
+        if (!clickDiagEnabled || !homeBisect.tileDiag) return;
+        // eslint-disable-next-line no-console
+        console.log(`[CLICK_DIAG] ${label}`, {
+          tileId,
+          defaultPrevented: event.defaultPrevented,
+          target: event.target?.tagName,
+          currentTarget: event.currentTarget?.tagName,
+        });
+        const hrefAttr = event.currentTarget?.getAttribute?.("href");
+        if (hrefAttr) {
+          // eslint-disable-next-line no-console
+          console.log("[CLICK_DIAG] TILE_HREF", { tileId, href: hrefAttr });
+        }
+        queueMicrotask(() => {
+          // eslint-disable-next-line no-console
+          console.log("[CLICK_DIAG] TILE_POST", { tileId, href: window.location.href });
+        });
+      };
   const coverFor = (value) => primaryPhotoUrl(value) || null;
   const recordPhotoStatus = (url, status) => {
     if (!url) return;
@@ -323,31 +531,39 @@ function CustomerHomePageInner() {
         return;
       }
       setAllListingsLoading((prev) => (hasLoadedListings ? prev : true));
-      const { data, error } = await client
-        .from("listings")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(80);
-      if (!active) return;
-      if (error) {
-        console.error("Load all listings failed", error);
-        setAllListings([]);
-      } else {
-        const next = data || [];
-        setAllListings(next);
-        setHasLoadedListings(true);
-        if (typeof window !== "undefined") {
-          try {
-            sessionStorage.setItem(
-              "yb_customer_home_listings",
-              JSON.stringify(next)
-            );
-          } catch {
-            /* ignore cache errors */
+      try {
+        const { data, error } = await client
+          .from("listings")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(80);
+        if (!active) return;
+        if (error) {
+          console.error("Load all listings failed", error);
+          setAllListings([]);
+        } else {
+          const next = data || [];
+          setAllListings(next);
+          setHasLoadedListings(true);
+          if (typeof window !== "undefined") {
+            try {
+              sessionStorage.setItem(
+                "yb_customer_home_listings",
+                JSON.stringify(next)
+              );
+            } catch {
+              /* ignore cache errors */
+            }
           }
         }
+      } catch (err) {
+        if (active) {
+          console.error("Load all listings threw", err);
+          setAllListings([]);
+        }
+      } finally {
+        if (active) setAllListingsLoading(false);
       }
-      setAllListingsLoading(false);
     };
     loadAll();
     return () => {
@@ -486,7 +702,10 @@ function CustomerHomePageInner() {
   }
 
   return (
-    <section className="relative w-full min-h-screen text-white pb-4 pt-2 md:pt-3 -mt-4 md:-mt-12">
+    <section
+      className="relative w-full min-h-screen text-white pb-4 pt-2 md:pt-3 -mt-4 md:-mt-12"
+      data-clickdiag={clickDiagEnabled ? "home" : undefined}
+    >
 
       {/* Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -496,7 +715,7 @@ function CustomerHomePageInner() {
         <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
       </div>
 
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
+      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 relative z-10">
         <div className="w-full max-w-6xl mx-auto space-y-6">
         <div style={{ minHeight: "420px" }}>
           {authReady ? (
@@ -558,18 +777,25 @@ function CustomerHomePageInner() {
                   ) : null}
 
                   <div className="grid sm:grid-cols-2 gap-3 mt-3">
-                    {hybridItems.map((item) => (
+                    {hybridItems.map((item, idx) => (
                       <a
                         key={item.id}
                         href={`/customer/listings/${item.id}`}
                         className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto touch-manipulation"
                         target="_self"
+                        data-safe-nav="1"
+                        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
+                        data-clickdiag-tile-id={clickDiagEnabled ? item.id : undefined}
+                        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id || idx)}
+                        onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || idx)}
                       >
                         {coverFor(item.photo_url) ? (
-                          <img
+                          <SafeImage
                             src={coverFor(item.photo_url)}
                             alt={item.title}
                             className="h-20 w-20 object-cover rounded-lg border border-white/10"
+                            fallbackSrc="/business-placeholder.png"
                           />
                         ) : (
                           <div className="h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] text-white/60">
@@ -604,7 +830,11 @@ function CustomerHomePageInner() {
               ) : null}
 
               {/* Header with gallery + map (compact) */}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              <div
+                className="grid grid-cols-1 lg:grid-cols-5 gap-4"
+                onClickCapture={handleHomeCapture}
+                data-clickdiag={clickDiagEnabled ? "home-grid" : undefined}
+              >
                 <div className="lg:col-span-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
                   <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
                     <div className="text-sm uppercase tracking-[0.18em] text-white/60">Browse spots</div>
@@ -638,7 +868,14 @@ function CustomerHomePageInner() {
                         className={`min-w-[220px] max-w-[240px] snap-start text-left rounded-2xl border border-white/10 bg-white/5 p-3 hover:border-white/30 hover:bg-white/10 transition shadow-sm ${
                           selectedBusiness?.id === biz.id ? "border-white/40 bg-white/10" : ""
                         }`}
-                        onClick={() => handleSelectBusiness(biz)}
+                        onClick={(event) => {
+                          diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
+                          handleSelectBusiness(biz);
+                        }}
+                        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
+                        data-clickdiag-tile-id={clickDiagEnabled ? biz.id || biz.name : undefined}
+                        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="space-y-1">
@@ -679,33 +916,42 @@ function CustomerHomePageInner() {
                 </div>
 
                 <div className="lg:col-span-2">
-                  <div
-                    className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3"
-                    style={{ pointerEvents: "auto", touchAction: "auto" }}
-                  >
-                    <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-white/85 truncate">
-                          {selectedBusiness ? selectedBusiness.name : "Map"}
+                  {homeBisect.map ? (
+                    <div
+                      className="home-map-shell relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3 z-0"
+                      data-clickdiag={clickDiagEnabled ? "map-shell" : undefined}
+                      data-home-map-shell="1"
+                    >
+                      <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-white/85 truncate">
+                            {selectedBusiness ? selectedBusiness.name : "Map"}
+                          </div>
                         </div>
                       </div>
+                      <div className="home-map-viewport relative overflow-hidden rounded-2xl border border-white/12 shadow-lg">
+                        <GoogleMapClient
+                          radiusKm={25}
+                          showBusinessErrors={false}
+                          containerClassName="w-full pointer-events-auto"
+                          cardClassName="bg-transparent border-0 text-white"
+                          mapClassName="h-64 sm:h-72 lg:h-[240px] w-full pointer-events-auto touch-pan-y touch-manipulation"
+                          title=""
+                          enableCategoryFilter={false}
+                          enableSearch={false}
+                          placesMode="manual"
+                          disableGooglePlaces
+                          prefilledBusinesses={mapBusinesses}
+                          onBusinessesChange={setMapBusinesses}
+                          onControlsReady={setMapControls}
+                        />
+                      </div>
                     </div>
-                    <GoogleMapClient
-                      radiusKm={25}
-                      showBusinessErrors={false}
-                      containerClassName="w-full pointer-events-auto"
-                      cardClassName="bg-transparent border-0 text-white"
-                      mapClassName="h-64 sm:h-72 lg:h-[240px] rounded-2xl overflow-hidden border border-white/12 shadow-lg pointer-events-auto touch-pan-y touch-manipulation"
-                      title=""
-                      enableCategoryFilter={false}
-                      enableSearch={false}
-                      placesMode="manual"
-                      disableGooglePlaces
-                      prefilledBusinesses={mapBusinesses}
-                      onBusinessesChange={setMapBusinesses}
-                      onControlsReady={setMapControls}
-                    />
-                  </div>
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3 h-64 sm:h-72 lg:h-[240px] text-white/70 text-sm flex items-center">
+                      Map disabled (HOME_BISECT_MAP=0)
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -729,10 +975,11 @@ function CustomerHomePageInner() {
                           className="rounded-xl border border-white/10 bg-white/5 p-4 flex gap-3"
                         >
                           {coverFor(item.photo_url) ? (
-                            <img
+                            <SafeImage
                               src={coverFor(item.photo_url)}
                               alt={item.title}
                               className="h-20 w-20 rounded-lg object-cover border border-white/10"
+                              fallbackSrc="/business-placeholder.png"
                             />
                           ) : (
                             <div className="h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] text-white/60">
@@ -789,8 +1036,8 @@ function CustomerHomePageInner() {
         </div>
 
         {!search && (
-          <div className="space-y-3 mt-4 lg:mt-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-3 mt-4 lg:mt-6 relative z-10" data-home-tiles="1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
                 <p className="text-lg font-semibold">Browse by category</p>
@@ -830,36 +1077,49 @@ function CustomerHomePageInner() {
                           {validCandidates.length} items
                         </p>
                       </div>
-                      <a
+                      <Link
                         href={`/listings/${firstItem.id}`}
+                        prefetch={false}
+                        data-safe-nav="1"
                         className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto touch-manipulation"
-                        target="_self"
+                        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
+                        data-clickdiag-tile-id={clickDiagEnabled ? firstItem.id : undefined}
+                        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", firstItem.id)}
+                        onClick={diagTileClick("REACT_TILE_BUBBLE", firstItem.id)}
                       >
                         View
-                      </a>
+                      </Link>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 auto-rows-[160px]">
                       {visibleItems.map((item, index) => {
                         const isHero = showSingle && index === 0;
                         return (
-                          <a
+                          <Link
                             key={item.id}
                             href={`/listings/${item.id}`}
+                            prefetch={false}
+                            data-safe-nav="1"
                             className={`relative group bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto touch-manipulation ${
                               isHero ? "col-span-2 row-span-2 min-h-[320px]" : "min-h-[160px]"
                             }`}
-                            target="_self"
+                            data-clickdiag={clickDiagEnabled ? "tile" : undefined}
+                            data-clickdiag-tile-id={clickDiagEnabled ? item.id : undefined}
+                            data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                            onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id)}
+                            onClick={diagTileClick("REACT_TILE_BUBBLE", item.id)}
                           >
-                            <img
+                            <SafeImage
                               src={item.cover}
                               alt={item.title}
                               className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                               onLoad={() => recordPhotoStatus(item.cover, "valid")}
                               onError={() => recordPhotoStatus(item.cover, "invalid")}
+                              fallbackSrc="/business-placeholder.png"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                          </a>
+                          </Link>
                         );
                       })}
                     </div>
@@ -876,9 +1136,14 @@ function CustomerHomePageInner() {
 }
 
 export default function CustomerHomePage() {
+  const safeNavFlag = process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1";
   return (
     <CustomerHomeErrorBoundary>
-      <CustomerHomePageInner />
+      {safeNavFlag ? <SafeNavFallback /> : null}
+      <HomeGuard fallback={<HomeGuardFallback />}>
+        <GuaranteedNavCapture />
+        <CustomerHomePageInner />
+      </HomeGuard>
     </CustomerHomeErrorBoundary>
   );
 }

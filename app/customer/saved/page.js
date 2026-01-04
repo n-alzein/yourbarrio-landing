@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { BookmarkCheck, Heart, Sparkles, Star } from "lucide-react";
+import SafeImage from "@/components/SafeImage";
 
 export default function CustomerSavedPage() {
   const { user, supabase, loadingUser } = useAuth();
@@ -246,13 +247,11 @@ export default function CustomerSavedPage() {
                   className="group relative rounded-2xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl hover:-translate-y-1 transition-transform duration-300"
                 >
                   <div className="relative h-48 w-full overflow-hidden">
-                    <img
-                      src={
-                        primaryPhotoUrl(item.photo_url) ||
-                        "/business-placeholder.png"
-                      }
+                    <SafeImage
+                      src={primaryPhotoUrl(item.photo_url)}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
+                      fallbackSrc="/business-placeholder.png"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                     <div className="absolute top-3 left-3 text-xs px-3 py-1 rounded-full bg-black/50 border border-white/15 backdrop-blur flex items-center gap-1">

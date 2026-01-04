@@ -1,29 +1,81 @@
 // middleware.js
 import { NextResponse } from "next/server";
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
+import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req) {
+  const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+  const isProd = process.env.NODE_ENV === "production";
+
   // Forward request headers so Supabase helper can read cookies and set new ones
   const res = NextResponse.next({ request: { headers: req.headers } });
   const path = req.nextUrl.pathname;
 
-  // Use explicit cookie name so browser + middleware stay in sync
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const cookieName = supabaseUrl
-    ? `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`
-    : undefined;
+  const log = (message, ...args) => {
+    if (debug) console.log(`[middleware] ${message}`, ...args);
+  };
+
+  log("executing for path", path);
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const baseOptions = {
+              ...options,
+              sameSite: "lax",
+              secure: isProd,
+              path: options?.path ?? "/",
+            };
+            res.cookies.set(name, value, baseOptions);
+          });
+        },
+      },
+    }
+  );
+
+  const clearSupabaseCookies = () => {
+    const all = req.cookies.getAll();
+    const targets = all
+      .map((c) => c.name)
+      .filter((name) => name.startsWith("sb-"));
+
+    targets.forEach((name) => {
+      res.cookies.set(name, "", {
+        path: "/",
+        maxAge: 0,
+        sameSite: "lax",
+        secure: isProd,
+      });
+    });
+
+    if (targets.length && debug) {
+      log("cleared invalid supabase cookies", targets);
+    }
+  };
 
   if (req.headers.get("x-supabase-callback") === "true") {
     return res;
   }
 
-  const supabase = createMiddlewareClient(
-    { req, res },
-    cookieName ? { cookieOptions: { name: cookieName } } : undefined
-  );
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  let session = null;
+  try {
+    const {
+      data: { session: s },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) throw error;
+    session = s;
+  } catch (err) {
+    log("getSession failed; clearing cookies", err?.message);
+    clearSupabaseCookies();
+    return res;
+  }
 
   const hasSession = Boolean(session);
   const isBusinessPublicPage =

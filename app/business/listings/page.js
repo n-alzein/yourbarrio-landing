@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { useTheme } from "@/components/ThemeProvider";
+import SafeImage from "@/components/SafeImage";
 
 export default function BusinessListingsPage() {
   const { supabase, authUser, loadingUser } = useAuth();
@@ -444,10 +445,11 @@ export default function BusinessListingsPage() {
                       isLight ? "bg-slate-50" : "bg-slate-800"
                     }`}
                   >
-                    <img
+                    <SafeImage
                       src={primaryPhotoUrl(listing.photo_url)}
                       alt={listing.title}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                      fallbackSrc="/business-placeholder.png"
                     />
                   </div>
                 ) : (

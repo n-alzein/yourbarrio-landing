@@ -337,3 +337,29 @@ html, body {
   box-shadow: 0 6px 12px rgba(2,6,23,0.25);
   transform: translate(-50%, -50%);
 }
+
+/* Customer home map shell containment */
+.home-map-shell {
+  position: relative;
+  isolation: isolate;
+  contain: layout paint;
+  z-index: 0;
+  pointer-events: auto;
+}
+.home-map-viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+.home-map-shell .gm-style,
+.home-map-shell .gm-style * {
+  max-width: 100%;
+}
+.home-map-shell > * {
+  max-width: 100%;
+}
+/* Prevent map shell from intercepting navbar/menu clicks when open */
+html[data-nav-menu-open="1"] .home-map-shell,
+html[data-nav-menu-open="1"] .home-map-shell * {
+  pointer-events: none !important;
+}

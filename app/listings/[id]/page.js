@@ -15,6 +15,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
+import SafeImage from "@/components/SafeImage";
 
 export default function ListingDetails({ params }) {
   const { supabase, user } = useAuth();
@@ -254,10 +255,11 @@ export default function ListingDetails({ params }) {
                         }`}
                         aria-label={`View photo ${idx + 1}`}
                       >
-                        <img
+                        <SafeImage
                           src={photo}
                           alt={`Listing photo ${idx + 1}`}
                           className="h-full w-full object-cover"
+                          fallbackSrc="/business-placeholder.png"
                         />
                       </button>
                     );
@@ -266,7 +268,7 @@ export default function ListingDetails({ params }) {
               ) : null}
 
               <div className="relative">
-                <img
+                <SafeImage
                   src={heroSrc || "/business-placeholder.png"}
                   alt={listing.title}
                   className="w-full h-[420px] object-cover"
@@ -277,6 +279,7 @@ export default function ListingDetails({ params }) {
                     }
                   }}
                   referrerPolicy="no-referrer"
+                  fallbackSrc="/business-placeholder.png"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/10 to-white/20" />
               </div>

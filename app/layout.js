@@ -7,6 +7,8 @@ import Footer from "@/components/Footer";
 import { ModalProvider } from "@/components/modals/ModalProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import OverlayGuard from "@/components/OverlayGuard";
+import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
+import DebugToolsClient from "@/components/debug/DebugToolsClient";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +35,7 @@ export default function RootLayout({ children }) {
           geistMono.variable
         ].join(" ")}
       >
+        <DevOnlyNavRecorderLoader />
         <ThemeProvider>
           <OverlayGuard />
           <AuthProvider>
@@ -57,6 +60,8 @@ export default function RootLayout({ children }) {
             </ModalProvider>
           </AuthProvider>
         </ThemeProvider>
+        {/* DEBUG_CLICK_DIAG / NAV_TRACE */}
+        <DebugToolsClient />
       </body>
     </html>
   );

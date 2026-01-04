@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useModal } from "./ModalProvider";
 
 export default function CustomerLoginModal({ onClose }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { supabase, loadingUser } = useAuth();
   const { openModal } = useModal();
@@ -60,8 +59,52 @@ export default function CustomerLoginModal({ onClose }) {
     const dest = redirectParam || fallback;
 
     onClose?.();
-    router.push(dest);
-    router.refresh();
+
+    const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+
+      if (debugAuth) {
+        console.log("[customer-login] refreshing cookies with tokens");
+      }
+
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: session?.access_token,
+          refresh_token: session?.refresh_token,
+        }),
+      });
+
+      const refreshed = res.headers.get("x-auth-refresh-user") === "1";
+      if (debugAuth) {
+        console.log(
+          "[customer-login] refresh user header",
+          res.headers.get("x-auth-refresh-user")
+        );
+      }
+
+      if (!refreshed) {
+        setError(
+          "Login succeeded but session could not be persisted in Safari. Please try again."
+        );
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Auth refresh call failed", err);
+      setError(
+        "Login succeeded but session could not be persisted in Safari. Please try again."
+      );
+      setLoading(false);
+      return;
+    }
+
+    window.location.assign(dest);
     setLoading(false);
   }
 

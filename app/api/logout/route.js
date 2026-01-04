@@ -26,6 +26,7 @@ export async function POST() {
         path: "/",
         maxAge: 0,
         sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
       });
     }
 
