@@ -33,12 +33,6 @@ export default function NewListingPage() {
     [photoPreviews]
   );
 
-  useEffect(() => {
-    if (!loadingUser && !authUser) {
-      router.push("/business");
-    }
-  }, [authUser, loadingUser, router]);
-
   const handleAddPhotos = (files) => {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;

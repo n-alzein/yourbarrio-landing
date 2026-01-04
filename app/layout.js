@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import OverlayGuard from "@/components/OverlayGuard";
 import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
+import CrashLoggerClient from "@/components/CrashLoggerClient";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
           geistMono.variable
         ].join(" ")}
       >
+        <CrashLoggerClient />
         <DevOnlyNavRecorderLoader />
         <ThemeProvider>
           <OverlayGuard />

@@ -62,7 +62,6 @@ export default function BusinessListingsPage() {
     if (loadingUser) return; // Wait for auth
     if (!authUser) {
       setLoading(false);
-      router.push("/business");
       return;
     }
     if (!isVisible) return;
@@ -108,7 +107,7 @@ export default function BusinessListingsPage() {
     return () => {
       if (typeof cleanup === "function") cleanup();
     };
-  }, [loadingUser, authUser, supabase, router, hasLoaded, isVisible]);
+  }, [loadingUser, authUser, supabase, hasLoaded, isVisible]);
 
   // ------------------------------------------------------
   // DELETE LISTING
@@ -137,6 +136,13 @@ export default function BusinessListingsPage() {
     return (
       <p className="text-slate-700 dark:text-slate-100 text-center py-20">
         Loading listings...
+      </p>
+    );
+  }
+  if (!authUser) {
+    return (
+      <p className="text-slate-700 dark:text-slate-100 text-center py-20">
+        Loading your account...
       </p>
     );
   }

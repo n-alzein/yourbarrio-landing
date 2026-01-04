@@ -17,6 +17,19 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const router = useRouter();
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
+  const authDiagPrevRef = useRef({
+    loadingUser: null,
+    authUserId: null,
+  });
+
+  const authDiagLog = (event, payload = {}) => {
+    if (!authDiagEnabled || typeof window === "undefined") return;
+    const timestamp = new Date().toISOString();
+    const pathname = window.location.pathname;
+    // eslint-disable-next-line no-console
+    console.log("[AUTH_DIAG]", { timestamp, pathname, event, ...payload });
+  };
 
   /* -----------------------------------------------------------------
      STABLE SUPABASE CLIENT
@@ -62,6 +75,26 @@ export function AuthProvider({ children }) {
       role: profile?.role ?? null,
       hasProfile: Boolean(profile),
     });
+
+    if (!authDiagEnabled) return;
+    const prev = authDiagPrevRef.current;
+    const next = {
+      loadingUser,
+      authUserId: authUser?.id ?? null,
+    };
+    if (prev.loadingUser !== next.loadingUser) {
+      authDiagLog("loadingUser change", {
+        prev: prev.loadingUser,
+        next: next.loadingUser,
+      });
+    }
+    if (prev.authUserId !== next.authUserId) {
+      authDiagLog("authUser change", {
+        prev: prev.authUserId,
+        next: next.authUserId,
+      });
+    }
+    authDiagPrevRef.current = next;
   }, [loadingUser, authUser?.id, profile?.role, profile]);
 
   /* -----------------------------------------------------------------
@@ -256,6 +289,11 @@ export function AuthProvider({ children }) {
     const { data: listener } = supabase
       ? supabase.auth.onAuthStateChange(async (event, session) => {
           try {
+            authDiagLog("onAuthStateChange", {
+              event,
+              hasSession: Boolean(session),
+              sessionUserId: session?.user?.id ?? null,
+            });
             // Skip only the synthetic initial event; handle real sign-ins immediately
             if (event === "INITIAL_SESSION") return;
 
@@ -302,18 +340,32 @@ export function AuthProvider({ children }) {
     if (!supabase) return;
 
     const handleVisibility = () => {
+      authDiagLog("visibilitychange", {
+        visibilityState: document.visibilityState,
+      });
       if (document.hidden) return;
       syncSession();
     };
 
     const handleFocus = () => syncSession();
+    const handlePageShow = (event) => {
+      authDiagLog("pageshow", { persisted: event?.persisted ?? null });
+      syncSession();
+    };
+    const handlePageHide = (event) => {
+      authDiagLog("pagehide", { persisted: event?.persisted ?? null });
+    };
 
     window.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       window.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("pagehide", handlePageHide);
     };
   }, [supabase]);
 

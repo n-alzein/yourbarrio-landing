@@ -78,11 +78,12 @@ export async function middleware(req) {
   }
 
   const hasSession = Boolean(session);
-  const isBusinessPublicPage =
-    path === "/business" ||
-    path === "/business/" ||
-    path === "/business/about" ||
-    path === "/business/about/";
+  const isCustomerPath = path.startsWith("/customer");
+  const isBusinessProtectedPath =
+    path.startsWith("/business/dashboard") ||
+    path.startsWith("/business/listings") ||
+    path.startsWith("/business/settings") ||
+    path.startsWith("/business/onboarding");
 
   // Keep logged-in users off the public landing page
   if (path === "/" && hasSession) {
@@ -103,14 +104,16 @@ export async function middleware(req) {
     });
   }
 
-  // Allow customer routes to handle auth client-side to avoid false redirects
-  if (path.startsWith("/customer") && !hasSession) {
-    return res;
+  if (isCustomerPath && !hasSession) {
+    return NextResponse.redirect(new URL("/", req.url), {
+      headers: res.headers,
+    });
   }
 
-  // Allow business routes to render unauthenticated (handled client-side)
-  if (path.startsWith("/business") && !hasSession) {
-    return res;
+  if (isBusinessProtectedPath && !hasSession) {
+    return NextResponse.redirect(new URL("/business-auth/login", req.url), {
+      headers: res.headers,
+    });
   }
 
   return res;

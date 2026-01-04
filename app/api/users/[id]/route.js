@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 export async function GET(request, { params }) {
   const user = await getUser(request);
   if (!user) return new Response("Unauthorized", { status: 401 });
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
     .from("users")
@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
   if (!user) return new Response("Unauthorized", { status: 401 });
 
   const updates = await request.json();
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
 
 
   const { data, error } = await supabase
@@ -37,7 +37,7 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const user = await getUser(request);
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
 
   if (!user) return new Response("Unauthorized", { status: 401 });
 

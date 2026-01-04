@@ -13,7 +13,7 @@ export default function SettingsPage() {
   const { authUser, user, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
   const router = useRouter();
-  const redirectPath = "/?redirect=/customer/settings";
+  const redirectPath = "/business";
 
   /* -----------------------------------------------------------
      HOOKS (always first — no conditional hooks)
@@ -29,16 +29,6 @@ export default function SettingsPage() {
     address: "",
     profile_photo_url: "",
   });
-
-  /* -----------------------------------------------------------
-     AUTH GUARD — redirect when session drops instead of blank UI
-  ----------------------------------------------------------- */
-  useEffect(() => {
-    if (loadingUser) return;
-    if (authUser) return;
-
-    router.replace(redirectPath);
-  }, [authUser, loadingUser, router, redirectPath]);
 
   /* -----------------------------------------------------------
      LOAD PROFILE INTO FORM
@@ -167,7 +157,7 @@ export default function SettingsPage() {
       }
     })();
 
-    console.debug("[Settings:customer] auth provider debug", {
+    console.debug("[Settings:business] auth provider debug", {
       resolvedProvider: primaryProvider,
       providerLabel,
       sessionUserId: authUser?.id,
@@ -197,7 +187,7 @@ export default function SettingsPage() {
         <div className="space-y-3 text-center">
           <p className="text-lg font-semibold">Session expired</p>
           <p className="text-sm text-white/70">
-            Please sign in again to get back to your account.
+            Please sign in again to keep managing your business account.
           </p>
           <button
             type="button"
@@ -246,9 +236,9 @@ export default function SettingsPage() {
             <div className="flex flex-col items-center mb-8">
               <Image
                 src={
-                  (form?.profile_photo_url ||
-                    user?.profile_photo_url ||
-                    "/customer-placeholder.png")                   
+                  form.profile_photo_url ||
+                  user.profile_photo_url ||
+                  "/customer-placeholder.png"
                 }
                 alt="Profile Photo"
                 width={140}

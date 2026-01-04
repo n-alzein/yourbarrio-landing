@@ -38,7 +38,6 @@ export default function BusinessNavbar() {
   const pathname = usePathname();
   const { user, authUser, role, loadingUser, supabase } = useAuth();
 
-  const [hydrated, setHydrated] = useState(typeof window !== "undefined");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -49,11 +48,6 @@ export default function BusinessNavbar() {
     authUser?.user_metadata?.full_name ||
     authUser?.user_metadata?.name ||
     "Account";
-
-  // Hydration guard prevents frozen dropdown interactions
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
 
   useEffect(() => {
     setProfileMenuOpen(false);
@@ -107,8 +101,6 @@ export default function BusinessNavbar() {
     authUser?.email ||
     authUser?.user_metadata?.email ||
     null;
-
-  if (!hydrated) return null;
 
   if (loadingUser && !user && !authUser) {
     return (

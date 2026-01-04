@@ -3,11 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function BusinessDashboard() {
-  const router = useRouter();
   const { supabase, user, authUser, role, loadingUser } = useAuth();
 
   const [hydrated, setHydrated] = useState(false);
@@ -22,25 +20,7 @@ export default function BusinessDashboard() {
   }, []);
 
   /* ------------------------------------------- */
-  /* 2️⃣ Auth guard */
-  /* ------------------------------------------- */
-  useEffect(() => {
-    if (!hydrated) return;
-    if (loadingUser) return;
-
-    if (!user) {
-      router.replace("/business");
-      return;
-    }
-
-    if (role !== "business") {
-      router.replace("/customer/home");
-      return;
-    }
-  }, [hydrated, loadingUser, user, role, router]);
-
-  /* ------------------------------------------- */
-  /* 3️⃣ Load business profile */
+  /* 2️⃣ Load business profile */
   /* ------------------------------------------- */
   useEffect(() => {
     // Use profile from AuthProvider immediately to avoid blank screen while refetching
@@ -82,7 +62,7 @@ export default function BusinessDashboard() {
   }, [hydrated, loadingUser, user, role, supabase, authUser?.id]);
 
   /* ------------------------------------------- */
-  /* 4️⃣ Load stats AFTER business exists */
+  /* 3️⃣ Load stats AFTER business exists */
   /* ------------------------------------------- */
   useEffect(() => {
     if (!hydrated) return;
@@ -129,7 +109,7 @@ export default function BusinessDashboard() {
   }, [hydrated, business, supabase]);
 
   /* ------------------------------------------- */
-  /* 5️⃣ Block UI until ready */
+  /* 4️⃣ Block UI until ready */
   /* ------------------------------------------- */
   if (!hydrated || loadingUser) return <div className="h-screen" />;
 

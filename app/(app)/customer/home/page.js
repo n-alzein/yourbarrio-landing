@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -22,18 +22,48 @@ import SafeImage from "@/components/SafeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { installPreventDefaultTracer } from "@/lib/tracePreventDefault";
 import { installHomeNavInstrumentation } from "@/lib/navInstrumentation";
+import { appendCrashLog } from "@/lib/crashlog";
+import MapModal from "@/components/customer/MapModal";
+
+const SAMPLE_BUSINESSES = [
+  {
+    id: "sample-1",
+    name: "Barrio Cafe",
+    category: "Cafe",
+    categoryLabel: "Cafe",
+    address: "123 Sample St, San Francisco",
+    description: "Neighborhood coffee and light bites.",
+    website: "",
+    imageUrl: "",
+    source: "sample",
+    coords: { lat: 37.7749, lng: -122.4194 },
+  },
+  {
+    id: "sample-2",
+    name: "Barrio Market",
+    category: "Market",
+    categoryLabel: "Market",
+    address: "456 Grove Ave, San Francisco",
+    description: "Local grocery staples and fresh produce.",
+    website: "",
+    imageUrl: "",
+    source: "sample",
+    coords: { lat: 37.779, lng: -122.423 },
+  },
+];
+
+const isSameBusinessList = (prev, next) => {
+  if (!Array.isArray(prev) || !Array.isArray(next)) return false;
+  if (prev.length !== next.length) return false;
+  for (let i = 0; i < prev.length; i += 1) {
+    if (prev[i]?.id !== next[i]?.id) return false;
+  }
+  return true;
+};
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 function HomeGuardFallback({ children }) {
   return <>{children}</>;
 }
-const GoogleMapClient = dynamic(() => import("@/components/GoogleMapClient"), {
-  ssr: false,
-  loading: () => (
-    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3 text-white/70 text-sm">
-      Loading map…
-    </div>
-  ),
-});
 const SafeNavFallback = dynamic(() => import("@/components/nav/SafeNavFallback"), { ssr: false });
 import GuaranteedNavCapture from "@/components/nav/GuaranteedNavCapture";
 
@@ -50,6 +80,13 @@ class CustomerHomeErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error("Customer home crashed", error, info);
+    appendCrashLog({
+      type: "react-error",
+      message: error?.message,
+      stack: error?.stack,
+      info: info?.componentStack,
+      route: "/customer/home",
+    });
   }
 
   render() {
@@ -84,6 +121,7 @@ function CustomerHomePageInner() {
   const searchParams = useSearchParams();
   const { user, authUser, loadingUser, supabase } = useAuth();
   const [search, setSearch] = useState("");
+  const [mapOpen, setMapOpen] = useState(false);
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
   const homeBisect = {
@@ -93,6 +131,8 @@ function CustomerHomePageInner() {
     safeNav: process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1",
     tileDiag: process.env.NEXT_PUBLIC_HOME_BISECT_TILE_DIAG !== "0",
   };
+  const mapEnabled = homeBisect.map;
+  const mapAvailable = mapEnabled && process.env.NEXT_PUBLIC_DISABLE_MAP !== "1";
   const initialYb = (() => {
     if (typeof window === "undefined") return [];
     try {
@@ -138,6 +178,14 @@ function CustomerHomePageInner() {
   const authReady = !loadingUser || !!authUser || !!user;
   const galleryRef = useRef(null);
   const [photoValidity, setPhotoValidity] = useState({});
+  const logCrashEvent = useCallback(
+    (payload) =>
+      appendCrashLog({
+        type: "customer-home",
+        ...payload,
+      }),
+    []
+  );
 
   useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
@@ -318,33 +366,6 @@ function CustomerHomePageInner() {
       return { ...prev, [url]: status };
     });
   };
-  const sampleBusinesses = [
-    {
-      id: "sample-1",
-      name: "Barrio Cafe",
-      category: "Cafe",
-      categoryLabel: "Cafe",
-      address: "123 Sample St, San Francisco",
-      description: "Neighborhood coffee and light bites.",
-      website: "",
-      imageUrl: "",
-      source: "sample",
-      coords: { lat: 37.7749, lng: -122.4194 },
-    },
-    {
-      id: "sample-2",
-      name: "Barrio Market",
-      category: "Market",
-      categoryLabel: "Market",
-      address: "456 Grove Ave, San Francisco",
-      description: "Local grocery staples and fresh produce.",
-      website: "",
-      imageUrl: "",
-      source: "sample",
-      coords: { lat: 37.779, lng: -122.423 },
-    },
-  ];
-
   const filteredBusinesses = useMemo(() => {
     const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
     const q = search.trim().toLowerCase();
@@ -376,6 +397,7 @@ function CustomerHomePageInner() {
   };
 
   useEffect(() => {
+    if (hasLoadedYb) return undefined;
     let active = true;
     const loadYb = async () => {
       setYbBusinessesLoading((prev) => (hasLoadedYb ? prev : true));
@@ -386,35 +408,80 @@ function CustomerHomePageInner() {
 
         // Try server-fed public endpoint first (uses service role when available)
         try {
-          const res = await fetch("/api/public-businesses");
-          const payload = await res.json();
+          const controller = new AbortController();
+          const timeoutId = setTimeout(
+            () => controller.abort(new DOMException("Timeout", "AbortError")),
+            12000
+          );
+          const res = await fetch("/api/public-businesses", { signal: controller.signal });
+          clearTimeout(timeoutId);
+          const payload = await res.json().catch(() => ({}));
           if (res.ok && Array.isArray(payload?.businesses)) {
             rows = payload.businesses;
           }
         } catch (errApi) {
+          if (errApi?.name === "AbortError") {
+            logCrashEvent({
+              context: "public-businesses",
+              kind: "timeout",
+              message: "/api/public-businesses timed out after 12s",
+            });
+            if (active) {
+              setYbBusinesses(sampleBusinesses);
+              setHasLoadedYb(true);
+              setYbBusinessesError("Still loading businesses. Please refresh to retry.");
+              setYbBusinessesLoading(false);
+            }
+            return;
+          }
           console.warn("public-businesses endpoint failed", errApi);
         }
 
         // Fallback to direct Supabase query with anon key if endpoint returned nothing
         if (!rows.length && client) {
-          const { data, error } = await client
-            .from("users")
-            .select(
-              "id,business_name,full_name,category,city,address,description,website,profile_photo_url,latitude,longitude,lat,lng,role"
-            )
-            .eq("role", "business")
-            .limit(400);
-          if (error) {
-            console.warn("Supabase fallback failed", error);
-          } else {
-            rows = data || [];
+          const controller = new AbortController();
+          const timeoutId = setTimeout(
+            () => controller.abort(new DOMException("Timeout", "AbortError")),
+            12000
+          );
+          try {
+            let query = client
+              .from("users")
+              .select(
+                "id,business_name,full_name,category,city,address,description,website,profile_photo_url,latitude,longitude,lat,lng,role"
+              )
+              .eq("role", "business")
+              .limit(400);
+            if (typeof query.abortSignal === "function") {
+              query = query.abortSignal(controller.signal);
+            }
+            const { data, error } = await query;
+            if (error) {
+              console.warn("Supabase fallback failed", error);
+            } else {
+              rows = data || [];
+            }
+          } catch (err) {
+            if (err?.name === "AbortError") {
+              logCrashEvent({
+                context: "public-businesses",
+                kind: "timeout",
+                message: "Supabase users query timed out after 12s",
+              });
+            } else {
+              console.warn("Supabase fallback threw", err);
+            }
+          } finally {
+            clearTimeout(timeoutId);
           }
         }
 
         if (!active) return;
 
         if (!rows.length) {
-          setYbBusinesses(sampleBusinesses);
+          setYbBusinesses((prev) =>
+            isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
+          );
           setHasLoadedYb(true);
           setYbBusinessesError("Showing sample businesses — real data unavailable.");
         } else {
@@ -450,8 +517,8 @@ function CustomerHomePageInner() {
               };
             })
             .filter(Boolean);
-          const next = mapped.length ? mapped : sampleBusinesses;
-          setYbBusinesses(next);
+          const next = mapped.length ? mapped : SAMPLE_BUSINESSES;
+          setYbBusinesses((prev) => (isSameBusinessList(prev, next) ? prev : next));
           setHasLoadedYb(true);
 
           if (typeof window !== "undefined") {
@@ -468,7 +535,9 @@ function CustomerHomePageInner() {
       } catch (err) {
         console.warn("Failed to load YourBarrio businesses", err);
         if (!active) return;
-        setYbBusinesses(sampleBusinesses);
+        setYbBusinesses((prev) =>
+          isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
+        );
         setHasLoadedYb(true);
         setYbBusinessesError("Could not load businesses yet. Showing sample locations.");
       } finally {
@@ -481,7 +550,7 @@ function CustomerHomePageInner() {
     return () => {
       active = false;
     };
-  }, [supabase, hasLoadedYb]);
+  }, [supabase, hasLoadedYb, logCrashEvent]);
 
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
@@ -491,15 +560,30 @@ function CustomerHomePageInner() {
   // Guard against long/hung requests leaving loading on
   useEffect(() => {
     if (!ybBusinessesLoading) return;
-    const timer = setTimeout(() => setYbBusinessesLoading(false), 8000);
+    const timer = setTimeout(() => {
+      setYbBusinessesLoading(false);
+      setYbBusinessesError((prev) => prev || "Still loading businesses. Please try again.");
+      logCrashEvent({
+        context: "yb-businesses",
+        kind: "timeout",
+        message: "Businesses load exceeded 12s watchdog",
+      });
+    }, 12000);
     return () => clearTimeout(timer);
-  }, [ybBusinessesLoading]);
+  }, [ybBusinessesLoading, logCrashEvent]);
 
   useEffect(() => {
     if (!allListingsLoading) return;
-    const timer = setTimeout(() => setAllListingsLoading(false), 8000);
+    const timer = setTimeout(() => {
+      setAllListingsLoading(false);
+      logCrashEvent({
+        context: "all-listings",
+        kind: "timeout",
+        message: "All listings load exceeded 12s watchdog",
+      });
+    }, 12000);
     return () => clearTimeout(timer);
-  }, [allListingsLoading]);
+  }, [allListingsLoading, logCrashEvent]);
 
   // Keep map businesses in sync with fetched YB businesses (for list display)
   useEffect(() => {
@@ -510,17 +594,10 @@ function CustomerHomePageInner() {
 
   // After both map controls and businesses are ready, refresh markers once
   useEffect(() => {
-    if (mapControls) {
-      mapControls.refresh?.();
+    if (!mapOpen) {
+      setMapControls(null);
     }
-  }, [mapControls]);
-
-  // Refresh map when fresh YB businesses with coords arrive
-  useEffect(() => {
-    if (mapControls && mapBusinesses.length) {
-      mapControls.refresh?.();
-    }
-  }, [mapControls, mapBusinesses]);
+  }, [mapOpen]);
 
   useEffect(() => {
     let active = true;
@@ -532,11 +609,21 @@ function CustomerHomePageInner() {
       }
       setAllListingsLoading((prev) => (hasLoadedListings ? prev : true));
       try {
-        const { data, error } = await client
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+          () => controller.abort(new DOMException("Timeout", "AbortError")),
+          12000
+        );
+        let query = client
           .from("listings")
           .select("*")
           .order("created_at", { ascending: false })
           .limit(80);
+        if (typeof query.abortSignal === "function") {
+          query = query.abortSignal(controller.signal);
+        }
+        const { data, error } = await query;
+        clearTimeout(timeoutId);
         if (!active) return;
         if (error) {
           console.error("Load all listings failed", error);
@@ -558,7 +645,15 @@ function CustomerHomePageInner() {
         }
       } catch (err) {
         if (active) {
-          console.error("Load all listings threw", err);
+          if (err?.name === "AbortError") {
+            logCrashEvent({
+              context: "all-listings",
+              kind: "timeout",
+              message: "Listings query timed out after 12s",
+            });
+          } else {
+            console.error("Load all listings threw", err);
+          }
           setAllListings([]);
         }
       } finally {
@@ -569,7 +664,7 @@ function CustomerHomePageInner() {
     return () => {
       active = false;
     };
-  }, [supabase, hasLoadedListings]);
+  }, [supabase, hasLoadedListings, logCrashEvent]);
 
   const groupedListings = useMemo(() => {
     const groups = {};
@@ -609,27 +704,56 @@ function CustomerHomePageInner() {
         return;
       }
 
-      const { data, error } = await client
-        .from("listings")
-        .select(
-          "id,title,description,price,category,city,photo_url,business_id,created_at"
-        )
-        .or(
-          `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
-        )
-        .order("created_at", { ascending: false })
-        .limit(8);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(new DOMException("Timeout", "AbortError")),
+        12000
+      );
 
-      if (!isActive) return;
+      try {
+        let query = client
+          .from("listings")
+          .select(
+            "id,title,description,price,category,city,photo_url,business_id,created_at"
+          )
+          .or(
+            `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
+          )
+          .order("created_at", { ascending: false })
+          .limit(8);
+        if (typeof query.abortSignal === "function") {
+          query = query.abortSignal(controller.signal);
+        }
 
-      if (error) {
-        console.error("Hybrid item search failed", error);
-        setHybridItemsError("Could not load item matches right now.");
+        const { data, error } = await query;
+
+        if (!isActive) return;
+
+        if (error) {
+          console.error("Hybrid item search failed", error);
+          setHybridItemsError("Could not load item matches right now.");
+          setHybridItems([]);
+        } else {
+          setHybridItems(data || []);
+        }
+      } catch (err) {
+        if (!isActive) return;
+        if (err?.name === "AbortError") {
+          logCrashEvent({
+            context: "hybrid-search",
+            kind: "timeout",
+            message: "Hybrid search query timed out after 12s",
+          });
+          setHybridItemsError("Search is taking too long. Please try again.");
+        } else {
+          console.error("Hybrid item search threw", err);
+          setHybridItemsError("Could not load item matches right now.");
+        }
         setHybridItems([]);
-      } else {
-        setHybridItems(data || []);
+      } finally {
+        clearTimeout(timeoutId);
+        if (isActive) setHybridItemsLoading(false);
       }
-      setHybridItemsLoading(false);
     };
 
     loadHybridItems();
@@ -637,7 +761,7 @@ function CustomerHomePageInner() {
     return () => {
       isActive = false;
     };
-  }, [search, supabase]);
+  }, [search, supabase, logCrashEvent]);
 
   useEffect(() => {
     let isActive = true;
@@ -656,23 +780,51 @@ function CustomerHomePageInner() {
       setListingsLoading(true);
       setListingsError(null);
 
-      const { data, error } = await client
-        .from("listings")
-        .select("*")
-        .eq("business_id", selectedBusiness.id)
-        .order("created_at", { ascending: false });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(new DOMException("Timeout", "AbortError")),
+        12000
+      );
 
-      if (!isActive) return;
+      try {
+        let query = client
+          .from("listings")
+          .select("*")
+          .eq("business_id", selectedBusiness.id)
+          .order("created_at", { ascending: false });
+        if (typeof query.abortSignal === "function") {
+          query = query.abortSignal(controller.signal);
+        }
 
-      if (error) {
-        console.error("Failed to load business listings", error);
-        setListingsError("Could not load listings for this business.");
+        const { data, error } = await query;
+
+        if (!isActive) return;
+
+        if (error) {
+          console.error("Failed to load business listings", error);
+          setListingsError("Could not load listings for this business.");
+          setBusinessListings([]);
+        } else {
+          setBusinessListings(data || []);
+        }
+      } catch (err) {
+        if (!isActive) return;
+        if (err?.name === "AbortError") {
+          logCrashEvent({
+            context: "business-listings",
+            kind: "timeout",
+            message: "Listings for business timed out after 12s",
+          });
+          setListingsError("Loading listings timed out. Please retry.");
+        } else {
+          console.error("Failed to load business listings", err);
+          setListingsError("Could not load listings for this business.");
+        }
         setBusinessListings([]);
-      } else {
-        setBusinessListings(data || []);
+      } finally {
+        clearTimeout(timeoutId);
+        if (isActive) setListingsLoading(false);
       }
-
-      setListingsLoading(false);
     };
 
     loadListings();
@@ -680,7 +832,7 @@ function CustomerHomePageInner() {
     return () => {
       isActive = false;
     };
-  }, [selectedBusiness, supabase]);
+  }, [selectedBusiness, supabase, logCrashEvent]);
 
   if (loadingUser && !authUser && !user) {
     return (
@@ -716,8 +868,8 @@ function CustomerHomePageInner() {
       </div>
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 relative z-10">
-        <div className="w-full max-w-6xl mx-auto space-y-6">
-        <div style={{ minHeight: "420px" }}>
+        <div className="w-full max-w-6xl mx-auto">
+        <div style={{ minHeight: "320px" }}>
           {authReady ? (
             <>
               <motion.div
@@ -731,9 +883,19 @@ function CustomerHomePageInner() {
                   <h1 className="text-3xl font-semibold leading-tight">
                     {search ? `Results for “${search}”` : "Discover what’s open near you"}
                   </h1>
-                  <div className="inline-flex items-center gap-2 text-xs text-white/70 bg-white/5 border border-white/10 rounded-full px-3 py-1 backdrop-blur">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {filteredBusinesses.length} matches live
+                  <div className="flex flex-wrap items-center gap-2 relative z-10">
+                    <div className="inline-flex items-center gap-2 text-xs text-white/70 bg-white/5 border border-white/10 rounded-full px-3 py-1 backdrop-blur">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      {filteredBusinesses.length} matches live
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMapOpen(true)}
+                      disabled={!mapAvailable}
+                      className="px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold text-white hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto"
+                    >
+                      Map
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -831,11 +993,11 @@ function CustomerHomePageInner() {
 
               {/* Header with gallery + map (compact) */}
               <div
-                className="grid grid-cols-1 lg:grid-cols-5 gap-4"
+                className="grid grid-cols-1 gap-4"
                 onClickCapture={handleHomeCapture}
                 data-clickdiag={clickDiagEnabled ? "home-grid" : undefined}
               >
-                <div className="lg:col-span-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
                   <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
                     <div className="text-sm uppercase tracking-[0.18em] text-white/60">Browse spots</div>
                     <div className="flex items-center gap-2">
@@ -915,44 +1077,6 @@ function CustomerHomePageInner() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-2">
-                  {homeBisect.map ? (
-                    <div
-                      className="home-map-shell relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3 z-0"
-                      data-clickdiag={clickDiagEnabled ? "map-shell" : undefined}
-                      data-home-map-shell="1"
-                    >
-                      <div className="flex flex-wrap items-center justify-between mb-2 gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-white/85 truncate">
-                            {selectedBusiness ? selectedBusiness.name : "Map"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="home-map-viewport relative overflow-hidden rounded-2xl border border-white/12 shadow-lg">
-                        <GoogleMapClient
-                          radiusKm={25}
-                          showBusinessErrors={false}
-                          containerClassName="w-full pointer-events-auto"
-                          cardClassName="bg-transparent border-0 text-white"
-                          mapClassName="h-64 sm:h-72 lg:h-[240px] w-full pointer-events-auto touch-pan-y touch-manipulation"
-                          title=""
-                          enableCategoryFilter={false}
-                          enableSearch={false}
-                          placesMode="manual"
-                          disableGooglePlaces
-                          prefilledBusinesses={mapBusinesses}
-                          onBusinessesChange={setMapBusinesses}
-                          onControlsReady={setMapControls}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3 h-64 sm:h-72 lg:h-[240px] text-white/70 text-sm flex items-center">
-                      Map disabled (HOME_BISECT_MAP=0)
-                    </div>
-                  )}
-                </div>
               </div>
 
               {selectedBusiness?.source === "supabase_users" ? (
@@ -1036,7 +1160,7 @@ function CustomerHomePageInner() {
         </div>
 
         {!search && (
-          <div className="space-y-3 mt-4 lg:mt-6 relative z-10" data-home-tiles="1">
+          <div className="space-y-3 mt-0 relative z-" data-home-tiles="1">
                   <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
@@ -1131,6 +1255,16 @@ function CustomerHomePageInner() {
         )}
         </div>
       </div>
+      <MapModal
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+        mapEnabled={mapEnabled}
+        mapBusinesses={mapBusinesses}
+        onBusinessesChange={setMapBusinesses}
+        onControlsReady={setMapControls}
+        selectedBusiness={selectedBusiness}
+        clickDiagEnabled={clickDiagEnabled}
+      />
     </section>
   );
 }

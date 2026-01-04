@@ -91,12 +91,6 @@ export default function EditListingPage() {
     loadListing();
   }, [loadingUser, authUser, supabase, listingId]);
 
-  useEffect(() => {
-    if (!loadingUser && !authUser) {
-      router.push("/business");
-    }
-  }, [authUser, loadingUser, router]);
-
   const handleAddNewPhotos = (files) => {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;

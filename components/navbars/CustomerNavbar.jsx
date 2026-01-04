@@ -32,7 +32,6 @@ export default function CustomerNavbar() {
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(typeof window !== "undefined");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState({
     items: [],
@@ -95,11 +94,6 @@ export default function CustomerNavbar() {
       console.log("[CLICK_DIAG] REACT_ONCLICK_POST", { label, href: window.location.href });
     });
   };
-
-  // ⭐ Hydration guard fixes frozen buttons
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
 
   // Close menus when the route changes
   useEffect(() => {
@@ -362,18 +356,6 @@ export default function CustomerNavbar() {
     };
   }, [suggestionsOpen]);
 
-  if (!hydrated) return null;
-
-  /* ---------------------------------------------------
-     ⛔ DO NOT RENDER CUSTOMER NAV ON BUSINESS PAGES
-  --------------------------------------------------- */
-  if (
-    pathname.startsWith("/business") ||
-    pathname.startsWith("/business-auth")
-  ) {
-    return null;
-  }
-
   /* ---------------------------------------------------
      AVATAR PRIORITY
   --------------------------------------------------- */
@@ -451,7 +433,7 @@ export default function CustomerNavbar() {
     <button
       type="button"
       onClick={() => handleNavigate(href, "nav-item")}
-      className={`text-sm md:text-base transition ${
+      className={`w-full text-left text-sm md:text-base transition ${
         isActive(href)
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
@@ -889,8 +871,9 @@ export default function CustomerNavbar() {
 
           {user && (
             <>
-              <NavItem href="/customer/saved">Saved</NavItem>
-              <NavItem href="/customer/settings">Settings</NavItem>
+              <NavItem href="/customer/home">Discover</NavItem>
+              <NavItem href="/customer/saved">Saved items</NavItem>
+              <NavItem href="/customer/settings">Account settings</NavItem>
 
               <LogoutButton mobile />
             </>

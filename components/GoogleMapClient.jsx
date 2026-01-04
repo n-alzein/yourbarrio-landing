@@ -97,6 +97,7 @@ export default function GoogleMapClient({
   const mapRef = useRef(null);
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const mapErrorLoggedRef = useRef(false);
   const businessMarkersRef = useRef([]);
   const userMarkerRef = useRef(null);
   const searchMarkerRef = useRef(null);
@@ -981,6 +982,9 @@ export default function GoogleMapClient({
         setSearchLoading(false);
         return;
       }
+      if (!placesEnabledRef.current && placesMode === "manual") {
+        activatePlaces();
+      }
       if (!placesEnabledRef.current) {
         setSearchError("Enable Google Places to search the map.");
         setSearchLoading(false);
@@ -1068,13 +1072,18 @@ export default function GoogleMapClient({
     await performSearch(searchTerm);
   };
 
-  const enablePlaces = async () => {
+  const activatePlaces = () => {
     if (PLACES_DISABLED || disableGooglePlaces) return;
     placesEnabledRef.current = true;
     setPlacesEnabledState(true);
     lastFetchKeyRef.current = null;
     lastFetchAtRef.current = 0;
     resetPlacesSessionToken();
+  };
+
+  const enablePlaces = async () => {
+    if (PLACES_DISABLED || disableGooglePlaces) return;
+    activatePlaces();
     const map = mapInstanceRef.current;
     if (!map || !loadAndPlaceMarkersRef.current) return;
     const center = map.getCenter();
@@ -1186,7 +1195,17 @@ export default function GoogleMapClient({
     mapInstanceRef.current = map;
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
     const handleLoaded = () => setLoading(false);
+    const handleMapError = (event) => {
+      const err = event?.error || event;
+      if (!mapErrorLoggedRef.current) {
+        mapErrorLoggedRef.current = true;
+        console.error("Mapbox runtime error", err);
+      }
+      setError((prev) => prev || "Map unavailable right now.");
+      setLoading(false);
+    };
     map.on("load", handleLoaded);
+    map.on("error", handleMapError);
 
     const placeUserMarker = (centerLat, centerLng) => {
       detachMarker(userMarkerRef.current);
@@ -1301,6 +1320,7 @@ export default function GoogleMapClient({
     return () => {
       moveEndHandler && map.off("moveend", moveEndHandler);
       map.off("load", handleLoaded);
+      map.off("error", handleMapError);
       map.remove();
       clearBusinessMarkers();
       detachMarker(userMarkerRef.current);

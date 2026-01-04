@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export async function GET(req, { params }) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { id } = params;
 
   const { data, error } = await supabase

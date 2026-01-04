@@ -196,7 +196,7 @@ export async function GET(request) {
 
   let supabase = null;
   try {
-    supabase = createSupabaseServerClient();
+    supabase = await createSupabaseServerClient();
   } catch (err) {
     console.error("Failed to init Supabase client", err);
   }
