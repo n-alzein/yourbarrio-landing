@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronDown,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   Settings,
   Store,
 } from "lucide-react";
@@ -14,8 +15,10 @@ import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
+import { fetchUnreadTotal } from "@/lib/messages";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
-function NavItem({ href, children, onClick, isActive, closeMenus }) {
+function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) {
   return (
     <Link
       href={href}
@@ -29,7 +32,14 @@ function NavItem({ href, children, onClick, isActive, closeMenus }) {
           : "text-white/70 hover:text-white"
       }`}
     >
-      {children}
+      <span className="flex items-center gap-2">
+        {children}
+        {badgeCount > 0 ? (
+          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+            {badgeCount}
+          </span>
+        ) : null}
+      </span>
     </Link>
   );
 }
@@ -41,6 +51,8 @@ export default function BusinessNavbar() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [badgeReady, setBadgeReady] = useState(false);
   const dropdownRef = useRef(null);
   const displayName =
     user?.business_name ||
@@ -53,6 +65,10 @@ export default function BusinessNavbar() {
     setProfileMenuOpen(false);
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!loadingUser) setBadgeReady(true);
+  }, [loadingUser]);
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -102,12 +118,6 @@ export default function BusinessNavbar() {
     authUser?.user_metadata?.email ||
     null;
 
-  if (loadingUser && !user && !authUser) {
-    return (
-      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
-    );
-  }
-
   const handleBusinessAuthClick = (event, path) => {
     event.preventDefault();
     openBusinessAuthPopup(path);
@@ -126,12 +136,73 @@ export default function BusinessNavbar() {
       icon: LayoutDashboard,
     },
     {
+      href: "/business/messages",
+      title: "Messages",
+      description: "Reply to customer inquiries",
+      icon: MessageSquare,
+      showBadge: true,
+    },
+    {
       href: "/business/listings",
       title: "Manage listings",
       description: "Keep offers & hours fresh",
       icon: Store,
     },
   ];
+
+  const loadUnreadCount = useCallback(async () => {
+    const userId = user?.id || authUser?.id;
+    if (!userId || role !== "business") return;
+    try {
+      const total = await fetchUnreadTotal({
+        supabase,
+        userId,
+        role: "business",
+      });
+      setUnreadCount(total);
+    } catch (err) {
+      console.warn("Failed to load unread messages", err);
+    }
+  }, [supabase, user?.id, authUser?.id, role]);
+
+  useEffect(() => {
+    if (!badgeReady) return;
+    loadUnreadCount();
+  }, [badgeReady, loadUnreadCount]);
+
+  useEffect(() => {
+    if (!badgeReady) return undefined;
+    const userId = user?.id || authUser?.id;
+    if (!userId || role !== "business") return undefined;
+    const client = supabase ?? getBrowserSupabaseClient();
+    if (!client) return undefined;
+
+    const channel = client
+      .channel(`business-unread-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversations",
+          filter: `business_id=eq.${userId}`,
+        },
+        () => {
+          loadUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [badgeReady, user?.id, authUser?.id, supabase, role, loadUnreadCount]);
+
+  if (loadingUser && !user && !authUser) {
+    return (
+      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
+    );
+  }
 
   /* ---------------------------------------------------
      NAVBAR
@@ -254,7 +325,7 @@ export default function BusinessNavbar() {
 
                     <div className="px-2 pb-1 pt-2 space-y-1">
                       {quickActions.map(
-                        ({ href, title, description, icon: Icon }) => (
+                        ({ href, title, description, icon: Icon, showBadge }) => (
                           <Link
                             key={href}
                             href={href}
@@ -264,10 +335,17 @@ export default function BusinessNavbar() {
                             <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
                               <Icon className="h-5 w-5" />
                             </div>
-                            <div>
-                              <p className="text-sm font-semibold text-white/90">
-                                {title}
-                              </p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-white/90">
+                                  {title}
+                                </p>
+                                {showBadge && badgeReady && unreadCount > 0 ? (
+                                  <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                    {unreadCount}
+                                  </span>
+                                ) : null}
+                              </div>
                               <p className="text-xs text-white/60">{description}</p>
                             </div>
                           </Link>
@@ -358,7 +436,14 @@ export default function BusinessNavbar() {
         {/* Logged-in business menu */}
         {user && role === "business" && (
           <>
-            {null}
+            <NavItem
+              href="/business/messages"
+              isActive={isActive}
+              closeMenus={closeMenus}
+              badgeCount={unreadCount}
+            >
+              Messages
+            </NavItem>
           </>
         )}
 

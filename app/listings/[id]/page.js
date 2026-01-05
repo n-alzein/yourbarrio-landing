@@ -14,11 +14,13 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import SafeImage from "@/components/SafeImage";
+import { getOrCreateConversation } from "@/lib/messages";
 
 export default function ListingDetails({ params }) {
-  const { supabase, user } = useAuth();
+  const { supabase, user, authUser, role } = useAuth();
+  const router = useRouter();
   const routeParams = useParams();
   const resolvedParams =
     params && typeof params.then === "function" ? use(params) : params;
@@ -31,6 +33,8 @@ export default function ListingDetails({ params }) {
   const [quantity, setQuantity] = useState(1);
   const [orderingMode, setOrderingMode] = useState("delivery");
   const [statusMessage, setStatusMessage] = useState("");
+  const [messageStatus, setMessageStatus] = useState("");
+  const [messageLoading, setMessageLoading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [heroSrc, setHeroSrc] = useState("/business-placeholder.png");
@@ -143,6 +147,46 @@ export default function ListingDetails({ params }) {
     }
   };
 
+  const handleMessageBusiness = async () => {
+    const customerId = user?.id || authUser?.id;
+    const businessId = business?.id;
+
+    if (!customerId) {
+      setMessageStatus("Log in to message this business.");
+      return;
+    }
+
+    if (!businessId) {
+      setMessageStatus("Business info unavailable.");
+      return;
+    }
+
+    setMessageLoading(true);
+    setMessageStatus("");
+
+    try {
+      const conversationId = await getOrCreateConversation({
+        supabase,
+        customerId,
+        businessId,
+      });
+      if (conversationId) {
+        router.push(`/customer/messages/${conversationId}`);
+      } else {
+        setMessageStatus("Could not open messages yet.");
+      }
+    } catch (err) {
+      const message =
+        err?.message ||
+        err?.details ||
+        "Could not open messages yet.";
+      console.error("Failed to start conversation", err);
+      setMessageStatus(message);
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
   const formattedPrice = useMemo(() => {
     if (!listing?.price) return null;
     try {
@@ -212,6 +256,7 @@ export default function ListingDetails({ params }) {
   const city = business?.city || "Your area";
   const address = business?.address || null;
   const category = business?.category || listing.category || "Local listing";
+  const showMessage = role !== "business";
   const galleryPhotos = extractPhotoUrls(listing.photo_url);
 
   return (
@@ -352,6 +397,30 @@ export default function ListingDetails({ params }) {
                   ) : null}
                 </div>
               </div>
+              {showMessage ? (
+                <div className="mt-4 space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleMessageBusiness}
+                    disabled={messageLoading}
+                    className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                      messageLoading
+                        ? "bg-white/10 text-white/50"
+                        : "bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white hover:opacity-95"
+                    }`}
+                  >
+                    {messageLoading ? "Opening messages..." : "Message business"}
+                  </button>
+                  {messageStatus ? (
+                    <div
+                      className="text-xs rounded-xl px-3 py-2 text-white/80"
+                      style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                    >
+                      {messageStatus}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 

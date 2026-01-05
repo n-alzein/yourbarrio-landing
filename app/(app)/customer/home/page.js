@@ -177,6 +177,14 @@ function CustomerHomePageInner() {
   const [ybBusinessesError, setYbBusinessesError] = useState(null);
   const authReady = !loadingUser || !!authUser || !!user;
   const galleryRef = useRef(null);
+  const tileDragState = useRef({
+    pointerId: null,
+    pointerType: null,
+    startX: 0,
+    startY: 0,
+    dragging: false,
+    lastDragAt: 0,
+  });
   const [photoValidity, setPhotoValidity] = useState({});
   const logCrashEvent = useCallback(
     (payload) =>
@@ -395,6 +403,53 @@ function CustomerHomePageInner() {
     if (!el) return;
     el.scrollBy({ left: dir * 320, behavior: "smooth" });
   };
+  const DRAG_DISTANCE_PX = 6;
+  const DRAG_CANCEL_WINDOW_MS = 300;
+  const handleTilePointerDown = useCallback((event) => {
+    if (event.pointerType !== "touch") return;
+    const state = tileDragState.current;
+    state.pointerId = event.pointerId;
+    state.pointerType = event.pointerType;
+    state.startX = event.clientX;
+    state.startY = event.clientY;
+    state.dragging = false;
+  }, []);
+  const handleTilePointerMove = useCallback((event) => {
+    const state = tileDragState.current;
+    if (state.pointerType !== "touch" || state.pointerId !== event.pointerId) return;
+    const dx = Math.abs(event.clientX - state.startX);
+    const dy = Math.abs(event.clientY - state.startY);
+    if (!state.dragging && (dx > DRAG_DISTANCE_PX || dy > DRAG_DISTANCE_PX)) {
+      state.dragging = true;
+    }
+  }, []);
+  const handleTilePointerUp = useCallback((event) => {
+    const state = tileDragState.current;
+    if (state.pointerType !== "touch" || state.pointerId !== event.pointerId) return;
+    if (state.dragging) {
+      state.lastDragAt = Date.now();
+    }
+    state.pointerId = null;
+    state.pointerType = null;
+    state.dragging = false;
+  }, []);
+  const handleTilePointerCancel = useCallback((event) => {
+    const state = tileDragState.current;
+    if (state.pointerType !== "touch" || state.pointerId !== event.pointerId) return;
+    if (state.dragging) {
+      state.lastDragAt = Date.now();
+    }
+    state.pointerId = null;
+    state.pointerType = null;
+    state.dragging = false;
+  }, []);
+  const handleTileClickCapture = useCallback((event) => {
+    const { lastDragAt } = tileDragState.current;
+    if (lastDragAt && Date.now() - lastDragAt < DRAG_CANCEL_WINDOW_MS) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, []);
 
   useEffect(() => {
     if (hasLoadedYb) return undefined;
@@ -1022,6 +1077,11 @@ function CustomerHomePageInner() {
                   <div
                     ref={galleryRef}
                     className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory"
+                    onPointerDown={handleTilePointerDown}
+                    onPointerMove={handleTilePointerMove}
+                    onPointerUp={handleTilePointerUp}
+                    onPointerCancel={handleTilePointerCancel}
+                    onClickCapture={handleTileClickCapture}
                   >
                     {filteredBusinesses.map((biz) => (
                       <button
@@ -1032,6 +1092,7 @@ function CustomerHomePageInner() {
                         }`}
                         onClick={(event) => {
                           diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
+                          if (event.defaultPrevented) return;
                           handleSelectBusiness(biz);
                         }}
                         data-clickdiag={clickDiagEnabled ? "tile" : undefined}
@@ -1174,7 +1235,14 @@ function CustomerHomePageInner() {
               ) : null}
             </div>
 
-            <div className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory mt-3">
+            <div
+              className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory mt-3"
+              onPointerDown={handleTilePointerDown}
+              onPointerMove={handleTilePointerMove}
+              onPointerUp={handleTilePointerUp}
+              onPointerCancel={handleTilePointerCancel}
+              onClickCapture={handleTileClickCapture}
+            >
               {groupedListings.map(({ category, items }) => {
                 const withPhotos = items
                   .map((item) => ({ ...item, cover: coverFor(item.photo_url) }))

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import {
   Bookmark,
@@ -11,6 +11,7 @@ import {
   Loader2,
   LogOut,
   MapPin,
+  MessageSquare,
   PackageSearch,
   Search,
   Settings,
@@ -21,18 +22,23 @@ import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
+import { fetchUnreadTotal } from "@/lib/messages";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+
+const SEARCH_CATEGORIES = ["All", "Coffee", "Salons", "Groceries", "Tacos"];
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, authUser, loadingUser } = useAuth();
+  const { user, authUser, loadingUser, supabase } = useAuth();
   const { openModal } = useModal();
   const [, startTransition] = useTransition();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchResults, setSearchResults] = useState({
     items: [],
     businesses: [],
@@ -41,6 +47,8 @@ export default function CustomerNavbar() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [badgeReady, setBadgeReady] = useState(false);
   const dropdownRef = useRef(null);
   const dropdownPanelRef = useRef(null);
   const searchBoxRef = useRef(null);
@@ -100,6 +108,10 @@ export default function CustomerNavbar() {
     setProfileMenuOpen(false);
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!loadingUser) setBadgeReady(true);
+  }, [loadingUser]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -237,8 +249,12 @@ export default function CustomerNavbar() {
 
   // Keep the search bar in sync with the current URL query
   useEffect(() => {
-    const currentQuery = searchParams?.get("q") || "";
+    const currentQuery = (searchParams?.get("q") || "").trim();
     setSearchTerm(currentQuery);
+    const matchedCategory = SEARCH_CATEGORIES.find(
+      (category) => category.toLowerCase() === currentQuery.toLowerCase()
+    );
+    setSelectedCategory(matchedCategory || "All");
   }, [searchParams]);
 
   // Hybrid search — fetch AI-style blend of items + businesses
@@ -429,7 +445,7 @@ export default function CustomerNavbar() {
     });
   };
 
-  const NavItem = ({ href, children }) => (
+  const NavItem = ({ href, children, badgeCount }) => (
     <button
       type="button"
       onClick={() => handleNavigate(href, "nav-item")}
@@ -439,7 +455,14 @@ export default function CustomerNavbar() {
           : "text-white/70 hover:text-white"
       }`}
     >
-      {children}
+      <span className="flex items-center gap-2">
+        {children}
+        {badgeReady && badgeCount > 0 ? (
+          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+            {badgeCount}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 
@@ -449,6 +472,13 @@ export default function CustomerNavbar() {
       title: "Discover",
       description: "See what's buzzing near you",
       icon: Compass,
+    },
+    {
+      href: "/customer/messages",
+      title: "Messages",
+      description: "Chat with local businesses",
+      icon: MessageSquare,
+      showBadge: true,
     },
     {
       href: "/customer/saved",
@@ -481,6 +511,18 @@ export default function CustomerNavbar() {
     navigateToSearch(searchTerm || "");
   };
 
+  const handleCategoryChange = (event) => {
+    const next = event.target.value;
+    setSelectedCategory(next);
+    if (next === "All") {
+      setSearchTerm("");
+      navigateToSearch("");
+      return;
+    }
+    setSearchTerm(next);
+    navigateToSearch(next);
+  };
+
   const handleSuggestionSelect = (value, itemId) => {
     const next = (value || "").trim();
     if (!next) return;
@@ -492,6 +534,54 @@ export default function CustomerNavbar() {
     }
     navigateToSearch(next);
   };
+
+  const loadUnreadCount = useCallback(async () => {
+    const userId = user?.id || authUser?.id;
+    if (!userId) return;
+    try {
+      const total = await fetchUnreadTotal({
+        supabase,
+        userId,
+        role: "customer",
+      });
+      setUnreadCount(total);
+    } catch (err) {
+      console.warn("Failed to load unread messages", err);
+    }
+  }, [supabase, user?.id, authUser?.id]);
+
+  useEffect(() => {
+    if (!badgeReady) return;
+    loadUnreadCount();
+  }, [badgeReady, loadUnreadCount]);
+
+  useEffect(() => {
+    if (!badgeReady) return undefined;
+    const userId = user?.id || authUser?.id;
+    if (!userId) return undefined;
+    const client = supabase ?? getBrowserSupabaseClient();
+    if (!client) return undefined;
+
+    const channel = client
+      .channel(`customer-unread-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversations",
+          filter: `customer_id=eq.${userId}`,
+        },
+        () => {
+          loadUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [badgeReady, user?.id, authUser?.id, supabase, loadUnreadCount]);
 
   /* ---------------------------------------------------
      LOADING STATE
@@ -535,8 +625,24 @@ export default function CustomerNavbar() {
               className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10 backdrop-blur-lg shadow-lg shadow-purple-950/20"
             >
               <div className="hidden lg:flex items-center gap-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 bg-white/5 border-r border-white/10">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10">YB</span>
-                <span>All</span>
+                <label htmlFor="customer-search-category" className="sr-only">
+                  Category
+                </label>
+                <div className="relative">
+                  <select
+                    id="customer-search-category"
+                    value={selectedCategory}
+                    onChange={handleCategoryChange}
+                    className="appearance-none bg-transparent pr-5 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
+                  >
+                    {SEARCH_CATEGORIES.map((category) => (
+                      <option key={category} value={category} className="text-black">
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-white/60" />
+                </div>
               </div>
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
@@ -724,7 +830,7 @@ export default function CustomerNavbar() {
                     </div>
 
                     <div className="px-2 pb-1 pt-2 space-y-1">
-                      {quickActions.map(({ href, title, description, icon: Icon, diag }) => (
+                      {quickActions.map(({ href, title, description, icon: Icon, diag, showBadge }) => (
                         <Link
                           key={href}
                           href={href}
@@ -750,8 +856,15 @@ export default function CustomerNavbar() {
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
                             <Icon className="h-5 w-5" />
                           </div>
-                          <div>
-                            <p className="text-sm font-semibold text-white/90">{title}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-white/90">{title}</p>
+                              {showBadge && badgeReady && unreadCount > 0 ? (
+                                <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                  {unreadCount}
+                                </span>
+                              ) : null}
+                            </div>
                             <p className="text-xs text-white/60">{description}</p>
                           </div>
                         </Link>
@@ -884,6 +997,9 @@ export default function CustomerNavbar() {
           {user && (
             <>
               <NavItem href="/customer/home">Discover</NavItem>
+              <NavItem href="/customer/messages" badgeCount={unreadCount}>
+                Messages
+              </NavItem>
               <NavItem href="/customer/saved">Saved items</NavItem>
               <NavItem href="/customer/settings">Account settings</NavItem>
 

@@ -3,7 +3,7 @@ import CustomerNavbar from "@/components/navbars/CustomerNavbar";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 function CustomerRouteShell({ children = null }) {
-  return <div className="pt-20 min-h-screen">{children}</div>;
+  return <div className="pt-28 md:pt-20 min-h-screen">{children}</div>;
 }
 
 async function resolveRole(supabase, user) {
