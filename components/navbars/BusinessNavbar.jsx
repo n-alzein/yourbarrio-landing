@@ -191,7 +191,6 @@ export default function BusinessNavbar() {
 
         {/* RIGHT SIDE */}
         <div className="hidden md:flex items-center gap-8">
-          <ThemeToggle />
 
           {/* Logged OUT */}
           {!user && (
@@ -277,6 +276,14 @@ export default function BusinessNavbar() {
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
+                      <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+                          Theme
+                        </span>
+                        <ThemeToggle
+                          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+                        />
+                      </div>
                       <Link
                         href="/business/settings"
                         onClick={closeMenus}
@@ -321,7 +328,12 @@ export default function BusinessNavbar() {
     {/* MOBILE MENU */}
     {mobileMenuOpen && (
       <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-6 text-white">
-        <ThemeToggle showLabel align="left" />
+        <ThemeToggle
+          showLabel
+          align="left"
+          className="self-start"
+          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+        />
 
         {/* Logged-out */}
         {!user && (

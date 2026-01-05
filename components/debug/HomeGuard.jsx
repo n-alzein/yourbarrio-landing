@@ -21,7 +21,7 @@ export default function HomeGuard({ children, fallback = null }) {
 
   useEffect(() => {
     if (blocker === "NO_USER") {
-      router.replace("/auth/login");
+      router.replace("/");
     }
     if (blocker === "ROLE_MISMATCH") {
       router.replace("/business/dashboard");

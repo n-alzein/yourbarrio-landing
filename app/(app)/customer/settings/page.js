@@ -129,11 +129,12 @@ export default function SettingsPage() {
 
   const primaryProvider = getPrimaryAuthProvider(authUser);
   const providerLabel = getAuthProviderLabel(authUser);
+  const userEmail = authUser?.email || user?.email || "";
   const providerName = primaryProvider
-    ? primaryProvider === "email"
-      ? "Email"
+    ? primaryProvider === "email" || primaryProvider === "google"
+      ? userEmail || "Email"
       : primaryProvider.charAt(0).toUpperCase() + primaryProvider.slice(1)
-    : "Email";
+    : userEmail || "Email";
 
   /* -----------------------------------------------------------
      DEBUG (dev only) — trace provider sources

@@ -449,7 +449,6 @@ export function AuthProvider({ children }) {
     const clearCookies = () => {
       if (typeof document === "undefined") return;
       const cookieName = getCookieName();
-      if (!cookieName) return;
 
       const host = window.location.hostname;
       const domains = [host];
@@ -457,45 +456,66 @@ export function AuthProvider({ children }) {
         domains.push(`.${host}`);
       }
 
+      const cookieNames = document.cookie
+        .split(";")
+        .map((entry) => entry.split("=")[0].trim())
+        .filter((name) => {
+          if (!name) return false;
+          if (name.startsWith("sb-")) return true;
+          if (cookieName && name.startsWith(cookieName)) return true;
+          return false;
+        });
+
+      if (cookieName) cookieNames.push(cookieName);
+      const uniqueNames = Array.from(new Set(cookieNames));
+
       // Clear without domain (works for localhost)
-      try {
-        document.cookie = `${cookieName}=; path=/; max-age=0; sameSite=lax`;
-      } catch (err) {
-        console.warn("Could not clear auth cookie (no domain)", err);
-      }
+      uniqueNames.forEach((name) => {
+        try {
+          document.cookie = `${name}=; path=/; max-age=0; sameSite=lax`;
+        } catch (err) {
+          console.warn("Could not clear auth cookie (no domain)", name, err);
+        }
+      });
 
       domains.forEach((domain) => {
-        try {
-          document.cookie = `${cookieName}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;
-        } catch (err) {
-          console.warn("Could not clear auth cookie for domain", domain, err);
-        }
+        uniqueNames.forEach((name) => {
+          try {
+            document.cookie = `${name}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;
+          } catch (err) {
+            console.warn("Could not clear auth cookie for domain", domain, name, err);
+          }
+        });
       });
     };
 
-    const backgroundTasks = [];
+    const signOutTasks = [];
 
     if (client) {
-      // Kick off local + global signouts; don't block UI on these calls
-      backgroundTasks.push(
+      // Run local + global signouts before redirecting
+      signOutTasks.push(
         client
           .auth
           .signOut()
-          .catch((err) => console.error("Supabase local signOut error", err))
       );
-      backgroundTasks.push(
+      signOutTasks.push(
         client
           .auth
           .signOut({ scope: "global" })
-          .catch((err) => console.error("Supabase global signOut error", err))
       );
     }
 
-    backgroundTasks.push(
+    signOutTasks.push(
       fetch("/api/logout", {
         method: "POST",
         credentials: "include",
-      }).catch((err) => console.error("Server logout call failed", err))
+      })
+    );
+
+    await Promise.allSettled(
+      signOutTasks.map((task) =>
+        task.catch((err) => console.error("Logout task failed", err))
+      )
     );
 
     clearCookies();

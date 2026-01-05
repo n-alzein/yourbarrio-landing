@@ -511,26 +511,24 @@ export default function CustomerNavbar() {
       data-clickdiag={clickDiagEnabled ? "navbar" : undefined}
       onClickCapture={handleNavCapture}
     >
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
+      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20 gap-6">
+        <Link
+          href="/customer/home"
+          onClick={closeMenus}
+          aria-label="Go to home"
+          className="touch-manipulation"
+        >
+          <img
+            src="/logo.png"
+            className="h-34 w-auto cursor-pointer select-none"
+            alt="YourBarrio"
+          />
+        </Link>
 
-        {/* LEFT GROUP — LOGO + SEARCH */}
-        <div className="flex items-center gap-6 md:gap-10 flex-1">
-          <Link
-            href="/customer/home"
-            onClick={closeMenus}
-            aria-label="Go to home"
-            className="touch-manipulation"
-          >
-            <img
-              src="/logo.png"
-              className="h-34 w-auto cursor-pointer select-none"
-              alt="YourBarrio"
-            />
-          </Link>
-
+        <div className="hidden md:flex flex-1 justify-center">
           <div
             ref={searchBoxRef}
-            className="hidden md:flex flex-1 max-w-3xl relative"
+            className="w-full max-w-3xl relative"
           >
             <form
               onSubmit={handleSubmitSearch}
@@ -658,7 +656,6 @@ export default function CustomerNavbar() {
 
         {/* RIGHT — AUTH STATE */}
         <div className="hidden md:flex items-center gap-8">
-          <ThemeToggle />
 
           {!user && (
             <>
@@ -762,6 +759,14 @@ export default function CustomerNavbar() {
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
+                      <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+                          Theme
+                        </span>
+                        <ThemeToggle
+                          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+                        />
+                      </div>
                       <Link
                         href="/customer/settings"
                         onClick={(e) => {
@@ -818,32 +823,39 @@ export default function CustomerNavbar() {
         </button>
       </div>
 
+      <div className="md:hidden px-5 sm:px-6 pt-2 pb-4 border-t border-white/10">
+        <form
+          onSubmit={handleSubmitSearch}
+          className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+        >
+          <Search className="h-4 w-4 text-white/70" />
+          <input
+            id="customer-nav-search-mobile"
+            name="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"
+            placeholder="Search for anything nearby"
+            type="search"
+          />
+          <button
+            type="submit"
+            className="px-3 py-1 rounded-lg bg-white text-xs font-semibold text-black"
+          >
+            Go
+          </button>
+        </form>
+      </div>
+
       {/* MOBILE MENU */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
-          <form
-            onSubmit={handleSubmitSearch}
-            className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
-          >
-            <Search className="h-4 w-4 text-white/70" />
-            <input
-              id="customer-nav-search-mobile"
-              name="search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"
-              placeholder="Search for anything nearby"
-              type="search"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1 rounded-lg bg-white text-xs font-semibold text-black"
-            >
-              Go
-            </button>
-          </form>
-          <ThemeToggle showLabel align="left" />
-
+          <ThemeToggle
+            showLabel
+            align="left"
+            className="self-start"
+            buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+          />
           {!user && (
             <>
               <button

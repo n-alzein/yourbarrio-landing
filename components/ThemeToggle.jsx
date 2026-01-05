@@ -8,7 +8,12 @@ const options = [
   { value: "dark", label: "Dark", icon: Moon },
 ];
 
-export default function ThemeToggle({ className = "", showLabel = false, align = "right" }) {
+export default function ThemeToggle({
+  className = "",
+  buttonClassName = "",
+  showLabel = false,
+  align = "right",
+}) {
   const { theme, setTheme, hydrated } = useTheme();
 
   const placement = align === "left" ? "left-0" : "right-0";
@@ -25,7 +30,7 @@ export default function ThemeToggle({ className = "", showLabel = false, align =
           const next = options[(idx + 1) % options.length]?.value || "light";
           setTheme(next);
         }}
-        className="flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:text-white hover:bg-white/10 transition theme-lock"
+        className={`flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:text-white hover:bg-white/10 transition theme-lock ${buttonClassName}`}
       >
         <CurrentIcon className="h-4 w-4" />
         {showLabel && <span>{current.label}</span>}

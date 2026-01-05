@@ -20,15 +20,27 @@ export async function POST() {
 
     const res = NextResponse.json({ success: true });
 
-    if (cookieName) {
-      // Explicitly clear auth cookie in case Supabase helper skips it
-      res.cookies.set(cookieName, "", {
+    const cookieNames = cookieStore
+      .getAll()
+      .map((cookie) => cookie.name)
+      .filter((name) => {
+        if (name.startsWith("sb-")) return true;
+        if (cookieName && name.startsWith(cookieName)) return true;
+        return false;
+      });
+
+    if (cookieName) cookieNames.push(cookieName);
+    const uniqueNames = Array.from(new Set(cookieNames));
+
+    uniqueNames.forEach((name) => {
+      // Explicitly clear auth cookies in case Supabase helper skips them
+      res.cookies.set(name, "", {
         path: "/",
         maxAge: 0,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
       });
-    }
+    });
 
     return res;
   } catch (err) {

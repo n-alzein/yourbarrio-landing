@@ -993,7 +993,7 @@ function CustomerHomePageInner() {
 
               {/* Header with gallery + map (compact) */}
               <div
-                className="grid grid-cols-1 gap-4"
+                className="grid grid-cols-1 gap-4 mt-4"
                 onClickCapture={handleHomeCapture}
                 data-clickdiag={clickDiagEnabled ? "home-grid" : undefined}
               >
@@ -1160,7 +1160,7 @@ function CustomerHomePageInner() {
         </div>
 
         {!search && (
-          <div className="space-y-3 mt-0 relative z-" data-home-tiles="1">
+          <div className="space-y-3 mt-4 sm:mt-0 relative z-10" data-home-tiles="1">
                   <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
@@ -1174,7 +1174,7 @@ function CustomerHomePageInner() {
               ) : null}
             </div>
 
-            <div className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory">
+            <div className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory mt-3">
               {groupedListings.map(({ category, items }) => {
                 const withPhotos = items
                   .map((item) => ({ ...item, cover: coverFor(item.photo_url) }))
@@ -1188,6 +1188,10 @@ function CustomerHomePageInner() {
                   ? validCandidates.slice(0, 1)
                   : validCandidates.slice(0, 4);
                 const firstItem = visibleItems[0];
+                const viewHref =
+                  validCandidates.length > 1
+                    ? `/listings?category=${encodeURIComponent(category)}`
+                    : `/listings/${firstItem.id}`;
 
                 return (
                   <div
@@ -1202,7 +1206,7 @@ function CustomerHomePageInner() {
                         </p>
                       </div>
                       <Link
-                        href={`/listings/${firstItem.id}`}
+                        href={viewHref}
                         prefetch={false}
                         data-safe-nav="1"
                         className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto touch-manipulation"
