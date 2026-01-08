@@ -63,21 +63,21 @@ export async function middleware(req) {
     return res;
   }
 
-  let session = null;
+  let user = null;
   try {
     const {
-      data: { session: s },
+      data,
       error,
-    } = await supabase.auth.getSession();
+    } = await supabase.auth.getUser();
     if (error) throw error;
-    session = s;
+    user = data?.user ?? null;
   } catch (err) {
-    log("getSession failed; clearing cookies", err?.message);
+    log("getUser failed; clearing cookies", err?.message);
     clearSupabaseCookies();
     return res;
   }
 
-  const hasSession = Boolean(session);
+  const hasSession = Boolean(user);
   const isCustomerPath = path.startsWith("/customer");
   const isBusinessProtectedPath =
     path.startsWith("/business/dashboard") ||
@@ -92,7 +92,7 @@ export async function middleware(req) {
     const { data: profile } = await supabase
       .from("users")
       .select("role")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .maybeSingle();
 
     if (profile?.role === "business") {

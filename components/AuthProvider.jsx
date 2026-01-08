@@ -156,6 +156,48 @@ export function AuthProvider({ children }) {
   }
 
   /* -----------------------------------------------------------------
+     VERIFIED USER FETCH (avoid untrusted session user)
+  ----------------------------------------------------------------- */
+  async function getCachedUser() {
+    if (!supabase) return null;
+
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) throw error;
+      return sanitizeAuthUser(session?.user ?? null);
+    } catch (err) {
+      console.warn("Supabase getSession failed while reading cache", err);
+      return null;
+    }
+  }
+
+  async function getVerifiedUser() {
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return sanitizeAuthUser(data?.user ?? null);
+    } catch (err) {
+      console.warn("Supabase getUser failed, falling back to session cache", err);
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (error) throw error;
+        return sanitizeAuthUser(session?.user ?? null);
+      } catch (sessionErr) {
+        console.error("Supabase getSession failed after getUser", sessionErr);
+        return null;
+      }
+    }
+  }
+
+  /* -----------------------------------------------------------------
      LOAD PROFILE
   ----------------------------------------------------------------- */
   async function loadProfile(userId, { signal } = {}) {
@@ -211,15 +253,9 @@ export function AuthProvider({ children }) {
     sessionRefreshInFlight.current = true;
 
     try {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-      if (error) throw error;
-
       if (!isMountedRef.current) return;
 
-      const user = sanitizeAuthUser(session?.user ?? null);
+      const user = await getVerifiedUser();
       setAuthUser(user);
 
       if (user) {
@@ -253,24 +289,31 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-        if (error) throw error;
-
-        const rawUser = session?.user ?? null;
-        if (!isMountedRef.current) return;
-
-        const user = sanitizeAuthUser(rawUser);
-        setAuthUser(user);
-
-        if (user) {
-          const p = await loadProfile(user.id, { signal: controller.signal });
+        const cachedUser = await getCachedUser();
+        if (isMountedRef.current && cachedUser) {
+          setAuthUser(cachedUser);
+          const p = await loadProfile(cachedUser.id, {
+            signal: controller.signal,
+          });
           if (isMountedRef.current && !p?.aborted && !p?.error) {
             setProfile(p.profile);
+            await cacheGoogleAvatar(cachedUser, p.profile);
+          }
+        }
 
-            await cacheGoogleAvatar(user, p.profile);
+        if (!isMountedRef.current) return;
+
+        const user = await getVerifiedUser();
+        if (cachedUser?.id !== user?.id) {
+          setAuthUser(user);
+          if (user) {
+            const p = await loadProfile(user.id, { signal: controller.signal });
+            if (isMountedRef.current && !p?.aborted && !p?.error) {
+              setProfile(p.profile);
+              await cacheGoogleAvatar(user, p.profile);
+            }
+          } else {
+            setProfile(null);
           }
         }
       } catch (err) {
@@ -292,7 +335,7 @@ export function AuthProvider({ children }) {
             authDiagLog("onAuthStateChange", {
               event,
               hasSession: Boolean(session),
-              sessionUserId: session?.user?.id ?? null,
+              sessionUserId: null,
             });
             // Skip only the synthetic initial event; handle real sign-ins immediately
             if (event === "INITIAL_SESSION") return;
@@ -304,10 +347,21 @@ export function AuthProvider({ children }) {
               if (event !== "SIGNED_IN") return;
             }
 
-            const rawUser = session?.user ?? null;
-            const user = sanitizeAuthUser(rawUser);
+            if (event === "SIGNED_OUT" || event === "USER_DELETED") {
+              setAuthUser(null);
+              setProfile(null);
+              return;
+            }
 
-            setAuthUser(user);
+            const sessionUser = sanitizeAuthUser(session?.user ?? null);
+            if (sessionUser) {
+              setAuthUser(sessionUser);
+            }
+
+            const user = await getVerifiedUser();
+            if (sessionUser?.id !== user?.id) {
+              setAuthUser(user);
+            }
 
             if (user) {
               const p = await loadProfile(user.id);
@@ -381,12 +435,7 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        const rawUser = session?.user ?? null;
-        const user = sanitizeAuthUser(rawUser);
+        const user = await getVerifiedUser();
         setAuthUser(user);
 
         if (user) {
@@ -494,29 +543,50 @@ export function AuthProvider({ children }) {
     if (client) {
       // Run local + global signouts before redirecting
       signOutTasks.push(
-        client
-          .auth
-          .signOut()
+        {
+          label: "signOut:local",
+          task: client.auth.signOut(),
+        }
       );
       signOutTasks.push(
-        client
-          .auth
-          .signOut({ scope: "global" })
+        {
+          label: "signOut:global",
+          task: client.auth.signOut({ scope: "global" }),
+        }
       );
     }
 
-    signOutTasks.push(
-      fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      })
-    );
+    const fetchController = new AbortController();
+    const fetchTimeoutId = setTimeout(() => fetchController.abort(), 6000);
+    const logoutFetch = fetch("/api/logout", {
+      method: "POST",
+      credentials: "include",
+      signal: fetchController.signal,
+    }).finally(() => clearTimeout(fetchTimeoutId));
 
-    await Promise.allSettled(
-      signOutTasks.map((task) =>
-        task.catch((err) => console.error("Logout task failed", err))
-      )
-    );
+    signOutTasks.push({
+      label: "api/logout",
+      task: logoutFetch,
+    });
+
+    const timeoutMs = 6000;
+    const runWithTimeout = ({ label, task }) => {
+      let timeoutId;
+      const timeout = new Promise((resolve) => {
+        timeoutId = setTimeout(() => {
+          console.warn(`Logout task timed out (${label})`);
+          resolve();
+        }, timeoutMs);
+      });
+
+      const safeTask = Promise.resolve(task)
+        .catch((err) => console.error("Logout task failed", label, err))
+        .finally(() => clearTimeout(timeoutId));
+
+      return Promise.race([safeTask, timeout]);
+    };
+
+    await Promise.allSettled(signOutTasks.map(runWithTimeout));
 
     clearCookies();
 

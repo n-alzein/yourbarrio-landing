@@ -15,7 +15,7 @@ import {
 } from "@/lib/inventory";
 
 export default function CustomerSavedPage() {
-  const { user, supabase, loadingUser } = useAuth();
+  const { user, authUser, supabase, loadingUser } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const [saved, setSaved] = useState([]);
@@ -25,7 +25,8 @@ export default function CustomerSavedPage() {
     typeof document === "undefined" ? true : !document.hidden
   );
   const sortedSaved = useMemo(() => sortListingsByAvailability(saved), [saved]);
-  const showLoading = !hasLoaded && (loadingUser || loading);
+  const userId = authUser?.id || user?.id || null;
+  const showLoading = !hasLoaded && (loading || (!userId && loadingUser));
 
   useEffect(() => {
     const handleVisibility = () => setIsVisible(!document.hidden);
@@ -43,10 +44,10 @@ export default function CustomerSavedPage() {
   // Hydrate from session cache so the page shows instantly after navigation
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!user?.id) return;
+    if (!userId) return;
 
     try {
-      const raw = sessionStorage.getItem(`yb_saved_${user.id}`);
+      const raw = sessionStorage.getItem(`yb_saved_${userId}`);
       const parsed = raw ? JSON.parse(raw) : null;
       if (Array.isArray(parsed)) {
         setSaved(parsed);
@@ -55,11 +56,10 @@ export default function CustomerSavedPage() {
     } catch {
       // ignore cache errors
     }
-  }, [user?.id]);
+  }, [userId]);
 
   const loadSaved = useCallback(() => {
     const client = supabase ?? getBrowserSupabaseClient();
-    const userId = user?.id;
 
     if (!client || !userId || typeof userId !== "string") {
       setSaved([]);
@@ -133,17 +133,17 @@ export default function CustomerSavedPage() {
     return () => {
       active = false;
     };
-  }, [supabase, user?.id, hasLoaded]);
+  }, [supabase, userId, hasLoaded]);
 
   useEffect(() => {
-    if (loadingUser) return;
     if (!isVisible && hasLoaded) return;
+    if (!userId && loadingUser) return;
 
     const cleanup = loadSaved();
     return () => {
       if (typeof cleanup === "function") cleanup();
     };
-  }, [loadingUser, loadSaved, isVisible, hasLoaded]);
+  }, [loadingUser, loadSaved, isVisible, hasLoaded, userId]);
 
   const totalSaved = saved.length;
   const averagePrice =
@@ -155,7 +155,9 @@ export default function CustomerSavedPage() {
     new Set(saved.map((item) => item.category).filter(Boolean))
   );
 
-  if (loadingUser) return <div className="min-h-screen bg-black" />;
+  if (loadingUser && !authUser && !user) {
+    return <div className="min-h-screen bg-black" />;
+  }
 
   return (
     <section className="relative w-full min-h-screen pt-2 md:pt-3 text-white overflow-hidden -mt-8 md:-mt-12 pb-12 md:pb-16">
