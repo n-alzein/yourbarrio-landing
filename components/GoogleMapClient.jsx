@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 // helper: compute distance in km
 function haversine(lat1, lon1, lat2, lon2) {
@@ -261,13 +262,10 @@ export default function GoogleMapClient({
   };
 
   const geocodeWithTimeout = async (address) => {
-    const timeout = new Promise((resolve) => {
-      setTimeout(() => resolve(null), GEOCODE_TIMEOUT_MS);
-    });
-    return Promise.race([geocodeAddress(address), timeout]);
+    return geocodeAddress(address, GEOCODE_TIMEOUT_MS);
   };
 
-  const geocodeAddress = async (address) => {
+  const geocodeAddress = async (address, timeoutMs = GEOCODE_TIMEOUT_MS) => {
     if (!address) return null;
     const key = address.trim().toLowerCase();
     if (geocodeCacheRef.current.has(key)) {
@@ -281,12 +279,13 @@ export default function GoogleMapClient({
       }
       geocodeBudgetRef.current -= 1;
 
-      const res = await fetch("/api/geocode", {
+      const res = await fetchWithTimeout("/api/geocode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ address }),
+        timeoutMs,
       });
 
       if (!res.ok) {

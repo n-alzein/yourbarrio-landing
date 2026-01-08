@@ -1,22 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { BookmarkCheck, Heart, Sparkles, Star } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
+import { useTheme } from "@/components/ThemeProvider";
+import {
+  getAvailabilityBadgeStyle,
+  normalizeInventory,
+  sortListingsByAvailability,
+} from "@/lib/inventory";
 
 export default function CustomerSavedPage() {
   const { user, supabase, loadingUser } = useAuth();
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
   const [saved, setSaved] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
-
+  const sortedSaved = useMemo(() => sortListingsByAvailability(saved), [saved]);
   const showLoading = !hasLoaded && (loadingUser || loading);
 
   useEffect(() => {
@@ -240,7 +248,13 @@ export default function CustomerSavedPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {saved.map((item) => (
+              {sortedSaved.map((item) => {
+                const inventory = normalizeInventory(item);
+                const badgeStyle = getAvailabilityBadgeStyle(
+                  inventory.availability,
+                  isLight
+                );
+                return (
                 <Link
                   key={item.id}
                   href={`/listings/${item.id}`}
@@ -274,6 +288,16 @@ export default function CustomerSavedPage() {
                         <p className="text-xs uppercase tracking-wide text-white/60">
                           {item.category || "Listing"}
                         </p>
+                        <span
+                          className="inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"
+                          style={
+                            badgeStyle
+                              ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                              : undefined
+                          }
+                        >
+                          {inventory.label}
+                        </span>
                       </div>
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/70">
                         <BookmarkCheck className="h-3.5 w-3.5" />
@@ -294,7 +318,8 @@ export default function CustomerSavedPage() {
                     </div>
                   </div>
                 </Link>
-              ))}
+              );
+              })}
             </div>
           </div>
         )}

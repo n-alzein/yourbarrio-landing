@@ -14,6 +14,9 @@ export default function NewListingPage() {
     description: "",
     price: "",
     category: "",
+    inventoryQuantity: "",
+    inventoryStatus: "in_stock",
+    lowStockThreshold: "",
   });
 
   const [photos, setPhotos] = useState([]);
@@ -116,6 +119,18 @@ export default function NewListingPage() {
         description: form.description,
         price: form.price,
         category: form.category,
+        inventory_status: form.inventoryStatus,
+        inventory_quantity:
+          form.inventoryStatus === "out_of_stock"
+            ? 0
+            : form.inventoryQuantity === ""
+            ? null
+            : Number(form.inventoryQuantity),
+        low_stock_threshold:
+          form.inventoryStatus === "in_stock" && form.lowStockThreshold !== ""
+            ? Number(form.lowStockThreshold)
+            : null,
+        inventory_last_updated_at: new Date().toISOString(),
         city: business?.city || null,
         photo_url: photo_urls.length ? JSON.stringify(photo_urls) : null,
       });
@@ -268,6 +283,36 @@ export default function NewListingPage() {
             ))}
           </select>
 
+          <select
+            className="w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
+                       focus:ring-4 focus:ring-blue-500/40 outline-none transition"
+            value={form.inventoryStatus}
+            onChange={(e) => {
+              const nextStatus = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                inventoryStatus: nextStatus,
+                inventoryQuantity:
+                  nextStatus === "out_of_stock" ? "0" : prev.inventoryQuantity,
+                lowStockThreshold:
+                  nextStatus === "in_stock" ? prev.lowStockThreshold : "",
+              }));
+            }}
+          >
+            <option value="always_available" className="text-black">
+              Always available
+            </option>
+            <option value="in_stock" className="text-black">
+              Limited stock (default)
+            </option>
+            <option value="seasonal" className="text-black">
+              Seasonal/temporary
+            </option>
+            <option value="out_of_stock" className="text-black">
+              Out of stock
+            </option>
+          </select>
+
           <input
             className="w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
                        placeholder-gray-300 focus:ring-4 focus:ring-blue-500/40 outline-none transition"
@@ -277,6 +322,34 @@ export default function NewListingPage() {
             onChange={(e) => setForm({ ...form, price: e.target.value })}
             required
           />
+
+          <input
+            className="w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
+                       placeholder-gray-300 focus:ring-4 focus:ring-blue-500/40 outline-none transition"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Inventory quantity (ex: 20)"
+            value={form.inventoryQuantity}
+            onChange={(e) =>
+              setForm({ ...form, inventoryQuantity: e.target.value })
+            }
+          />
+
+          {form.inventoryStatus === "in_stock" && (
+            <input
+              className="w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
+                         placeholder-gray-300 focus:ring-4 focus:ring-blue-500/40 outline-none transition"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="Low stock threshold (default 5)"
+              value={form.lowStockThreshold}
+              onChange={(e) =>
+                setForm({ ...form, lowStockThreshold: e.target.value })
+              }
+            />
+          )}
 
           {/* BUTTONS SIDE BY SIDE */}
           <div className="flex gap-4 pt-2">

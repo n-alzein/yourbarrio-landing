@@ -17,10 +17,14 @@ import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useParams, useRouter } from "next/navigation";
 import SafeImage from "@/components/SafeImage";
 import { getOrCreateConversation } from "@/lib/messages";
+import { useTheme } from "@/components/ThemeProvider";
+import { getAvailabilityBadgeStyle, normalizeInventory } from "@/lib/inventory";
 
 export default function ListingDetails({ params }) {
   const { supabase, user, authUser, role } = useAuth();
   const router = useRouter();
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
   const routeParams = useParams();
   const resolvedParams =
     params && typeof params.then === "function" ? use(params) : params;
@@ -258,6 +262,9 @@ export default function ListingDetails({ params }) {
   const category = business?.category || listing.category || "Local listing";
   const showMessage = role !== "business";
   const galleryPhotos = extractPhotoUrls(listing.photo_url);
+  const inventory = normalizeInventory(listing);
+  const badgeStyle = getAvailabilityBadgeStyle(inventory.availability, isLight);
+  const isOutOfStock = inventory.availability === "out";
 
   return (
     <div
@@ -332,6 +339,16 @@ export default function ListingDetails({ params }) {
                 <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] opacity-75">
                   <Shield className="h-4 w-4 opacity-90" />
                   {category}
+                  <span
+                    className="rounded-full px-2 py-1 text-[10px] font-semibold border bg-transparent"
+                    style={
+                      badgeStyle
+                        ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                        : undefined
+                    }
+                  >
+                    {inventory.label}
+                  </span>
                 </div>
                 <h1 className="text-3xl font-semibold leading-tight">{listing.title}</h1>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm opacity-80 min-w-0">
@@ -403,11 +420,12 @@ export default function ListingDetails({ params }) {
                     type="button"
                     onClick={handleMessageBusiness}
                     disabled={messageLoading}
-                    className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                    className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition border ${
                       messageLoading
-                        ? "bg-white/10 text-white/50"
-                        : "bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white hover:opacity-95"
+                        ? "bg-white/60 text-slate-400"
+                        : "bg-white text-slate-900 hover:bg-slate-50"
                     }`}
+                    style={{ borderColor: "var(--border)" }}
                   >
                     {messageLoading ? "Opening messages..." : "Message business"}
                   </button>
@@ -476,6 +494,7 @@ export default function ListingDetails({ params }) {
                 <select
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
+                  disabled={isOutOfStock}
                   className="w-full rounded-xl px-3 py-2 text-sm font-semibold"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
@@ -486,42 +505,51 @@ export default function ListingDetails({ params }) {
                   ))}
                 </select>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => handleOrder("delivery")}
+                    disabled={isOutOfStock}
                     className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
                       orderingMode === "delivery"
-                        ? "bg-indigo-600 text-white shadow"
+                        ? "border text-[color:var(--text)] ring-2 ring-indigo-500/30"
                         : "border text-[color:var(--text)]"
                     }`}
-                    style={orderingMode === "delivery" ? {} : { background: "var(--surface)", borderColor: "var(--border)" }}
+                    style={{ background: "var(--surface)", borderColor: "var(--border)" }}
                   >
                     Request delivery
                   </button>
                   <button
                     type="button"
                     onClick={() => handleOrder("pickup")}
+                    disabled={isOutOfStock}
                     className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
                       orderingMode === "pickup"
-                        ? "bg-indigo-600 text-white shadow"
+                        ? "border text-[color:var(--text)] ring-2 ring-indigo-500/30"
                         : "border text-[color:var(--text)]"
                     }`}
-                    style={orderingMode === "pickup" ? {} : { background: "var(--surface)", borderColor: "var(--border)" }}
+                    style={{ background: "var(--surface)", borderColor: "var(--border)" }}
                   >
                     Request pickup
                   </button>
                 </div>
 
-                {statusMessage ? (
+                {isOutOfStock ? (
                   <div
-                    className="text-xs rounded-xl px-3 py-2"
+                    className="mt-2 text-xs rounded-xl px-3 py-2"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  >
+                    Currently unavailable. Check back soon.
+                  </div>
+                ) : statusMessage ? (
+                  <div
+                    className="mt-2 text-xs rounded-xl px-3 py-2"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   >
                     {statusMessage}
                   </div>
                 ) : (
-                  <div className="text-xs opacity-80">
+                  <div className="mt-2 text-xs opacity-80">
                     We’ll confirm address or pickup time in the next step. Charges apply after
                     business confirms.
                   </div>

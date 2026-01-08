@@ -147,6 +147,12 @@ button {
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
+/* Light theme — soften business placeholder contrast */
+.theme-light img[data-placeholder="true"],
+.theme-light img[src="/business-placeholder.png"] {
+  background: #c4b5fd;
+}
+
 /* YB badge theme contrast */
 .yb-badge {
   background: rgba(16, 185, 129, 0.18);

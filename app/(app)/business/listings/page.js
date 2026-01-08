@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getLowStockThreshold, normalizeInventory } from "@/lib/inventory";
 import { useTheme } from "@/components/ThemeProvider";
 import SafeImage from "@/components/SafeImage";
+import InventorySelfTest from "@/components/debug/InventorySelfTest";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function BusinessListingsPage() {
   const { supabase, authUser, loadingUser } = useAuth();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const [isHydrating, setIsHydrating] = useState(true);
 
   const [listings, setListings] = useState(() => {
     if (typeof window === "undefined") return [];
@@ -29,6 +33,8 @@ export default function BusinessListingsPage() {
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
+  const [inventoryUpdatingId, setInventoryUpdatingId] = useState(null);
+  const inventoryPollRef = useRef(null);
   const totalListings = listings.length;
   const averagePrice =
     totalListings === 0
@@ -46,6 +52,18 @@ export default function BusinessListingsPage() {
     const handleVisibility = () => setIsVisible(!document.hidden);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (inventoryPollRef.current) {
+        clearTimeout(inventoryPollRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsHydrating(false);
   }, []);
 
   // Safety: don't leave loading true forever
@@ -129,9 +147,157 @@ export default function BusinessListingsPage() {
     setListings((prev) => prev.filter((l) => l.id !== id));
   }
 
+  async function updateListingInventory(listingId, updates) {
+    if (!authUser) {
+      alert("Connection not ready. Please try again.");
+      return;
+    }
+
+    const clearPoll = () => {
+      if (inventoryPollRef.current) {
+        clearTimeout(inventoryPollRef.current);
+        inventoryPollRef.current = null;
+      }
+    };
+
+    clearPoll();
+    setInventoryUpdatingId(listingId);
+    try {
+      const payload = { ...updates };
+      const response = await fetchWithTimeout("/api/inventory/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId, updates: payload }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Failed to start inventory update.");
+      }
+
+      const syncPayload = await response.json();
+      const { jobId, listingId: jobListingId } = syncPayload || {};
+      if (process.env.NEXT_PUBLIC_DEBUG_PERF === "true") {
+        console.info("[inventory] sync response", syncPayload);
+      }
+      if (!jobId) {
+        throw new Error("Inventory update job could not be created.");
+      }
+      const isValidJobId = /^[0-9a-fA-F-]{36}$/.test(jobId);
+      if (!isValidJobId) {
+        throw new Error("Inventory update job id is invalid. Please retry.");
+      }
+      if (jobListingId && jobListingId !== listingId) {
+        setInventoryUpdatingId(null);
+        alert("Another inventory update is already in progress. Please wait.");
+        return;
+      }
+
+      try {
+        await fetchWithTimeout(`/api/inventory/jobs/${jobId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        console.warn("Inventory job trigger failed, relying on polling.", err);
+      }
+
+      const applyInventoryUpdate = (listingUpdate) => {
+        setListings((prev) => {
+          const next = prev.map((item) =>
+            item.id === listingId ? { ...item, ...listingUpdate } : item
+          );
+          try {
+            sessionStorage.setItem("yb_business_listings", JSON.stringify(next));
+          } catch {
+            // ignore cache write errors
+          }
+          return next;
+        });
+      };
+
+      const pollJob = async () => {
+        try {
+          if (!jobId || !/^[0-9a-fA-F-]{36}$/.test(jobId)) {
+            throw new Error("Inventory update job id is missing. Please retry.");
+          }
+          if (process.env.NEXT_PUBLIC_DEBUG_PERF === "true") {
+            console.info("[inventory] polling job", jobId);
+          }
+          const statusRes = await fetchWithTimeout(
+            `/api/inventory/jobs/${jobId}`,
+            { method: "GET" }
+          );
+          if (!statusRes.ok) {
+            let errorPayload = null;
+            try {
+              errorPayload = await statusRes.json();
+            } catch {}
+            if (errorPayload?.code === "42P01") {
+              throw new Error(
+                "Inventory jobs table is missing. Please run the latest migration."
+              );
+            }
+            throw new Error(
+              errorPayload?.details ||
+                errorPayload?.error ||
+                "Failed to check job status."
+            );
+          }
+
+          const payload = await statusRes.json();
+          const job = payload?.job || payload;
+          if (job?.status === "succeeded") {
+            applyInventoryUpdate({
+              ...updates,
+              inventory_last_updated_at:
+                job?.completed_at || new Date().toISOString(),
+            });
+            setInventoryUpdatingId(null);
+            clearPoll();
+            return;
+          }
+          if (job?.status === "failed") {
+            throw new Error(job?.error || "Inventory update failed.");
+          }
+        } catch (err) {
+          console.error("❌ Inventory job error:", err);
+          alert(err?.message || "Failed to update inventory status.");
+          setInventoryUpdatingId(null);
+          clearPoll();
+          return;
+        }
+
+        inventoryPollRef.current = setTimeout(pollJob, 1500);
+      };
+
+      pollJob();
+    } catch (err) {
+      console.error("❌ Update inventory error:", err);
+      alert(err?.message || "Failed to update inventory status.");
+      clearPoll();
+      setInventoryUpdatingId(null);
+    }
+  }
+
+  const cancelInventoryUpdate = () => {
+    if (inventoryPollRef.current) {
+      clearTimeout(inventoryPollRef.current);
+      inventoryPollRef.current = null;
+    }
+    setInventoryUpdatingId(null);
+  };
+
   // ------------------------------------------------------
   // LOADING STATES
   // ------------------------------------------------------
+  if (isHydrating) {
+    return (
+      <p className="text-slate-700 dark:text-slate-100 text-center py-20">
+        Loading listings...
+      </p>
+    );
+  }
   if (showLoading) {
     return (
       <p className="text-slate-700 dark:text-slate-100 text-center py-20">
@@ -152,6 +318,7 @@ export default function BusinessListingsPage() {
   // ------------------------------------------------------
   return (
     <div className="max-w-6xl mx-auto px-6 py-4 md:py-8 text-slate-900 dark:text-slate-100">
+      {process.env.NODE_ENV !== "production" ? <InventorySelfTest /> : null}
       {/* Hero */}
       <div
         className={`rounded-3xl border shadow-xl p-8 md:p-10 flex flex-col md:flex-row items-start md:items-center gap-8 ${
@@ -321,7 +488,7 @@ export default function BusinessListingsPage() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
         <div
           className={`rounded-2xl border shadow-sm p-4 ${
             isLight ? "bg-white border-slate-200/80" : "bg-slate-900/80 border-white/10"
@@ -419,7 +586,7 @@ export default function BusinessListingsPage() {
 
       {/* List grid */}
       {listings.length > 0 && (
-        <div className="mt-12 space-y-4">
+        <div className="mt-12 space-y-5">
           <div className="flex items-center justify-between">
             <div>
               <h2 className={`text-xl font-bold ${isLight ? "text-slate-900" : "text-slate-100"}`}>
@@ -437,14 +604,43 @@ export default function BusinessListingsPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {listings.map((listing) => (
-              <div
-                key={listing.id}
-                className={`group relative overflow-hidden rounded-2xl border shadow-sm hover:shadow-xl transition ${
-                  isLight ? "bg-white border-slate-200/80" : "bg-slate-900/80 border-white/10"
-                }`}
-              >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+            {listings.map((listing) => {
+              const inventory = normalizeInventory(listing);
+              const isUpdating = inventoryUpdatingId === listing.id;
+              const threshold = getLowStockThreshold(listing);
+              const currentQuantity = Number(listing.inventory_quantity);
+              const restockQuantity =
+                Number.isFinite(currentQuantity) && currentQuantity > 0
+                  ? currentQuantity
+                  : Math.max(10, threshold * 2);
+              const availabilityPalette = {
+                available: {
+                  light: { color: "#065f46", border: "#047857" },
+                  dark: { color: "#d1fae5", border: "rgba(110, 231, 183, 0.7)" },
+                },
+                low: {
+                  light: { color: "#92400e", border: "#b45309" },
+                  dark: { color: "#fef3c7", border: "rgba(252, 211, 77, 0.7)" },
+                },
+                out: {
+                  light: { color: "#9f1239", border: "#be123c" },
+                  dark: { color: "#ffe4e6", border: "rgba(251, 113, 133, 0.7)" },
+                },
+              };
+              const badgeStyle = isLight
+                ? availabilityPalette[inventory.availability]?.light
+                : availabilityPalette[inventory.availability]?.dark;
+
+              return (
+                <div
+                  key={listing.id}
+                  className={`group relative overflow-hidden rounded-2xl border shadow-sm hover:shadow-xl transition ${
+                    isLight
+                      ? "bg-white border-slate-200/80"
+                      : "bg-slate-900/80 border-white/10"
+                  }`}
+                >
                 {primaryPhotoUrl(listing.photo_url) ? (
                   <div
                     className={`relative h-48 w-full overflow-hidden ${
@@ -464,7 +660,7 @@ export default function BusinessListingsPage() {
                   </div>
                 )}
 
-                <div className="p-5 space-y-3">
+                <div className="p-5 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p
@@ -482,40 +678,69 @@ export default function BusinessListingsPage() {
                         {listing.title || "Untitled listing"}
                       </h3>
                     </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold border ${
-                        isLight
-                          ? "bg-slate-100 text-slate-900 border-slate-200"
-                          : "bg-amber-500/20 text-amber-100 border-amber-400/20"
+                    <div className="flex flex-col items-end gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                          isLight
+                            ? "bg-slate-100 text-slate-900 border-slate-200"
+                            : "bg-amber-500/20 text-amber-100 border-amber-400/20"
+                        }`}
+                      >
+                        {listing.price
+                          ? new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                              maximumFractionDigits: 0,
+                            }).format(Number(listing.price))
+                          : "Price TBC"}
+                      </span>
+                      <span
+                        className="inline-flex items-center justify-center text-center rounded-full px-3 py-1 text-[11px] font-semibold border bg-transparent"
+                        style={
+                          badgeStyle
+                            ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                            : undefined
+                        }
+                      >
+                        {inventory.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div
+                      className={`flex items-center justify-between ${
+                        isLight ? "text-slate-700" : "text-slate-400"
                       }`}
                     >
-                      {listing.price
-                        ? new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: "USD",
-                            maximumFractionDigits: 0,
-                          }).format(Number(listing.price))
-                        : "Price TBC"}
-                    </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        Ready for customers
+                      </span>
+                      <span>
+                        {listing.created_at
+                          ? new Date(listing.created_at).toLocaleDateString()
+                          : "—"}
+                      </span>
+                    </div>
+
+                    <div
+                      className={`flex items-center justify-between ${
+                        isLight ? "text-slate-700" : "text-slate-400"
+                      }`}
+                    >
+                      <span>Inventory available</span>
+                      <span className="font-semibold">
+                        {listing.inventory_quantity ?? "Not set"}
+                      </span>
+                    </div>
                   </div>
 
                   <div
-                    className={`flex items-center justify-between text-sm ${
-                      isLight ? "text-slate-700" : "text-slate-400"
+                    className={`pt-3 border-t flex flex-wrap items-center gap-2 ${
+                      isLight ? "border-slate-200/80" : "border-white/10"
                     }`}
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      Ready for customers
-                    </span>
-                    <span>
-                      {listing.created_at
-                        ? new Date(listing.created_at).toLocaleDateString()
-                        : "—"}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       onClick={() =>
                         router.push(`/business/listings/${listing.id}/edit`)
@@ -534,10 +759,73 @@ export default function BusinessListingsPage() {
                     >
                       🗑 Delete
                     </button>
+                    <div className="flex flex-wrap items-center gap-2 ml-auto">
+                      <button
+                        onClick={() =>
+                          updateListingInventory(listing.id, {
+                            inventory_status: "out_of_stock",
+                            inventory_quantity: 0,
+                          })
+                        }
+                        disabled={isUpdating}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                          isLight
+                            ? "text-slate-900 border-slate-300 hover:bg-slate-50"
+                            : "text-white border-white/15 hover:bg-white/10"
+                        }`}
+                      >
+                        {isUpdating ? "Updating..." : "Mark out of stock"}
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateListingInventory(listing.id, {
+                            inventory_status: "in_stock",
+                            inventory_quantity: restockQuantity,
+                          })
+                        }
+                        disabled={isUpdating}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                          isLight
+                            ? "text-slate-900 border-slate-300 hover:bg-slate-50"
+                            : "text-white border-white/15 hover:bg-white/10"
+                        }`}
+                      >
+                        {isUpdating ? "Updating..." : "Restock"}
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateListingInventory(listing.id, {
+                            inventory_status: "seasonal",
+                          })
+                        }
+                        disabled={isUpdating}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                          isLight
+                            ? "text-slate-900 border-slate-300 hover:bg-slate-50"
+                            : "text-white border-white/15 hover:bg-white/10"
+                        }`}
+                      >
+                        {isUpdating ? "Updating..." : "Pause listing"}
+                      </button>
+                      {isUpdating ? (
+                        <button
+                          type="button"
+                          onClick={cancelInventoryUpdate}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                            isLight
+                              ? "text-slate-900 border-slate-300 hover:bg-slate-50"
+                              : "text-white border-white/15 hover:bg-white/10"
+                          }`}
+                        >
+                          Stop tracking
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

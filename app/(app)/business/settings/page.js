@@ -37,7 +37,7 @@ export default function SettingsPage() {
     if (!user) return;
 
     setForm({
-      full_name: user.full_name || "",
+      full_name: user.business_name || user.full_name || "",
       phone: user.phone || "",
       city: user.city || "",
       address: user.address || "",
@@ -56,6 +56,7 @@ export default function SettingsPage() {
       .from("users")
       .update({
         full_name: form.full_name,
+        business_name: form.full_name,
         phone: form.phone,
         city: form.city,
         address: form.address,
@@ -120,7 +121,7 @@ export default function SettingsPage() {
     user &&
     JSON.stringify(form) !==
       JSON.stringify({
-        full_name: user.full_name || "",
+        full_name: user.business_name || user.full_name || "",
         phone: user.phone || "",
         city: user.city || "",
         address: user.address || "",
@@ -303,7 +304,7 @@ export default function SettingsPage() {
                   onClick={() => {
                     setEditMode(false);
                     setForm({
-                      full_name: user.full_name || "",
+                      full_name: user.business_name || user.full_name || "",
                       phone: user.phone || "",
                       city: user.city || "",
                       address: user.address || "",

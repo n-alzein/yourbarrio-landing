@@ -2,23 +2,42 @@
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabaseClient";
 
 export async function POST() {
   const cookieName = getCookieName();
+  const isProd = process.env.NODE_ENV === "production";
 
   try {
     const cookieStore = await cookies();
 
-    const supabase = createRouteHandlerClient(
-      { cookies: () => cookieStore },
-      cookieName ? { cookieOptions: { name: cookieName } } : undefined
+    const res = NextResponse.json({ success: true });
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookieOptions: cookieName ? { name: cookieName } : undefined,
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              res.cookies.set(name, value, {
+                ...options,
+                sameSite: "lax",
+                secure: isProd,
+                path: options?.path ?? "/",
+              });
+            });
+          },
+        },
+      }
     );
 
     await supabase.auth.signOut();
-
-    const res = NextResponse.json({ success: true });
 
     const cookieNames = cookieStore
       .getAll()
@@ -38,7 +57,7 @@ export async function POST() {
         path: "/",
         maxAge: 0,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: isProd,
       });
     });
 

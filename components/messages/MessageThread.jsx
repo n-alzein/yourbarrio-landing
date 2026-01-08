@@ -49,9 +49,10 @@ export default function MessageThread({ messages = [], currentUserId }) {
                   key={message.id}
                   className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                     isSelf
-                      ? "bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white"
-                      : "bg-white/10 text-white/90"
+                      ? "text-slate-900"
+                      : "text-slate-900"
                   }`}
+                  style={{ backgroundColor: isSelf ? "#dccbff" : "#e5e7eb" }}
                 >
                   {message.body}
                 </div>

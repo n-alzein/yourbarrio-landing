@@ -50,18 +50,23 @@ const setCachedResponse = (key, payload) => {
   });
 };
 
-async function searchListings(supabase, term) {
+async function searchListings(supabase, term, category) {
   const safe = sanitize(term);
   if (!safe) return [];
+  const safeCategory = sanitize(category);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("listings")
     .select(
-      "id,title,description,price,category,city,photo_url,business_id,created_at"
+      "id,title,description,price,category,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
     )
     .or(
       `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
-    )
+    );
+  if (safeCategory) {
+    query = query.eq("category", safeCategory);
+  }
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(8);
 
@@ -79,15 +84,20 @@ async function searchListings(supabase, term) {
     city: row.city,
     photo_url: primaryPhotoUrl(row.photo_url),
     business_id: row.business_id,
+    inventory_status: row.inventory_status,
+    inventory_quantity: row.inventory_quantity,
+    low_stock_threshold: row.low_stock_threshold,
+    inventory_last_updated_at: row.inventory_last_updated_at,
     source: "supabase_listing",
   }));
 }
 
-async function searchBusinesses(supabase, term) {
+async function searchBusinesses(supabase, term, category) {
   const safe = sanitize(term);
   if (!safe) return [];
+  const safeCategory = sanitize(category);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("users")
     .select(
       "id,business_name,full_name,category,city,address,description,website,profile_photo_url,role"
@@ -95,8 +105,11 @@ async function searchBusinesses(supabase, term) {
     .eq("role", "business")
     .or(
       `business_name.ilike.%${safe}%,full_name.ilike.%${safe}%,category.ilike.%${safe}%,description.ilike.%${safe}%,city.ilike.%${safe}%`
-    )
-    .limit(8);
+    );
+  if (safeCategory) {
+    query = query.eq("category", safeCategory);
+  }
+  const { data, error } = await query.limit(8);
 
   if (error) {
     console.warn("searchBusinesses failed", error);
@@ -167,7 +180,8 @@ async function searchGooglePlaces(term) {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("q") || "").trim();
-  const cacheKey = query.toLowerCase();
+  const category = (searchParams.get("category") || "").trim();
+  const cacheKey = `${query.toLowerCase()}::${category.toLowerCase()}`;
 
   if (!query) {
     return NextResponse.json({
@@ -202,8 +216,8 @@ export async function GET(request) {
   }
 
   const [items, businesses, places] = await Promise.all([
-    supabase ? searchListings(supabase, query) : [],
-    supabase ? searchBusinesses(supabase, query) : [],
+    supabase ? searchListings(supabase, query, category) : [],
+    supabase ? searchBusinesses(supabase, query, category) : [],
     searchGooglePlaces(query),
   ]);
 

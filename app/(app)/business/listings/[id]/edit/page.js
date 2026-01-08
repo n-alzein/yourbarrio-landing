@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 import { extractPhotoUrls } from "@/lib/listingPhotos";
+import { retry } from "@/lib/retry";
 
 export default function EditListingPage() {
   const router = useRouter();
@@ -12,7 +13,6 @@ export default function EditListingPage() {
   const listingId = params.id;
 
   const { supabase, authUser, loadingUser } = useAuth();
-  const REQUEST_TIMEOUT_MS = 60000;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,6 +24,9 @@ export default function EditListingPage() {
     price: "",
     category: "",
     city: "",
+    inventoryQuantity: "",
+    inventoryStatus: "in_stock",
+    lowStockThreshold: "",
   });
 
   const [existingPhotos, setExistingPhotos] = useState([]);
@@ -32,22 +35,6 @@ export default function EditListingPage() {
     () => newPhotos.map((file) => ({ url: URL.createObjectURL(file) })),
     [newPhotos]
   );
-
-  const withTimeout = async (promise, label) => {
-    let timer;
-    try {
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(label || "Request timed out. Please retry.")),
-          REQUEST_TIMEOUT_MS
-        );
-      });
-      const result = await Promise.race([promise, timeout]);
-      return result;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  };
 
   useEffect(
     () => () => {
@@ -61,31 +48,40 @@ export default function EditListingPage() {
     if (loadingUser || !authUser || !supabase || !listingId) return;
 
     async function loadListing() {
-      const { data, error } = await withTimeout(
-        supabase
-          .from("listings")
-          .select("*")
-          .eq("id", listingId)
-          .single(),
-        "Loading listing timed out. Please retry."
-      );
+      try {
+        const { data, error } = await retry(
+          async () => {
+            const result = await supabase
+              .from("listings")
+              .select("*")
+              .eq("id", listingId)
+              .single();
+            if (result.error) throw result.error;
+            return result;
+          },
+          { retries: 1, delayMs: 600 }
+        );
 
-      if (error) {
-        console.error("❌ Fetch listing error:", error);
+        if (error) {
+          throw error;
+        }
+
+        setForm({
+          title: data.title || "",
+          description: data.description || "",
+          price: data.price || "",
+          category: data.category || "",
+          city: data.city || "",
+          inventoryQuantity: data.inventory_quantity ?? "",
+          inventoryStatus: data.inventory_status || "in_stock",
+          lowStockThreshold: data.low_stock_threshold ?? "",
+        });
+        setExistingPhotos(extractPhotoUrls(data.photo_url));
+      } catch (err) {
+        console.error("❌ Fetch listing error:", err);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setForm({
-        title: data.title || "",
-        description: data.description || "",
-        price: data.price || "",
-        category: data.category || "",
-        city: data.city || "",
-      });
-      setExistingPhotos(extractPhotoUrls(data.photo_url));
-
-      setLoading(false);
     }
 
     loadListing();
@@ -126,13 +122,19 @@ export default function EditListingPage() {
         file.name
       }`;
 
-      const { error } = await withTimeout(
-        supabase.storage.from("listing-photos").upload(fileName, file, {
-          contentType: file.type,
-          upsert: false,
-          cacheControl: "3600",
-        }),
-        "Uploading a photo timed out. Please retry."
+      const { error } = await retry(
+        async () => {
+          const result = await supabase.storage
+            .from("listing-photos")
+            .upload(fileName, file, {
+              contentType: file.type,
+              upsert: false,
+              cacheControl: "3600",
+            });
+          if (result.error) throw result.error;
+          return result;
+        },
+        { retries: 1, delayMs: 600 }
       );
 
       if (error) {
@@ -179,18 +181,34 @@ export default function EditListingPage() {
         price: form.price,
         category: form.category,
         city: form.city,
+        inventory_status: form.inventoryStatus,
+        inventory_quantity:
+          form.inventoryStatus === "out_of_stock"
+            ? 0
+            : form.inventoryQuantity === ""
+            ? null
+            : Number(form.inventoryQuantity),
+        low_stock_threshold:
+          form.inventoryStatus === "in_stock" && form.lowStockThreshold !== ""
+            ? Number(form.lowStockThreshold)
+            : null,
+        inventory_last_updated_at: new Date().toISOString(),
         photo_url: JSON.stringify(photoUrls),
       };
 
-      const { data, error } = await withTimeout(
-        supabase
-          .from("listings")
-          .update(payload)
-          .eq("id", listingId)
-          .eq("business_id", authUser.id)
-          .select("id")
-          .single(),
-        "Saving changes timed out. Please retry."
+      const { data, error } = await retry(
+        async () => {
+          const result = await supabase
+            .from("listings")
+            .update(payload)
+            .eq("id", listingId)
+            .eq("business_id", authUser.id)
+            .select("id")
+            .single();
+          if (result.error) throw result.error;
+          return result;
+        },
+        { retries: 1, delayMs: 600 }
       );
 
       if (error) {
@@ -333,6 +351,38 @@ export default function EditListingPage() {
             required
           />
 
+          <select
+            className="
+              w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
+              focus:ring-4 focus:ring-blue-500/40 outline-none transition
+            "
+            value={form.inventoryStatus}
+            onChange={(e) => {
+              const nextStatus = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                inventoryStatus: nextStatus,
+                inventoryQuantity:
+                  nextStatus === "out_of_stock" ? "0" : prev.inventoryQuantity,
+                lowStockThreshold:
+                  nextStatus === "in_stock" ? prev.lowStockThreshold : "",
+              }));
+            }}
+          >
+            <option value="always_available" className="text-black">
+              Always available
+            </option>
+            <option value="in_stock" className="text-black">
+              Limited stock (default)
+            </option>
+            <option value="seasonal" className="text-black">
+              Seasonal/temporary
+            </option>
+            <option value="out_of_stock" className="text-black">
+              Out of stock
+            </option>
+          </select>
+
           <input
             className="
               w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
@@ -344,6 +394,38 @@ export default function EditListingPage() {
             onChange={(e) => setForm({ ...form, price: e.target.value })}
             required
           />
+
+          <input
+            className="
+              w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
+              placeholder-gray-300 focus:ring-4 focus:ring-blue-500/40 outline-none transition
+            "
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Inventory quantity (ex: 20)"
+            value={form.inventoryQuantity}
+            onChange={(e) =>
+              setForm({ ...form, inventoryQuantity: e.target.value })
+            }
+          />
+
+          {form.inventoryStatus === "in_stock" && (
+            <input
+              className="
+                w-full px-5 py-4 rounded-2xl bg-white/15 text-white 
+                placeholder-gray-300 focus:ring-4 focus:ring-blue-500/40 outline-none transition
+              "
+              type="number"
+              min="0"
+              step="1"
+              placeholder="Low stock threshold (default 5)"
+              value={form.lowStockThreshold}
+              onChange={(e) =>
+                setForm({ ...form, lowStockThreshold: e.target.value })
+              }
+            />
+          )}
 
           <select
             className="

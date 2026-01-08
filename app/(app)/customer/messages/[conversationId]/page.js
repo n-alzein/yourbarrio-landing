@@ -166,26 +166,28 @@ export default function CustomerConversationPage() {
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-5xl mx-auto space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <img
-                src={getAvatarUrl(otherProfile)}
-                alt={headerName}
-                className="h-12 w-12 rounded-2xl object-cover border border-white/10"
-              />
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  Conversation
-                </p>
-                <h1 className="text-2xl font-semibold text-white">{headerName}</h1>
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur">
+            <div className="space-y-4">
+              <Link
+                href="/customer/messages"
+                className="mb-3 inline-flex items-center text-xs uppercase tracking-[0.28em] text-white/60 hover:text-white"
+              >
+                Back to inbox
+              </Link>
+              <div className="flex items-center gap-4">
+                <img
+                  src={getAvatarUrl(otherProfile)}
+                  alt={headerName}
+                  className="h-12 w-12 rounded-2xl object-cover border border-white/10"
+                />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-white/50">
+                    Conversation
+                  </p>
+                  <h1 className="text-2xl font-semibold text-white">{headerName}</h1>
+                </div>
               </div>
             </div>
-            <Link
-              href="/customer/messages"
-              className="text-sm text-white/70 hover:text-white"
-            >
-              Back to inbox
-            </Link>
           </div>
 
           {error ? (
@@ -199,7 +201,7 @@ export default function CustomerConversationPage() {
               Loading conversation...
             </div>
           ) : (
-            <>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 space-y-4">
               {hasMore ? (
                 <button
                   type="button"
@@ -211,7 +213,7 @@ export default function CustomerConversationPage() {
                 </button>
               ) : null}
               <MessageThread messages={messages} currentUserId={userId} />
-            </>
+            </div>
           )}
         </div>
       </div>

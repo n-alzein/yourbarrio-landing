@@ -40,11 +40,14 @@ export default function SafeImage({
     }
   };
 
+  const isPlaceholder = currentSrc === resolvedFallback;
+
   return (
     <img
       {...rest}
       src={currentSrc}
       alt={alt}
+      data-placeholder={isPlaceholder ? "true" : undefined}
       onError={handleError}
       onLoad={handleLoad}
     />

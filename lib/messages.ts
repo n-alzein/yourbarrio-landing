@@ -1,6 +1,7 @@
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
 export const MESSAGE_PAGE_SIZE = 50;
+export const CONVERSATION_PAGE_SIZE = 40;
 
 export function getDisplayName(profile: {
   business_name?: string | null;
@@ -39,7 +40,13 @@ export async function fetchConversations({
   const client = supabase ?? getBrowserSupabaseClient();
   if (!client) return [];
 
+  const diagEnabled =
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_MSG_DIAG === "1";
+  const startTime = diagEnabled ? Date.now() : 0;
+
   const idField = role === "business" ? "business_id" : "customer_id";
+  // Avoid embedded joins to reduce RLS overhead and slow query plans.
   const { data, error } = await client
     .from("conversations")
     .select(
@@ -51,15 +58,38 @@ export async function fetchConversations({
         "last_message_preview",
         "customer_unread_count",
         "business_unread_count",
-        "customer:customer_id(id, full_name, business_name, profile_photo_url)",
-        "business:business_id(id, full_name, business_name, profile_photo_url)",
       ].join(",")
     )
     .eq(idField, userId)
-    .order("last_message_at", { ascending: false });
+    .order("last_message_at", { ascending: false })
+    .limit(CONVERSATION_PAGE_SIZE);
 
   if (error) throw error;
-  return Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? data : [];
+  const profiles = await fetchProfilesByIds({
+    supabase: client,
+    ids: rows.flatMap((row) => [row.customer_id, row.business_id]),
+  });
+
+  const conversations = rows.map((row) => ({
+    ...row,
+    customer: profiles[row.customer_id] ?? null,
+    business: profiles[row.business_id] ?? null,
+  }));
+
+  if (diagEnabled && typeof window !== "undefined") {
+    const durationMs = Date.now() - startTime;
+    // eslint-disable-next-line no-console
+    console.log("[MSG_DIAG]", {
+      phase: "fetchConversations",
+      role,
+      userId,
+      durationMs,
+      count: conversations.length,
+    });
+  }
+
+  return conversations;
 }
 
 export async function fetchConversationById({
@@ -72,6 +102,7 @@ export async function fetchConversationById({
   const client = supabase ?? getBrowserSupabaseClient();
   if (!client) return null;
 
+  // Avoid embedded joins to reduce RLS overhead and slow query plans.
   const { data, error } = await client
     .from("conversations")
     .select(
@@ -83,15 +114,24 @@ export async function fetchConversationById({
         "last_message_preview",
         "customer_unread_count",
         "business_unread_count",
-        "customer:customer_id(id, full_name, business_name, profile_photo_url)",
-        "business:business_id(id, full_name, business_name, profile_photo_url)",
       ].join(",")
     )
     .eq("id", conversationId)
     .maybeSingle();
 
   if (error) throw error;
-  return data || null;
+  if (!data) return null;
+
+  const profiles = await fetchProfilesByIds({
+    supabase: client,
+    ids: [data.customer_id, data.business_id],
+  });
+
+  return {
+    ...data,
+    customer: profiles[data.customer_id] ?? null,
+    business: profiles[data.business_id] ?? null,
+  };
 }
 
 export async function fetchMessages({
@@ -225,14 +265,58 @@ export async function fetchUnreadTotal({
 }) {
   const client = supabase ?? getBrowserSupabaseClient();
   if (!client) return 0;
+  if (!userId) return 0;
+
+  const { data, error } = await client.rpc("unread_total", {
+    role,
+    uid: userId,
+  });
+
+  if (!error) return Number(data || 0);
+
+  const message = (error?.message || "").toLowerCase();
+  const missingRpc =
+    error?.code === "PGRST202" ||
+    message.includes("could not find the function") ||
+    message.includes("function public.unread_total");
+
+  if (!missingRpc) throw error;
 
   const field = role === "business" ? "business_id" : "customer_id";
-  const { data, error } = await client
+  const { data: rowsData, error: rowError } = await client
     .from("conversations")
     .select("customer_unread_count, business_unread_count")
     .eq(field, userId);
 
-  if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
+  if (rowError) throw rowError;
+  const rows = Array.isArray(rowsData) ? rowsData : [];
   return rows.reduce((sum, row) => sum + getUnreadCount(row, role), 0);
+}
+
+async function fetchProfilesByIds({
+  supabase,
+  ids,
+}: {
+  supabase?: any;
+  ids: Array<string | null | undefined>;
+}) {
+  const client = supabase ?? getBrowserSupabaseClient();
+  if (!client) return {};
+  const uniqueIds = Array.from(
+    new Set(ids.filter((id): id is string => Boolean(id)))
+  );
+  if (uniqueIds.length === 0) return {};
+
+  const { data, error } = await client
+    .from("users")
+    .select("id, full_name, business_name, profile_photo_url")
+    .in("id", uniqueIds);
+
+  if (error) throw error;
+
+  const profiles = Array.isArray(data) ? data : [];
+  return profiles.reduce<Record<string, any>>((map, profile) => {
+    if (profile?.id) map[profile.id] = profile;
+    return map;
+  }, {});
 }

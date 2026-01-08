@@ -12,7 +12,9 @@ import {
   getDisplayName,
   markConversationRead,
   sendMessage,
+  MESSAGE_PAGE_SIZE,
 } from "@/lib/messages";
+import { retry } from "@/lib/retry";
 import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
 
@@ -29,6 +31,7 @@ export default function BusinessConversationPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
+  const [messagesError, setMessagesError] = useState(null);
 
   useEffect(() => {
     setHydrated(true);
@@ -38,17 +41,47 @@ export default function BusinessConversationPage() {
     if (!conversationId) return;
     setLoading(true);
     setError(null);
+    setMessagesError(null);
     try {
       const convo = await fetchConversationById({ supabase, conversationId });
       setConversation(convo);
-      const initialMessages = await fetchMessages({ supabase, conversationId });
-      setMessages(initialMessages);
-      setHasMore(initialMessages.length === 50);
     } catch (err) {
       console.error("Failed to load conversation", err);
       setError("We couldn’t load this conversation. Try again soon.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const initialMessages = await retry(
+        () => fetchMessages({ supabase, conversationId }),
+        { retries: 1, delayMs: 600 }
+      );
+      setMessages(initialMessages);
+      setHasMore(initialMessages.length === MESSAGE_PAGE_SIZE);
+    } catch (err) {
+      console.error("Failed to load messages", err);
+      setMessages([]);
+      setHasMore(false);
+      setMessagesError("We couldn’t load messages yet. Try again.");
     } finally {
       setLoading(false);
+    }
+  }, [supabase, conversationId]);
+
+  const reloadMessages = useCallback(async () => {
+    if (!conversationId) return;
+    setMessagesError(null);
+    try {
+      const refreshed = await retry(
+        () => fetchMessages({ supabase, conversationId }),
+        { retries: 1, delayMs: 600 }
+      );
+      setMessages(refreshed);
+      setHasMore(refreshed.length === MESSAGE_PAGE_SIZE);
+    } catch (err) {
+      console.error("Failed to reload messages", err);
+      setMessagesError("We couldn’t load messages yet. Try again.");
     }
   }, [supabase, conversationId]);
 
@@ -114,7 +147,7 @@ export default function BusinessConversationPage() {
         setHasMore(false);
       } else {
         setMessages((prev) => [...older, ...prev]);
-        if (older.length < 50) setHasMore(false);
+        if (older.length < MESSAGE_PAGE_SIZE) setHasMore(false);
       }
     } catch (err) {
       console.error("Failed to load older messages", err);
@@ -157,32 +190,37 @@ export default function BusinessConversationPage() {
   const headerName = getDisplayName(otherProfile);
 
   return (
-    <section className="relative w-full min-h-screen pt-8 md:pt-10 pb-20 text-white">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-purple-900 via-black to-slate-900 opacity-70" />
-      <div className="absolute inset-0 -z-10 backdrop-blur-3xl" />
+    <section className="relative w-full min-h-screen pt-6 md:pt-8 text-white overflow-hidden -mt-8 md:-mt-12 pb-20 md:pb-24">
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0b0720] via-[#0a0816] to-black" />
+        <div className="absolute -top-32 -left-20 h-[360px] w-[360px] rounded-full bg-purple-600/20 blur-[120px]" />
+        <div className="absolute top-10 right-10 h-[300px] w-[300px] rounded-full bg-pink-500/15 blur-[120px]" />
+      </div>
 
-      <div className="w-full px-6 md:px-10">
+      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-5xl mx-auto space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <img
-                src={getAvatarUrl(otherProfile)}
-                alt={headerName}
-                className="h-12 w-12 rounded-2xl object-cover border border-white/10"
-              />
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  Conversation
-                </p>
-                <h1 className="text-2xl font-semibold text-white">{headerName}</h1>
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur">
+            <div className="space-y-4">
+              <Link
+                href="/business/messages"
+                className="mb-3 inline-flex items-center text-xs uppercase tracking-[0.28em] text-white/60 hover:text-white"
+              >
+                Back to inbox
+              </Link>
+              <div className="flex items-center gap-4">
+                <img
+                  src={getAvatarUrl(otherProfile)}
+                  alt={headerName}
+                  className="h-12 w-12 rounded-2xl object-cover border border-white/10"
+                />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-white/50">
+                    Conversation
+                  </p>
+                  <h1 className="text-2xl font-semibold text-white">{headerName}</h1>
+                </div>
               </div>
             </div>
-            <Link
-              href="/business/messages"
-              className="text-sm text-white/70 hover:text-white"
-            >
-              Back to inbox
-            </Link>
           </div>
 
           {error ? (
@@ -196,7 +234,19 @@ export default function BusinessConversationPage() {
               Loading conversation...
             </div>
           ) : (
-            <>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 space-y-4">
+              {messagesError ? (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
+                  <span>{messagesError}</span>
+                  <button
+                    type="button"
+                    onClick={reloadMessages}
+                    className="rounded-full border border-rose-200/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-rose-100 hover:text-white"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : null}
               {hasMore ? (
                 <button
                   type="button"
@@ -208,12 +258,12 @@ export default function BusinessConversationPage() {
                 </button>
               ) : null}
               <MessageThread messages={messages} currentUserId={userId} />
-            </>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="sticky bottom-0 mt-8 w-full px-6 md:px-10">
+      <div className="sticky bottom-0 mt-8 w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-5xl mx-auto">
           <MessageComposer onSend={handleSend} disabled={loading || !conversation} />
         </div>

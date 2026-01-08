@@ -16,14 +16,21 @@ import React from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import {
+  getAvailabilityBadgeStyle,
+  normalizeInventory,
+  sortListingsByAvailability,
+} from "@/lib/inventory";
 import { installPreventDefaultTracer } from "@/lib/tracePreventDefault";
 import { installHomeNavInstrumentation } from "@/lib/navInstrumentation";
 import { appendCrashLog } from "@/lib/crashlog";
 import MapModal from "@/components/customer/MapModal";
+import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 
 const SAMPLE_BUSINESSES = [
   {
@@ -120,7 +127,10 @@ class CustomerHomeErrorBoundary extends React.Component {
 function CustomerHomePageInner() {
   const searchParams = useSearchParams();
   const { user, authUser, loadingUser, supabase } = useAuth();
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
   const [mapOpen, setMapOpen] = useState(false);
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
@@ -377,7 +387,17 @@ function CustomerHomePageInner() {
   const filteredBusinesses = useMemo(() => {
     const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
     const q = search.trim().toLowerCase();
-    if (!q) return source;
+    const categoryFilterNormalized = categoryFilter.trim().toLowerCase();
+    if (!q) {
+      if (!categoryFilterNormalized || categoryFilterNormalized === "all") return source;
+      return source.filter((biz) => {
+        const categoryValue =
+          biz.categoryLabel?.toLowerCase() ||
+          biz.category?.toLowerCase() ||
+          "";
+        return categoryValue === categoryFilterNormalized;
+      });
+    }
     return source.filter((biz) => {
       const name = biz.name?.toLowerCase() || "";
       const category =
@@ -385,13 +405,16 @@ function CustomerHomePageInner() {
         biz.category?.toLowerCase() ||
         "";
       const desc = biz.description?.toLowerCase() || "";
+      const matchesCategory =
+        !categoryFilterNormalized ||
+        categoryFilterNormalized === "all" ||
+        category === categoryFilterNormalized;
       return (
-        name.includes(q) ||
-        category.includes(q) ||
-        desc.includes(q)
+        matchesCategory &&
+        (name.includes(q) || category.includes(q) || desc.includes(q))
       );
     });
-  }, [mapBusinesses, search, ybBusinesses]);
+  }, [mapBusinesses, search, ybBusinesses, categoryFilter]);
 
   const handleSelectBusiness = (biz) => {
     setSelectedBusiness(biz);
@@ -609,7 +632,12 @@ function CustomerHomePageInner() {
 
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
+    const urlCategory = (searchParams?.get("category") || "").trim();
+    const matchedCategory = BUSINESS_CATEGORIES.find(
+      (category) => category.toLowerCase() === urlCategory.toLowerCase()
+    );
     setSearch(urlQuery);
+    setCategoryFilter(matchedCategory || "All");
   }, [searchParams]);
 
   // Guard against long/hung requests leaving loading on
@@ -723,20 +751,39 @@ function CustomerHomePageInner() {
 
   const groupedListings = useMemo(() => {
     const groups = {};
-    (allListings || []).forEach((item) => {
+    const categoryFilterNormalized = categoryFilter.trim().toLowerCase();
+    const baseListings =
+      !categoryFilterNormalized || categoryFilterNormalized === "all"
+        ? allListings || []
+        : (allListings || []).filter(
+            (item) =>
+              (item.category || "").trim().toLowerCase() === categoryFilterNormalized
+          );
+    const sortedListings = sortListingsByAvailability(baseListings);
+    sortedListings.forEach((item) => {
       const key = item.category?.trim() || "Other";
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     });
     return Object.entries(groups).map(([category, items]) => ({
       category,
-      items,
+      items: sortListingsByAvailability(items),
     }));
-  }, [allListings]);
+  }, [allListings, categoryFilter]);
+
+  const sortedHybridItems = useMemo(
+    () => sortListingsByAvailability(hybridItems),
+    [hybridItems]
+  );
+  const sortedBusinessListings = useMemo(
+    () => sortListingsByAvailability(businessListings),
+    [businessListings]
+  );
 
   useEffect(() => {
     let isActive = true;
     const term = search.trim();
+    const categoryValue = categoryFilter.trim();
 
     const client = supabase ?? getBrowserSupabaseClient();
     if (!client) return undefined;
@@ -769,13 +816,16 @@ function CustomerHomePageInner() {
         let query = client
           .from("listings")
           .select(
-            "id,title,description,price,category,city,photo_url,business_id,created_at"
+            "id,title,description,price,category,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
           )
           .or(
             `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
           )
           .order("created_at", { ascending: false })
           .limit(8);
+        if (categoryValue && categoryValue !== "All") {
+          query = query.eq("category", categoryValue);
+        }
         if (typeof query.abortSignal === "function") {
           query = query.abortSignal(controller.signal);
         }
@@ -816,7 +866,7 @@ function CustomerHomePageInner() {
     return () => {
       isActive = false;
     };
-  }, [search, supabase, logCrashEvent]);
+  }, [search, supabase, logCrashEvent, categoryFilter]);
 
   useEffect(() => {
     let isActive = true;
@@ -994,7 +1044,13 @@ function CustomerHomePageInner() {
                   ) : null}
 
                   <div className="grid sm:grid-cols-2 gap-3 mt-3">
-                    {hybridItems.map((item, idx) => (
+                    {sortedHybridItems.map((item, idx) => {
+                      const inventory = normalizeInventory(item);
+                      const badgeStyle = getAvailabilityBadgeStyle(
+                        inventory.availability,
+                        isLight
+                      );
+                      return (
                       <a
                         key={item.id}
                         href={`/customer/listings/${item.id}`}
@@ -1034,6 +1090,16 @@ function CustomerHomePageInner() {
                             {item.category || "Listing"}
                             {item.city ? ` · ${item.city}` : ""}
                           </div>
+                          <span
+                            className="mt-2 inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"
+                            style={
+                              badgeStyle
+                                ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                                : undefined
+                            }
+                          >
+                            {inventory.label}
+                          </span>
                           {item.description ? (
                             <p className="text-xs text-white/70 mt-1 line-clamp-2">
                               {item.description}
@@ -1041,7 +1107,8 @@ function CustomerHomePageInner() {
                           ) : null}
                         </div>
                       </a>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -1153,8 +1220,14 @@ function CustomerHomePageInner() {
                       <div className="text-sm text-white/70">Loading listings...</div>
                     ) : listingsError ? (
                       <div className="text-sm text-red-200">{listingsError}</div>
-                    ) : businessListings.length ? (
-                      businessListings.map((item) => (
+                    ) : sortedBusinessListings.length ? (
+                      sortedBusinessListings.map((item) => {
+                        const inventory = normalizeInventory(item);
+                        const badgeStyle = getAvailabilityBadgeStyle(
+                          inventory.availability,
+                          isLight
+                        );
+                        return (
                         <div
                           key={item.id}
                           className="rounded-xl border border-white/10 bg-white/5 p-4 flex gap-3"
@@ -1180,6 +1253,16 @@ function CustomerHomePageInner() {
                                     {item.category}
                                   </div>
                                 ) : null}
+                                <span
+                                  className="mt-2 inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"
+                                  style={
+                                    badgeStyle
+                                      ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                                      : undefined
+                                  }
+                                >
+                                  {inventory.label}
+                                </span>
                               </div>
                               {item.price ? (
                                 <div className="text-sm font-semibold text-white/90">
@@ -1194,7 +1277,8 @@ function CustomerHomePageInner() {
                             ) : null}
                           </div>
                         </div>
-                      ))
+                      );
+                      })
                     ) : (
                       <div className="text-sm text-white/70">
                         This business hasn’t shared any listings yet.

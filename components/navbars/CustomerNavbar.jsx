@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import {
   Bookmark,
@@ -21,17 +21,26 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
+import { useTheme } from "@/components/ThemeProvider";
 import { useModal } from "../modals/ModalProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import {
+  getAvailabilityBadgeStyle,
+  normalizeInventory,
+  sortListingsByAvailability,
+} from "@/lib/inventory";
 
-const SEARCH_CATEGORIES = ["All", "Coffee", "Salons", "Groceries", "Tacos"];
+const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
 
 export default function CustomerNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, authUser, loadingUser, supabase } = useAuth();
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
   const { openModal } = useModal();
   const [, startTransition] = useTransition();
 
@@ -44,6 +53,10 @@ export default function CustomerNavbar() {
     businesses: [],
     places: [],
   });
+  const sortedSearchItems = useMemo(
+    () => sortListingsByAvailability(searchResults.items || []),
+    [searchResults.items]
+  );
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -251,8 +264,9 @@ export default function CustomerNavbar() {
   useEffect(() => {
     const currentQuery = (searchParams?.get("q") || "").trim();
     setSearchTerm(currentQuery);
+    const currentCategory = (searchParams?.get("category") || "").trim();
     const matchedCategory = SEARCH_CATEGORIES.find(
-      (category) => category.toLowerCase() === currentQuery.toLowerCase()
+      (category) => category.toLowerCase() === currentCategory.toLowerCase()
     );
     setSelectedCategory(matchedCategory || "All");
   }, [searchParams]);
@@ -269,7 +283,7 @@ export default function CustomerNavbar() {
       return;
     }
 
-    const normalized = term.toLowerCase();
+    const normalized = `${term.toLowerCase()}::${selectedCategory.toLowerCase()}`;
     if (normalized === lastQueryRef.current) {
       setSuggestionsOpen(true);
       return;
@@ -281,7 +295,11 @@ export default function CustomerNavbar() {
     const handle = setTimeout(() => {
       setSearchLoading(true);
       setSearchError(null);
-      fetch(`/api/search?q=${encodeURIComponent(term)}`, {
+      const categoryParam = selectedCategory !== "All" ? selectedCategory : "";
+      const params = new URLSearchParams();
+      params.set("q", term);
+      if (categoryParam) params.set("category", categoryParam);
+      fetch(`/api/search?${params.toString()}`, {
         signal: controller.signal,
       })
         .then(async (res) => {
@@ -332,7 +350,7 @@ export default function CustomerNavbar() {
       clearTimeout(handle);
       controller.abort();
     };
-  }, [searchTerm]);
+  }, [searchTerm, selectedCategory]);
 
   // Close dropdown on outside click for a more premium, lightweight feel
   useEffect(() => {
@@ -376,6 +394,7 @@ export default function CustomerNavbar() {
      AVATAR PRIORITY
   --------------------------------------------------- */
   const googleAvatar = authUser?.user_metadata?.avatar_url || null;
+  const hasAuth = Boolean(user || authUser);
 
   const avatar =
     user?.profile_photo_url?.trim() ||
@@ -384,14 +403,14 @@ export default function CustomerNavbar() {
 
   const displayName =
     user?.full_name ||
-    user?.authUser?.user_metadata?.full_name ||
-    user?.authUser?.user_metadata?.name ||
+    authUser?.user_metadata?.full_name ||
+    authUser?.user_metadata?.name ||
     "Account";
 
   const email =
     user?.email ||
-    user?.authUser?.email ||
-    user?.authUser?.user_metadata?.email ||
+    authUser?.email ||
+    authUser?.user_metadata?.email ||
     null;
 
   const isActive = (href) => pathname === href;
@@ -495,10 +514,12 @@ export default function CustomerNavbar() {
       (searchResults.places?.length || 0) >
     0;
 
-  const navigateToSearch = (query) => {
+  const navigateToSearch = (query, category) => {
     const value = (query || "").trim();
+    const nextCategory = (category || "").trim();
     const params = new URLSearchParams();
     if (value) params.set("q", value);
+    if (nextCategory && nextCategory !== "All") params.set("category", nextCategory);
     const target = params.toString()
       ? `/customer/home?${params.toString()}`
       : "/customer/home";
@@ -508,19 +529,13 @@ export default function CustomerNavbar() {
 
   const handleSubmitSearch = (event) => {
     event.preventDefault();
-    navigateToSearch(searchTerm || "");
+    navigateToSearch(searchTerm || "", selectedCategory);
   };
 
   const handleCategoryChange = (event) => {
     const next = event.target.value;
     setSelectedCategory(next);
-    if (next === "All") {
-      setSearchTerm("");
-      navigateToSearch("");
-      return;
-    }
-    setSearchTerm(next);
-    navigateToSearch(next);
+    navigateToSearch(searchTerm || "", next);
   };
 
   const handleSuggestionSelect = (value, itemId) => {
@@ -532,8 +547,10 @@ export default function CustomerNavbar() {
       hardNavigate(`/customer/listings/${itemId}`);
       return;
     }
-    navigateToSearch(next);
+    navigateToSearch(next, selectedCategory);
   };
+
+  const categorySelectWidth = Math.max(selectedCategory.length, 3) + 6;
 
   const loadUnreadCount = useCallback(async () => {
     const userId = user?.id || authUser?.id;
@@ -633,7 +650,8 @@ export default function CustomerNavbar() {
                     id="customer-search-category"
                     value={selectedCategory}
                     onChange={handleCategoryChange}
-                    className="appearance-none bg-transparent pr-5 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
+                    style={{ width: `${categorySelectWidth}ch` }}
+                    className="appearance-none bg-transparent pr-7 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
                   >
                     {SEARCH_CATEGORIES.map((category) => (
                       <option key={category} value={category} className="text-black">
@@ -683,7 +701,13 @@ export default function CustomerNavbar() {
                         {searchLoading ? <Loader2 className="h-3 w-3 animate-spin text-white/60" /> : null}
                       </div>
                       <div className="space-y-2">
-                        {(searchResults.items || []).slice(0, 4).map((item) => (
+                        {sortedSearchItems.slice(0, 4).map((item) => {
+                          const inventory = normalizeInventory(item);
+                          const badgeStyle = getAvailabilityBadgeStyle(
+                            inventory.availability,
+                            isLight
+                          );
+                          return (
                           <button
                             key={`item-${item.id}`}
                             type="button"
@@ -701,9 +725,20 @@ export default function CustomerNavbar() {
                                 {item.category || "Local listing"}
                                 {item.price ? ` · $${item.price}` : ""}
                               </div>
+                              <span
+                                className="mt-2 inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"
+                                style={
+                                  badgeStyle
+                                    ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                                    : undefined
+                                }
+                              >
+                                {inventory.label}
+                              </span>
                             </div>
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -763,7 +798,7 @@ export default function CustomerNavbar() {
         {/* RIGHT — AUTH STATE */}
         <div className="hidden md:flex items-center gap-8">
 
-          {!user && (
+          {!hasAuth && (
             <>
               <button
                 type="button"
@@ -782,7 +817,7 @@ export default function CustomerNavbar() {
             </>
           )}
 
-          {user && (
+          {hasAuth && (
             <div
               className="relative"
               ref={dropdownRef}
@@ -969,7 +1004,7 @@ export default function CustomerNavbar() {
             className="self-start"
             buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
           />
-          {!user && (
+          {!hasAuth && (
             <>
               <button
                 type="button"
@@ -994,7 +1029,7 @@ export default function CustomerNavbar() {
             </>
           )}
 
-          {user && (
+          {hasAuth && (
             <>
               <NavItem href="/customer/home">Discover</NavItem>
               <NavItem href="/customer/messages" badgeCount={unreadCount}>

@@ -2,13 +2,15 @@
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabaseClient";
 
 export async function GET(request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const cookieName = getCookieName();
+  const pendingCookies = [];
+  const isProd = process.env.NODE_ENV === "production";
 
   // Redirect back to login if no code is present
   if (!code) {
@@ -20,9 +22,20 @@ export async function GET(request) {
 
   // Prepare Supabase client bound to the current cookie jar
   const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient(
-    { cookies: () => cookieStore },
-    cookieName ? { cookieOptions: { name: cookieName } } : undefined
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookieOptions: cookieName ? { name: cookieName } : undefined,
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach((cookie) => pendingCookies.push(cookie));
+        },
+      },
+    }
   );
 
   // Exchange the code for a session (sets auth cookies)
@@ -77,5 +90,15 @@ export async function GET(request) {
   requestUrl.pathname = target;
   requestUrl.search = ""; // clear oauth params
 
-  return NextResponse.redirect(requestUrl);
+  const response = NextResponse.redirect(requestUrl);
+  pendingCookies.forEach(({ name, value, options }) => {
+    response.cookies.set(name, value, {
+      ...options,
+      sameSite: "lax",
+      secure: isProd,
+      path: options?.path ?? "/",
+    });
+  });
+
+  return response;
 }
