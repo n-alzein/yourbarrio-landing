@@ -268,13 +268,13 @@ export default function CustomerSavedPage() {
                       fallbackSrc="/business-placeholder.png"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                    <div className="absolute top-3 left-3 text-xs px-3 py-1 rounded-full bg-black/50 border border-white/15 backdrop-blur flex items-center gap-1">
+                    <div className="theme-lock absolute top-3 left-3 text-xs px-3 py-1 rounded-full bg-black/50 border border-white/15 backdrop-blur flex items-center gap-1">
                       <Heart className="h-3.5 w-3.5 text-pink-200" />
-                      Saved
+                      <span className="text-white">Saved</span>
                     </div>
                     {item.price ? (
-                      <div className="absolute bottom-3 right-3 rounded-xl bg-black/60 border border-white/10 px-3 py-1 text-sm font-semibold">
-                        ${item.price}
+                      <div className="theme-lock absolute bottom-3 right-3 rounded-xl bg-black/60 border border-white/10 px-3 py-1 text-sm font-semibold">
+                        <span className="text-white">${item.price}</span>
                       </div>
                     ) : null}
                   </div>

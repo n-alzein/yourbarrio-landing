@@ -1171,11 +1171,6 @@ function CustomerHomePageInner() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="text-base font-semibold">{biz.name}</span>
-                              {biz.source === "supabase_users" ? (
-                                <span className="yb-badge inline-flex items-center text-[10px] px-2 py-[2px] rounded-full border font-semibold">
-                                  YB
-                                </span>
-                              ) : null}
                             </div>
                             <div className="text-xs text-white/70">
                               {biz.categoryLabel || biz.category || "Local spot"}

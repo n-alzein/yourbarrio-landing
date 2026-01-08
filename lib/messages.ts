@@ -223,6 +223,16 @@ export async function getOrCreateConversation({
 
   if (!missingRpc) throw error;
 
+  const { data: existing, error: existingError } = await client
+    .from("conversations")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
   const { data: upserted, error: upsertError } = await client
     .from("conversations")
     .upsert(
