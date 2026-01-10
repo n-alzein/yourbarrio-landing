@@ -495,16 +495,18 @@ export function AuthProvider({ children }) {
             }
 
             const user = await getVerifiedUser();
-            if (sessionUser?.id !== user?.id) {
+            const resolvedUser = user || sessionUser;
+
+            if (user && sessionUser?.id !== user?.id) {
               setAuthUser(user);
             }
 
-            if (user) {
-              const p = await loadProfile(user.id);
+            if (resolvedUser) {
+              const p = await loadProfile(resolvedUser.id);
               if (!p?.aborted && !p?.error) {
                 setProfile(p.profile);
 
-                await cacheGoogleAvatar(user, p.profile);
+                await cacheGoogleAvatar(resolvedUser, p.profile);
               }
 
               // Start proactive session refresh when user signs in
@@ -514,6 +516,7 @@ export function AuthProvider({ children }) {
               }
             } else {
               setProfile(null);
+              setAuthUser(null);
             }
           } catch (err) {
             console.error("Auth listener failed — clearing session", err);

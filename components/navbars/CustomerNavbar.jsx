@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 import {
   Bookmark,
   ChevronDown,
@@ -24,6 +24,7 @@ import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "@/components/ThemeProvider";
 import { useModal } from "../modals/ModalProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
+import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 import {
@@ -396,10 +397,10 @@ export default function CustomerNavbar() {
   const googleAvatar = authUser?.user_metadata?.avatar_url || null;
   const hasAuth = Boolean(user || authUser);
 
-  const avatar =
-    user?.profile_photo_url?.trim() ||
-    googleAvatar ||
-    "/customer-placeholder.png";
+  const avatar = resolveImageSrc(
+    user?.profile_photo_url?.trim() || googleAvatar || "",
+    "/customer-placeholder.png"
+  );
 
   const displayName =
     user?.full_name ||
@@ -828,11 +829,9 @@ export default function CustomerNavbar() {
                 data-clickdiag={clickDiagEnabled ? "navbar-user" : undefined}
                 className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
               >
-                <Image
+                <SafeImage
                   src={avatar}
                   alt="Profile avatar"
-                  width={40}
-                  height={40}
                   className="h-10 w-10 rounded-2xl object-cover border border-white/20"
                 />
                 <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
@@ -849,11 +848,9 @@ export default function CustomerNavbar() {
                 >
                   <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
                     <div className="flex items-center gap-3 px-4 py-4">
-                      <Image
+                      <SafeImage
                         src={avatar}
                         alt="Profile avatar"
-                        width={48}
-                        height={48}
                         className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
                       />
                       <div>

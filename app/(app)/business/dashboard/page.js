@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 import { useAuth } from "@/components/AuthProvider";
 import { getDisplayName } from "@/lib/messages";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
@@ -139,10 +139,8 @@ export default function BusinessDashboard() {
         <div className="flex flex-col md:flex-row items-center gap-6 mb-12 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-xl backdrop-blur-2xl">
 
           <div className="w-32 h-32 rounded-xl overflow-hidden">
-            <Image
+            <SafeImage
               src={business.profile_photo_url || "/business-placeholder.png"}
-              width={128}
-              height={128}
               alt="Business Logo"
               className="object-cover w-full h-full"
             />

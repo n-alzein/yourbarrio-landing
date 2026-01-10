@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 import { useRouter } from "next/navigation";
 import {
   getAuthProviderLabel,
@@ -100,13 +100,11 @@ export default function SettingsPage() {
       .upload(fileName, file);
 
     if (!error) {
-      const { data } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(fileName);
+      supabase.storage.from("avatars").getPublicUrl(fileName);
 
       setForm((prev) => ({
         ...prev,
-        profile_photo_url: data.publicUrl,
+        profile_photo_url: `avatars/${fileName}`,
       }));
     }
 
@@ -235,16 +233,16 @@ export default function SettingsPage() {
 
             {/* AVATAR */}
             <div className="flex flex-col items-center mb-8">
-              <Image
+              <SafeImage
                 src={
                   (form?.profile_photo_url ||
                     user?.profile_photo_url ||
-                    "/customer-placeholder.png")                   
+                    "/customer-placeholder.png")
                 }
                 alt="Profile Photo"
                 width={140}
                 height={140}
-                className="rounded-3xl border border-white/20 object-cover mb-3"
+                className="h-[140px] w-[140px] rounded-3xl border border-white/20 object-cover mb-3"
               />
 
               {editMode && (

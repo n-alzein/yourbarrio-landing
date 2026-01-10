@@ -1,3 +1,4 @@
+import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
 export const MESSAGE_PAGE_SIZE = 50;
@@ -13,7 +14,10 @@ export function getDisplayName(profile: {
 export function getAvatarUrl(profile: {
   profile_photo_url?: string | null;
 } | null) {
-  return profile?.profile_photo_url || "/business-placeholder.png";
+  return resolveImageSrc(
+    profile?.profile_photo_url,
+    "/business-placeholder.png"
+  );
 }
 
 export function getUnreadCount(

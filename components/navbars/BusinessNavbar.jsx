@@ -16,6 +16,7 @@ import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
+import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
 function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) {
@@ -107,9 +108,10 @@ export default function BusinessNavbar() {
     loadPhoto();
   }, [user, supabase]);
 
-  const avatar = photoUrl?.trim()
-    ? photoUrl
-    : "/business-placeholder.png";
+  const avatar = resolveImageSrc(
+    photoUrl?.trim() || "",
+    "/business-placeholder.png"
+  );
 
   const isActive = (href) => pathname === href;
   const email =
