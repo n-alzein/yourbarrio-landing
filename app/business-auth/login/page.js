@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getCookieName } from "@/lib/supabaseClient";
@@ -15,6 +15,7 @@ function BusinessLoginInner() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const redirectingRef = useRef(false);
 
   const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
     if (typeof document === "undefined") return false;
@@ -43,6 +44,9 @@ function BusinessLoginInner() {
   }, []);
 
   const finishBusinessAuth = useCallback(() => {
+    if (redirectingRef.current) return;
+    redirectingRef.current = true;
+
     if (typeof window !== "undefined") {
       try {
         // Broadcast success so other tabs (the opener) can react
@@ -70,6 +74,12 @@ function BusinessLoginInner() {
     window.location.href = "/business/dashboard";
   }, [isPopup]);
 
+  const redirectToDashboard = useCallback(async () => {
+    if (redirectingRef.current) return;
+    await waitForAuthCookie();
+    finishBusinessAuth();
+  }, [finishBusinessAuth, waitForAuthCookie]);
+
   /* --------------------------------------------------------------
      AUTO-REDIRECT IF ALREADY LOGGED IN
   -------------------------------------------------------------- */
@@ -82,14 +92,14 @@ function BusinessLoginInner() {
     const timer = setTimeout(() => {
       if (role === "business") {
         console.log("Login: Redirecting to dashboard, authUser:", authUser.id);
-        finishBusinessAuth();
+        redirectToDashboard();
       } else {
         router.replace("/customer/home"); // non-business users redirected
       }
     }, 200); // Increased from 50ms to 200ms
 
     return () => clearTimeout(timer);
-  }, [authUser, role, loadingUser, router, finishBusinessAuth]);
+  }, [authUser, role, loadingUser, router, redirectToDashboard]);
 
   /* --------------------------------------------------------------
      EMAIL + PASSWORD LOGIN  (FIXED)
@@ -147,10 +157,8 @@ function BusinessLoginInner() {
     console.log("Login: Session check before redirect:", sessionCheck?.session ? "Session exists" : "No session");
 
     // 6) Ensure the auth cookie is present before navigating (prevents blank dashboard)
-    await waitForAuthCookie();
-
+    await redirectToDashboard();
     setLoading(false);
-    finishBusinessAuth();
   }
 
   /* --------------------------------------------------------------

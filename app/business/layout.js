@@ -3,7 +3,8 @@
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useCallback, useEffect } from "react";
+import { getCookieName } from "@/lib/supabaseClient";
 
 function BusinessRouteShell({ children = null }) {
   return <div className="pt-8 md:pt-10 min-h-screen">{children}</div>;
@@ -12,6 +13,32 @@ function BusinessRouteShell({ children = null }) {
 export default function BusinessLayout({ children }) {
   const { authUser, role, loadingUser } = useAuth();
   const router = useRouter();
+
+  const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
+    if (typeof document === "undefined") return false;
+    const cookieName = getCookieName();
+    if (!cookieName) return false;
+
+    const hasAuthCookie = () => {
+      const names = document.cookie
+        .split(";")
+        .map((entry) => entry.trim().split("=")[0])
+        .filter(Boolean);
+      return names.some(
+        (name) => name === cookieName || name.startsWith(`${cookieName}.`)
+      );
+    };
+
+    if (hasAuthCookie()) return true;
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (hasAuthCookie()) return true;
+    }
+
+    return false;
+  }, []);
 
   // Redirect the opener tab to dashboard when a popup login succeeds
   useEffect(() => {
@@ -24,14 +51,15 @@ export default function BusinessLayout({ children }) {
         // Clear hint so future logins don't reuse it
         localStorage.removeItem("business_auth_redirect");
 
-        router.replace(redirectTarget);
-        router.refresh();
+        waitForAuthCookie().finally(() => {
+          window.location.assign(redirectTarget);
+        });
       }
     }
 
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [router]);
+  }, [router, waitForAuthCookie]);
 
   useEffect(() => {
     if (loadingUser) return;

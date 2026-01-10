@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense } from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { getCookieName } from "@/lib/supabaseClient";
 
 function BusinessRegisterInner() {
   const router = useRouter();
@@ -12,13 +13,43 @@ function BusinessRegisterInner() {
   const isPopup = searchParams?.get("popup") === "1";
 
   const [loading, setLoading] = useState(false);
+  const redirectingRef = useRef(false);
 
   // Form fields
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
+    if (typeof document === "undefined") return false;
+    const cookieName = getCookieName();
+    if (!cookieName) return false;
+
+    const hasAuthCookie = () => {
+      const names = document.cookie
+        .split(";")
+        .map((entry) => entry.trim().split("=")[0])
+        .filter(Boolean);
+      return names.some(
+        (name) => name === cookieName || name.startsWith(`${cookieName}.`)
+      );
+    };
+
+    if (hasAuthCookie()) return true;
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (hasAuthCookie()) return true;
+    }
+
+    return false;
+  }, []);
+
   const finishBusinessAuth = useCallback(() => {
+    if (redirectingRef.current) return;
+    redirectingRef.current = true;
+
     const target = "/business/onboarding";
 
     if (typeof window !== "undefined") {
@@ -36,7 +67,7 @@ function BusinessRegisterInner() {
 
         setTimeout(() => {
           if (!window.closed) {
-            router.replace(target);
+            window.location.href = target;
           }
         }, 150);
 
@@ -44,8 +75,14 @@ function BusinessRegisterInner() {
       }
     }
 
-    router.replace(target);
-  }, [isPopup, router]);
+    window.location.href = target;
+  }, [isPopup]);
+
+  const redirectToOnboarding = useCallback(async () => {
+    if (redirectingRef.current) return;
+    await waitForAuthCookie();
+    finishBusinessAuth();
+  }, [finishBusinessAuth, waitForAuthCookie]);
 
   /* --------------------------------------------------------------
      AUTO-REDIRECT IF ALREADY LOGGED IN
@@ -56,11 +93,11 @@ function BusinessRegisterInner() {
     if (!role) return; // wait until role is loaded
 
     if (role === "business") {
-      finishBusinessAuth();
+      redirectToOnboarding();
     } else {
       router.replace("/customer/home");
     }
-  }, [authUser, role, loadingUser, router, finishBusinessAuth]);
+  }, [authUser, role, loadingUser, router, redirectToOnboarding]);
 
   /* --------------------------------------------------------------
      EMAIL/PASSWORD BUSINESS SIGNUP
@@ -118,8 +155,8 @@ function BusinessRegisterInner() {
       return;
     }
 
+    await redirectToOnboarding();
     setLoading(false);
-    finishBusinessAuth();
   }
 
   /* --------------------------------------------------------------
