@@ -150,24 +150,23 @@ function BusinessRegisterInner() {
     }
 
   /* --------------------------------------------------------------
-     UI — MATCHES LOGIN PAGE STYLING
+     UI — PROFESSIONAL BUSINESS STYLE
   -------------------------------------------------------------- */
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 text-white">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div
-        className="
-          w-full max-w-md p-8 rounded-2xl
-          auth-card backdrop-blur-xl
-          border border-white/10
-          shadow-[0_0_40px_-12px_rgba(0,0,0,0.4)]
-          animate-fadeIn
-        "
+        className="w-full max-w-md p-8 rounded-2xl backdrop-blur-xl animate-fadeIn"
+        style={{
+          background: 'rgba(30, 41, 59, 0.4)',
+          border: '1px solid rgba(51, 65, 85, 0.5)',
+          boxShadow: '0 0 40px -12px rgba(0, 0, 0, 0.5)',
+        }}
       >
-        <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
+        <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight" style={{ color: '#fff' }}>
           Create Business Account
         </h1>
 
-        <p className="text-center text-white/70 mb-6">
+        <p className="text-center mb-6" style={{ color: '#94a3b8' }}>
           Start reaching local customers today
         </p>
 
@@ -175,37 +174,32 @@ function BusinessRegisterInner() {
         <button
           onClick={handleGoogle}
           disabled={loading}
-          className="
-            w-full flex items-center justify-center gap-2
-            py-3 rounded-xl font-semibold bg-white text-black
-            hover:bg-white/90 active:scale-[0.98] transition-all
-          "
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold active:scale-[0.98] transition-all"
+          style={{ background: '#fff', color: '#000' }}
         >
           <img src="/google-icon.svg" alt="" className="w-5 h-5" />
           Sign up with Google
         </button>
 
         <div className="my-6 flex items-center gap-4">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-white/40 text-sm">or</span>
-          <div className="h-px flex-1 bg-white/10" />
+          <div className="h-px flex-1" style={{ background: 'rgba(71, 85, 105, 0.3)' }} />
+          <span className="text-sm" style={{ color: '#64748b' }}>or</span>
+          <div className="h-px flex-1" style={{ background: 'rgba(71, 85, 105, 0.3)' }} />
         </div>
 
         {/* ---------------- FORM ---------------- */}
         <form onSubmit={handleRegister} className="space-y-4">
-
           <input
             id="business-register-name"
             name="businessName"
             type="text"
             placeholder="Business Name"
-            className="
-              w-full px-4 py-3 rounded-xl
-              bg-black/30 border border-white/10 
-              placeholder-white/40
-              focus:ring-2 focus:ring-fuchsia-500/40 
-              transition
-            "
+            className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
+            style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              border: '1px solid rgba(71, 85, 105, 0.3)',
+              color: '#fff',
+            }}
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
             required
@@ -216,13 +210,12 @@ function BusinessRegisterInner() {
             name="email"
             type="email"
             placeholder="Email"
-            className="
-              w-full px-4 py-3 rounded-xl
-              bg-black/30 border border-white/10 
-              placeholder-white/40
-              focus:ring-2 focus:ring-fuchsia-500/40 
-              transition
-            "
+            className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
+            style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              border: '1px solid rgba(71, 85, 105, 0.3)',
+              color: '#fff',
+            }}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -233,13 +226,12 @@ function BusinessRegisterInner() {
             name="password"
             type="password"
             placeholder="Password"
-            className="
-              w-full px-4 py-3 rounded-xl
-              bg-black/30 border border-white/10 
-              placeholder-white/40
-              focus:ring-2 focus:ring-fuchsia-500/40
-              transition
-            "
+            className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
+            style={{
+              background: 'rgba(30, 41, 59, 0.5)',
+              border: '1px solid rgba(71, 85, 105, 0.3)',
+              color: '#fff',
+            }}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -248,24 +240,26 @@ function BusinessRegisterInner() {
           <button
             type="submit"
             disabled={loading}
-            className="
-              w-full py-3 rounded-xl font-semibold text-lg
-              bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500
-              shadow-lg shadow-fuchsia-500/30
-              hover:brightness-110 active:scale-[0.98]
-              transition-all
-            "
+            className="w-full py-3 rounded-xl font-semibold text-lg active:scale-[0.98] transition-all duration-200"
+            style={{
+              background: '#2563eb',
+              color: '#fff',
+              boxShadow: '0 10px 15px -3px rgba(30, 58, 138, 0.3)',
+              opacity: loading ? 0.6 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
           >
             {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
 
         {/* ---------------- LOGIN LINK ---------------- */}
-        <p className="text-center text-white/70 text-sm mt-4">
+        <p className="text-center text-sm mt-4" style={{ color: '#94a3b8' }}>
           Already have a business account?{" "}
           <a
             href="/business-auth/login"
-            className="text-pink-400 font-medium hover:underline"
+            className="font-medium hover:underline"
+            style={{ color: '#60a5fa' }}
           >
             Log in
           </a>
@@ -280,6 +274,16 @@ function BusinessRegisterInner() {
         }
         .animate-fadeIn {
           animation: fadeIn 0.6s ease-out;
+        }
+        .business-auth-page input::placeholder {
+          color: #94a3b8;
+        }
+        .business-auth-page input:focus {
+          border-color: rgba(59, 130, 246, 0.5);
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+        .business-auth-page button:hover:not(:disabled) {
+          filter: brightness(1.1);
         }
       `}</style>
     </div>

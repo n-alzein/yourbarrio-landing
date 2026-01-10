@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { getCookieName } from "@/lib/supabaseClient";
 
 function BusinessLoginInner() {
   const router = useRouter();
@@ -14,6 +15,32 @@ function BusinessLoginInner() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
+    if (typeof document === "undefined") return false;
+    const cookieName = getCookieName();
+    if (!cookieName) return false;
+
+    const hasAuthCookie = () => {
+      const names = document.cookie
+        .split(";")
+        .map((entry) => entry.trim().split("=")[0])
+        .filter(Boolean);
+      return names.some(
+        (name) => name === cookieName || name.startsWith(`${cookieName}.`)
+      );
+    };
+
+    if (hasAuthCookie()) return true;
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (hasAuthCookie()) return true;
+    }
+
+    return false;
+  }, []);
 
   const finishBusinessAuth = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -119,8 +146,11 @@ function BusinessLoginInner() {
     const { data: sessionCheck } = await supabase.auth.getSession();
     console.log("Login: Session check before redirect:", sessionCheck?.session ? "Session exists" : "No session");
 
+    // 6) Ensure the auth cookie is present before navigating (prevents blank dashboard)
+    await waitForAuthCookie();
+
     setLoading(false);
-    // The useEffect above will handle the redirect once role is set
+    finishBusinessAuth();
   }
 
   /* --------------------------------------------------------------
@@ -155,30 +185,24 @@ function BusinessLoginInner() {
   }
 
   /* --------------------------------------------------------------
-     UI — EXACT SAME STYLE
+     UI — PROFESSIONAL BUSINESS STYLE
   -------------------------------------------------------------- */
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="w-full flex justify-center px-4 mt-24 grow text-white">
+      <div className="w-full flex justify-center px-4 mt-24 grow">
         <div
-          className="
-            max-w-md w-full 
-            max-h-[420px]
-            p-8
-            rounded-2xl
-            auth-card
-            backdrop-blur-xl
-            border border-white/10
-            overflow-y-auto
-            shadow-[0_0_50px_-12px_rgba(0,0,0,0.4)]
-            animate-fadeIn
-          "
+          className="max-w-md w-full max-h-[420px] p-8 rounded-2xl backdrop-blur-xl overflow-y-auto animate-fadeIn"
+          style={{
+            background: 'rgba(30, 41, 59, 0.4)',
+            border: '1px solid rgba(51, 65, 85, 0.5)',
+            boxShadow: '0 0 50px -12px rgba(0, 0, 0, 0.5)',
+          }}
         >
-          <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight">
+          <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight" style={{ color: '#fff' }}>
             Business Login
           </h1>
 
-          <p className="text-center text-white/70 mb-6">
+          <p className="text-center mb-6" style={{ color: '#94a3b8' }}>
             Sign in to manage your business
           </p>
 
@@ -189,15 +213,12 @@ function BusinessLoginInner() {
               name="email"
               type="email"
               placeholder="Email"
-              className="
-                w-full px-4 py-3 rounded-xl 
-                bg-black/30
-                border border-white/10 
-                text-white placeholder-white/40
-                focus:ring-2 focus:ring-pink-500/40 
-                focus:border-pink-400
-                transition
-              "
+              className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
+              style={{
+                background: 'rgba(30, 41, 59, 0.5)',
+                border: '1px solid rgba(71, 85, 105, 0.3)',
+                color: '#fff',
+              }}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -208,15 +229,12 @@ function BusinessLoginInner() {
               name="password"
               type="password"
               placeholder="Password"
-              className="
-                w-full px-4 py-3 rounded-xl 
-                bg-black/30
-                border border-white/10 
-                text-white placeholder-white/40
-                focus:ring-2 focus:ring-pink-500/40 
-                focus:border-pink-400
-                transition
-              "
+              className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
+              style={{
+                background: 'rgba(30, 41, 59, 0.5)',
+                border: '1px solid rgba(71, 85, 105, 0.3)',
+                color: '#fff',
+              }}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -225,14 +243,14 @@ function BusinessLoginInner() {
             <button
               type="submit"
               disabled={loading}
-              className={`
-                w-full py-3 rounded-xl font-semibold text-white text-lg
-                bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500
-                shadow-lg shadow-purple-500/30 
-                hover:brightness-110 active:scale-[0.98]
-                transition-all duration-200
-                ${loading ? "opacity-60 cursor-not-allowed" : ""}
-              `}
+              className="w-full py-3 rounded-xl font-semibold text-lg active:scale-[0.98] transition-all duration-200"
+              style={{
+                background: '#2563eb',
+                color: '#fff',
+                boxShadow: '0 10px 15px -3px rgba(30, 58, 138, 0.3)',
+                opacity: loading ? 0.6 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
             >
               {loading ? "Signing in..." : "Log in"}
             </button>
@@ -242,24 +260,24 @@ function BusinessLoginInner() {
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="
-              w-full mt-5 py-3 rounded-xl font-medium
-              bg-white/10 border border-white/20
-              hover:bg-white/20
-              flex items-center justify-center gap-2
-              transition
-            "
+            className="w-full mt-5 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition"
+            style={{
+              background: 'rgba(51, 65, 85, 0.5)',
+              border: '1px solid rgba(71, 85, 105, 0.3)',
+              color: '#fff',
+            }}
           >
             <img src="/google-icon.svg" className="h-5 w-5" alt="Google" />
             Continue with Google
           </button>
 
           {/* SIGNUP LINK */}
-          <p className="text-center text-white/70 text-sm mt-4">
-            Don’t have an account?{" "}
+          <p className="text-center text-sm mt-4" style={{ color: '#94a3b8' }}>
+            Don't have an account?{" "}
             <a
               href="/business-auth/register"
-              className="text-pink-400 font-medium hover:underline"
+              className="font-medium hover:underline"
+              style={{ color: '#60a5fa' }}
             >
               Sign up
             </a>
@@ -273,6 +291,16 @@ function BusinessLoginInner() {
           }
           .animate-fadeIn {
             animation: fadeIn 0.6s ease-out;
+          }
+          .business-auth-page input::placeholder {
+            color: #94a3b8;
+          }
+          .business-auth-page input:focus {
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+          }
+          .business-auth-page button:hover:not(:disabled) {
+            filter: brightness(1.1);
           }
         `}</style>
       </div>

@@ -7,16 +7,32 @@ function BusinessAuthFallback() {
 
 export default function BusinessAuthLayout({ children }) {
   return (
-    <div className="relative min-h-screen flex items-center justify-center text-white">
+    <>
+      {/* Override body background for this page */}
+      <style>{`
+        body {
+          background: #000 !important;
+        }
+      `}</style>
 
-      {/* Background gradient */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
-        <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
-        <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+      <div
+        className="business-auth-page fixed inset-0 flex items-center justify-center overflow-auto"
+        style={{ background: 'linear-gradient(to bottom, #0f172a, #020617, #000)', color: '#fff' }}
+      >
+        {/* Background glow effects */}
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div
+            className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px]"
+            style={{ background: 'rgba(30, 58, 138, 0.2)' }}
+          />
+          <div
+            className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px]"
+            style={{ background: 'rgba(49, 46, 129, 0.15)' }}
+          />
+        </div>
+
+        <Suspense fallback={<BusinessAuthFallback />}>{children}</Suspense>
       </div>
-
-      <Suspense fallback={<BusinessAuthFallback />}>{children}</Suspense>
-    </div>
+    </>
   );
 }
