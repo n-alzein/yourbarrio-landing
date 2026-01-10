@@ -278,8 +278,8 @@ export async function fetchUnreadTotal({
   if (!userId) return 0;
 
   const { data, error } = await client.rpc("unread_total", {
-    role,
-    uid: userId,
+    p_role: role,
+    p_uid: userId,
   });
 
   if (!error) return Number(data || 0);

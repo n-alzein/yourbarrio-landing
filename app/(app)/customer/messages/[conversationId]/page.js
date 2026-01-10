@@ -6,13 +6,14 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import {
-  fetchConversationById,
-  fetchMessages,
   getAvatarUrl,
   getDisplayName,
   markConversationRead,
   sendMessage,
+  MESSAGE_PAGE_SIZE,
 } from "@/lib/messages";
+import { retry } from "@/lib/retry";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
 
@@ -21,6 +22,10 @@ export default function CustomerConversationPage() {
   const conversationId = params?.conversationId;
   const { user, authUser, loadingUser, supabase } = useAuth();
   const userId = user?.id || authUser?.id || null;
+  const conversationKey = useMemo(() => {
+    if (Array.isArray(conversationId)) return conversationId[0] || "";
+    return typeof conversationId === "string" ? conversationId : "";
+  }, [conversationId]);
 
   const [hydrated, setHydrated] = useState(false);
   const [conversation, setConversation] = useState(null);
@@ -35,49 +40,85 @@ export default function CustomerConversationPage() {
   }, []);
 
   const loadThread = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationKey) return;
     setLoading(true);
     setError(null);
     try {
-      const convo = await fetchConversationById({ supabase, conversationId });
+      const convoResponse = await fetchWithTimeout(
+        `/api/customer/conversations?conversationId=${encodeURIComponent(
+          conversationKey
+        )}`,
+        {
+          method: "GET",
+          credentials: "include",
+          timeoutMs: 12000,
+        }
+      );
+      if (!convoResponse.ok) {
+        const message = await convoResponse.text();
+        throw new Error(message || "Failed to load conversation");
+      }
+      const convoPayload = await convoResponse.json();
+      const convo = convoPayload?.conversation ?? null;
       setConversation(convo);
-      const initialMessages = await fetchMessages({ supabase, conversationId });
-      setMessages(initialMessages);
-      setHasMore(initialMessages.length === 50);
+
+      const initialMessages = await retry(
+        () =>
+          fetchWithTimeout(
+            `/api/customer/messages?conversationId=${encodeURIComponent(
+              conversationKey
+            )}`,
+            {
+              method: "GET",
+              credentials: "include",
+              timeoutMs: 12000,
+            }
+          ),
+        { retries: 1, delayMs: 600 }
+      );
+      if (!initialMessages.ok) {
+        const message = await initialMessages.text();
+        throw new Error(message || "Failed to load messages");
+      }
+      const payload = await initialMessages.json();
+      const nextMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+      setMessages(nextMessages);
+      setHasMore(nextMessages.length === MESSAGE_PAGE_SIZE);
     } catch (err) {
       console.error("Failed to load conversation", err);
       setError("We couldn’t load this conversation. Try again soon.");
     } finally {
       setLoading(false);
     }
-  }, [supabase, conversationId]);
+  }, [conversationKey]);
 
   useEffect(() => {
-    if (!hydrated || loadingUser || !conversationId) return;
+    if (!hydrated || loadingUser || !conversationKey) return;
     loadThread();
-  }, [hydrated, loadingUser, conversationId, loadThread]);
+  }, [hydrated, loadingUser, conversationKey, loadThread]);
 
   useEffect(() => {
-    if (!hydrated || !userId || !conversationId) return;
-    markConversationRead({ supabase, conversationId }).catch((err) => {
+    if (!hydrated || !userId || !conversationKey) return;
+    markConversationRead({ supabase, conversationId: conversationKey }).catch(
+      (err) => {
       console.warn("Failed to mark conversation read", err);
     });
-  }, [hydrated, userId, conversationId, supabase]);
+  }, [hydrated, userId, conversationKey, supabase]);
 
   useEffect(() => {
-    if (!hydrated || !conversationId) return undefined;
+    if (!hydrated || !conversationKey) return undefined;
     const client = supabase ?? getBrowserSupabaseClient();
     if (!client) return undefined;
 
     const channel = client
-      .channel(`messages-${conversationId}`)
+      .channel(`messages-${conversationKey}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `conversation_id=eq.${conversationId}`,
+          filter: `conversation_id=eq.${conversationKey}`,
         },
         (payload) => {
           const next = payload.new;
@@ -87,7 +128,9 @@ export default function CustomerConversationPage() {
             return [...prev, next];
           });
           if (next.recipient_id === userId) {
-            markConversationRead({ supabase, conversationId }).catch(() => {});
+            markConversationRead({ supabase, conversationId: conversationKey }).catch(
+              () => {}
+            );
           }
         }
       )
@@ -96,32 +139,43 @@ export default function CustomerConversationPage() {
     return () => {
       client.removeChannel(channel);
     };
-  }, [hydrated, conversationId, supabase, userId]);
+  }, [hydrated, conversationKey, supabase, userId]);
 
   const loadOlder = useCallback(async () => {
-    if (!conversationId || loadingMore || !hasMore) return;
+    if (!conversationKey || loadingMore || !hasMore) return;
     const oldest = messages[0]?.created_at;
     if (!oldest) return;
 
     setLoadingMore(true);
     try {
-      const older = await fetchMessages({
-        supabase,
-        conversationId,
-        before: oldest,
-      });
+      const response = await fetchWithTimeout(
+        `/api/customer/messages?conversationId=${encodeURIComponent(
+          conversationKey
+        )}&before=${encodeURIComponent(oldest)}`,
+        {
+          method: "GET",
+          credentials: "include",
+          timeoutMs: 12000,
+        }
+      );
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Failed to load older messages");
+      }
+      const payload = await response.json();
+      const older = Array.isArray(payload?.messages) ? payload.messages : [];
       if (older.length === 0) {
         setHasMore(false);
       } else {
         setMessages((prev) => [...older, ...prev]);
-        if (older.length < 50) setHasMore(false);
+        if (older.length < MESSAGE_PAGE_SIZE) setHasMore(false);
       }
     } catch (err) {
       console.error("Failed to load older messages", err);
     } finally {
       setLoadingMore(false);
     }
-  }, [supabase, conversationId, loadingMore, hasMore, messages]);
+  }, [conversationKey, loadingMore, hasMore, messages]);
 
   const handleSend = useCallback(
     async (body) => {

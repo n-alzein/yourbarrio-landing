@@ -46,7 +46,7 @@ export default function BusinessListingsPage() {
   const lastUpdated = listings[0]?.created_at
     ? new Date(listings[0].created_at).toLocaleDateString()
     : "—";
-  const showLoading = !hasLoaded && (loadingUser || loading);
+  const showLoading = !hasLoaded && ((loadingUser && !authUser) || loading);
 
   useEffect(() => {
     const handleVisibility = () => setIsVisible(!document.hidden);
@@ -77,38 +77,38 @@ export default function BusinessListingsPage() {
   //  SAFE AUTH GUARD + FETCH
   // ------------------------------------------------------
   useEffect(() => {
-    if (loadingUser) return; // Wait for auth
+    if (loadingUser && !authUser) return; // Wait for auth only if we don't have a user
     if (!authUser) {
       setLoading(false);
       return;
     }
     if (!isVisible) return;
-    const client = supabase ?? getBrowserSupabaseClient();
 
     async function fetchListings() {
       // Only show the loading state if we don't already have data
       setLoading((prev) => (hasLoaded ? prev : true));
       let active = true;
       try {
-        const { data, error } = await client
-          .from("listings")
-          .select("*")
-          .eq("business_id", authUser.id)
-          .order("created_at", { ascending: false });
+        const response = await fetchWithTimeout("/api/business/listings", {
+          method: "GET",
+          credentials: "include",
+          timeoutMs: 12000,
+        });
 
-        if (error) {
-          console.error("❌ Fetch listings error:", error);
-        } else if (active) {
-          setListings(data || []);
-          setHasLoaded(true);
-          try {
-            sessionStorage.setItem(
-              "yb_business_listings",
-              JSON.stringify(data || [])
-            );
-          } catch {
-            // ignore cache write errors
-          }
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || "Failed to load listings");
+        }
+
+        const payload = await response.json();
+        const data = Array.isArray(payload?.listings) ? payload.listings : [];
+        if (!active) return;
+        setListings(data);
+        setHasLoaded(true);
+        try {
+          sessionStorage.setItem("yb_business_listings", JSON.stringify(data));
+        } catch {
+          // ignore cache write errors
         }
       } catch (err) {
         console.error("❌ Fetch listings error:", err);
@@ -133,7 +133,12 @@ export default function BusinessListingsPage() {
   async function handleDelete(id) {
     if (!confirm("Are you sure you want to delete this listing?")) return;
 
-    const { error } = await supabase
+    const client = getBrowserSupabaseClient() ?? supabase;
+    if (!client) {
+      alert("Connection not ready. Please try again.");
+      return;
+    }
+    const { error } = await client
       .from("listings")
       .delete()
       .eq("id", id);
@@ -586,25 +591,29 @@ export default function BusinessListingsPage() {
 
       {/* List grid */}
       {listings.length > 0 && (
-        <div className="mt-12 space-y-5">
-          <div className="flex items-center justify-between">
+        <div className="mt-12 space-y-12">
+          <div className="flex items-start justify-between">
             <div>
               <h2 className={`text-xl font-bold ${isLight ? "text-slate-900" : "text-slate-100"}`}>
                 Catalog
               </h2>
-              <p className={`text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
+              <p className={`text-sm ${isLight ? "text-slate-700" : "text-slate-400"} mb-8`}>
                 Manage imagery, categories, and pricing in one place.
               </p>
             </div>
             <button
               onClick={() => router.push("/business/listings/new")}
-              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-slate-300/80 dark:border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white dark:hover:bg-white/10 transition"
+              className={`hidden sm:inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                isLight
+                  ? "border-slate-300 text-slate-900 hover:bg-slate-50"
+                  : "border-white/15 text-white hover:bg-white/10"
+              }`}
             >
               + New listing
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {listings.map((listing) => {
               const inventory = normalizeInventory(listing);
               const isUpdating = inventoryUpdatingId === listing.id;
@@ -616,16 +625,16 @@ export default function BusinessListingsPage() {
                   : Math.max(10, threshold * 2);
               const availabilityPalette = {
                 available: {
-                  light: { color: "#065f46", border: "#047857" },
-                  dark: { color: "#d1fae5", border: "rgba(110, 231, 183, 0.7)" },
+                  light: { bg: "#f0fdf4", text: "#166534", border: "#bbf7d0" },
+                  dark: { bg: "#064e3b", text: "#d1fae5", border: "#047857" },
                 },
                 low: {
-                  light: { color: "#92400e", border: "#b45309" },
-                  dark: { color: "#fef3c7", border: "rgba(252, 211, 77, 0.7)" },
+                  light: { bg: "#fffbeb", text: "#92400e", border: "#fde68a" },
+                  dark: { bg: "#78350f", text: "#fef3c7", border: "#b45309" },
                 },
                 out: {
-                  light: { color: "#9f1239", border: "#be123c" },
-                  dark: { color: "#ffe4e6", border: "rgba(251, 113, 133, 0.7)" },
+                  light: { bg: "#fef2f2", text: "#991b1b", border: "#fecaca" },
+                  dark: { bg: "#7f1d1d", text: "#ffe4e6", border: "#be123c" },
                 },
               };
               const badgeStyle = isLight
@@ -635,195 +644,219 @@ export default function BusinessListingsPage() {
               return (
                 <div
                   key={listing.id}
-                  className={`group relative overflow-hidden rounded-2xl border shadow-sm hover:shadow-xl transition ${
+                  className={`group relative flex flex-col overflow-hidden rounded-lg border transition-all duration-200 ${
                     isLight
-                      ? "bg-white border-slate-200/80"
-                      : "bg-slate-900/80 border-white/10"
+                      ? "bg-white border-slate-200 hover:border-slate-300 hover:shadow-lg"
+                      : "bg-slate-900 border-slate-700 hover:border-slate-600 hover:shadow-xl"
                   }`}
                 >
-                {primaryPhotoUrl(listing.photo_url) ? (
-                  <div
-                    className={`relative h-48 w-full overflow-hidden ${
-                      isLight ? "bg-slate-50" : "bg-slate-800"
-                    }`}
-                  >
-                    <SafeImage
-                      src={primaryPhotoUrl(listing.photo_url)}
-                      alt={listing.title}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                      fallbackSrc="/business-placeholder.png"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-48 w-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                    Image coming soon
-                  </div>
-                )}
-
-                <div className="p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p
-                        className={`text-xs uppercase tracking-wide ${
-                          isLight ? "text-slate-700" : "text-slate-400"
-                        }`}
-                      >
-                        {listing.category || "Uncategorized"}
-                      </p>
-                      <h3
-                        className={`text-lg font-bold leading-snug ${
-                          isLight ? "text-slate-900" : "text-slate-100"
-                        }`}
-                      >
-                        {listing.title || "Untitled listing"}
-                      </h3>
+                  {/* Image Section */}
+                  {primaryPhotoUrl(listing.photo_url) ? (
+                    <div
+                      className={`relative h-56 w-full overflow-hidden ${
+                        isLight ? "bg-purple-100" : "bg-slate-800"
+                      }`}
+                    >
+                      <SafeImage
+                        src={primaryPhotoUrl(listing.photo_url)}
+                        alt={listing.title}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        fallbackSrc="/business-placeholder.png"
+                      />
+                      {/* Inventory Badge Overlay */}
+                      <div className="absolute top-2 right-2">
+                        <span
+                          className="inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm"
+                          style={
+                            badgeStyle
+                              ? {
+                                  backgroundColor: badgeStyle.bg,
+                                  color: badgeStyle.text,
+                                  border: `1px solid ${badgeStyle.border}`
+                                }
+                              : undefined
+                          }
+                        >
+                          {inventory.label}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                  ) : (
+                    <div className={`h-56 w-full flex items-center justify-center ${
+                      isLight ? "bg-purple-100" : "bg-slate-800"
+                    }`}>
+                      <span className={isLight ? "text-purple-400" : "text-slate-500"}>No image</span>
+                    </div>
+                  )}
+
+                  {/* Content Section */}
+                  <div className="flex flex-col flex-1 p-4">
+                    {/* Category */}
+                    <p
+                      className={`text-xs font-medium mb-1 ${
+                        isLight ? "text-slate-600" : "text-slate-400"
+                      }`}
+                    >
+                      {listing.category || "Uncategorized"}
+                    </p>
+
+                    {/* Title */}
+                    <h3
+                      className={`text-base font-semibold mb-2 line-clamp-2 min-h-[3rem] ${
+                        isLight ? "text-slate-900" : "text-slate-100"
+                      }`}
+                    >
+                      {listing.title || "Untitled listing"}
+                    </h3>
+
+                    {/* Price */}
+                    <div className="mb-3">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold border ${
-                          isLight
-                            ? "bg-slate-100 text-slate-900 border-slate-200"
-                            : "bg-amber-500/20 text-amber-100 border-amber-400/20"
+                        className={`text-2xl font-bold ${
+                          isLight ? "text-slate-900" : "text-slate-100"
                         }`}
                       >
                         {listing.price
                           ? new Intl.NumberFormat("en-US", {
                               style: "currency",
                               currency: "USD",
-                              maximumFractionDigits: 0,
                             }).format(Number(listing.price))
-                          : "Price TBC"}
-                      </span>
-                      <span
-                        className="inline-flex items-center justify-center text-center rounded-full px-3 py-1 text-[11px] font-semibold border bg-transparent"
-                        style={
-                          badgeStyle
-                            ? { color: badgeStyle.color, borderColor: badgeStyle.border }
-                            : undefined
-                        }
-                      >
-                        {inventory.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div
-                      className={`flex items-center justify-between ${
-                        isLight ? "text-slate-700" : "text-slate-400"
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        Ready for customers
-                      </span>
-                      <span>
-                        {listing.created_at
-                          ? new Date(listing.created_at).toLocaleDateString()
-                          : "—"}
+                          : "Price TBD"}
                       </span>
                     </div>
 
-                    <div
-                      className={`flex items-center justify-between ${
-                        isLight ? "text-slate-700" : "text-slate-400"
-                      }`}
-                    >
-                      <span>Inventory available</span>
-                      <span className="font-semibold">
-                        {listing.inventory_quantity ?? "Not set"}
-                      </span>
+                    {/* Stock Info */}
+                    <div className={`text-sm mb-4 ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+                      <div className="flex items-center justify-between">
+                        <span>Stock:</span>
+                        <span className="font-semibold">
+                          {listing.inventory_quantity ?? "—"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <div
-                    className={`pt-3 border-t flex flex-wrap items-center gap-2 ${
-                      isLight ? "border-slate-200/80" : "border-white/10"
-                    }`}
-                  >
-                    <button
-                      onClick={() =>
-                        router.push(`/business/listings/${listing.id}/edit`)
-                      }
-                      className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                        isLight
-                          ? "text-slate-900 border-slate-300 hover:bg-slate-50"
-                          : "text-white border-white/15 hover:bg-white/10"
-                      }`}
-                    >
-                      ✏️ Edit details
-                    </button>
-                    <button
-                      onClick={() => handleDelete(listing.id)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-rose-700 transition"
-                    >
-                      🗑 Delete
-                    </button>
-                    <div className="flex flex-wrap items-center gap-2 ml-auto">
-                      <button
-                        onClick={() =>
-                          updateListingInventory(listing.id, {
-                            inventory_status: "out_of_stock",
-                            inventory_quantity: 0,
-                          })
-                        }
-                        disabled={isUpdating}
-                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                          isLight
-                            ? "text-slate-900 border-slate-300 hover:bg-slate-50"
-                            : "text-white border-white/15 hover:bg-white/10"
-                        }`}
-                      >
-                        {isUpdating ? "Updating..." : "Mark out of stock"}
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateListingInventory(listing.id, {
-                            inventory_status: "in_stock",
-                            inventory_quantity: restockQuantity,
-                          })
-                        }
-                        disabled={isUpdating}
-                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                          isLight
-                            ? "text-slate-900 border-slate-300 hover:bg-slate-50"
-                            : "text-white border-white/15 hover:bg-white/10"
-                        }`}
-                      >
-                        {isUpdating ? "Updating..." : "Restock"}
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateListingInventory(listing.id, {
-                            inventory_status: "seasonal",
-                          })
-                        }
-                        disabled={isUpdating}
-                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                          isLight
-                            ? "text-slate-900 border-slate-300 hover:bg-slate-50"
-                            : "text-white border-white/15 hover:bg-white/10"
-                        }`}
-                      >
-                        {isUpdating ? "Updating..." : "Pause listing"}
-                      </button>
-                      {isUpdating ? (
+                    {/* Spacer to push buttons to bottom */}
+                    <div className="flex-1"></div>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                      {/* Primary Actions */}
+                      <div className="grid grid-cols-2 gap-2">
                         <button
-                          type="button"
-                          onClick={cancelInventoryUpdate}
-                          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                          onClick={() =>
+                            router.push(`/business/listings/${listing.id}/edit`)
+                          }
+                          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                             isLight
-                              ? "text-slate-900 border-slate-300 hover:bg-slate-50"
-                              : "text-white border-white/15 hover:bg-white/10"
+                              ? "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                              : "bg-slate-800 text-slate-100 hover:bg-slate-700"
                           }`}
                         >
-                          Stop tracking
+                          Edit
                         </button>
-                      ) : null}
+                        <button
+                          onClick={() => handleDelete(listing.id)}
+                          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            isLight
+                              ? "bg-red-50 text-red-700 hover:bg-red-100"
+                              : "bg-red-900/30 text-red-300 hover:bg-red-900/50"
+                          }`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+
+                      {/* Inventory Actions */}
+                      <div className="pt-3">
+                        {isUpdating ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className={`col-span-2 px-3 py-2 rounded-md text-sm font-medium text-center ${
+                              isLight ? "bg-blue-50 text-blue-700" : "bg-blue-900/30 text-blue-300"
+                            }`}>
+                              Updating...
+                            </div>
+                            <button
+                              type="button"
+                              onClick={cancelInventoryUpdate}
+                              className={`col-span-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                isLight
+                                  ? "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                                  : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                              }`}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <details className="group/details relative">
+                          <summary className={`cursor-pointer list-none px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            isLight
+                              ? "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                              : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <span>Inventory actions</span>
+                              <svg className="w-4 h-4 transition-transform group-open/details:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </summary>
+                          <div className={`absolute bottom-full left-0 right-0 mb-2 grid grid-cols-1 gap-2 p-2 rounded-md shadow-lg border z-10 ${
+                            isLight
+                              ? "bg-white border-slate-200"
+                              : "bg-slate-800 border-slate-600"
+                          }`}>
+                            <button
+                              onClick={() =>
+                                updateListingInventory(listing.id, {
+                                  inventory_status: "in_stock",
+                                  inventory_quantity: restockQuantity,
+                                })
+                              }
+                              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                isLight
+                                  ? "bg-green-50 text-green-700 hover:bg-green-100"
+                                  : "bg-green-900/30 text-green-300 hover:bg-green-900/50"
+                              }`}
+                            >
+                              Restock
+                            </button>
+                            <button
+                              onClick={() =>
+                                updateListingInventory(listing.id, {
+                                  inventory_status: "out_of_stock",
+                                  inventory_quantity: 0,
+                                })
+                              }
+                              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                isLight
+                                  ? "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                                  : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                              }`}
+                            >
+                              Mark out of stock
+                            </button>
+                            <button
+                              onClick={() =>
+                                updateListingInventory(listing.id, {
+                                  inventory_status: "seasonal",
+                                })
+                              }
+                              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                isLight
+                                  ? "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                                  : "bg-slate-800 text-slate-100 hover:bg-slate-700"
+                              }`}
+                            >
+                              Pause listing
+                            </button>
+                          </div>
+                        </details>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
               );
             })}
           </div>

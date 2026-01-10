@@ -19,6 +19,7 @@ import SafeImage from "@/components/SafeImage";
 import { getOrCreateConversation } from "@/lib/messages";
 import { useTheme } from "@/components/ThemeProvider";
 import { getAvailabilityBadgeStyle, normalizeInventory } from "@/lib/inventory";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function ListingDetails({ params }) {
   const { supabase, user, authUser, role } = useAuth();
@@ -45,19 +46,47 @@ export default function ListingDetails({ params }) {
 
   useEffect(() => {
     let isMounted = true;
+    const accountId = user?.id || authUser?.id || null;
+    const shouldUseServer = Boolean(accountId);
 
     async function load() {
       if (!id) return;
-      const client = supabase ?? getBrowserSupabaseClient();
-      if (!client) {
-        setError("We couldn’t connect. Try again.");
-        setLoading(false);
-        return;
-      }
       setLoading(true);
       setError(null);
 
       try {
+        if (shouldUseServer) {
+          const response = await fetchWithTimeout(
+            `/api/customer/listings?id=${encodeURIComponent(id)}`,
+            {
+              method: "GET",
+              credentials: "include",
+              timeoutMs: 12000,
+            }
+          );
+          if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || "Failed to load listing");
+          }
+          const payload = await response.json();
+          if (!isMounted) return;
+          setListing(payload?.listing ?? null);
+          setBusiness(payload?.business ?? null);
+          setIsSaved(Boolean(payload?.isSaved));
+          setHeroSrc(
+            primaryPhotoUrl(payload?.listing?.photo_url) ||
+              "/business-placeholder.png"
+          );
+          return;
+        }
+
+        const client = supabase ?? getBrowserSupabaseClient();
+        if (!client) {
+          setError("We couldn’t connect. Try again.");
+          setLoading(false);
+          return;
+        }
+
         const { data: item, error: listingError } = await client
           .from("listings")
           .select("*")
@@ -95,20 +124,19 @@ export default function ListingDetails({ params }) {
     return () => {
       isMounted = false;
     };
-  }, [supabase, id]);
+  }, [supabase, id, user?.id, authUser?.id]);
 
   useEffect(() => {
     let active = true;
+    const accountId = user?.id || authUser?.id || null;
+    if (!accountId || !id) return () => {};
     const checkSaved = async () => {
       const client = supabase ?? getBrowserSupabaseClient();
-      if (!client || !user?.id || !id) {
-        setIsSaved(false);
-        return;
-      }
+      if (!client) return;
       const { data } = await client
         .from("saved_listings")
         .select("id")
-        .eq("user_id", user.id)
+        .eq("user_id", accountId)
         .eq("listing_id", id)
         .maybeSingle();
       if (!active) return;
@@ -118,7 +146,7 @@ export default function ListingDetails({ params }) {
     return () => {
       active = false;
     };
-  }, [supabase, user?.id, id]);
+  }, [supabase, user?.id, authUser?.id, id]);
 
   const handleToggleSave = async () => {
     if (!supabase || !id || !user?.id) {

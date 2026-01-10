@@ -31,7 +31,7 @@ function BusinessLoginInner() {
         // Some browsers ignore close() if not opened by script
         setTimeout(() => {
           if (!window.closed) {
-            router.replace("/business/dashboard");
+            window.location.href = "/business/dashboard";
           }
         }, 150);
 
@@ -39,8 +39,9 @@ function BusinessLoginInner() {
       }
     }
 
-    router.replace("/business/dashboard");
-  }, [isPopup, router]);
+    // Use full page reload to ensure session is properly loaded
+    window.location.href = "/business/dashboard";
+  }, [isPopup]);
 
   /* --------------------------------------------------------------
      AUTO-REDIRECT IF ALREADY LOGGED IN
@@ -50,11 +51,17 @@ function BusinessLoginInner() {
     if (!authUser) return;
     if (!role) return; // wait until role is loaded
 
-    if (role === "business") {
-      finishBusinessAuth();
-    } else {
-      router.replace("/customer/home"); // non-business users redirected
-    }
+    // Add delay to ensure session is fully established and AuthProvider state is ready
+    const timer = setTimeout(() => {
+      if (role === "business") {
+        console.log("Login: Redirecting to dashboard, authUser:", authUser.id);
+        finishBusinessAuth();
+      } else {
+        router.replace("/customer/home"); // non-business users redirected
+      }
+    }, 200); // Increased from 50ms to 200ms
+
+    return () => clearTimeout(timer);
   }, [authUser, role, loadingUser, router, finishBusinessAuth]);
 
   /* --------------------------------------------------------------
@@ -63,15 +70,15 @@ function BusinessLoginInner() {
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
-  
+
     // 🔥 Tell AuthProvider this login belongs to a business account
     localStorage.setItem("signup_role", "business");
-  
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-  
+
 
     if (error) {
       alert(error.message);
@@ -103,9 +110,17 @@ function BusinessLoginInner() {
       return;
     }
 
-    // 4) Redirect or close popup
+    // 4) Wait for session to be fully written to storage before allowing redirect
+    // This ensures the AuthProvider and dashboard can read the session immediately
+    console.log("Login: Waiting for session to stabilize...");
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 5) Verify session is accessible
+    const { data: sessionCheck } = await supabase.auth.getSession();
+    console.log("Login: Session check before redirect:", sessionCheck?.session ? "Session exists" : "No session");
+
     setLoading(false);
-    finishBusinessAuth();
+    // The useEffect above will handle the redirect once role is set
   }
 
   /* --------------------------------------------------------------

@@ -3,61 +3,96 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import { fetchConversations } from "@/lib/messages";
 import { retry } from "@/lib/retry";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import InboxList from "@/components/messages/InboxList";
 
 export default function BusinessMessagesPage() {
-  const { user, authUser, supabase } = useAuth();
+  const { user, authUser, supabase, loadingUser } = useAuth();
   const userId = user?.id || authUser?.id || null;
 
   const [hydrated, setHydrated] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const requestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+  const [isVisible, setIsVisible] = useState(
+    typeof document === "undefined" ? true : !document.hidden
+  );
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    setHasLoaded(false);
+  }, [userId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handleVisibility = () => setIsVisible(!document.hidden);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
   const loadConversations = useCallback(async () => {
     if (!userId) return;
     const requestId = ++requestIdRef.current;
-    setLoading(true);
+    // Only show loading if we haven't loaded conversations yet
+    setLoading((prev) => (hasLoadedRef.current ? prev : true));
     setError(null);
     try {
-      const data = await retry(
+      // AuthProvider handles session management, we just fetch data
+      const response = await retry(
         () =>
-          fetchConversations({
-            supabase,
-            userId,
-            role: "business",
+          fetchWithTimeout("/api/business/conversations", {
+            method: "GET",
+            credentials: "include",
+            timeoutMs: 12000,
           }),
         { retries: 1, delayMs: 600 }
       );
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Failed to load conversations");
+      }
+
+      const payload = await response.json();
+      const data = Array.isArray(payload?.conversations)
+        ? payload.conversations
+        : [];
       if (requestId !== requestIdRef.current) return;
       setConversations(data);
+      setHasLoaded(true);
+      hasLoadedRef.current = true;
     } catch (err) {
       console.error("Failed to load conversations", err);
+
       if (requestId === requestIdRef.current) {
-        setError("We couldn’t load your messages. Please try again.");
+        setError("We couldn't load your messages. Please try again.");
       }
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
       }
     }
-  }, [supabase, userId]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!hydrated || !userId) return;
+    // Wait until auth is fully loaded and we have a userId
+    if (!hydrated || (!userId && loadingUser)) return;
+    if (!isVisible && hasLoadedRef.current) return;
     loadConversations();
-  }, [hydrated, userId, loadConversations]);
+  }, [hydrated, loadingUser, userId, loadConversations, isVisible]);
 
   useEffect(() => {
-    if (!hydrated || !userId) return undefined;
-    const client = supabase ?? getBrowserSupabaseClient();
+    // Wait until auth is fully loaded before setting up realtime subscription
+    if (!hydrated || (!userId && loadingUser)) return undefined;
+    const client = getBrowserSupabaseClient() ?? supabase;
     if (!client) return undefined;
 
     const channel = client
@@ -79,7 +114,7 @@ export default function BusinessMessagesPage() {
     return () => {
       client.removeChannel(channel);
     };
-  }, [hydrated, userId, supabase, loadConversations]);
+  }, [hydrated, loadingUser, userId, supabase, loadConversations]);
 
   const intro = useMemo(
     () =>

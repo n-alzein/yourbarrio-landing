@@ -149,7 +149,8 @@ button {
 
 /* Light theme — soften business placeholder contrast */
 .theme-light img[data-placeholder="true"],
-.theme-light img[src="/business-placeholder.png"] {
+.theme-light img[src="/business-placeholder.png"],
+.theme-light img[src*="business-placeholder.png"] {
   background: #c4b5fd;
 }
 

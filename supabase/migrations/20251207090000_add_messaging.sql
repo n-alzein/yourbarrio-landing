@@ -267,3 +267,24 @@ BEGIN
       WITH CHECK (recipient_id = auth.uid());
   END IF;
 END$$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Participants can read user profiles'
+  ) THEN
+    DROP POLICY "Participants can read user profiles" ON public.users;
+  END IF;
+
+  CREATE POLICY "Participants can read user profiles"
+    ON public.users FOR SELECT TO authenticated
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.conversations c
+        WHERE (
+          (c.customer_id = public.users.id AND c.business_id = auth.uid())
+          OR (c.business_id = public.users.id AND c.customer_id = auth.uid())
+        )
+      )
+    );
+END$$;

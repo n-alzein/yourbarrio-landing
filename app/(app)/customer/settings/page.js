@@ -96,12 +96,12 @@ export default function SettingsPage() {
     const fileName = `${authUser.id}-${Date.now()}`;
 
     const { error } = await supabase.storage
-      .from("customer-photos")
+      .from("avatars")
       .upload(fileName, file);
 
     if (!error) {
       const { data } = supabase.storage
-        .from("customer-photos")
+        .from("avatars")
         .getPublicUrl(fileName);
 
       setForm((prev) => ({

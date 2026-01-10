@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/components/AuthProvider";
+import { getDisplayName } from "@/lib/messages";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function BusinessDashboard() {
-  const { supabase, user, authUser, role, loadingUser } = useAuth();
+  const { authUser, user, loadingUser } = useAuth();
 
   const [hydrated, setHydrated] = useState(false);
   const [business, setBusiness] = useState(null);
   const [stats, setStats] = useState(null);
+  const [latestMessage, setLatestMessage] = useState(null);
 
   /* ------------------------------------------- */
   /* 1️⃣ Hydration flag (always first) */
@@ -23,96 +26,85 @@ export default function BusinessDashboard() {
   /* 2️⃣ Load business profile */
   /* ------------------------------------------- */
   useEffect(() => {
-    // Use profile from AuthProvider immediately to avoid blank screen while refetching
-    if (user && role === "business" && !business) {
-      setBusiness(user);
-    }
-  }, [user, role, business]);
+    if (business || !user) return;
+    if (authUser && user.id !== authUser.id) return;
+    setBusiness(user);
+  }, [business, user, authUser]);
 
   useEffect(() => {
     if (!hydrated) return;
-    if (loadingUser) return;
-    if (role !== "business") return;
-    if (!supabase) return;
-
-    const id = user?.id || authUser?.id;
-    if (!id) return;
-
-    let active = true;
-
-    async function loadBusiness() {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) {
-        console.error("Failed to load business", error);
-        return;
-      }
-
-      if (active) setBusiness(data);
+    if (!authUser && loadingUser) return;
+    if (!authUser) return;
+    if (business?.id === authUser.id && stats?._businessId === authUser.id) {
+      return;
     }
 
-    loadBusiness();
+    let cancelled = false;
+
+    async function loadDashboard() {
+      try {
+        const response = await fetchWithTimeout("/api/business/dashboard", {
+          method: "GET",
+          credentials: "include",
+          timeoutMs: 12000,
+        });
+
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || "Failed to load dashboard data");
+        }
+
+        const payload = await response.json();
+        if (cancelled) return;
+
+        if (!business && payload?.business) {
+          setBusiness(payload.business);
+        }
+
+        if (!stats || stats._businessId !== authUser.id) {
+          setStats(payload?.stats ?? null);
+        }
+
+        setLatestMessage(payload?.latestMessage ?? null);
+      } catch (err) {
+        console.error("Dashboard: Failed to load dashboard data", err);
+        if (cancelled) return;
+        if (!stats) {
+          setStats({
+            views: 0,
+            saves: 0,
+            messages: 0,
+            rating: "",
+            reviewCount: 0,
+            _businessId: authUser.id,
+          });
+        }
+        setLatestMessage(null);
+      }
+    }
+
+    loadDashboard();
+
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, [hydrated, loadingUser, user, role, supabase, authUser?.id]);
+  }, [hydrated, loadingUser, authUser, business, stats]);
 
   /* ------------------------------------------- */
   /* 3️⃣ Load stats AFTER business exists */
   /* ------------------------------------------- */
-  useEffect(() => {
-    if (!hydrated) return;
-    if (!business) return;
-    if (!supabase) return;
-
-    async function loadStats() {
-      const [viewsRes, savesRes, msgRes, reviewsRes] = await Promise.all([
-        supabase
-          .from("business_views")
-          .select("id", { count: "exact", head: true })
-          .eq("business_id", business.id),
-
-        supabase
-          .from("business_saves")
-          .select("id", { count: "exact", head: true })
-          .eq("business_id", business.id),
-
-        supabase
-          .from("business_messages")
-          .select("id", { count: "exact", head: true })
-          .eq("business_id", business.id),
-
-        supabase
-          .from("business_reviews")
-          .select("rating")
-          .eq("business_id", business.id),
-      ]);
-
-      const ratings = reviewsRes.data?.map((r) => r.rating) ?? [];
-
-      setStats({
-        views: viewsRes.count ?? 0,
-        saves: savesRes.count ?? 0,
-        messages: msgRes.count ?? 0,
-        rating: ratings.length
-          ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
-          : "",
-        reviewCount: ratings.length,
-      });
-    }
-
-    loadStats();
-  }, [hydrated, business, supabase]);
+  /* stats + latest message now loaded via /api/business/dashboard */
 
   /* ------------------------------------------- */
   /* 4️⃣ Block UI until ready */
   /* ------------------------------------------- */
-  if (!hydrated || loadingUser) return <div className="h-screen" />;
+  if (!hydrated) {
+    return <div className="h-screen" />;
+  }
 
+  // Show loading state only if:
+  // 1. We don't have business data yet, AND
+  // 2. Either auth is still loading OR we haven't attempted to load business yet
   if (!business) {
     return (
       <div className="min-h-screen px-6 md:px-10 pt-10 text-white">
@@ -146,13 +138,15 @@ export default function BusinessDashboard() {
         {/* HEADER */}
         <div className="flex flex-col md:flex-row items-center gap-6 mb-12 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-xl backdrop-blur-2xl">
 
-          <Image
-            src={business.profile_photo_url || "/business-placeholder.png"}
-            width={128}
-            height={128}
-            alt="Business Logo"
-            className="object-cover w-32 h-32 rounded-xl"
-          />
+          <div className="w-32 h-32 rounded-xl overflow-hidden">
+            <Image
+              src={business.profile_photo_url || "/business-placeholder.png"}
+              width={128}
+              height={128}
+              alt="Business Logo"
+              className="object-cover w-full h-full"
+            />
+          </div>
 
           <div className="flex flex-col gap-1 text-center md:text-left">
             <h1 className="text-4xl font-bold">{business.business_name}</h1>
@@ -189,8 +183,23 @@ export default function BusinessDashboard() {
         {/* ACTION CARDS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           <DashboardCard title="Inbox">
-            <p className="text-white/60 mb-4">Customer messages appear here.</p>
-            <Link href="/business/inbox" className="inline-block px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition">
+            {latestMessage ? (
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-white/50">
+                  <span>{getDisplayName(latestMessage.customer)}</span>
+                  <span>{formatMessageTime(latestMessage.time)}</span>
+                </div>
+                <p className="text-sm text-white/80 line-clamp-2">
+                  {latestMessage.preview || "New message received from a customer."}
+                </p>
+              </div>
+            ) : (
+              <p className="text-white/60 mb-4">Customer messages appear here.</p>
+            )}
+            <Link
+              href="/business/messages"
+              className="inline-block px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition"
+            >
               Open Inbox
             </Link>
           </DashboardCard>
@@ -241,4 +250,16 @@ function DashboardCard({ title, children }) {
       {children}
     </div>
   );
+}
+
+function formatMessageTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

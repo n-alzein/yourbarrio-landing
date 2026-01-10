@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import { fetchConversations } from "@/lib/messages";
 import { retry } from "@/lib/retry";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import InboxList from "@/components/messages/InboxList";
 
 export default function CustomerMessagesPage() {
-  const { user, authUser, supabase } = useAuth();
+  const { user, authUser, supabase, loadingUser } = useAuth();
   const userId = user?.id || authUser?.id || null;
 
   const [hydrated, setHydrated] = useState(false);
@@ -16,28 +16,52 @@ export default function CustomerMessagesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const requestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+  const [isVisible, setIsVisible] = useState(
+    typeof document === "undefined" ? true : !document.hidden
+  );
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    hasLoadedRef.current = false;
+  }, [userId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handleVisibility = () => setIsVisible(!document.hidden);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
   const loadConversations = useCallback(async () => {
     if (!userId) return;
     const requestId = ++requestIdRef.current;
-    setLoading(true);
+    setLoading((prev) => (hasLoadedRef.current ? prev : true));
     setError(null);
     try {
-      const data = await retry(
+      const response = await retry(
         () =>
-          fetchConversations({
-            supabase,
-            userId,
-            role: "customer",
+          fetchWithTimeout("/api/customer/conversations", {
+            method: "GET",
+            credentials: "include",
+            timeoutMs: 12000,
           }),
         { retries: 1, delayMs: 600 }
       );
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Failed to load conversations");
+      }
+      const payload = await response.json();
+      const data = Array.isArray(payload?.conversations)
+        ? payload.conversations
+        : [];
       if (requestId !== requestIdRef.current) return;
       setConversations(data);
+      hasLoadedRef.current = true;
     } catch (err) {
       console.error("Failed to load conversations", err);
       if (requestId === requestIdRef.current) {
@@ -48,15 +72,16 @@ export default function CustomerMessagesPage() {
         setLoading(false);
       }
     }
-  }, [supabase, userId]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!hydrated || !userId) return;
+    if (!hydrated || loadingUser || !userId) return;
+    if (!isVisible && hasLoadedRef.current) return;
     loadConversations();
-  }, [hydrated, userId, loadConversations]);
+  }, [hydrated, loadingUser, userId, loadConversations, isVisible]);
 
   useEffect(() => {
-    if (!hydrated || !userId) return undefined;
+    if (!hydrated || loadingUser || !userId) return undefined;
     const client = supabase ?? getBrowserSupabaseClient();
     if (!client) return undefined;
 
@@ -79,7 +104,7 @@ export default function CustomerMessagesPage() {
     return () => {
       client.removeChannel(channel);
     };
-  }, [hydrated, userId, supabase, loadConversations]);
+  }, [hydrated, loadingUser, userId, supabase, loadConversations]);
 
   const intro = useMemo(
     () =>

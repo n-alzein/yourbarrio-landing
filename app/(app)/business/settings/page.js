@@ -27,6 +27,7 @@ export default function SettingsPage() {
     phone: "",
     city: "",
     address: "",
+    website: "",
     profile_photo_url: "",
   });
 
@@ -36,13 +37,14 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!user) return;
 
-    setForm({
-      full_name: user.business_name || user.full_name || "",
-      phone: user.phone || "",
-      city: user.city || "",
-      address: user.address || "",
-      profile_photo_url: user.profile_photo_url || "",
-    });
+      setForm({
+        full_name: user.business_name || user.full_name || "",
+        phone: user.phone || "",
+        city: user.city || "",
+        address: user.address || "",
+        website: user.website || "",
+        profile_photo_url: user.profile_photo_url || "",
+      });
   }, [user]);
 
   /* -----------------------------------------------------------
@@ -54,14 +56,15 @@ export default function SettingsPage() {
 
     const { error } = await supabase
       .from("users")
-      .update({
-        full_name: form.full_name,
-        business_name: form.full_name,
-        phone: form.phone,
-        city: form.city,
-        address: form.address,
-        profile_photo_url: form.profile_photo_url,
-      })
+        .update({
+          full_name: form.full_name,
+          business_name: form.full_name,
+          phone: form.phone,
+          city: form.city,
+          address: form.address,
+          website: form.website,
+          profile_photo_url: form.profile_photo_url,
+        })
       .eq("id", authUser.id);
 
     setSaving(false);
@@ -97,12 +100,12 @@ export default function SettingsPage() {
     const fileName = `${authUser.id}-${Date.now()}`;
 
     const { error } = await supabase.storage
-      .from("customer-photos")
+      .from("business-photos")
       .upload(fileName, file);
 
     if (!error) {
       const { data } = supabase.storage
-        .from("customer-photos")
+        .from("business-photos")
         .getPublicUrl(fileName);
 
       setForm((prev) => ({
@@ -120,13 +123,14 @@ export default function SettingsPage() {
   const hasChanges =
     user &&
     JSON.stringify(form) !==
-      JSON.stringify({
-        full_name: user.business_name || user.full_name || "",
-        phone: user.phone || "",
-        city: user.city || "",
-        address: user.address || "",
-        profile_photo_url: user.profile_photo_url || "",
-      });
+        JSON.stringify({
+          full_name: user.business_name || user.full_name || "",
+          phone: user.phone || "",
+          city: user.city || "",
+          address: user.address || "",
+          website: user.website || "",
+          profile_photo_url: user.profile_photo_url || "",
+        });
 
   const primaryProvider = getPrimaryAuthProvider(authUser);
   const providerLabel = getAuthProviderLabel(authUser);
@@ -263,13 +267,14 @@ export default function SettingsPage() {
                 ["phone", "Phone Number"],
                 ["city", "City"],
                 ["address", "Address"],
+                ["website", "Website"],
               ].map(([key, label]) => (
                 <div key={key} className="bg-white/5 p-4 rounded-xl border border-white/10">
                   <p className="text-sm text-white/60 mb-1">{label}</p>
 
                   {editMode ? (
                     <input
-                      type="text"
+                      type={key === "website" ? "url" : "text"}
                       value={form[key]}
                       onChange={(e) =>
                         setForm({ ...form, [key]: e.target.value })
@@ -308,6 +313,7 @@ export default function SettingsPage() {
                       phone: user.phone || "",
                       city: user.city || "",
                       address: user.address || "",
+                      website: user.website || "",
                       profile_photo_url: user.profile_photo_url || "",
                     });
                   }}

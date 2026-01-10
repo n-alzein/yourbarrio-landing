@@ -185,6 +185,11 @@ function CustomerHomePageInner() {
   );
   const [hasLoadedYb, setHasLoadedYb] = useState(initialYb.length > 0);
   const [ybBusinessesError, setYbBusinessesError] = useState(null);
+  const [isVisible, setIsVisible] = useState(() =>
+    typeof document === "undefined" ? true : !document.hidden
+  );
+  const ybFetchedRef = useRef(false);
+  const allListingsFetchedRef = useRef(false);
   const authReady = !loadingUser || !!authUser || !!user;
   const galleryRef = useRef(null);
   const tileDragState = useRef({
@@ -204,6 +209,13 @@ function CustomerHomePageInner() {
       }),
     []
   );
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handleVisibility = () => setIsVisible(!document.hidden);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
@@ -475,9 +487,10 @@ function CustomerHomePageInner() {
   }, []);
 
   useEffect(() => {
-    if (hasLoadedYb) return undefined;
+    if (!isVisible && ybFetchedRef.current) return undefined;
     let active = true;
     const loadYb = async () => {
+      ybFetchedRef.current = true;
       setYbBusinessesLoading((prev) => (hasLoadedYb ? prev : true));
       setYbBusinessesError(null);
       const client = supabase ?? getBrowserSupabaseClient();
@@ -628,7 +641,7 @@ function CustomerHomePageInner() {
     return () => {
       active = false;
     };
-  }, [supabase, hasLoadedYb, logCrashEvent]);
+  }, [supabase, logCrashEvent, isVisible]);
 
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
@@ -683,8 +696,10 @@ function CustomerHomePageInner() {
   }, [mapOpen]);
 
   useEffect(() => {
+    if (!isVisible && allListingsFetchedRef.current) return undefined;
     let active = true;
     const loadAll = async () => {
+      allListingsFetchedRef.current = true;
       const client = supabase ?? getBrowserSupabaseClient();
       if (!client) {
         setAllListingsLoading(false);
@@ -747,7 +762,7 @@ function CustomerHomePageInner() {
     return () => {
       active = false;
     };
-  }, [supabase, hasLoadedListings, logCrashEvent]);
+  }, [supabase, hasLoadedListings, logCrashEvent, isVisible]);
 
   const groupedListings = useMemo(() => {
     const groups = {};
