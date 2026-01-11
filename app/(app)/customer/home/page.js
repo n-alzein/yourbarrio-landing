@@ -97,11 +97,14 @@ class CustomerHomeErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const isLight = this.props.isLight ?? true;
+      const textBase = isLight ? "text-slate-900" : "text-white";
+      const textMuted = isLight ? "text-slate-600" : "text-white/70";
       return (
-        <div className="min-h-screen flex items-center justify-center px-6 text-white">
+        <div className={`min-h-screen flex items-center justify-center px-6 ${textBase}`}>
           <div className="max-w-md w-full space-y-4 text-center bg-white/5 border border-white/10 rounded-2xl p-6">
             <h2 className="text-xl font-semibold">Something went wrong</h2>
-            <p className="text-white/70 text-sm">
+            <p className={`text-sm ${textMuted}`}>
               {this.state.message || "The page failed to load. Please try again."}
             </p>
             <button
@@ -128,6 +131,18 @@ function CustomerHomePageInner() {
   const { user, authUser, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const textTone = useMemo(
+    () => ({
+      base: isLight ? "text-slate-900" : "text-white",
+      strong: isLight ? "text-slate-900" : "text-white/90",
+      muted: isLight ? "text-slate-700" : "text-white/80",
+      soft: isLight ? "text-slate-600" : "text-white/70",
+      subtle: isLight ? "text-slate-500" : "text-white/60",
+      faint: isLight ? "text-slate-400" : "text-white/50",
+      tint: isLight ? "text-slate-700" : "text-white/75",
+    }),
+    [isLight]
+  );
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [mapOpen, setMapOpen] = useState(false);
@@ -876,7 +891,7 @@ function CustomerHomePageInner() {
 
   if (loadingUser && !authUser && !user) {
     return (
-      <div className="min-h-screen text-white relative px-6 pt-3">
+      <div className={`min-h-screen ${textTone.base} relative px-6 pt-3`}>
         <div className="absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute inset-0 bg-[#05010d]" />
           <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
@@ -886,7 +901,7 @@ function CustomerHomePageInner() {
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center space-y-3">
             <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
-            <p className="text-lg text-white/80">Loading your account...</p>
+            <p className={`text-lg ${textTone.muted}`}>Loading your account...</p>
           </div>
         </div>
       </div>
@@ -895,7 +910,7 @@ function CustomerHomePageInner() {
 
   return (
     <section
-      className="relative w-full min-h-screen text-white pb-4 pt-0 md:pt-0 -mt-4 md:-mt-12"
+      className={`relative w-full min-h-screen ${textTone.base} pb-4 pt-0 md:pt-0 -mt-4 md:-mt-12`}
       data-clickdiag={clickDiagEnabled ? "home" : undefined}
     >
 
@@ -916,14 +931,14 @@ function CustomerHomePageInner() {
                 <div className="rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl shadow-xl px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-white/60">
+                      <p className={`text-[10px] uppercase tracking-[0.22em] ${textTone.subtle}`}>
                         AI picks
                       </p>
                       <p className="text-lg font-semibold">
                         Items matching “{search}”
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-white/70">
+                    <div className={`flex items-center gap-2 text-xs ${textTone.soft}`}>
                       {hybridItemsLoading ? (
                         <>
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -945,7 +960,7 @@ function CustomerHomePageInner() {
                   ) : null}
 
                   {!hybridItemsLoading && !hybridItemsError && hybridItems.length === 0 ? (
-                    <div className="mt-3 text-sm text-white/70">
+                    <div className={`mt-3 text-sm ${textTone.soft}`}>
                       No items yet. Try a category like “coffee”, “salon”, or “groceries”.
                     </div>
                   ) : null}
@@ -978,7 +993,7 @@ function CustomerHomePageInner() {
                             fallbackSrc="/business-placeholder.png"
                           />
                         ) : (
-                          <div className="h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] text-white/60">
+                          <div className={`h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] ${textTone.subtle}`}>
                             No image
                           </div>
                         )}
@@ -988,12 +1003,12 @@ function CustomerHomePageInner() {
                               {item.title}
                             </div>
                             {item.price ? (
-                              <div className="text-sm font-semibold text-white/90">
+                              <div className={`text-sm font-semibold ${textTone.strong}`}>
                                 ${item.price}
                               </div>
                             ) : null}
                           </div>
-                          <div className="text-[11px] uppercase tracking-wide text-white/50 mt-1">
+                          <div className={`text-[11px] uppercase tracking-wide ${textTone.faint} mt-1`}>
                             {item.category || "Listing"}
                             {item.city ? ` · ${item.city}` : ""}
                           </div>
@@ -1008,7 +1023,7 @@ function CustomerHomePageInner() {
                             {inventory.label}
                           </span>
                           {item.description ? (
-                            <p className="text-xs text-white/70 mt-1 line-clamp-2">
+                            <p className={`text-xs ${textTone.soft} mt-1 line-clamp-2`}>
                               {item.description}
                             </p>
                           ) : null}
@@ -1028,11 +1043,11 @@ function CustomerHomePageInner() {
               >
                 <div className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl">
                   <div className="flex flex-wrap items-center justify-between mb-3 gap-2 px-3 pt-3">
-                    <div className="text-sm uppercase tracking-[0.18em] text-white/60">
+                    <div className={`text-sm uppercase tracking-[0.18em] ${textTone.subtle}`}>
                       Nearby businesses
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="inline-flex items-center gap-2 text-xs text-white/70 bg-white/5 border border-white/10 px-3 py-1 backdrop-blur">
+                      <div className={`inline-flex items-center gap-2 text-xs ${textTone.soft} bg-white/5 border border-white/10 px-3 py-1 backdrop-blur`}>
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         {filteredBusinesses.length} matches live
                       </div>
@@ -1040,14 +1055,14 @@ function CustomerHomePageInner() {
                         type="button"
                         onClick={() => setMapOpen(true)}
                         disabled={!mapAvailable}
-                        className="px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold text-white hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto"
+                        className={`px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold ${textTone.base} hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto`}
                       >
                         Map
                       </button>
                       <button
                         type="button"
                         onClick={() => scrollGallery(-1)}
-                        className="h-8 w-8 rounded-full border border-white/20 bg-white/5 text-white hover:border-white/40"
+                        className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
                         aria-label="Scroll left"
                       >
                         <ChevronLeft className="h-4 w-4 mx-auto" />
@@ -1055,7 +1070,7 @@ function CustomerHomePageInner() {
                       <button
                         type="button"
                         onClick={() => scrollGallery(1)}
-                        className="h-8 w-8 rounded-full border border-white/20 bg-white/5 text-white hover:border-white/40"
+                        className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
                         aria-label="Scroll right"
                       >
                         <ChevronRight className="h-4 w-4 mx-auto" />
@@ -1100,7 +1115,7 @@ function CustomerHomePageInner() {
                               />
                             </div>
                           ) : (
-                            <div className="text-[11px] text-white/60">No photo</div>
+                            <div className={`text-[11px] ${textTone.subtle}`}>No photo</div>
                           )}
                         </div>
                         <div className="p-3 space-y-2 flex-1 flex flex-col">
@@ -1109,33 +1124,33 @@ function CustomerHomePageInner() {
                               <div className="text-base font-semibold line-clamp-1">
                                 {biz.name}
                               </div>
-                              <div className="text-xs text-white/70">
+                              <div className={`text-xs ${textTone.soft}`}>
                                 {biz.categoryLabel || biz.category || "Local spot"}
                               </div>
                             </div>
                             {biz.distance_km ? (
-                              <div className="text-[11px] text-white/70 bg-white/10 border border-white/10 px-2 py-1">
+                              <div className={`text-[11px] ${textTone.soft} bg-white/10 border border-white/10 px-2 py-1`}>
                                 {biz.distance_km.toFixed(1)} km
                               </div>
                             ) : null}
                           </div>
                           {biz.address ? (
-                            <div className="text-xs text-white/60 line-clamp-1">{biz.address}</div>
+                            <div className={`text-xs ${textTone.subtle} line-clamp-1`}>{biz.address}</div>
                           ) : (
-                            <div className="text-xs text-white/60">&nbsp;</div>
+                            <div className={`text-xs ${textTone.subtle}`}>&nbsp;</div>
                           )}
                           {biz.description ? (
-                            <div className="text-sm text-white/75 leading-snug line-clamp-2">
+                            <div className={`text-sm ${textTone.tint} leading-snug line-clamp-2`}>
                               {biz.description}
                             </div>
                           ) : (
-                            <div className="text-sm text-white/75 leading-snug">&nbsp;</div>
+                            <div className={`text-sm ${textTone.tint} leading-snug`}>&nbsp;</div>
                           )}
                         </div>
                       </button>
                     ))}
                     {!filteredBusinesses.length ? (
-                      <div className="text-sm text-white/70">
+                      <div className={`text-sm ${textTone.soft}`}>
                         {ybBusinessesLoading ? "Loading businesses..." : ybBusinessesError || "No matches found."}
                       </div>
                     ) : null}
@@ -1168,7 +1183,7 @@ function CustomerHomePageInner() {
                 <p className="text-lg font-semibold">Browse listings</p>
               </div>
               {allListingsLoading ? (
-                <div className="flex items-center gap-2 text-sm text-white/70">
+                <div className={`flex items-center gap-2 text-sm ${textTone.soft}`}>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading
                 </div>
@@ -1209,20 +1224,20 @@ function CustomerHomePageInner() {
                             fallbackSrc="/business-placeholder.png"
                           />
                         ) : (
-                          <div className="h-full w-full flex items-center justify-center text-[11px] text-white/60">
+                          <div className={`h-full w-full flex items-center justify-center text-[11px] ${textTone.subtle}`}>
                             No image
                           </div>
                         )}
                       </div>
                       <div className="flex flex-col flex-1 p-4 gap-2">
-                        <p className="text-xs font-medium text-white/60 uppercase tracking-wide">
+                        <p className={`text-xs font-medium ${textTone.subtle} uppercase tracking-wide`}>
                           {item.category || "Listing"}
                           {item.city ? ` · ${item.city}` : ""}
                         </p>
-                        <h3 className="text-base font-semibold text-white line-clamp-2 min-h-[3rem]">
+                        <h3 className={`text-base font-semibold ${textTone.base} line-clamp-2 min-h-[3rem]`}>
                           {item.title}
                         </h3>
-                        <div className="mt-auto text-lg font-semibold text-white/90">
+                        <div className={`mt-auto text-lg font-semibold ${textTone.strong}`}>
                           {item.price ? `$${item.price}` : "Price TBD"}
                         </div>
                       </div>
@@ -1231,7 +1246,7 @@ function CustomerHomePageInner() {
                 })}
               </div>
             ) : (
-              <div className="text-sm text-white/70 mt-3">
+              <div className={`text-sm ${textTone.soft} mt-3`}>
                 {allListingsLoading
                   ? "Loading listings..."
                   : "No listings available yet."}
@@ -1257,8 +1272,10 @@ function CustomerHomePageInner() {
 
 export default function CustomerHomePage() {
   const safeNavFlag = process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1";
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
   return (
-    <CustomerHomeErrorBoundary>
+    <CustomerHomeErrorBoundary isLight={isLight}>
       {safeNavFlag ? <SafeNavFallback /> : null}
       <HomeGuard fallback={<HomeGuardFallback />}>
         <GuaranteedNavCapture />

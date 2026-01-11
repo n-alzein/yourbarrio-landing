@@ -654,7 +654,7 @@ export default function BusinessListingsPage() {
                   {primaryPhotoUrl(listing.photo_url) ? (
                     <div
                       className={`relative h-56 w-full overflow-hidden ${
-                        isLight ? "bg-purple-100" : "bg-slate-800"
+                        isLight ? "bg-white" : "bg-slate-800"
                       }`}
                     >
                       <SafeImage
@@ -684,9 +684,9 @@ export default function BusinessListingsPage() {
                     </div>
                   ) : (
                     <div className={`h-56 w-full flex items-center justify-center ${
-                      isLight ? "bg-purple-100" : "bg-slate-800"
+                      isLight ? "bg-white" : "bg-slate-800"
                     }`}>
-                      <span className={isLight ? "text-purple-400" : "text-slate-500"}>No image</span>
+                      <span className={isLight ? "text-slate-400" : "text-slate-500"}>No image</span>
                     </div>
                   )}
 
