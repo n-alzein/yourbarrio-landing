@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import useTapGuard from "@/components/nav/useTapGuard";
 
 export default function GuaranteedNavCapture() {
   const pathname = usePathname();
@@ -11,6 +12,13 @@ export default function GuaranteedNavCapture() {
   const didNavigateRef = useRef(false);
   const pendingTimerRef = useRef(null);
   const prevPathRef = useRef(pathname);
+
+  useTapGuard({
+    enabled: pathname?.startsWith("/customer/home"),
+    movePx: 10,
+    scrollWindowMs: 320,
+    navSelector: 'a[href], [data-safe-nav]',
+  });
 
   useEffect(() => {
     if (pathname !== prevPathRef.current) {

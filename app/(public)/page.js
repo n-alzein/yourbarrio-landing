@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import GoogleMapClient from "@/components/GoogleMapClient";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
@@ -66,8 +65,8 @@ export default function HomePage() {
                 </h1>
 
                 <p className="mt-4 text-base md:text-lg text-white/80 leading-relaxed">
-                  Find nearby restaurants, stores, services, and hidden gems.
-                  Connect with local business owners instantly and explore what’s around you.
+                  Shop and order from neighborhood favorites with delivery or pickup.
+                  Support local businesses without losing the convenience you expect.
                 </p>
 
                 <div className="mt-7 flex flex-col sm:flex-row gap-3">
@@ -76,7 +75,7 @@ export default function HomePage() {
                     onClick={() => openModal("customer-signup")}
                     className="inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 shadow-lg shadow-purple-500/30 hover:brightness-110 active:scale-[0.98] transition"
                   >
-                    Get Started
+                    Start Shopping Local
                   </button>
                 </div>
 
@@ -106,17 +105,33 @@ export default function HomePage() {
                   }`}
                 />
                 <div className="relative rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-2xl">
-                  <GoogleMapClient
-                    radiusKm={25}
-                    preferUserCenter
-                    containerClassName="w-full"
-                    cardClassName="p-0 bg-transparent border-0 text-white"
-                    mapClassName="h-80 rounded-2xl overflow-hidden border border-white/10"
-                    title="Explore nearby businesses"
-                    showBusinessErrors={false}
-                    placesMode="manual"
-                    disableGooglePlaces
-                  />
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <div className="text-xs uppercase tracking-[0.22em] text-white/60">
+                      Buy local, anytime
+                    </div>
+                    <div className="mt-3 text-2xl md:text-3xl font-bold">
+                      Delivery or pickup from the spots you love.
+                    </div>
+                    <p className="mt-3 text-sm md:text-base text-white/75 leading-relaxed">
+                      From coffee runs to home services, YourBarrio keeps your
+                      dollars in the neighborhood while saving you time.
+                    </p>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                        <div className="font-semibold">Fast delivery</div>
+                        <div className="text-xs text-white/65 mt-1">
+                          Order from nearby favorites.
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                        <div className="font-semibold">Easy pickup</div>
+                        <div className="text-xs text-white/65 mt-1">
+                          Skip the wait, grab and go.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div
                     className={`mt-6 rounded-2xl bg-gradient-to-r p-4 border border-white/10 ${
@@ -149,22 +164,22 @@ export default function HomePage() {
               How it works
             </h2>
             <p className="text-center text-white/70 mt-2">
-              Three simple steps to explore your city like a local.
+              Three simple steps to shop local on your schedule.
             </p>
 
             <div className="mt-8 grid md:grid-cols-3 gap-5">
               {[
                 {
-                  title: "Discover",
-                  desc: "Search for restaurants, stores, services, and hidden gems around you.",
+                  title: "Browse",
+                  desc: "Shop neighborhood restaurants, stores, and services in one place.",
                 },
                 {
-                  title: "Connect",
-                  desc: "Contact business owners and get the info you need instantly.",
+                  title: "Order",
+                  desc: "Choose delivery or pickup with transparent timing.",
                 },
                 {
-                  title: "Explore",
-                  desc: "Navigate your neighborhood with curated recommendations.",
+                  title: "Support",
+                  desc: "Keep your spend in the community and build local relationships.",
                 },
               ].map((c) => (
                 <div
@@ -192,10 +207,10 @@ export default function HomePage() {
               }`}
             >
               <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight">
-                Ready to find what’s nearby?
+                Ready to buy local tonight?
               </h3>
               <p className="mt-3 text-white/80">
-                Create your account and start exploring your neighborhood today.
+                Create your account and order from nearby businesses with delivery or pickup.
               </p>
               <div className="mt-6 flex justify-center">
                 <button
@@ -203,7 +218,7 @@ export default function HomePage() {
                   onClick={() => openModal("customer-signup")}
                   className="inline-flex items-center justify-center rounded-xl px-7 py-3 font-semibold bg-white text-black hover:bg-white/90 transition"
                 >
-                  Sign Up Free
+                  Start Ordering
                 </button>
               </div>
             </div>

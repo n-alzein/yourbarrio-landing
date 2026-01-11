@@ -10,7 +10,6 @@
 */
 
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import { useSearchParams } from "next/navigation";
@@ -169,9 +168,6 @@ function CustomerHomePageInner() {
   const [hybridItems, setHybridItems] = useState([]);
   const [hybridItemsLoading, setHybridItemsLoading] = useState(false);
   const [hybridItemsError, setHybridItemsError] = useState(null);
-  const [businessListings, setBusinessListings] = useState([]);
-  const [listingsLoading, setListingsLoading] = useState(false);
-  const [listingsError, setListingsError] = useState(null);
   const [allListings, setAllListings] = useState(initialListings);
   const [allListingsLoading, setAllListingsLoading] = useState(
     initialListings.length === 0
@@ -388,6 +384,15 @@ function CustomerHomePageInner() {
         });
       };
   const coverFor = (value) => primaryPhotoUrl(value) || null;
+  const businessPhotoFor = (biz) =>
+    primaryPhotoUrl(
+      biz?.imageUrl ||
+        biz?.profile_photo_url ||
+        biz?.photo_url ||
+        biz?.image_url ||
+        biz?.avatar_url ||
+        biz?.logo_url
+    ) || null;
   const filteredBusinesses = useMemo(() => {
     const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
     const q = search.trim().toLowerCase();
@@ -421,8 +426,11 @@ function CustomerHomePageInner() {
   }, [mapBusinesses, search, ybBusinesses, categoryFilter]);
 
   const handleSelectBusiness = (biz) => {
-    setSelectedBusiness(biz);
-    mapControls?.focusBusiness?.(biz);
+    setSelectedBusiness((prev) => {
+      const next = prev?.id === biz?.id ? null : biz;
+      if (next) mapControls?.focusBusiness?.(biz);
+      return next;
+    });
   };
 
   const scrollGallery = (dir) => {
@@ -758,23 +766,24 @@ function CustomerHomePageInner() {
 
   const filteredListings = useMemo(() => {
     const categoryFilterNormalized = categoryFilter.trim().toLowerCase();
-    const baseListings =
+    let baseListings =
       !categoryFilterNormalized || categoryFilterNormalized === "all"
         ? allListings || []
         : (allListings || []).filter(
             (item) =>
               (item.category || "").trim().toLowerCase() === categoryFilterNormalized
           );
+    if (selectedBusiness?.source === "supabase_users" && selectedBusiness?.id) {
+      baseListings = baseListings.filter(
+        (item) => item.business_id === selectedBusiness.id
+      );
+    }
     return sortListingsByAvailability(baseListings);
-  }, [allListings, categoryFilter]);
+  }, [allListings, categoryFilter, selectedBusiness]);
 
   const sortedHybridItems = useMemo(
     () => sortListingsByAvailability(hybridItems),
     [hybridItems]
-  );
-  const sortedBusinessListings = useMemo(
-    () => sortListingsByAvailability(businessListings),
-    [businessListings]
   );
 
   useEffect(() => {
@@ -865,77 +874,6 @@ function CustomerHomePageInner() {
     };
   }, [search, supabase, logCrashEvent, categoryFilter]);
 
-  useEffect(() => {
-    let isActive = true;
-
-    const client = supabase ?? getBrowserSupabaseClient();
-    if (!selectedBusiness || selectedBusiness.source !== "supabase_users" || !client) {
-      setBusinessListings([]);
-      setListingsLoading(false);
-      setListingsError(null);
-      return () => {
-        isActive = false;
-      };
-    }
-
-    const loadListings = async () => {
-      setListingsLoading(true);
-      setListingsError(null);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(new DOMException("Timeout", "AbortError")),
-        12000
-      );
-
-      try {
-        let query = client
-          .from("listings")
-          .select("*")
-          .eq("business_id", selectedBusiness.id)
-          .order("created_at", { ascending: false });
-        if (typeof query.abortSignal === "function") {
-          query = query.abortSignal(controller.signal);
-        }
-
-        const { data, error } = await query;
-
-        if (!isActive) return;
-
-        if (error) {
-          console.error("Failed to load business listings", error);
-          setListingsError("Could not load listings for this business.");
-          setBusinessListings([]);
-        } else {
-          setBusinessListings(data || []);
-        }
-      } catch (err) {
-        if (!isActive) return;
-        if (err?.name === "AbortError") {
-          logCrashEvent({
-            context: "business-listings",
-            kind: "timeout",
-            message: "Listings for business timed out after 12s",
-          });
-          setListingsError("Loading listings timed out. Please retry.");
-        } else {
-          console.error("Failed to load business listings", err);
-          setListingsError("Could not load listings for this business.");
-        }
-        setBusinessListings([]);
-      } finally {
-        clearTimeout(timeoutId);
-        if (isActive) setListingsLoading(false);
-      }
-    };
-
-    loadListings();
-
-    return () => {
-      isActive = false;
-    };
-  }, [selectedBusiness, supabase, logCrashEvent]);
-
   if (loadingUser && !authUser && !user) {
     return (
       <div className="min-h-screen text-white relative px-6 pt-3">
@@ -957,7 +895,7 @@ function CustomerHomePageInner() {
 
   return (
     <section
-      className="relative w-full min-h-screen text-white pb-4 pt-2 md:pt-3 -mt-4 md:-mt-12"
+      className="relative w-full min-h-screen text-white pb-4 pt-0 md:pt-0 -mt-4 md:-mt-12"
       data-clickdiag={clickDiagEnabled ? "home" : undefined}
     >
 
@@ -974,34 +912,6 @@ function CustomerHomePageInner() {
         <div style={{ minHeight: "320px" }}>
           {authReady ? (
             <>
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55 }}
-                className="flex flex-col gap-2"
-              >
-                <p className="text-xs uppercase tracking-[0.22em] text-white/60">YourBarrio</p>
-                <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
-                  <h1 className="text-3xl font-semibold leading-tight">
-                    {search ? `Results for “${search}”` : "Discover what’s open near you"}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-2 relative z-10">
-                    <div className="inline-flex items-center gap-2 text-xs text-white/70 bg-white/5 border border-white/10 rounded-full px-3 py-1 backdrop-blur">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {filteredBusinesses.length} matches live
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setMapOpen(true)}
-                      disabled={!mapAvailable}
-                      className="px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold text-white hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto"
-                    >
-                      Map
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-
               {search ? (
                 <div className="rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl shadow-xl px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1112,14 +1022,28 @@ function CustomerHomePageInner() {
 
               {/* Header with gallery + map (compact) */}
               <div
-                className="grid grid-cols-1 gap-4 mt-4"
+                className="grid grid-cols-1 gap-4 mt-0"
                 onClickCapture={handleHomeCapture}
                 data-clickdiag={clickDiagEnabled ? "home-grid" : undefined}
               >
-                <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl p-3">
-                  <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
-                    <div className="text-sm uppercase tracking-[0.18em] text-white/60">Browse spots</div>
-                    <div className="flex items-center gap-2">
+                <div className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl">
+                  <div className="flex flex-wrap items-center justify-between mb-3 gap-2 px-3 pt-3">
+                    <div className="text-sm uppercase tracking-[0.18em] text-white/60">
+                      Nearby businesses
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-2 text-xs text-white/70 bg-white/5 border border-white/10 px-3 py-1 backdrop-blur">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        {filteredBusinesses.length} matches live
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMapOpen(true)}
+                        disabled={!mapAvailable}
+                        className="px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold text-white hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto"
+                      >
+                        Map
+                      </button>
                       <button
                         type="button"
                         onClick={() => scrollGallery(-1)}
@@ -1140,7 +1064,7 @@ function CustomerHomePageInner() {
                   </div>
                   <div
                     ref={galleryRef}
-                    className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory"
+                    className="flex flex-nowrap overflow-x-auto snap-x snap-mandatory border-t border-white/10"
                     onPointerDown={handleTilePointerDown}
                     onPointerMove={handleTilePointerMove}
                     onPointerUp={handleTilePointerUp}
@@ -1151,9 +1075,10 @@ function CustomerHomePageInner() {
                       <button
                         type="button"
                         key={biz.id || biz.name}
-                        className={`min-w-[220px] max-w-[240px] snap-start text-left rounded-2xl border border-white/10 bg-white/5 p-3 hover:border-white/30 hover:bg-white/10 transition shadow-sm ${
-                          selectedBusiness?.id === biz.id ? "border-white/40 bg-white/10" : ""
+                        className={`h-[260px] snap-start text-left border-r border-white/10 bg-white/5 hover:bg-white/10 transition shadow-sm rounded-none last:border-r-0 flex flex-col overflow-hidden ${
+                          selectedBusiness?.id === biz.id ? "bg-white/10" : ""
                         }`}
+                        style={{ width: "260px", minWidth: "260px", maxWidth: "260px", flex: "0 0 260px" }}
                         onClick={(event) => {
                           diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
                           if (event.defaultPrevented) return;
@@ -1164,29 +1089,49 @@ function CustomerHomePageInner() {
                         data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
                         onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-base font-semibold">{biz.name}</span>
+                        <div className="h-28 w-full border-b border-white/10 bg-white/5 flex items-center justify-center p-3 flex-shrink-0">
+                          {businessPhotoFor(biz) ? (
+                            <div className="h-20 w-20">
+                              <SafeImage
+                                src={businessPhotoFor(biz)}
+                                alt={biz.name || "Business"}
+                                className="block h-full w-full object-contain"
+                                fallbackSrc="/business-placeholder.png"
+                              />
                             </div>
-                            <div className="text-xs text-white/70">
-                              {biz.categoryLabel || biz.category || "Local spot"}
+                          ) : (
+                            <div className="text-[11px] text-white/60">No photo</div>
+                          )}
+                        </div>
+                        <div className="p-3 space-y-2 flex-1 flex flex-col">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="text-base font-semibold line-clamp-1">
+                                {biz.name}
+                              </div>
+                              <div className="text-xs text-white/70">
+                                {biz.categoryLabel || biz.category || "Local spot"}
+                              </div>
                             </div>
-                            {biz.address ? (
-                              <div className="text-xs text-white/60 line-clamp-2">{biz.address}</div>
+                            {biz.distance_km ? (
+                              <div className="text-[11px] text-white/70 bg-white/10 border border-white/10 px-2 py-1">
+                                {biz.distance_km.toFixed(1)} km
+                              </div>
                             ) : null}
                           </div>
-                          {biz.distance_km ? (
-                            <div className="text-xs text-white/70 bg-white/10 border border-white/10 rounded-full px-2 py-1">
-                              {biz.distance_km.toFixed(1)} km
+                          {biz.address ? (
+                            <div className="text-xs text-white/60 line-clamp-1">{biz.address}</div>
+                          ) : (
+                            <div className="text-xs text-white/60">&nbsp;</div>
+                          )}
+                          {biz.description ? (
+                            <div className="text-sm text-white/75 leading-snug line-clamp-2">
+                              {biz.description}
                             </div>
-                          ) : null}
+                          ) : (
+                            <div className="text-sm text-white/75 leading-snug">&nbsp;</div>
+                          )}
                         </div>
-                        {biz.description ? (
-                          <div className="text-sm text-white/75 leading-snug line-clamp-2 mt-1">
-                            {biz.description}
-                          </div>
-                        ) : null}
                       </button>
                     ))}
                     {!filteredBusinesses.length ? (
@@ -1199,86 +1144,6 @@ function CustomerHomePageInner() {
 
               </div>
 
-              {selectedBusiness?.source === "supabase_users" ? (
-                <div className="rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl overflow-hidden flex flex-col shadow-xl">
-                  <div className="px-4 py-3 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-semibold">{selectedBusiness.name}</div>
-                      <div className="text-xs text-white/60">Listings from this business</div>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-auto p-4 space-y-3">
-                    {listingsLoading ? (
-                      <div className="text-sm text-white/70">Loading listings...</div>
-                    ) : listingsError ? (
-                      <div className="text-sm text-red-200">{listingsError}</div>
-                    ) : sortedBusinessListings.length ? (
-                      sortedBusinessListings.map((item) => {
-                        const inventory = normalizeInventory(item);
-                        const badgeStyle = getAvailabilityBadgeStyle(
-                          inventory.availability,
-                          isLight
-                        );
-                        return (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border border-white/10 bg-white/5 p-4 flex gap-3"
-                        >
-                          {coverFor(item.photo_url) ? (
-                            <SafeImage
-                              src={coverFor(item.photo_url)}
-                              alt={item.title}
-                              className="h-20 w-20 rounded-lg object-cover border border-white/10"
-                              fallbackSrc="/business-placeholder.png"
-                            />
-                          ) : (
-                            <div className="h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] text-white/60">
-                              No image
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold">{item.title}</div>
-                                {item.category ? (
-                                  <div className="text-[11px] uppercase tracking-wide text-white/50 mt-1">
-                                    {item.category}
-                                  </div>
-                                ) : null}
-                                <span
-                                  className="mt-2 inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"
-                                  style={
-                                    badgeStyle
-                                      ? { color: badgeStyle.color, borderColor: badgeStyle.border }
-                                      : undefined
-                                  }
-                                >
-                                  {inventory.label}
-                                </span>
-                              </div>
-                              {item.price ? (
-                                <div className="text-sm font-semibold text-white/90">
-                                  ${item.price}
-                                </div>
-                              ) : null}
-                            </div>
-                            {item.description ? (
-                              <p className="text-sm text-white/75 mt-2 leading-snug">
-                                {item.description}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                      })
-                    ) : (
-                      <div className="text-sm text-white/70">
-                        This business hasn’t shared any listings yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
             </>
           ) : (
             <div className="space-y-4">
@@ -1300,7 +1165,6 @@ function CustomerHomePageInner() {
           <div className="space-y-3 mt-4 sm:mt-0 relative z-10" data-home-tiles="1">
                   <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
                 <p className="text-lg font-semibold">Browse listings</p>
               </div>
               {allListingsLoading ? (

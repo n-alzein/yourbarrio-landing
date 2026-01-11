@@ -995,12 +995,6 @@ export default function CustomerNavbar() {
       {/* MOBILE MENU */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
-          <ThemeToggle
-            showLabel
-            align="left"
-            className="self-start"
-            buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-          />
           {!hasAuth && (
             <>
               <button
@@ -1028,16 +1022,36 @@ export default function CustomerNavbar() {
 
           {hasAuth && (
             <>
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <SafeImage
+                  src={avatar}
+                  alt="Profile avatar"
+                  className="h-11 w-11 rounded-2xl object-cover border border-white/20"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                  {email ? (
+                    <p className="text-xs text-white/60 truncate">{email}</p>
+                  ) : null}
+                </div>
+              </div>
               <NavItem href="/customer/home">Discover</NavItem>
               <NavItem href="/customer/messages" badgeCount={unreadCount}>
                 Messages
               </NavItem>
               <NavItem href="/customer/saved">Saved items</NavItem>
               <NavItem href="/customer/settings">Account settings</NavItem>
-
-              <LogoutButton mobile />
             </>
           )}
+
+          <ThemeToggle
+            showLabel
+            align="left"
+            className="self-start"
+            buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+          />
+
+          {hasAuth ? <LogoutButton mobile /> : null}
         </div>
       )}
     </nav>

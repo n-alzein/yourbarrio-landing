@@ -430,7 +430,7 @@ export default function ListingDetails({ params }) {
                       rel="noreferrer"
                       className="underline underline-offset-4 hover:opacity-100"
                     >
-                      Visit website
+                      {business.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                     </Link>
                   ) : null}
                   {business?.phone ? (
@@ -439,7 +439,7 @@ export default function ListingDetails({ params }) {
                       className="inline-flex items-center gap-2 rounded-full px-3 py-2"
                       style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                     >
-                      <PhoneIcon /> Call
+                      <PhoneIcon /> {business.phone}
                     </Link>
                   ) : null}
                 </div>
