@@ -660,7 +660,8 @@ export default function BusinessListingsPage() {
                       <SafeImage
                         src={primaryPhotoUrl(listing.photo_url)}
                         alt={listing.title}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+                        style={{ objectFit: "contain", objectPosition: "center" }}
                         fallbackSrc="/business-placeholder.png"
                       />
                       {/* Inventory Badge Overlay */}

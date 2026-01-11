@@ -148,6 +148,19 @@ button {
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
+/* Business dashboard keeps dark styling even when theme is light */
+.theme-light .business-theme .text-white {
+  color: #ffffff !important;
+}
+
+.theme-light .business-theme [class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.theme-light .business-theme [class*="border-white"] {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
 /* Light theme — soften business placeholder contrast */
 .theme-light img[data-placeholder="true"],
 .theme-light img[src="/business-placeholder.png"],

@@ -107,7 +107,7 @@ export default function BusinessDashboard() {
   // 2. Either auth is still loading OR we haven't attempted to load business yet
   if (!business) {
     return (
-      <div className="min-h-screen px-6 md:px-10 pt-10 text-white">
+      <div className="min-h-screen px-6 md:px-10 pt-10 text-white business-theme">
         <div className="max-w-6xl mx-auto">
           <div className="bg-white/5 border border-white/10 rounded-3xl p-10 animate-pulse">
             <div className="h-6 w-40 bg-white/20 rounded mb-4" />
@@ -123,7 +123,7 @@ export default function BusinessDashboard() {
   /* 6️⃣ UI with shared background */
   /* ------------------------------------------- */
   return (
-    <div className="min-h-screen px-6 md:px-10 pt-0 pb-20 relative text-white">
+    <div className="min-h-screen px-6 md:px-10 pt-0 pb-20 relative text-white business-theme">
 
       {/* 🔥 SAME BACKGROUND AS BUSINESSES & ABOUT */}
       <div className="absolute inset-0 -z-10 overflow-hidden">

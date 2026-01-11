@@ -200,7 +200,6 @@ function CustomerHomePageInner() {
     dragging: false,
     lastDragAt: 0,
   });
-  const [photoValidity, setPhotoValidity] = useState({});
   const logCrashEvent = useCallback(
     (payload) =>
       appendCrashLog({
@@ -389,13 +388,6 @@ function CustomerHomePageInner() {
         });
       };
   const coverFor = (value) => primaryPhotoUrl(value) || null;
-  const recordPhotoStatus = (url, status) => {
-    if (!url) return;
-    setPhotoValidity((prev) => {
-      if (prev[url] === status) return prev;
-      return { ...prev, [url]: status };
-    });
-  };
   const filteredBusinesses = useMemo(() => {
     const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
     const q = search.trim().toLowerCase();
@@ -764,8 +756,7 @@ function CustomerHomePageInner() {
     };
   }, [supabase, hasLoadedListings, logCrashEvent, isVisible]);
 
-  const groupedListings = useMemo(() => {
-    const groups = {};
+  const filteredListings = useMemo(() => {
     const categoryFilterNormalized = categoryFilter.trim().toLowerCase();
     const baseListings =
       !categoryFilterNormalized || categoryFilterNormalized === "all"
@@ -774,16 +765,7 @@ function CustomerHomePageInner() {
             (item) =>
               (item.category || "").trim().toLowerCase() === categoryFilterNormalized
           );
-    const sortedListings = sortListingsByAvailability(baseListings);
-    sortedListings.forEach((item) => {
-      const key = item.category?.trim() || "Other";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
-    });
-    return Object.entries(groups).map(([category, items]) => ({
-      category,
-      items: sortListingsByAvailability(items),
-    }));
+    return sortListingsByAvailability(baseListings);
   }, [allListings, categoryFilter]);
 
   const sortedHybridItems = useMemo(
@@ -1319,7 +1301,7 @@ function CustomerHomePageInner() {
                   <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-white/60">All listings</p>
-                <p className="text-lg font-semibold">Browse by category</p>
+                <p className="text-lg font-semibold">Browse listings</p>
               </div>
               {allListingsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-white/70">
@@ -1328,95 +1310,69 @@ function CustomerHomePageInner() {
                 </div>
               ) : null}
             </div>
-
-            <div
-              className="flex overflow-x-auto gap-4 pb-3 snap-x snap-mandatory mt-3"
-              onPointerDown={handleTilePointerDown}
-              onPointerMove={handleTilePointerMove}
-              onPointerUp={handleTilePointerUp}
-              onPointerCancel={handleTilePointerCancel}
-              onClickCapture={handleTileClickCapture}
-            >
-              {groupedListings.map(({ category, items }) => {
-                const withPhotos = items
-                  .map((item) => ({ ...item, cover: coverFor(item.photo_url) }))
-                  .filter((item) => item.cover);
-                const validCandidates = withPhotos.filter(
-                  (item) => photoValidity[item.cover] !== "invalid"
-                );
-                if (!validCandidates.length) return null;
-                const showSingle = validCandidates.length < 4;
-                const visibleItems = showSingle
-                  ? validCandidates.slice(0, 1)
-                  : validCandidates.slice(0, 4);
-                const firstItem = visibleItems[0];
-                const viewHref =
-                  validCandidates.length > 1
-                    ? `/listings?category=${encodeURIComponent(category)}`
-                    : `/listings/${firstItem.id}`;
-
-                return (
-                  <div
-                    key={category}
-                    className="snap-start min-w-[340px] max-w-[360px] bg-white/5 border border-white/12 backdrop-blur-xl shadow-lg rounded-xl p-3 flex flex-col gap-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <p className="text-base font-semibold text-white">{category}</p>
-                        <p className="text-xs text-white/60">
-                          {validCandidates.length} items
-                        </p>
+            {filteredListings.length ? (
+              <div
+                className="grid gap-3 mt-3 grid-cols-2 md:grid-cols-4"
+                onClickCapture={handleTileClickCapture}
+              >
+                {filteredListings.map((item, idx) => {
+                  const inventory = normalizeInventory(item);
+                  const badgeStyle = getAvailabilityBadgeStyle(
+                    inventory.availability,
+                    isLight
+                  );
+                  const cover = coverFor(item.photo_url);
+                  return (
+                    <Link
+                      key={item.id || idx}
+                      href={`/customer/listings/${item.id}`}
+                      prefetch={false}
+                      data-safe-nav="1"
+                      className="group relative flex flex-col overflow-hidden rounded-lg border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition shadow-sm pointer-events-auto touch-manipulation"
+                      data-clickdiag={clickDiagEnabled ? "tile" : undefined}
+                      data-clickdiag-tile-id={clickDiagEnabled ? item.id || idx : undefined}
+                      data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                      onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id || idx)}
+                      onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || idx)}
+                    >
+                      <div className="relative h-56 w-full overflow-hidden bg-white/5 border-b border-white/10 flex items-center justify-center">
+                        {cover ? (
+                          <SafeImage
+                            src={cover}
+                            alt={item.title}
+                            className="h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.02]"
+                            style={{ objectFit: "contain", objectPosition: "center" }}
+                            fallbackSrc="/business-placeholder.png"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-[11px] text-white/60">
+                            No image
+                          </div>
+                        )}
                       </div>
-                      <Link
-                        href={viewHref}
-                        prefetch={false}
-                        data-safe-nav="1"
-                        className="inline-flex items-center justify-center text-[11px] px-3 py-[6px] rounded border border-white/20 bg-white/10 hover:border-white/40 pointer-events-auto touch-manipulation"
-                        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
-                        data-clickdiag-tile-id={clickDiagEnabled ? firstItem.id : undefined}
-                        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
-                        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", firstItem.id)}
-                        onClick={diagTileClick("REACT_TILE_BUBBLE", firstItem.id)}
-                      >
-                        View
-                      </Link>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 auto-rows-[160px]">
-                      {visibleItems.map((item, index) => {
-                        const isHero = showSingle && index === 0;
-                        return (
-                          <Link
-                            key={item.id}
-                            href={`/listings/${item.id}`}
-                            prefetch={false}
-                            data-safe-nav="1"
-                            className={`relative group bg-white/8 border border-white/10 overflow-hidden hover:border-white/30 pointer-events-auto touch-manipulation ${
-                              isHero ? "col-span-2 row-span-2 min-h-[320px]" : "min-h-[160px]"
-                            }`}
-                            data-clickdiag={clickDiagEnabled ? "tile" : undefined}
-                            data-clickdiag-tile-id={clickDiagEnabled ? item.id : undefined}
-                            data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
-                            onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id)}
-                            onClick={diagTileClick("REACT_TILE_BUBBLE", item.id)}
-                          >
-                            <SafeImage
-                              src={item.cover}
-                              alt={item.title}
-                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                              onLoad={() => recordPhotoStatus(item.cover, "valid")}
-                              onError={() => recordPhotoStatus(item.cover, "invalid")}
-                              fallbackSrc="/business-placeholder.png"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="flex flex-col flex-1 p-4 gap-2">
+                        <p className="text-xs font-medium text-white/60 uppercase tracking-wide">
+                          {item.category || "Listing"}
+                          {item.city ? ` · ${item.city}` : ""}
+                        </p>
+                        <h3 className="text-base font-semibold text-white line-clamp-2 min-h-[3rem]">
+                          {item.title}
+                        </h3>
+                        <div className="mt-auto text-lg font-semibold text-white/90">
+                          {item.price ? `$${item.price}` : "Price TBD"}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-sm text-white/70 mt-3">
+                {allListingsLoading
+                  ? "Loading listings..."
+                  : "No listings available yet."}
+              </div>
+            )}
           </div>
         )}
         </div>

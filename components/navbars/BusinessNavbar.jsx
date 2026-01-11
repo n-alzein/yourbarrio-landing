@@ -387,27 +387,46 @@ export default function BusinessNavbar() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* MOBILE MENU BUTTON */}
-      <button
-        onClick={() => setMobileMenuOpen((open) => !open)}
-        className="md:hidden text-white"
-      >
-        {mobileMenuOpen ? (
-          <svg className="h-7 w-7" fill="none" stroke="currentColor">
-            <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="h-7 w-7" fill="none" stroke="currentColor">
-            <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        )}
-      </button>
+        {/* MOBILE MENU BUTTON */}
+        <button
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          className="md:hidden text-white"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileMenuOpen ? (
+            <svg className="h-7 w-7" fill="none" stroke="currentColor">
+              <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="h-7 w-7" fill="none" stroke="currentColor">
+              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
+        </button>
+      </div>
 
     {/* MOBILE MENU */}
     {mobileMenuOpen && (
       <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-6 text-white">
+        {user && role === "business" && (
+          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+            <img
+              src={avatar}
+              className="h-12 w-12 rounded-2xl object-cover border border-white/20"
+              alt="Avatar"
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white truncate">
+                {displayName}
+              </p>
+              {email && (
+                <p className="text-xs text-white/60 truncate">{email}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         <ThemeToggle
           showLabel
           align="left"
@@ -438,6 +457,20 @@ export default function BusinessNavbar() {
         {/* Logged-in business menu */}
         {user && role === "business" && (
           <>
+            <NavItem
+              href="/business/dashboard"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              Open dashboard
+            </NavItem>
+            <NavItem
+              href="/business/listings"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              Manage listings
+            </NavItem>
             <NavItem
               href="/business/messages"
               isActive={isActive}

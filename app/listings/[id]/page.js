@@ -328,7 +328,7 @@ export default function ListingDetails({ params }) {
                         key={`${photo}-${idx}`}
                         type="button"
                         onClick={() => setHeroSrc(photo)}
-                        className={`h-16 w-16 rounded-xl overflow-hidden border bg-white/5 transition shadow-sm ${
+                        className={`h-16 w-16 rounded-xl overflow-hidden border bg-white/5 transition shadow-sm flex items-center justify-center p-1 ${
                           active
                             ? "border-white/80 ring-2 ring-white/70"
                             : "border-white/20 hover:border-white/50"
@@ -338,7 +338,8 @@ export default function ListingDetails({ params }) {
                         <SafeImage
                           src={photo}
                           alt={`Listing photo ${idx + 1}`}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full"
+                          style={{ objectFit: "contain", objectPosition: "center" }}
                           fallbackSrc="/business-placeholder.png"
                         />
                       </button>
@@ -347,11 +348,12 @@ export default function ListingDetails({ params }) {
                 </div>
               ) : null}
 
-              <div className="relative">
+              <div className="relative h-[420px] w-full overflow-hidden flex items-center justify-center bg-transparent p-3">
                 <SafeImage
                   src={heroSrc || "/business-placeholder.png"}
                   alt={listing.title}
-                  className="w-full h-[420px] object-cover"
+                  className="h-full w-full"
+                  style={{ objectFit: "contain", objectPosition: "center" }}
                   loading="lazy"
                   onError={() => {
                     if (heroSrc !== "/business-placeholder.png") {
