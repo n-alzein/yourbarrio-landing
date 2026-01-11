@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function POST(request) {
-  const response = new NextResponse(null, { status: 204 });
+  const response = NextResponse.json({ ok: true }, { status: 200 });
   const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   let body = {};
@@ -64,9 +64,13 @@ export async function POST(request) {
     }
 
     response.headers.set("x-auth-refresh-user", user ? "1" : "0");
+    response.headers.set("Cache-Control", "no-store");
   } catch (err) {
     console.error("Supabase auth refresh failed", err);
-    return new NextResponse(null, { status: 200 });
+    const fallback = NextResponse.json({ ok: false }, { status: 200 });
+    fallback.headers.set("x-auth-refresh-user", "0");
+    fallback.headers.set("Cache-Control", "no-store");
+    return fallback;
   }
 
   return response;
