@@ -154,9 +154,42 @@ function BusinessLoginInner() {
 
     // 5) Verify session is accessible
     const { data: sessionCheck } = await supabase.auth.getSession();
-    console.log("Login: Session check before redirect:", sessionCheck?.session ? "Session exists" : "No session");
+    const session = sessionCheck?.session;
+    console.log(
+      "Login: Session check before redirect:",
+      session ? "Session exists" : "No session"
+    );
 
-    // 6) Ensure the auth cookie is present before navigating (prevents blank dashboard)
+    // 6) Sync auth cookies for SSR before navigating
+    try {
+      const res = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: session?.access_token,
+          refresh_token: session?.refresh_token,
+        }),
+      });
+
+      const refreshed = res.headers.get("x-auth-refresh-user") === "1";
+      if (!refreshed) {
+        alert(
+          "Login succeeded but session could not be persisted. Please refresh and try again."
+        );
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Auth refresh call failed", err);
+      alert(
+        "Login succeeded but session could not be persisted. Please refresh and try again."
+      );
+      setLoading(false);
+      return;
+    }
+
+    // 7) Ensure the auth cookie is present before navigating (prevents blank dashboard)
     await redirectToDashboard();
     setLoading(false);
   }
