@@ -61,9 +61,7 @@ function BusinessLoginInner() {
 
         // Some browsers ignore close() if not opened by script
         setTimeout(() => {
-          if (!window.closed) {
-            window.location.href = "/business/dashboard";
-          }
+          window.location.assign("/business/dashboard");
         }, 150);
 
         return;
