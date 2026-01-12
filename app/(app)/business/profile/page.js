@@ -59,7 +59,9 @@ export default async function BusinessProfileRoute() {
 
   const reviewListQuery = supabase
     .from("business_reviews")
-    .select("id, business_id, customer_id, rating, title, body, created_at")
+    .select(
+      "id, business_id, customer_id, rating, title, body, created_at, business_reply, business_reply_at"
+    )
     .eq("business_id", user.id)
     .order("created_at", { ascending: false })
     .range(0, 5);

@@ -446,6 +446,15 @@ export default function ListingDetails({ params }) {
               </div>
               {showMessage ? (
                 <div className="mt-4 space-y-2">
+                  {business?.id ? (
+                    <Link
+                      href={`/b/${business.id}`}
+                      className="w-full inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition border bg-transparent hover:bg-white/10"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      Visit business profile
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleMessageBusiness}

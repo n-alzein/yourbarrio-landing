@@ -17,13 +17,11 @@ export default function NavGate({ children }) {
     pathname.startsWith("/business") ||
     pathname.startsWith("/business-auth") ||
     pathname.startsWith("/listings");
-  const isPublicBusinessProfile = pathname.startsWith("/b");
-
   // Hide public nav:
   // - on any app route
   // - when signed in
   if (isAppRoute) return null;
-  if ((user || role) && !isPublicBusinessProfile) return null;
+  if (user || role) return null;
 
   return children;
 }

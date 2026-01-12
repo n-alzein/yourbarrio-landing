@@ -18,6 +18,10 @@ export default function ReviewsPanel({
   supabase,
 }) {
   const [loadingMore, setLoadingMore] = useState(false);
+  const [replyReviewId, setReplyReviewId] = useState(null);
+  const [replyBody, setReplyBody] = useState("");
+  const [replyError, setReplyError] = useState("");
+  const [replyLoading, setReplyLoading] = useState(false);
   const pageSize = 6;
 
   const averageRating = ratingSummary?.average || 0;
@@ -33,7 +37,9 @@ export default function ReviewsPanel({
     const to = from + pageSize - 1;
     const { data, error } = await supabase
       .from("business_reviews")
-      .select("id,business_id,customer_id,rating,title,body,created_at")
+      .select(
+        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+      )
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -43,6 +49,85 @@ export default function ReviewsPanel({
     }
 
     setLoadingMore(false);
+  };
+
+  const startReply = (review) => {
+    setReplyReviewId(review.id);
+    setReplyBody(review.business_reply || "");
+    setReplyError("");
+  };
+
+  const cancelReply = () => {
+    setReplyReviewId(null);
+    setReplyBody("");
+    setReplyError("");
+  };
+
+  const handleSaveReply = async (reviewId) => {
+    if (!supabase || replyLoading) return;
+    if (!replyBody.trim()) {
+      setReplyError("Reply cannot be empty.");
+      return;
+    }
+
+    setReplyLoading(true);
+    setReplyError("");
+
+    const { data, error } = await supabase
+      .from("business_reviews")
+      .update({
+        business_reply: replyBody.trim(),
+        business_reply_at: new Date().toISOString(),
+      })
+      .eq("id", reviewId)
+      .select(
+        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+      )
+      .maybeSingle();
+
+    if (error) {
+      setReplyError(error.message || "Could not save reply.");
+      setReplyLoading(false);
+      return;
+    }
+
+    if (data) {
+      setReviews((prev) => prev.map((item) => (item.id === reviewId ? data : item)));
+      cancelReply();
+    }
+
+    setReplyLoading(false);
+  };
+
+  const handleDeleteReply = async (reviewId) => {
+    if (!supabase || replyLoading) return;
+    setReplyLoading(true);
+    setReplyError("");
+
+    const { data, error } = await supabase
+      .from("business_reviews")
+      .update({
+        business_reply: null,
+        business_reply_at: null,
+      })
+      .eq("id", reviewId)
+      .select(
+        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+      )
+      .maybeSingle();
+
+    if (error) {
+      setReplyError(error.message || "Could not delete reply.");
+      setReplyLoading(false);
+      return;
+    }
+
+    if (data) {
+      setReviews((prev) => prev.map((item) => (item.id === reviewId ? data : item)));
+      cancelReply();
+    }
+
+    setReplyLoading(false);
   };
 
   const ratingRows = useMemo(() => {
@@ -118,6 +203,65 @@ export default function ReviewsPanel({
                 </div>
               </div>
               <p className={`mt-3 text-sm ${tone.textMuted}`}>{review.body}</p>
+              {review.business_reply ? (
+                <div className={`mt-4 rounded-lg border ${tone.cardBorder} ${tone.cardSoft} p-4`}>
+                  <p className={`text-xs font-semibold uppercase ${tone.textSoft}`}>
+                    Reply from business
+                  </p>
+                  <p className={`mt-2 text-sm ${tone.textMuted}`}>{review.business_reply}</p>
+                </div>
+              ) : null}
+
+              {replyReviewId === review.id ? (
+                <div className="mt-4 space-y-3">
+                  <textarea
+                    value={replyBody}
+                    onChange={(event) => setReplyBody(event.target.value)}
+                    placeholder="Write a reply..."
+                    className={`w-full min-h-[110px] rounded-lg border ${tone.cardBorder} ${tone.cardSoft} px-3 py-2 text-sm ${tone.textStrong} placeholder:text-slate-400 dark:placeholder:text-white/40`}
+                    maxLength={800}
+                  />
+                  {replyError ? (
+                    <p className="text-xs text-rose-400">{replyError}</p>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveReply(review.id)}
+                      disabled={replyLoading}
+                      className={`rounded-lg px-4 py-2 text-xs font-semibold ${tone.buttonPrimary}`}
+                    >
+                      {replyLoading ? "Saving..." : "Save reply"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelReply}
+                      className={`rounded-lg px-4 py-2 text-xs font-semibold ${tone.buttonSecondary}`}
+                    >
+                      Cancel
+                    </button>
+                    {review.business_reply ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteReply(review.id)}
+                        className="rounded-lg px-4 py-2 text-xs font-semibold border border-rose-300/60 text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 transition"
+                      >
+                        Delete reply
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => startReply(review)}
+                    className={`rounded-lg px-4 py-2 text-xs font-semibold ${tone.buttonSecondary}`}
+                  >
+                    {review.business_reply ? "Edit reply" : "Reply"}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

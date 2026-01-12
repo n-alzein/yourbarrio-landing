@@ -153,7 +153,9 @@ export default function PublicBusinessPreviewClient({ businessId }) {
 
       const reviewsQuery = client
         .from("business_reviews")
-        .select("id,business_id,customer_id,rating,title,body,created_at")
+        .select(
+          "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+        )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -178,6 +180,12 @@ export default function PublicBusinessPreviewClient({ businessId }) {
         reviewsQuery,
         ratingsQuery,
       ]);
+
+      console.log("[public business] reviews load", {
+        businessId,
+        reviewsCount: reviewsResult?.data?.length || 0,
+        ratingsCount: ratingsResult?.data?.length || 0,
+      });
 
       if (!active) return;
 
@@ -235,6 +243,7 @@ export default function PublicBusinessPreviewClient({ businessId }) {
               initialReviews={reviews}
               ratingSummary={ratingSummary}
               reviewCount={ratingSummary?.count || reviews?.length || 0}
+              loading={loading}
             />
           </>
         )}

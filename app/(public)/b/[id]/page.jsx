@@ -178,7 +178,9 @@ async function fetchGallery(supabase, businessId) {
 async function fetchReviews(supabase, businessId) {
   const query = supabase
     .from("business_reviews")
-    .select("id,business_id,customer_id,rating,title,body,created_at")
+    .select(
+      "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+    )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })
     .limit(10);
@@ -202,6 +204,25 @@ function descriptionSnippet(value) {
   const trimmed = value.trim();
   if (trimmed.length <= 160) return trimmed;
   return `${trimmed.slice(0, 157)}...`;
+}
+
+async function resolveAuthRole(supabase, user) {
+  const metaRole =
+    user?.app_metadata?.role || user?.user_metadata?.role || null;
+  if (metaRole) return metaRole;
+  if (!user?.id) return null;
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[public business] role lookup failed", error);
+  }
+
+  return data?.role ?? null;
 }
 
 export async function generateMetadata({ params }) {
@@ -293,6 +314,15 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
   }
 
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const role = user ? await resolveAuthRole(supabase, user) : null;
+
+  if (role === "customer") {
+    return <PublicBusinessPreviewClient businessId={businessId} />;
+  }
+
   const profile = await fetchPublicProfile(supabase, businessId);
 
   if (!profile) {
