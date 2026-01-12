@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronDown,
+  Building2,
   LayoutDashboard,
   LogOut,
   MessageSquare,
@@ -136,6 +137,12 @@ export default function BusinessNavbar() {
       title: "Open dashboard",
       description: "Monitor performance & leads",
       icon: LayoutDashboard,
+    },
+    {
+      href: "/business/profile",
+      title: "Business Profile",
+      description: "Edit how customers see you",
+      icon: Building2,
     },
     {
       href: "/business/messages",
@@ -463,6 +470,13 @@ export default function BusinessNavbar() {
               closeMenus={closeMenus}
             >
               Open dashboard
+            </NavItem>
+            <NavItem
+              href="/business/profile"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              Business Profile
             </NavItem>
             <NavItem
               href="/business/listings"

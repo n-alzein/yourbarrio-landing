@@ -1,0 +1,236 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import SafeImage from "@/components/SafeImage";
+import { Globe, MapPin, Phone, Share2, Star } from "lucide-react";
+import BusinessPreviewToolbar from "@/components/publicBusinessProfile/BusinessPreviewToolbar";
+
+const ACTION_ICONS = {
+  website: Globe,
+  phone: Phone,
+  directions: MapPin,
+};
+
+function normalizeUrl(value) {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  return `https://${value}`;
+}
+
+function buildDirectionsUrl(address, city) {
+  const query = [address, city].filter(Boolean).join(", ");
+  if (!query) return "";
+  return `https://maps.google.com/?q=${encodeURIComponent(query)}`;
+}
+
+export default function PublicBusinessHero({
+  profile,
+  ratingSummary,
+  publicPath,
+}) {
+  const [copied, setCopied] = useState(false);
+  const [showSticky, setShowSticky] = useState(false);
+
+  const name =
+    profile?.business_name || profile?.full_name || "Local business";
+  const category = profile?.category || "Neighborhood favorite";
+  const city = profile?.city || "";
+  const average = ratingSummary?.average || 0;
+  const reviewCount = ratingSummary?.count || 0;
+  const ratingLabel = reviewCount
+    ? `${average.toFixed(1)} - ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
+    : "No reviews yet";
+
+  const actions = useMemo(() => {
+    const next = [];
+    if (profile?.website) {
+      next.push({
+        key: "website",
+        label: "Website",
+        href: normalizeUrl(profile.website),
+        type: "website",
+      });
+    }
+    if (profile?.phone) {
+      next.push({
+        key: "phone",
+        label: "Call",
+        href: `tel:${profile.phone}`,
+        type: "phone",
+      });
+    }
+    const directionsUrl = buildDirectionsUrl(profile?.address, profile?.city);
+    if (directionsUrl) {
+      next.push({
+        key: "directions",
+        label: "Directions",
+        href: directionsUrl,
+        type: "directions",
+      });
+    }
+    return next;
+  }, [profile?.address, profile?.city, profile?.phone, profile?.website]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowSticky(window.scrollY > 260);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleShare = async () => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const shareUrl = origin ? new URL(publicPath, origin).toString() : publicPath;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const primaryAction = actions[0];
+
+  return (
+    <section className="relative text-white theme-lock">
+      {showSticky ? (
+        <div className="fixed top-20 inset-x-0 z-40">
+          <div className="mx-auto max-w-6xl px-6 md:px-10">
+            <div className="flex items-center justify-between gap-4 rounded-full border border-white/15 bg-black/60 backdrop-blur px-4 py-2 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full border border-white/20 bg-white/10 overflow-hidden">
+                  <SafeImage
+                    src={profile?.profile_photo_url || "/business-placeholder.png"}
+                    alt={`${name} logo`}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold">{name}</div>
+                  <div className="text-xs text-white/70 flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 text-amber-300" fill="currentColor" />
+                    {ratingLabel}
+                  </div>
+                </div>
+              </div>
+              {primaryAction ? (
+                <a
+                  href={primaryAction.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-white transition"
+                >
+                  {primaryAction.label}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-white transition"
+                >
+                  {copied ? "Copied link" : "Share"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="relative h-[170px] sm:h-[200px] md:h-[230px] overflow-hidden">
+        <div className="absolute left-0 top-24 w-full z-40 pointer-events-none">
+          <BusinessPreviewToolbar className="pointer-events-auto" />
+        </div>
+        {profile?.cover_photo_url ? (
+          <SafeImage
+            src={profile.cover_photo_url}
+            alt={`${name} cover`}
+            className="h-full w-full object-cover relative z-0"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900/70 to-black z-0" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/50 to-black/90 z-0" />
+        <div className="pointer-events-none absolute -top-32 -left-24 h-[320px] w-[320px] rounded-full bg-purple-500/30 blur-[140px] z-0" />
+        <div className="pointer-events-none absolute top-12 -right-24 h-[320px] w-[320px] rounded-full bg-rose-400/30 blur-[160px] z-0" />
+      </div>
+
+      <div className="relative -mt-16 sm:-mt-20">
+        <div className="mx-auto max-w-6xl px-6 md:px-10">
+          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl shadow-[0_30px_80px_-40px_rgba(0,0,0,0.75)] p-6 md:p-10">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl border border-white/20 bg-white/10 p-2 shadow-xl">
+                  <SafeImage
+                    src={profile?.profile_photo_url || "/business-placeholder.png"}
+                    alt={`${name} logo`}
+                    className="h-full w-full rounded-xl object-cover"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                      {name}
+                    </h1>
+                    <p className="text-sm md:text-base text-white/70">
+                    {category}
+                    {city ? ` - ${city}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-white/80">
+                    <Star className="h-4 w-4 text-amber-300" fill="currentColor" />
+                    {ratingLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                {actions.map((action) => {
+                  const Icon = ACTION_ICONS[action.type];
+                  return (
+                    <a
+                      key={action.key}
+                      href={action.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 hover:bg-white/20 transition"
+                    >
+                      <Icon className="h-4 w-4" />
+                      {action.label}
+                    </a>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 hover:bg-white/20 transition"
+                >
+                  <Share2 className="h-4 w-4" />
+                  {copied ? "Copied" : "Share"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-white/65">
+              <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
+                Local business
+              </div>
+              {category ? (
+                <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
+                  {category}
+                </div>
+              ) : null}
+              {city ? (
+                <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
+                  {city}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 
 export default function BusinessPublicPage({ params }) {
   const { supabase } = useAuth();
@@ -16,6 +16,23 @@ export default function BusinessPublicPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
 
+  const normalizeBusiness = (row) => ({
+    id: row.id,
+    name:
+      row.business_name ||
+      row.name ||
+      row.full_name ||
+      "Local Business",
+    category: row.category || "Local Business",
+    description: row.description || "",
+    address: row.address || "",
+    city: row.city || "",
+    phone: row.phone || "",
+    website: row.website || "",
+    banner_url: row.cover_photo_url || row.banner_url || row.banner || null,
+    logo_url: row.profile_photo_url || row.logo_url || row.logo || null,
+  });
+
   useEffect(() => {
     async function loadBusiness() {
       if (!supabase || !id) {
@@ -24,21 +41,40 @@ export default function BusinessPublicPage({ params }) {
       }
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("businesses")
-        .select("*")
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select(
+          "id, business_name, full_name, category, description, address, city, phone, website, profile_photo_url, cover_photo_url"
+        )
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
-      if (!error) {
-        setBusiness(data);
+      let resolvedBusiness = null;
+      if (!userError && userData) {
+        resolvedBusiness = normalizeBusiness(userData);
+      }
+
+      if (!resolvedBusiness) {
+        const { data, error } = await supabase
+          .from("businesses")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (!error && data) {
+          resolvedBusiness = normalizeBusiness(data);
+        } else {
+          console.error("Failed to load business", error);
+        }
+      }
+
+      if (resolvedBusiness) {
+        setBusiness(resolvedBusiness);
 
         // 🔵 Increment view count
         await supabase.from("business_views").insert({
           business_id: id,
         });
-      } else {
-        console.error("Failed to load business", error);
       }
 
       setLoading(false);
@@ -83,12 +119,11 @@ export default function BusinessPublicPage({ params }) {
   return (
     <div className="min-h-screen text-white">
       {/* HEADER IMAGE */}
-      <div className="h-64 relative bg-black/40">
-        <Image
+      <div className="h-64 relative bg-black/40 overflow-hidden">
+        <SafeImage
           src={business.banner_url || "/placeholder-banner.jpg"}
           alt={business.name}
-          fill
-          className="object-cover opacity-80"
+          className="h-full w-full object-cover opacity-80"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
       </div>
@@ -98,12 +133,10 @@ export default function BusinessPublicPage({ params }) {
         {/* BUSINESS CARD */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
-            <Image
+            <SafeImage
               src={business.logo_url || "/placeholder-logo.png"}
               alt={business.name}
-              width={90}
-              height={90}
-              className="rounded-xl border border-white/20"
+              className="h-[90px] w-[90px] rounded-xl border border-white/20 object-cover"
             />
 
             <div className="space-y-1">
@@ -129,7 +162,9 @@ export default function BusinessPublicPage({ params }) {
           {/* CONTACT */}
           <div className="mt-6 space-y-2 text-white/80">
             <p>
-              <strong>Address:</strong> {business.address}
+              <strong>Address:</strong>{" "}
+              {business.address}
+              {business.city ? `, ${business.city}` : ""}
             </p>
             <p>
               <strong>Phone:</strong> {business.phone}
