@@ -108,7 +108,7 @@ export default function BusinessProfilePage({
         ? "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
         : "bg-white/5 text-white/80 border border-white/15 hover:bg-white/10",
       tabActive: isLight
-        ? "bg-slate-600 text-white"
+        ? "bg-slate-200 text-slate-900"
         : "bg-white text-slate-900",
       tabInactive: isLight
         ? "bg-slate-100 text-slate-600 hover:bg-slate-200"

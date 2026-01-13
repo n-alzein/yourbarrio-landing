@@ -22,6 +22,7 @@ const PROFILE_FIELDS = [
   "profile_photo_url",
   "cover_photo_url",
   "hours_json",
+  "social_links_json",
 ].join(",");
 
 const OPTIONAL_PUBLISH_FIELDS = ["is_published", "is_verified", "is_active"];

@@ -7,14 +7,100 @@ import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 const DESCRIPTION_MIN = 30;
 
 const DAYS = [
-  { key: "mon", label: "Mon" },
-  { key: "tue", label: "Tue" },
-  { key: "wed", label: "Wed" },
-  { key: "thu", label: "Thu" },
-  { key: "fri", label: "Fri" },
-  { key: "sat", label: "Sat" },
-  { key: "sun", label: "Sun" },
+  { key: "mon", label: "Monday" },
+  { key: "tue", label: "Tuesday" },
+  { key: "wed", label: "Wednesday" },
+  { key: "thu", label: "Thursday" },
+  { key: "fri", label: "Friday" },
+  { key: "sat", label: "Saturday" },
+  { key: "sun", label: "Sunday" },
 ];
+
+// Generate time options from 12:00 AM to 11:30 PM in 30-min increments
+const TIME_OPTIONS = (() => {
+  const options = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const hour24 = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      const ampm = h < 12 ? "AM" : "PM";
+      const minuteStr = m === 0 ? "" : `:${String(m).padStart(2, "0")}`;
+      const label = `${hour12}${minuteStr} ${ampm}`;
+      options.push({ value: hour24, label });
+    }
+  }
+  return options;
+})();
+
+// Parse legacy string hours like "9am - 5pm" into structured format
+function parseLegacyHours(value) {
+  if (!value || typeof value !== "string") return null;
+  // Match patterns like "9am - 5pm", "9:00 AM - 5:00 PM", "09:00 - 17:00"
+  const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi;
+  const matches = [...value.matchAll(timeRegex)];
+  if (matches.length >= 2) {
+    const parseTime = (match) => {
+      let hour = parseInt(match[1], 10);
+      const minute = match[2] ? parseInt(match[2], 10) : 0;
+      const period = match[3]?.toLowerCase();
+      if (period === "pm" && hour < 12) hour += 12;
+      if (period === "am" && hour === 12) hour = 0;
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    };
+    return { open: parseTime(matches[0]), close: parseTime(matches[1]) };
+  }
+  return null;
+}
+
+// Normalize hours data to new structured format
+function normalizeHours(hoursObj) {
+  if (!hoursObj) return {};
+  const normalized = {};
+  DAYS.forEach(({ key }) => {
+    const val = hoursObj[key];
+    if (!val) {
+      normalized[key] = { open: "", close: "", isClosed: false };
+    } else if (typeof val === "string") {
+      if (val.toLowerCase() === "closed") {
+        normalized[key] = { open: "", close: "", isClosed: true };
+      } else {
+        const parsed = parseLegacyHours(val);
+        normalized[key] = parsed
+          ? { ...parsed, isClosed: false }
+          : { open: "", close: "", isClosed: false };
+      }
+    } else if (typeof val === "object") {
+      normalized[key] = {
+        open: val.open || "",
+        close: val.close || "",
+        isClosed: Boolean(val.isClosed),
+      };
+    } else {
+      normalized[key] = { open: "", close: "", isClosed: false };
+    }
+  });
+  return normalized;
+}
+
+function formatTime24(value) {
+  if (!value) return "";
+  const [hourStr, minuteStr = "00"] = value.split(":");
+  const hourNum = Number(hourStr);
+  if (Number.isNaN(hourNum)) return value;
+  const hour12 = hourNum % 12 || 12;
+  const ampm = hourNum < 12 ? "AM" : "PM";
+  const minute = minuteStr.padStart(2, "0");
+  return `${hour12}:${minute} ${ampm}`;
+}
+
+function formatHoursRange(dayData) {
+  if (!dayData) return "—";
+  if (dayData.isClosed) return "Closed";
+  if (dayData.open && dayData.close) {
+    return `${formatTime24(dayData.open)} - ${formatTime24(dayData.close)}`;
+  }
+  return "—";
+}
 
 const SOCIAL_FIELDS = [
   { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/" },
@@ -79,7 +165,7 @@ export default function OverviewEditor({
 
   useEffect(() => {
     if (!profile) return;
-    const hours = toObject(profile.hours_json);
+    const hours = normalizeHours(toObject(profile.hours_json));
     const socials = toObject(profile.social_links_json);
     setForm({
       business_name: profile.business_name || profile.full_name || "",
@@ -100,7 +186,7 @@ export default function OverviewEditor({
 
   const hasChanges = useMemo(() => {
     if (!profile) return false;
-    const hours = toObject(profile.hours_json);
+    const hours = normalizeHours(toObject(profile.hours_json));
     const socials = toObject(profile.social_links_json);
     const comparison = {
       business_name: profile.business_name || profile.full_name || "",
@@ -124,12 +210,40 @@ export default function OverviewEditor({
     setIsDirty(true);
   };
 
-  const handleHourChange = (dayKey) => (event) => {
-    const value = event.target.value;
+  const handleHourChange = (dayKey, field) => (event) => {
+    const value = field === "isClosed" ? event.target.checked : event.target.value;
     setForm((prev) => ({
       ...prev,
-      hours: { ...prev.hours, [dayKey]: value },
+      hours: {
+        ...prev.hours,
+        [dayKey]: { ...prev.hours[dayKey], [field]: value },
+      },
     }));
+    setIsDirty(true);
+  };
+
+  const copyHoursToWeekdays = (sourceDay) => {
+    const weekdays = ["mon", "tue", "wed", "thu", "fri"];
+    const sourceHours = form.hours[sourceDay];
+    setForm((prev) => {
+      const newHours = { ...prev.hours };
+      weekdays.forEach((day) => {
+        newHours[day] = { ...sourceHours };
+      });
+      return { ...prev, hours: newHours };
+    });
+    setIsDirty(true);
+  };
+
+  const copyHoursToAllDays = (sourceDay) => {
+    const sourceHours = form.hours[sourceDay];
+    setForm((prev) => {
+      const newHours = {};
+      DAYS.forEach(({ key }) => {
+        newHours[key] = { ...sourceHours };
+      });
+      return { ...prev, hours: newHours };
+    });
     setIsDirty(true);
   };
 
@@ -145,9 +259,12 @@ export default function OverviewEditor({
   const buildHoursPayload = () => {
     const entries = {};
     DAYS.forEach(({ key }) => {
-      const value = form.hours?.[key];
-      if (value && value.trim()) {
-        entries[key] = value.trim();
+      const dayData = form.hours?.[key];
+      if (!dayData) return;
+      if (dayData.isClosed) {
+        entries[key] = { open: "", close: "", isClosed: true };
+      } else if (dayData.open && dayData.close) {
+        entries[key] = { open: dayData.open, close: dayData.close, isClosed: false };
       }
     });
     return Object.keys(entries).length ? entries : null;
@@ -381,22 +498,83 @@ export default function OverviewEditor({
             </div>
             <div className="md:col-span-2">
               <label className={labelClass}>Hours</label>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {DAYS.map(({ key, label }) => (
-                  <div key={key} className="space-y-1">
-                    <p className={`text-xs font-semibold ${tone.textMuted}`}>{label}</p>
-                    <input
-                      type="text"
-                      value={form.hours?.[key] || ""}
-                      onChange={handleHourChange(key)}
-                      className={inputClass}
-                      placeholder="9am - 5pm"
-                    />
-                  </div>
-                ))}
+              <div className="mt-3 space-y-2">
+                {DAYS.map(({ key, label }, index) => {
+                  const dayHours = form.hours?.[key] || { open: "", close: "", isClosed: false };
+                  return (
+                    <div
+                      key={key}
+                      className={`flex flex-col gap-2 sm:flex-row sm:items-center rounded-lg border px-3 py-2 ${tone.cardBorder} ${tone.cardSoft}`}
+                    >
+                      <div className="flex items-center justify-between sm:w-28">
+                        <span className={`text-sm font-medium ${tone.textStrong}`}>{label}</span>
+                      </div>
+                      <div className="flex flex-1 flex-wrap items-center gap-2">
+                        <label className={`flex items-center gap-2 cursor-pointer select-none`}>
+                          <input
+                            type="checkbox"
+                            checked={dayHours.isClosed}
+                            onChange={handleHourChange(key, "isClosed")}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className={`text-sm ${tone.textMuted}`}>Closed</span>
+                        </label>
+                        {!dayHours.isClosed && (
+                          <>
+                            <select
+                              value={dayHours.open}
+                              onChange={handleHourChange(key, "open")}
+                              className={`flex-1 min-w-[100px] rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${tone.input}`}
+                            >
+                              <option value="">Opens</option>
+                              {TIME_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span className={`text-sm ${tone.textMuted}`}>to</span>
+                            <select
+                              value={dayHours.close}
+                              onChange={handleHourChange(key, "close")}
+                              className={`flex-1 min-w-[100px] rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${tone.input}`}
+                            >
+                              <option value="">Closes</option>
+                              {TIME_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                      </div>
+                      {index === 0 && (
+                        <div className="flex gap-1 sm:ml-2">
+                          <button
+                            type="button"
+                            onClick={() => copyHoursToWeekdays(key)}
+                            className={`rounded px-2 py-1 text-xs ${tone.buttonSecondary}`}
+                            title="Copy to Mon-Fri"
+                          >
+                            Weekdays
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyHoursToAllDays(key)}
+                            className={`rounded px-2 py-1 text-xs ${tone.buttonSecondary}`}
+                            title="Copy to all days"
+                          >
+                            All
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <p className={`mt-2 text-xs ${tone.textMuted}`}>
-                Optional. Use a simple format customers can read.
+                Set your business hours. Use the buttons on Monday to quickly copy to weekdays or all days.
               </p>
             </div>
             <div className="md:col-span-2">
@@ -435,6 +613,59 @@ export default function OverviewEditor({
             </div>
             <div className="md:col-span-2">
               <InfoItem label="Description" value={form.description} tone={tone} />
+            </div>
+            <div className="md:col-span-2">
+              <div className="space-y-2">
+                <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${tone.textSoft}`}>
+                  Hours
+                </p>
+                {Object.values(form.hours || {}).some(
+                  (day) => day?.isClosed || (day?.open && day?.close)
+                ) ? (
+                  <div className="grid gap-2">
+                    {DAYS.map(({ key, label }) => (
+                      <div key={key} className="flex items-center justify-between gap-3">
+                        <span className={`text-sm ${tone.textMuted}`}>{label}</span>
+                        <span className={`text-sm ${tone.textStrong}`}>
+                          {formatHoursRange(form.hours?.[key])}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={`text-sm ${tone.textStrong}`}>—</p>
+                )}
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <div className="space-y-2">
+                <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${tone.textSoft}`}>
+                  Social links
+                </p>
+                {Object.values(form.socials || {}).some((value) => value && value.trim()) ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {SOCIAL_FIELDS.map(({ key, label }) => {
+                      const value = form.socials?.[key];
+                      if (!value || !value.trim()) return null;
+                      return (
+                        <div key={key} className="flex items-center justify-between gap-3">
+                          <span className={`text-sm ${tone.textMuted}`}>{label}</span>
+                          <a
+                            href={value}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`text-sm font-semibold ${tone.textStrong} underline underline-offset-4`}
+                          >
+                            {value}
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className={`text-sm ${tone.textStrong}`}>—</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

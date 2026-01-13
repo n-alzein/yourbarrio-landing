@@ -118,7 +118,7 @@ export default function PublicBusinessPreviewClient({ businessId }) {
       const profileQuery = client
         .from("users")
         .select(
-          "id,role,business_name,full_name,category,description,website,phone,address,city,profile_photo_url,cover_photo_url,hours_json"
+          "id,role,business_name,full_name,category,description,website,phone,address,city,profile_photo_url,cover_photo_url,hours_json,social_links_json"
         )
         .eq("id", businessId)
         .eq("role", "business")
@@ -231,10 +231,8 @@ export default function PublicBusinessPreviewClient({ businessId }) {
           <PreviewSkeleton />
         ) : (
           <>
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-              <BusinessAnnouncementsPreview announcements={announcements} />
-              <BusinessGalleryGrid photos={gallery} />
-            </div>
+            <BusinessAnnouncementsPreview announcements={announcements} />
+            <BusinessGalleryGrid photos={gallery} />
 
             <BusinessListingsGrid listings={listings} />
 

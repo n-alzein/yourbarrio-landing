@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import SafeImage from "@/components/SafeImage";
 import { Globe, MapPin, Phone, Share2, Star } from "lucide-react";
 import BusinessPreviewToolbar from "@/components/publicBusinessProfile/BusinessPreviewToolbar";
+import { useTheme } from "@/components/ThemeProvider";
 
 const ACTION_ICONS = {
   website: Globe,
@@ -28,6 +29,8 @@ export default function PublicBusinessHero({
   ratingSummary,
   publicPath,
 }) {
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
   const [copied, setCopied] = useState(false);
   const [showSticky, setShowSticky] = useState(false);
 
@@ -93,6 +96,13 @@ export default function PublicBusinessHero({
   };
 
   const primaryAction = actions[0];
+  const cardText = {
+    heading: isLight ? "text-slate-900" : "text-white",
+    sub: isLight ? "text-slate-600" : "text-white/70",
+    rating: isLight ? "text-slate-700" : "text-white/80",
+    action: isLight ? "text-slate-900" : "text-white/90",
+    badge: isLight ? "text-slate-600" : "text-white/65",
+  };
 
   return (
     <section className="relative text-white theme-lock">
@@ -159,7 +169,7 @@ export default function PublicBusinessHero({
 
       <div className="relative -mt-16 sm:-mt-20">
         <div className="mx-auto max-w-6xl px-6 md:px-10">
-          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl shadow-[0_30px_80px_-40px_rgba(0,0,0,0.75)] p-6 md:p-10">
+          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-10 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl border border-white/20 bg-white/10 p-2 shadow-xl">
@@ -171,15 +181,15 @@ export default function PublicBusinessHero({
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                    <h1 className={`text-3xl md:text-4xl font-bold tracking-tight ${cardText.heading}`}>
                       {name}
                     </h1>
-                    <p className="text-sm md:text-base text-white/70">
+                    <p className={`text-sm md:text-base ${cardText.sub}`}>
                     {category}
                     {city ? ` - ${city}` : ""}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-white/80">
+                  <div className={`flex items-center gap-2 text-sm ${cardText.rating}`}>
                     <Star className="h-4 w-4 text-amber-300" fill="currentColor" />
                     {ratingLabel}
                   </div>
@@ -195,7 +205,7 @@ export default function PublicBusinessHero({
                       href={action.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 hover:bg-white/20 transition"
+                      className={`inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold ${cardText.action} hover:bg-white/20 transition`}
                     >
                       <Icon className="h-4 w-4" />
                       {action.label}
@@ -205,7 +215,7 @@ export default function PublicBusinessHero({
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 hover:bg-white/20 transition"
+                  className={`inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold ${cardText.action} hover:bg-white/20 transition`}
                 >
                   <Share2 className="h-4 w-4" />
                   {copied ? "Copied" : "Share"}
@@ -213,7 +223,7 @@ export default function PublicBusinessHero({
               </div>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-white/65">
+            <div className={`mt-6 flex flex-wrap items-center gap-3 text-xs ${cardText.badge}`}>
               <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1">
                 Local business
               </div>
