@@ -11,11 +11,30 @@ function BusinessLoginInner() {
   const { supabase, authUser, role, loadingUser } = useAuth();
   const searchParams = useSearchParams();
   const isPopup = searchParams?.get("popup") === "1";
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
 
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   const redirectingRef = useRef(false);
+
+  const authDiagLog = useCallback(
+    (event, payload = {}) => {
+      if (!authDiagEnabled || typeof window === "undefined") return;
+      const timestamp = new Date().toISOString();
+      // eslint-disable-next-line no-console
+      console.log("[AUTH_DIAG]", {
+        timestamp,
+        pathname: window.location.pathname,
+        search: window.location.search,
+        event,
+        ...payload,
+      });
+    },
+    [authDiagEnabled]
+  );
 
   const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
     if (typeof document === "undefined") return false;
@@ -43,13 +62,16 @@ function BusinessLoginInner() {
     return false;
   }, []);
 
-  const finishBusinessAuth = useCallback(() => {
+  const finishBusinessAuth = useCallback((target = "/business/dashboard") => {
     if (redirectingRef.current) return;
     redirectingRef.current = true;
+    setRedirecting(true);
+    authDiagLog("redirect:start", { target, isPopup });
 
     if (typeof window !== "undefined") {
       try {
         // Broadcast success so other tabs (the opener) can react
+        localStorage.setItem("business_auth_redirect", target);
         localStorage.setItem("business_auth_success", Date.now().toString());
       } catch (err) {
         console.warn("Could not broadcast business auth success", err);
@@ -57,11 +79,23 @@ function BusinessLoginInner() {
 
       if (isPopup) {
         // Close popup when possible; fall back to in-tab redirect if blocked
+        if (window.opener && window.location.origin) {
+          try {
+            window.opener.postMessage(
+              { type: "YB_BUSINESS_AUTH_SUCCESS", target },
+              window.location.origin
+            );
+          } catch (err) {
+            console.warn("Popup postMessage failed", err);
+          }
+        }
         window.close();
 
         // Some browsers ignore close() if not opened by script
         setTimeout(() => {
-          window.location.assign("/business/dashboard");
+          if (!window.closed) {
+            window.location.assign(target);
+          }
         }, 150);
 
         return;
@@ -69,8 +103,14 @@ function BusinessLoginInner() {
     }
 
     // Use full page reload to ensure session is properly loaded
-    window.location.href = "/business/dashboard";
-  }, [isPopup]);
+    window.location.assign(target);
+
+    setTimeout(() => {
+      if (typeof window !== "undefined" && window.location.pathname !== target) {
+        window.location.assign(target);
+      }
+    }, 600);
+  }, [authDiagLog, isPopup]);
 
   const redirectToDashboard = useCallback(async () => {
     if (redirectingRef.current) return;
@@ -105,9 +145,14 @@ function BusinessLoginInner() {
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
+    setAuthError("");
 
     // 🔥 Tell AuthProvider this login belongs to a business account
-    localStorage.setItem("signup_role", "business");
+    try {
+      localStorage.setItem("signup_role", "business");
+    } catch (err) {
+      console.warn("Could not set signup role", err);
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -117,6 +162,7 @@ function BusinessLoginInner() {
 
     if (error) {
       alert(error.message);
+      setAuthError(error.message);
       setLoading(false);
       return;
     }
@@ -133,6 +179,7 @@ function BusinessLoginInner() {
     if (profileErr) {
       console.error(profileErr);
       alert("Failed to load user role.");
+      setAuthError("Failed to load user role.");
       setLoading(false);
       return;
     }
@@ -141,6 +188,7 @@ function BusinessLoginInner() {
     if (profile?.role !== "business") {
       alert("Only business accounts can log in here.");
       await supabase.auth.signOut();
+      setAuthError("Only business accounts can log in here.");
       setLoading(false);
       return;
     }
@@ -175,12 +223,18 @@ function BusinessLoginInner() {
         alert(
           "Login succeeded but session could not be persisted. Please refresh and try again."
         );
+        setAuthError(
+          "Login succeeded but session could not be persisted. Please refresh and try again."
+        );
         setLoading(false);
         return;
       }
     } catch (err) {
       console.error("Auth refresh call failed", err);
       alert(
+        "Login succeeded but session could not be persisted. Please refresh and try again."
+      );
+      setAuthError(
         "Login succeeded but session could not be persisted. Please refresh and try again."
       );
       setLoading(false);
@@ -198,6 +252,7 @@ function BusinessLoginInner() {
   -------------------------------------------------------------- */
   async function handleGoogleLogin() {
     setLoading(true);
+    setAuthError("");
 
     const origin =
       typeof window !== "undefined" ? window.location.origin : "";
@@ -211,6 +266,7 @@ function BusinessLoginInner() {
     if (error) {
       console.error("Google login error:", error);
       alert("Failed to sign in with Google.");
+      setAuthError("Failed to sign in with Google.");
       setLoading(false);
       return;
     }
@@ -219,8 +275,71 @@ function BusinessLoginInner() {
   /* --------------------------------------------------------------
      AUTH LOADING
   -------------------------------------------------------------- */
-  if (loadingUser) {
-    return <div className="min-h-screen bg-black" />;
+  useEffect(() => {
+    if (!authDiagEnabled || !supabase) return;
+
+    authDiagLog("login:mount", { popup: isPopup });
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        authDiagLog("login:getSession", {
+          hasSession: Boolean(data?.session),
+          error: error?.message ?? null,
+        });
+      })
+      .catch((err) => {
+        authDiagLog("login:getSession:error", {
+          error: err?.message ?? String(err),
+        });
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        authDiagLog("login:onAuthStateChange", {
+          event,
+          hasSession: Boolean(session),
+        });
+      }
+    );
+
+    const handleError = (event) => {
+      authDiagLog("login:window:error", {
+        message: event?.message ?? null,
+        filename: event?.filename ?? null,
+        lineno: event?.lineno ?? null,
+        colno: event?.colno ?? null,
+      });
+    };
+
+    const handleRejection = (event) => {
+      const reason = event?.reason;
+      authDiagLog("login:window:unhandledrejection", {
+        reason: reason?.message ?? String(reason ?? ""),
+      });
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      listener?.subscription?.unsubscribe();
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, [authDiagEnabled, authDiagLog, isPopup, supabase]);
+
+  if (loadingUser || redirecting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center px-6">
+        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/5 p-6 text-white">
+          <div className="text-lg font-semibold">Signing you in…</div>
+          <div className="text-sm text-white/70 mt-1">
+            Please wait while we verify your session.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   /* --------------------------------------------------------------
@@ -247,6 +366,11 @@ function BusinessLoginInner() {
 
           {/* EMAIL/PASSWORD FORM */}
           <form onSubmit={handleLogin} className="space-y-4">
+            {authError ? (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {authError}
+              </div>
+            ) : null}
             <input
               id="business-login-email"
               name="email"
@@ -352,7 +476,18 @@ function BusinessLoginInner() {
 -------------------------------------------------------------- */
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-center px-6">
+          <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/5 p-6 text-white">
+            <div className="text-lg font-semibold">Signing you in…</div>
+            <div className="text-sm text-white/70 mt-1">
+              Please wait while we verify your session.
+            </div>
+          </div>
+        </div>
+      }
+    >
       <BusinessLoginInner />
     </Suspense>
   );
