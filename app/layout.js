@@ -10,6 +10,7 @@ import OverlayGuard from "@/components/OverlayGuard";
 import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
+import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,6 +42,7 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <OverlayGuard />
           <AuthProvider>
+            <BusinessAuthRedirector />
             <ModalProvider>
               {/* GLOBAL BACKGROUND */}
               <div className="absolute inset-0 -z-10 overflow-hidden h-full">

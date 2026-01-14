@@ -14,11 +14,13 @@ function BusinessLoginInner() {
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
 
   const [loading, setLoading] = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const redirectingRef = useRef(false);
+  const flowIdRef = useRef(
+    `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
 
   const authDiagLog = useCallback(
     (event, payload = {}) => {
@@ -29,12 +31,33 @@ function BusinessLoginInner() {
         timestamp,
         pathname: window.location.pathname,
         search: window.location.search,
+        flowId: flowIdRef.current,
         event,
         ...payload,
       });
     },
     [authDiagEnabled]
   );
+
+  const getCookieStatus = useCallback(() => {
+    if (typeof document === "undefined") return null;
+    const cookieName = getCookieName();
+    const cookieLength = document.cookie.length;
+    const names = document.cookie
+      .split(";")
+      .map((entry) => entry.trim().split("=")[0])
+      .filter(Boolean);
+    const hasAuthCookie = cookieName
+      ? names.some(
+          (name) => name === cookieName || name.startsWith(`${cookieName}.`)
+        )
+      : false;
+    return {
+      cookieName,
+      cookieLength,
+      hasAuthCookie,
+    };
+  }, []);
 
   const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
     if (typeof document === "undefined") return false;
@@ -62,10 +85,45 @@ function BusinessLoginInner() {
     return false;
   }, []);
 
+  const waitForSession = useCallback(
+    async (timeoutMs = 2000) => {
+      if (!supabase) return false;
+      const start = Date.now();
+      let attempt = 0;
+
+      while (Date.now() - start < timeoutMs) {
+        attempt += 1;
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          const session = data?.session;
+          const cookieStatus = getCookieStatus();
+
+          authDiagLog("login:pollSession", {
+            attempt,
+            hasSession: Boolean(session?.access_token),
+            cookieLength: cookieStatus?.cookieLength ?? null,
+            hasAuthCookie: cookieStatus?.hasAuthCookie ?? null,
+            error: error?.message ?? null,
+          });
+
+          if (session?.access_token) return true;
+        } catch (err) {
+          authDiagLog("login:pollSession:error", {
+            attempt,
+            error: err?.message ?? String(err),
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      return false;
+    },
+    [authDiagLog, getCookieStatus, supabase]
+  );
+
   const finishBusinessAuth = useCallback((target = "/business/dashboard") => {
     if (redirectingRef.current) return;
     redirectingRef.current = true;
-    setRedirecting(true);
     authDiagLog("redirect:start", { target, isPopup });
 
     if (typeof window !== "undefined") {
@@ -73,6 +131,12 @@ function BusinessLoginInner() {
         // Broadcast success so other tabs (the opener) can react
         localStorage.setItem("business_auth_redirect", target);
         localStorage.setItem("business_auth_success", Date.now().toString());
+
+        if (typeof BroadcastChannel !== "undefined") {
+          const channel = new BroadcastChannel("yb-business-auth");
+          channel.postMessage({ type: "YB_BUSINESS_AUTH_SUCCESS", target });
+          channel.close();
+        }
       } catch (err) {
         console.warn("Could not broadcast business auth success", err);
       }
@@ -94,6 +158,8 @@ function BusinessLoginInner() {
         // Some browsers ignore close() if not opened by script
         setTimeout(() => {
           if (!window.closed) {
+            authDiagLog("popup:close:blocked", { target });
+            authDiagLog("redirect:assign", { target });
             window.location.assign(target);
           }
         }, 150);
@@ -103,20 +169,15 @@ function BusinessLoginInner() {
     }
 
     // Use full page reload to ensure session is properly loaded
+    authDiagLog("redirect:assign", { target });
     window.location.assign(target);
-
-    setTimeout(() => {
-      if (typeof window !== "undefined" && window.location.pathname !== target) {
-        window.location.assign(target);
-      }
-    }, 600);
   }, [authDiagLog, isPopup]);
 
   const redirectToDashboard = useCallback(async () => {
     if (redirectingRef.current) return;
-    await waitForAuthCookie();
+    await Promise.all([waitForAuthCookie(), waitForSession()]);
     finishBusinessAuth();
-  }, [finishBusinessAuth, waitForAuthCookie]);
+  }, [finishBusinessAuth, waitForAuthCookie, waitForSession]);
 
   /* --------------------------------------------------------------
      AUTO-REDIRECT IF ALREADY LOGGED IN
@@ -278,7 +339,15 @@ function BusinessLoginInner() {
   useEffect(() => {
     if (!authDiagEnabled || !supabase) return;
 
+    try {
+      sessionStorage.setItem("auth_flow_id", flowIdRef.current);
+    } catch (err) {
+      console.warn("Could not persist auth flow id", err);
+    }
+
     authDiagLog("login:mount", { popup: isPopup });
+    const cookieStatus = getCookieStatus();
+    authDiagLog("login:cookies", cookieStatus ?? {});
 
     supabase.auth
       .getSession()
@@ -327,20 +396,7 @@ function BusinessLoginInner() {
       window.removeEventListener("error", handleError);
       window.removeEventListener("unhandledrejection", handleRejection);
     };
-  }, [authDiagEnabled, authDiagLog, isPopup, supabase]);
-
-  if (loadingUser || redirecting) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-center px-6">
-        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/5 p-6 text-white">
-          <div className="text-lg font-semibold">Signing you in…</div>
-          <div className="text-sm text-white/70 mt-1">
-            Please wait while we verify your session.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  }, [authDiagEnabled, authDiagLog, getCookieStatus, isPopup, supabase]);
 
   /* --------------------------------------------------------------
      UI — PROFESSIONAL BUSINESS STYLE
@@ -476,18 +532,7 @@ function BusinessLoginInner() {
 -------------------------------------------------------------- */
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center text-center px-6">
-          <div className="max-w-md w-full rounded-2xl border border-white/10 bg-white/5 p-6 text-white">
-            <div className="text-lg font-semibold">Signing you in…</div>
-            <div className="text-sm text-white/70 mt-1">
-              Please wait while we verify your session.
-            </div>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="w-full max-w-2xl min-h-[420px]" />}>
       <BusinessLoginInner />
     </Suspense>
   );

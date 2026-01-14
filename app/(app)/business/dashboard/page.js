@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import SafeImage from "@/components/SafeImage";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import { getDisplayName } from "@/lib/messages";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { useRouter } from "next/navigation";
+import { getCookieName } from "@/lib/supabaseClient";
 
 export default function BusinessDashboard() {
-  const { authUser, user, loadingUser } = useAuth();
+  const { authUser, user, loadingUser, supabase } = useAuth();
   const { theme, hydrated: themeHydrated } = useTheme();
+  const router = useRouter();
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
+  const flowIdRef = useRef(null);
+  const authUserRef = useRef(authUser);
+  const refreshGuardRef = useRef(false);
+  const hardReloadGuardRef = useRef(false);
   const isLight = themeHydrated ? theme === "light" : true;
   const textTone = useMemo(
     () => ({
@@ -52,12 +60,156 @@ export default function BusinessDashboard() {
   const [stats, setStats] = useState(null);
   const [latestMessage, setLatestMessage] = useState(null);
 
+  useEffect(() => {
+    authUserRef.current = authUser;
+  }, [authUser]);
+
+  const authDiagLog = useCallback(
+    (event, payload = {}) => {
+      if (!authDiagEnabled || typeof window === "undefined") return;
+      const timestamp = new Date().toISOString();
+      // eslint-disable-next-line no-console
+      console.log("[AUTH_DIAG]", {
+        timestamp,
+        pathname: window.location.pathname,
+        search: window.location.search,
+        flowId: flowIdRef.current,
+        event,
+        ...payload,
+      });
+    },
+    [authDiagEnabled]
+  );
+
+  const getCookieStatus = useCallback(() => {
+    if (typeof document === "undefined") return null;
+    const cookieName = getCookieName();
+    const cookieLength = document.cookie.length;
+    const names = document.cookie
+      .split(";")
+      .map((entry) => entry.trim().split("=")[0])
+      .filter(Boolean);
+    const hasAuthCookie = cookieName
+      ? names.some(
+          (name) => name === cookieName || name.startsWith(`${cookieName}.`)
+        )
+      : false;
+    return {
+      cookieName,
+      cookieLength,
+      hasAuthCookie,
+    };
+  }, []);
+
   /* ------------------------------------------- */
   /* 1️⃣ Hydration flag (always first) */
   /* ------------------------------------------- */
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!authDiagEnabled || typeof window === "undefined") return;
+
+    if (!flowIdRef.current) {
+      try {
+        flowIdRef.current =
+          sessionStorage.getItem("auth_flow_id") ||
+          `dash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      } catch (err) {
+        flowIdRef.current = `dash-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`;
+      }
+    }
+
+    const cookieStatus = getCookieStatus();
+    authDiagLog("dashboard:mount", {
+      url: window.location.href,
+      cookieLength: cookieStatus?.cookieLength ?? null,
+      hasAuthCookie: cookieStatus?.hasAuthCookie ?? null,
+    });
+
+    if (!supabase) return;
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        authDiagLog("dashboard:getSession", {
+          hasSession: Boolean(data?.session),
+          error: error?.message ?? null,
+        });
+      })
+      .catch((err) => {
+        authDiagLog("dashboard:getSession:error", {
+          error: err?.message ?? String(err),
+        });
+      });
+
+    fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    })
+      .then((res) => {
+        authDiagLog("dashboard:serverAuth", {
+          serverHasUser: res.headers.get("x-auth-refresh-user") === "1",
+          status: res.status,
+        });
+      })
+      .catch((err) => {
+        authDiagLog("dashboard:serverAuth:error", {
+          error: err?.message ?? String(err),
+        });
+      });
+  }, [authDiagEnabled, authDiagLog, getCookieStatus, supabase]);
+
+  useEffect(() => {
+    if (!supabase || loadingUser) return;
+    if (refreshGuardRef.current) return;
+
+    const run = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        if (session && !authUserRef.current) {
+          refreshGuardRef.current = true;
+          authDiagLog("dashboard:client_session_present_but_auth_missing", {
+            hasSession: Boolean(session),
+          });
+          router.refresh();
+
+          setTimeout(async () => {
+            if (typeof window === "undefined") return;
+            const { data: afterData } = await supabase.auth.getSession();
+            const stillSession = Boolean(afterData?.session);
+            const params = new URLSearchParams(window.location.search);
+            const hasReloaded = params.has("reloaded");
+
+            if (
+              stillSession &&
+              !authUserRef.current &&
+              !hasReloaded &&
+              !hardReloadGuardRef.current
+            ) {
+              hardReloadGuardRef.current = true;
+              params.set("reloaded", "1");
+              const target = `${window.location.pathname}?${params.toString()}`;
+              authDiagLog("dashboard:hardReload", { target });
+              window.location.replace(target);
+            }
+          }, 500);
+        }
+      } catch (err) {
+        authDiagLog("dashboard:selfHeal:error", {
+          error: err?.message ?? String(err),
+        });
+      }
+    };
+
+    run();
+  }, [authDiagLog, loadingUser, router, supabase]);
 
   /* ------------------------------------------- */
   /* 2️⃣ Load business profile */

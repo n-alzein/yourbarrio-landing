@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
 import { useTheme } from "../ThemeProvider";
+import { useAuth } from "../AuthProvider";
 
 export default function PublicNavbar() {
   const pathname = usePathname();
@@ -13,17 +14,61 @@ export default function PublicNavbar() {
   const [open, setOpen] = useState(false);
   const { hydrated, setTheme } = useTheme();
   const hasForcedLight = useRef(false);
+  const { authUser, role, loadingUser } = useAuth();
+  const [livePathname, setLivePathname] = useState(pathname);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updatePath = () => setLivePathname(window.location.pathname);
+    updatePath();
+
+    const handlePopState = () => updatePath();
+    window.addEventListener("popstate", handlePopState);
+
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    const wrap = (original) => {
+      return function wrappedState(...args) {
+        const result = original.apply(this, args);
+        updatePath();
+        return result;
+      };
+    };
+
+    window.history.pushState = wrap(originalPushState);
+    window.history.replaceState = wrap(originalReplaceState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+    };
+  }, []);
+
+  const effectivePath = livePathname || pathname;
+  const isAppRoute =
+    effectivePath?.startsWith("/business") ||
+    effectivePath?.startsWith("/customer");
+  const shouldRender = !loadingUser && !authUser && !role && !isAppRoute;
+
+  useEffect(() => {
+    if (!shouldRender) {
+      if (typeof document !== "undefined") {
+        document.body.style.overflow = "";
+      }
+      return;
+    }
     // Prevent background scroll when the mobile menu is open
     if (typeof document === "undefined") return;
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [open]);
+  }, [open, shouldRender]);
 
   useEffect(() => {
+    if (!shouldRender) return;
     if (!hydrated || hasForcedLight.current) return;
 
     const onPublicLanding =
@@ -51,6 +96,10 @@ export default function PublicNavbar() {
       {children}
     </Link>
   );
+
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <nav className="fixed top-0 inset-x-0 z-50 theme-lock" data-public-nav>

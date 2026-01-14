@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function BusinessRouteShell({ children = null }) {
   return <div className="pt-8 md:pt-10 min-h-screen">{children}</div>;
 }
@@ -42,6 +45,11 @@ export default async function BusinessLayout({ children }) {
 
   return (
     <>
+      <style>{`
+        [data-public-nav] {
+          display: none !important;
+        }
+      `}</style>
       <BusinessNavbar />
       <BusinessRouteShell>{children}</BusinessRouteShell>
     </>
