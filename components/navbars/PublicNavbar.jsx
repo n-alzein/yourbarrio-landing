@@ -12,6 +12,7 @@ export default function PublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
+  const [forceHidden, setForceHidden] = useState(false);
   const { hydrated, setTheme } = useTheme();
   const hasForcedLight = useRef(false);
   const { authUser, role, loadingUser } = useAuth();
@@ -51,6 +52,29 @@ export default function PublicNavbar() {
     effectivePath?.startsWith("/business") ||
     effectivePath?.startsWith("/customer");
   const shouldRender = !loadingUser && !authUser && !role && !isAppRoute;
+
+  useEffect(() => {
+    if (effectivePath?.startsWith("/business") || effectivePath?.startsWith("/customer")) {
+      setForceHidden(true);
+    }
+  }, [effectivePath]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const handleClick = (event) => {
+      const link = event.target?.closest?.("a");
+      if (!link) return;
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("http")) return;
+      if (href.startsWith("/business") || href.startsWith("/customer")) {
+        setForceHidden(true);
+      }
+    };
+
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, []);
 
   useEffect(() => {
     if (!shouldRender) {
@@ -97,7 +121,7 @@ export default function PublicNavbar() {
     </Link>
   );
 
-  if (!shouldRender) {
+  if (!shouldRender || forceHidden) {
     return null;
   }
 
