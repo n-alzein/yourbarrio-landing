@@ -4,6 +4,11 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const metadata = {
+  other: {
+    "yb-shell": "business",
+  },
+};
 
 function BusinessRouteShell({ children = null }) {
   return <div className="pt-8 md:pt-10 min-h-screen">{children}</div>;
@@ -35,7 +40,7 @@ export default async function BusinessLayout({ children }) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/business-auth/login");
+    redirect("/business/login");
   }
 
   const role = await resolveRole(supabase, user);
@@ -45,12 +50,7 @@ export default async function BusinessLayout({ children }) {
 
   return (
     <>
-      <style>{`
-        [data-public-nav] {
-          display: none !important;
-        }
-      `}</style>
-      <BusinessNavbar />
+      <BusinessNavbar requireAuth />
       <BusinessRouteShell>{children}</BusinessRouteShell>
     </>
   );

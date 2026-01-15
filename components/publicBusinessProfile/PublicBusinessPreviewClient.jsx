@@ -86,7 +86,7 @@ function PreviewSkeleton() {
   );
 }
 
-export default function PublicBusinessPreviewClient({ businessId }) {
+export default function PublicBusinessPreviewClient({ businessId, onReady }) {
   const [profile, setProfile] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [gallery, setGallery] = useState([]);
@@ -206,6 +206,12 @@ export default function PublicBusinessPreviewClient({ businessId }) {
       active = false;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    if (!loading && profile) {
+      onReady?.();
+    }
+  }, [loading, profile, onReady]);
 
   if (!profile) {
     return (

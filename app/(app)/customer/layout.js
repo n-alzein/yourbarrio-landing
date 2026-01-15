@@ -42,11 +42,6 @@ export default async function CustomerLayout({ children }) {
 
   return (
     <>
-      <style>{`
-        [data-public-nav] {
-          display: none !important;
-        }
-      `}</style>
       <CustomerNavbar />
       <CustomerRouteShell>{children}</CustomerRouteShell>
     </>

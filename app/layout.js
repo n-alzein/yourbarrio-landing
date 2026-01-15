@@ -25,6 +25,9 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "YourBarrio – Find What You Need Nearby",
   description: "YourBarrio neighborhood discovery landing page",
+  other: {
+    "yb-shell-root": "root",
+  },
 };
 
 export default function RootLayout({ children }) {

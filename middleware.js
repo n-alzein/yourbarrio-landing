@@ -111,7 +111,7 @@ export async function middleware(req) {
   }
 
   if (isBusinessProtectedPath && !hasSession) {
-    return NextResponse.redirect(new URL("/business-auth/login", req.url), {
+    return NextResponse.redirect(new URL("/business/login", req.url), {
       headers: res.headers,
     });
   }

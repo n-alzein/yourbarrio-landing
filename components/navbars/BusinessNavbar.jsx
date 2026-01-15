@@ -46,7 +46,7 @@ function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) 
   );
 }
 
-export default function BusinessNavbar() {
+export default function BusinessNavbar({ requireAuth = false }) {
   const pathname = usePathname();
   const { user, authUser, role, loadingUser, supabase } = useAuth();
 
@@ -207,9 +207,15 @@ export default function BusinessNavbar() {
     };
   }, [badgeReady, user?.id, authUser?.id, supabase, role, loadUnreadCount]);
 
-  if (loadingUser && !user && !authUser) {
+  const isBusinessAuthed = Boolean(authUser) && role === "business";
+  const holdUntilAuthed = requireAuth && (!authUser || role !== "business");
+
+  if (loadingUser || holdUntilAuthed) {
     return (
-      <nav className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock" />
+      <nav
+        className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock"
+        data-business-navbar="1"
+      />
     );
   }
 
@@ -217,7 +223,10 @@ export default function BusinessNavbar() {
      NAVBAR
   --------------------------------------------------- */
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock">
+    <nav
+      className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock"
+      data-business-navbar="1"
+    >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
 
         {/* LEFT SIDE */}
@@ -243,7 +252,7 @@ export default function BusinessNavbar() {
           {/* LEFT NAV LINKS */}
           <div className="hidden md:flex items-center gap-8 ml-8">
             {/* Show /business only when logged OUT */}
-            {!user && (
+            {!isBusinessAuthed && (
               <NavItem
                 href="/business"
                 isActive={isActive}
@@ -254,10 +263,10 @@ export default function BusinessNavbar() {
             )}
 
             {/* Logged-in business nav (LEFT SIDE) */}
-            {user && role === "business" && null}
+            {isBusinessAuthed && null}
 
             {/* Logged-out → show About */}
-            {!user && (
+            {!isBusinessAuthed && (
               <NavItem
                 href="/business/about"
                 isActive={isActive}
@@ -273,7 +282,7 @@ export default function BusinessNavbar() {
         <div className="hidden md:flex items-center gap-8">
 
           {/* Logged OUT */}
-          {!user && (
+          {!isBusinessAuthed && (
             <>
               <NavItem
                 href="/business-auth/login"
@@ -298,7 +307,7 @@ export default function BusinessNavbar() {
           )}
 
           {/* Logged IN — only dropdown */}
-          {user && role === "business" && (
+          {isBusinessAuthed && (
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setProfileMenuOpen((open) => !open)}
@@ -416,7 +425,7 @@ export default function BusinessNavbar() {
     {/* MOBILE MENU */}
     {mobileMenuOpen && (
       <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-6 text-white">
-        {user && role === "business" && (
+        {isBusinessAuthed && (
           <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
             <img
               src={avatar}
@@ -442,7 +451,7 @@ export default function BusinessNavbar() {
         />
 
         {/* Logged-out */}
-        {!user && (
+        {!isBusinessAuthed && (
           <NavItem
             href="/business"
             isActive={isActive}
@@ -451,7 +460,7 @@ export default function BusinessNavbar() {
             Businesses
           </NavItem>
         )}
-        {!user && (
+        {!isBusinessAuthed && (
           <NavItem
             href="/business/about"
             isActive={isActive}
@@ -462,7 +471,7 @@ export default function BusinessNavbar() {
         )}
 
         {/* Logged-in business menu */}
-        {user && role === "business" && (
+        {isBusinessAuthed && (
           <>
             <NavItem
               href="/business/dashboard"
@@ -496,7 +505,7 @@ export default function BusinessNavbar() {
           </>
         )}
 
-        {!user ? (
+        {!isBusinessAuthed ? (
           <>
             <NavItem
               href="/business-auth/login"

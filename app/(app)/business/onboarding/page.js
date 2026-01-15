@@ -193,7 +193,7 @@ export default function BusinessOnboardingPage() {
       const payload = await res.json();
 
       // 3) Redirect to business profile
-      router.push(`/business/${payload.id}`);
+      router.push(`/b/${payload.id}`);
     } catch (err) {
       console.error("Business onboarding failed", err);
       setMessage(err?.message || "Something went wrong. Please try again.");

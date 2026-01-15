@@ -129,7 +129,7 @@ export default function BusinessProfilePage({
     setToast({ type, message });
   };
 
-  const publicProfileHref = businessId ? `/b/${businessId}?preview=1` : null;
+  const publicProfileHref = businessId ? "/business/preview" : null;
 
   const handlePublicPreview = () => {
     if (!businessId || typeof window === "undefined") return;
