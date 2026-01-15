@@ -205,70 +205,63 @@ function BusinessLoginInner() {
   -------------------------------------------------------------- */
   async function handleLogin(e) {
     e.preventDefault();
+    if (!supabase) {
+      setAuthError("Auth client not ready. Please refresh and try again.");
+      return;
+    }
     setLoading(true);
     setAuthError("");
 
-    // 🔥 Tell AuthProvider this login belongs to a business account
     try {
-      localStorage.setItem("signup_role", "business");
-    } catch (err) {
-      console.warn("Could not set signup role", err);
-    }
+      // 🔥 Tell AuthProvider this login belongs to a business account
+      try {
+        localStorage.setItem("signup_role", "business");
+      } catch (err) {
+        console.warn("Could not set signup role", err);
+      }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
+      if (error) {
+        throw error;
+      }
 
-    if (error) {
-      alert(error.message);
-      setAuthError(error.message);
-      setLoading(false);
-      return;
-    }
+      const user = data.user;
 
-    const user = data.user;
+      // 2) 🔥 Fetch role immediately from DB (reliable)
+      const { data: profile, error: profileErr } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    // 2) 🔥 Fetch role immediately from DB (reliable)
-    const { data: profile, error: profileErr } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
+      if (profileErr) {
+        throw profileErr;
+      }
 
-    if (profileErr) {
-      console.error(profileErr);
-      alert("Failed to load user role.");
-      setAuthError("Failed to load user role.");
-      setLoading(false);
-      return;
-    }
+      // 3) Role check
+      if (profile?.role !== "business") {
+        await supabase.auth.signOut();
+        throw new Error("Only business accounts can log in here.");
+      }
 
-    // 3) Role check
-    if (profile?.role !== "business") {
-      alert("Only business accounts can log in here.");
-      await supabase.auth.signOut();
-      setAuthError("Only business accounts can log in here.");
-      setLoading(false);
-      return;
-    }
+      // 4) Wait for session to be fully written to storage before allowing redirect
+      // This ensures the AuthProvider and dashboard can read the session immediately
+      console.log("Login: Waiting for session to stabilize...");
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-    // 4) Wait for session to be fully written to storage before allowing redirect
-    // This ensures the AuthProvider and dashboard can read the session immediately
-    console.log("Login: Waiting for session to stabilize...");
-    await new Promise(resolve => setTimeout(resolve, 500));
+      // 5) Verify session is accessible
+      const { data: sessionCheck } = await supabase.auth.getSession();
+      const session = sessionCheck?.session;
+      console.log(
+        "Login: Session check before redirect:",
+        session ? "Session exists" : "No session"
+      );
 
-    // 5) Verify session is accessible
-    const { data: sessionCheck } = await supabase.auth.getSession();
-    const session = sessionCheck?.session;
-    console.log(
-      "Login: Session check before redirect:",
-      session ? "Session exists" : "No session"
-    );
-
-    // 6) Sync auth cookies for SSR before navigating
-    try {
+      // 6) Sync auth cookies for SSR before navigating
       const res = await fetch("/api/auth/refresh", {
         method: "POST",
         credentials: "include",
@@ -281,30 +274,22 @@ function BusinessLoginInner() {
 
       const refreshed = res.headers.get("x-auth-refresh-user") === "1";
       if (!refreshed) {
-        alert(
+        throw new Error(
           "Login succeeded but session could not be persisted. Please refresh and try again."
         );
-        setAuthError(
-          "Login succeeded but session could not be persisted. Please refresh and try again."
-        );
-        setLoading(false);
-        return;
       }
-    } catch (err) {
-      console.error("Auth refresh call failed", err);
-      alert(
-        "Login succeeded but session could not be persisted. Please refresh and try again."
-      );
-      setAuthError(
-        "Login succeeded but session could not be persisted. Please refresh and try again."
-      );
-      setLoading(false);
-      return;
-    }
 
-    // 7) Ensure the auth cookie is present before navigating (prevents blank dashboard)
-    await redirectToDashboard();
-    setLoading(false);
+      // 7) Ensure the auth cookie is present before navigating (prevents blank dashboard)
+      await redirectToDashboard();
+    } catch (err) {
+      console.error("Business login failed", err);
+      const message =
+        err?.message ?? "Login failed. Please refresh and try again.";
+      alert(message);
+      setAuthError(message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   /* --------------------------------------------------------------
