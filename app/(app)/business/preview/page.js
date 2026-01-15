@@ -5,6 +5,7 @@ import BusinessAnnouncementsPreview from "@/components/publicBusinessProfile/Bus
 import BusinessGalleryGrid from "@/components/publicBusinessProfile/BusinessGalleryGrid";
 import BusinessListingsGrid from "@/components/publicBusinessProfile/BusinessListingsGrid";
 import BusinessReviewsPanel from "@/components/publicBusinessProfile/BusinessReviewsPanel";
+import PreviewAutoRefresh from "@/components/business/preview/PreviewAutoRefresh";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -216,6 +217,7 @@ export default async function BusinessPreviewPage() {
 
   return (
     <div className="pointer-events-none min-h-screen text-white -mt-20">
+      <PreviewAutoRefresh businessId={user.id} />
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}

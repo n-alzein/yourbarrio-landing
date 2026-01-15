@@ -84,18 +84,27 @@ export async function middleware(req) {
     path.startsWith("/business/listings") ||
     path.startsWith("/business/settings") ||
     path.startsWith("/business/onboarding");
+  const isPublicBusinessProfilePath = path.startsWith("/b/");
+  let role = null;
 
-  // Keep logged-in users off the public landing page
-  if (path === "/" && hasSession) {
-    let redirectTarget = "/customer/home";
-
+  async function resolveRole() {
+    if (!hasSession || role) return role;
     const { data: profile } = await supabase
       .from("users")
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
+    role = profile?.role ?? null;
+    return role;
+  }
 
-    if (profile?.role === "business") {
+  // Keep logged-in users off the public landing page
+  if (path === "/" && hasSession) {
+    let redirectTarget = "/customer/home";
+
+    const resolvedRole = await resolveRole();
+
+    if (resolvedRole === "business") {
       redirectTarget = "/business/dashboard";
     }
 
@@ -111,14 +120,23 @@ export async function middleware(req) {
   }
 
   if (isBusinessProtectedPath && !hasSession) {
-    return NextResponse.redirect(new URL("/business-auth/login", req.url), {
+    return NextResponse.redirect(new URL("/business/login", req.url), {
       headers: res.headers,
     });
+  }
+
+  if (isPublicBusinessProfilePath && hasSession) {
+    const resolvedRole = await resolveRole();
+    if (resolvedRole === "customer") {
+      const rewritten = req.nextUrl.clone();
+      rewritten.pathname = `/customer${path}`;
+      return NextResponse.rewrite(rewritten);
+    }
   }
 
   return res;
 }
 
 export const config = {
-  matcher: ["/", "/customer/:path*", "/business/:path*"],
+  matcher: ["/", "/customer/:path*", "/business/:path*", "/b/:path*"],
 };

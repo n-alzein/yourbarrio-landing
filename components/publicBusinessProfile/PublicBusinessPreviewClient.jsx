@@ -237,8 +237,10 @@ export default function PublicBusinessPreviewClient({ businessId, onReady }) {
           <PreviewSkeleton />
         ) : (
           <>
-            <BusinessAnnouncementsPreview announcements={announcements} />
-            <BusinessGalleryGrid photos={gallery} />
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+              <BusinessAnnouncementsPreview announcements={announcements} />
+              <BusinessGalleryGrid photos={gallery} />
+            </div>
 
             <BusinessListingsGrid listings={listings} />
 

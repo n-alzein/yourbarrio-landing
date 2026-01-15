@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Edit3, ImagePlus, Megaphone, ExternalLink } from "lucide-react";
@@ -58,11 +58,39 @@ export default function BusinessProfilePage({
   const [announcementTrigger, setAnnouncementTrigger] = useState(0);
   const [toast, setToast] = useState(null);
   const [uploading, setUploading] = useState({ avatar: false, cover: false });
+  const previewChannelRef = useRef(null);
+  const previewSigRef = useRef("");
+  const previewSkipRef = useRef(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (previewChannelRef.current || typeof BroadcastChannel === "undefined") return;
+    previewChannelRef.current = new BroadcastChannel("yb-business-preview");
+    return () => previewChannelRef.current?.close();
+  }, []);
 
   const client = supabase ?? getBrowserSupabaseClient();
   const businessId = profile?.id || authUser?.id || "";
   const reviewCount = ratingSummary?.count ?? initialReviewCount ?? 0;
   const averageRating = ratingSummary?.average ?? 0;
+
+  const emitPreviewUpdate = useCallback(
+    (reason = "profile_update") => {
+      if (!businessId || typeof window === "undefined") return;
+      const payload = { type: "update", businessId, reason, ts: Date.now() };
+      try {
+        if (!previewChannelRef.current && typeof BroadcastChannel !== "undefined") {
+          previewChannelRef.current = new BroadcastChannel("yb-business-preview");
+        }
+        previewChannelRef.current?.postMessage(payload);
+      } catch {}
+
+      try {
+        localStorage.setItem("yb_preview_update", JSON.stringify(payload));
+      } catch {}
+    },
+    [businessId]
+  );
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -85,6 +113,24 @@ export default function BusinessProfilePage({
       }));
     }
   }, [user, profile]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    if (previewSkipRef.current) {
+      previewSkipRef.current = false;
+      return;
+    }
+    const signature = JSON.stringify({
+      profile,
+      galleryCount: gallery?.length ?? 0,
+      announcementCount: announcements?.length ?? 0,
+      reviewCount: reviews?.length ?? 0,
+    });
+    if (signature === previewSigRef.current) return;
+    previewSigRef.current = signature;
+    const timer = setTimeout(() => emitPreviewUpdate("content_change"), 300);
+    return () => clearTimeout(timer);
+  }, [businessId, profile, gallery, announcements, reviews, emitPreviewUpdate]);
 
   const tone = useMemo(
     () => ({
