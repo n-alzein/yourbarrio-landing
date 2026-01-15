@@ -3,11 +3,26 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const getCookieDomain = (host) => {
+  if (!host) return undefined;
+  const hostname = host.split(":")[0];
+  if (
+    hostname === "localhost" ||
+    hostname.startsWith("127.") ||
+    hostname.endsWith(".local")
+  ) {
+    return undefined;
+  }
+  const root = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
+  return root ? `.${root}` : undefined;
+};
+
 export async function POST(request) {
   const response = NextResponse.json({ ok: true }, { status: 200 });
   const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   let body = {};
+  const cookieDomain = getCookieDomain(request.headers.get("host"));
 
   try {
     body = await request.json();
@@ -33,6 +48,7 @@ export async function POST(request) {
               sameSite: "lax",
               secure: isProd,
               path: options?.path ?? "/",
+              ...(cookieDomain ? { domain: cookieDomain } : {}),
             };
 
             response.cookies.set(name, value, baseOptions);

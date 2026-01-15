@@ -1,9 +1,23 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabaseClient";
+
+const getCookieDomain = (host) => {
+  if (!host) return undefined;
+  const hostname = host.split(":")[0];
+  if (
+    hostname === "localhost" ||
+    hostname.startsWith("127.") ||
+    hostname.endsWith(".local")
+  ) {
+    return undefined;
+  }
+  const root = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
+  return root ? `.${root}` : undefined;
+};
 
 export async function POST() {
   const cookieName = getCookieName();
@@ -11,6 +25,8 @@ export async function POST() {
 
   try {
     const cookieStore = await cookies();
+    const host = (await headers()).get("host");
+    const cookieDomain = getCookieDomain(host);
 
     const res = NextResponse.json({ success: true });
 
@@ -30,6 +46,7 @@ export async function POST() {
                 sameSite: "lax",
                 secure: isProd,
                 path: options?.path ?? "/",
+                ...(cookieDomain ? { domain: cookieDomain } : {}),
               });
             });
           },
@@ -58,6 +75,7 @@ export async function POST() {
         maxAge: 0,
         sameSite: "lax",
         secure: isProd,
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
       });
     });
 

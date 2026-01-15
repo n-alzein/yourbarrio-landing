@@ -381,6 +381,13 @@ export function AuthProvider({ children }) {
       const domains = [host];
       if (host && !host.startsWith("localhost") && !host.startsWith("127.")) {
         domains.push(`.${host}`);
+        if (host.startsWith("www.")) {
+          const root = host.slice(4);
+          if (root) {
+            domains.push(root);
+            domains.push(`.${root}`);
+          }
+        }
       }
 
       const cookieNames = document.cookie
@@ -404,7 +411,8 @@ export function AuthProvider({ children }) {
         }
       });
 
-      domains.forEach((domain) => {
+      const uniqueDomains = Array.from(new Set(domains.filter(Boolean)));
+      uniqueDomains.forEach((domain) => {
         uniqueNames.forEach((name) => {
           try {
             document.cookie = `${name}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;
@@ -727,6 +735,13 @@ export function AuthProvider({ children }) {
       const domains = [host];
       if (host && !host.startsWith("localhost") && !host.startsWith("127.")) {
         domains.push(`.${host}`);
+        if (host.startsWith("www.")) {
+          const root = host.slice(4);
+          if (root) {
+            domains.push(root);
+            domains.push(`.${root}`);
+          }
+        }
       }
 
       const cookieNames = document.cookie
@@ -751,7 +766,8 @@ export function AuthProvider({ children }) {
         }
       });
 
-      domains.forEach((domain) => {
+      const uniqueDomains = Array.from(new Set(domains.filter(Boolean)));
+      uniqueDomains.forEach((domain) => {
         uniqueNames.forEach((name) => {
           try {
             document.cookie = `${name}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;

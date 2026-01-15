@@ -2,9 +2,24 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const getCookieDomain = (host) => {
+  if (!host) return undefined;
+  const hostname = host.split(":")[0];
+  if (
+    hostname === "localhost" ||
+    hostname.startsWith("127.") ||
+    hostname.endsWith(".local")
+  ) {
+    return undefined;
+  }
+  const root = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
+  return root ? `.${root}` : undefined;
+};
+
 export async function middleware(req) {
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   const isProd = process.env.NODE_ENV === "production";
+  const cookieDomain = getCookieDomain(req.headers.get("host"));
 
   // Forward request headers so Supabase helper can read cookies and set new ones
   const res = NextResponse.next({ request: { headers: req.headers } });
@@ -31,6 +46,7 @@ export async function middleware(req) {
               sameSite: "lax",
               secure: isProd,
               path: options?.path ?? "/",
+              ...(cookieDomain ? { domain: cookieDomain } : {}),
             };
             res.cookies.set(name, value, baseOptions);
           });
@@ -51,6 +67,7 @@ export async function middleware(req) {
         maxAge: 0,
         sameSite: "lax",
         secure: isProd,
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
       });
     });
 
