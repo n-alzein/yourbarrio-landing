@@ -212,6 +212,24 @@ function BusinessLoginInner() {
     setLoading(true);
     setAuthError("");
 
+    const withTimeout = (promise, timeoutMs, label) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  label
+                    ? `${label} timed out. Please check your connection and try again.`
+                    : "Request timed out. Please check your connection and try again."
+                )
+              ),
+            timeoutMs
+          )
+        ),
+      ]);
+
     try {
       // 🔥 Tell AuthProvider this login belongs to a business account
       try {
@@ -220,23 +238,34 @@ function BusinessLoginInner() {
         console.warn("Could not set signup role", err);
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        10000,
+        "Sign in"
+      );
 
       if (error) {
         throw error;
       }
 
-      const user = data.user;
+      const user = data?.user;
+      if (!user) {
+        throw new Error("Login failed. Please try again.");
+      }
 
       // 2) 🔥 Fetch role immediately from DB (reliable)
-      const { data: profile, error: profileErr } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+      const { data: profile, error: profileErr } = await withTimeout(
+        supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle(),
+        8000,
+        "Load profile"
+      );
 
       if (profileErr) {
         throw profileErr;
@@ -254,7 +283,11 @@ function BusinessLoginInner() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // 5) Verify session is accessible
-      const { data: sessionCheck } = await supabase.auth.getSession();
+      const { data: sessionCheck } = await withTimeout(
+        supabase.auth.getSession(),
+        6000,
+        "Verify session"
+      );
       const session = sessionCheck?.session;
       console.log(
         "Login: Session check before redirect:",
@@ -262,15 +295,19 @@ function BusinessLoginInner() {
       );
 
       // 6) Sync auth cookies for SSR before navigating
-      const res = await fetch("/api/auth/refresh", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          access_token: session?.access_token,
-          refresh_token: session?.refresh_token,
+      const res = await withTimeout(
+        fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_token: session?.access_token,
+            refresh_token: session?.refresh_token,
+          }),
         }),
-      });
+        8000,
+        "Persist session"
+      );
 
       const refreshed = res.headers.get("x-auth-refresh-user") === "1";
       if (!refreshed) {
