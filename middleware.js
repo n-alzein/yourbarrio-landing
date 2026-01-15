@@ -12,8 +12,24 @@ const getCookieDomain = (host) => {
   ) {
     return undefined;
   }
-  const root = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
-  return root ? `.${root}` : undefined;
+
+  if (hostname.endsWith("yourbarrio.com")) {
+    return ".yourbarrio.com";
+  }
+
+  return undefined;
+};
+
+const applyCookies = (fromRes, toRes, log) => {
+  const cookies = fromRes.cookies.getAll();
+  cookies.forEach((cookie) => {
+    const { name, value, ...options } = cookie;
+    toRes.cookies.set(name, value, options);
+  });
+
+  if (log && cookies.length) {
+    log("merged cookies into response", cookies.map((c) => c.name));
+  }
 };
 
 export async function middleware(req) {
@@ -21,8 +37,9 @@ export async function middleware(req) {
   const isProd = process.env.NODE_ENV === "production";
   const cookieDomain = getCookieDomain(req.headers.get("host"));
 
-  // Forward request headers so Supabase helper can read cookies and set new ones
-  const res = NextResponse.next({ request: { headers: req.headers } });
+  // Use a single base response for Supabase to mutate; copy its cookies
+  // into any redirect/rewrite response to avoid dropping Set-Cookie.
+  const response = NextResponse.next({ request: { headers: req.headers } });
   const path = req.nextUrl.pathname;
 
   const log = (message, ...args) => {
@@ -48,7 +65,7 @@ export async function middleware(req) {
               path: options?.path ?? "/",
               ...(cookieDomain ? { domain: cookieDomain } : {}),
             };
-            res.cookies.set(name, value, baseOptions);
+            response.cookies.set(name, value, baseOptions);
           });
         },
       },
@@ -56,13 +73,13 @@ export async function middleware(req) {
   );
 
   const clearSupabaseCookies = () => {
-    const all = req.cookies.getAll();
-    const targets = all
+    const targets = req.cookies
+      .getAll()
       .map((c) => c.name)
       .filter((name) => name.startsWith("sb-"));
 
     targets.forEach((name) => {
-      res.cookies.set(name, "", {
+      response.cookies.set(name, "", {
         path: "/",
         maxAge: 0,
         sameSite: "lax",
@@ -77,21 +94,18 @@ export async function middleware(req) {
   };
 
   if (req.headers.get("x-supabase-callback") === "true") {
-    return res;
+    return response;
   }
 
   let user = null;
   try {
-    const {
-      data,
-      error,
-    } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getUser();
     if (error) throw error;
     user = data?.user ?? null;
   } catch (err) {
     log("getUser failed; clearing cookies", err?.message);
     clearSupabaseCookies();
-    return res;
+    return response;
   }
 
   const hasSession = Boolean(user);
@@ -125,21 +139,23 @@ export async function middleware(req) {
       redirectTarget = "/business/dashboard";
     }
 
-    return NextResponse.redirect(new URL(redirectTarget, req.url), {
-      headers: res.headers,
-    });
+    const redirectRes = NextResponse.redirect(new URL(redirectTarget, req.url));
+    applyCookies(response, redirectRes, debug ? log : null);
+    return redirectRes;
   }
 
   if (isCustomerPath && !hasSession) {
-    return NextResponse.redirect(new URL("/", req.url), {
-      headers: res.headers,
-    });
+    const redirectRes = NextResponse.redirect(new URL("/", req.url));
+    applyCookies(response, redirectRes, debug ? log : null);
+    return redirectRes;
   }
 
   if (isBusinessProtectedPath && !hasSession) {
-    return NextResponse.redirect(new URL("/business/login", req.url), {
-      headers: res.headers,
-    });
+    const redirectRes = NextResponse.redirect(
+      new URL("/business-auth/login", req.url)
+    );
+    applyCookies(response, redirectRes, debug ? log : null);
+    return redirectRes;
   }
 
   if (isPublicBusinessProfilePath && hasSession) {
@@ -147,11 +163,13 @@ export async function middleware(req) {
     if (resolvedRole === "customer") {
       const rewritten = req.nextUrl.clone();
       rewritten.pathname = `/customer${path}`;
-      return NextResponse.rewrite(rewritten);
+      const rewriteRes = NextResponse.rewrite(rewritten);
+      applyCookies(response, rewriteRes, debug ? log : null);
+      return rewriteRes;
     }
   }
 
-  return res;
+  return response;
 }
 
 export const config = {
