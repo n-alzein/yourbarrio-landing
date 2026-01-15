@@ -108,6 +108,13 @@ export async function middleware(req) {
   } catch (err) {
     log("getUser failed; clearing cookies", err?.message);
     clearSupabaseCookies();
+    if (debug) {
+      const sbCookies = req.cookies
+        .getAll()
+        .map((c) => c.name)
+        .filter((name) => name.startsWith("sb-"));
+      log("session snapshot", { path, hasSession: false, sbCookies });
+    }
     return response;
   }
 
@@ -120,6 +127,14 @@ export async function middleware(req) {
     path.startsWith("/business/onboarding");
   const isPublicBusinessProfilePath = path.startsWith("/b/");
   let role = null;
+
+  if (debug) {
+    const sbCookies = req.cookies
+      .getAll()
+      .map((c) => c.name)
+      .filter((name) => name.startsWith("sb-"));
+    log("session snapshot", { path, hasSession, sbCookies });
+  }
 
   async function resolveRole() {
     if (!hasSession || role) return role;

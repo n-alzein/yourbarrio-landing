@@ -2,12 +2,11 @@
 
 import { Suspense } from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getCookieName } from "@/lib/supabaseClient";
 
 function BusinessLoginInner() {
-  const router = useRouter();
   const { supabase, authUser, role, loadingUser } = useAuth();
   const searchParams = useSearchParams();
   const isPopup = searchParams?.get("popup") === "1";
@@ -160,7 +159,7 @@ function BusinessLoginInner() {
           if (!window.closed) {
             authDiagLog("popup:close:blocked", { target });
             authDiagLog("redirect:assign", { target });
-            window.location.assign(target);
+            window.location.replace(target);
           }
         }, 150);
 
@@ -170,7 +169,7 @@ function BusinessLoginInner() {
 
     // Use full page reload to ensure session is properly loaded
     authDiagLog("redirect:assign", { target });
-    window.location.assign(target);
+    window.location.replace(target);
   }, [authDiagLog, isPopup]);
 
   const redirectToDashboard = useCallback(async () => {
@@ -193,12 +192,12 @@ function BusinessLoginInner() {
         console.log("Login: Redirecting to dashboard, authUser:", authUser.id);
         redirectToDashboard();
       } else {
-        router.replace("/customer/home"); // non-business users redirected
+        window.location.replace("/customer/home"); // non-business users redirected
       }
     }, 200); // Increased from 50ms to 200ms
 
     return () => clearTimeout(timer);
-  }, [authUser, role, loadingUser, router, redirectToDashboard]);
+  }, [authUser, role, loadingUser, redirectToDashboard]);
 
   /* --------------------------------------------------------------
      EMAIL + PASSWORD LOGIN  (FIXED)

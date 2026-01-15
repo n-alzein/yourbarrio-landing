@@ -13,7 +13,7 @@ export default function BusinessAuthRedirector() {
     const redirectTo = (target) => {
       if (redirectingRef.current) return;
       redirectingRef.current = true;
-      window.location.assign(target || DEFAULT_TARGET);
+      window.location.replace(target || DEFAULT_TARGET);
     };
 
     const handleStorage = (event) => {

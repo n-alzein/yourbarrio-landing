@@ -717,8 +717,6 @@ export function AuthProvider({ children }) {
       profile?.role ||
       authUser?.user_metadata?.role ||
       null;
-    const currentPath =
-      typeof window !== "undefined" ? window.location.pathname : "";
     try {
       sessionStorage.setItem("forceLogout", "1");
     } catch (err) {
@@ -726,57 +724,6 @@ export function AuthProvider({ children }) {
     }
 
     const client = supabaseRef.current || getBrowserSupabaseClient();
-
-    const clearCookies = () => {
-      if (typeof document === "undefined") return;
-      const cookieName = getCookieName();
-
-      const host = window.location.hostname;
-      const domains = [host];
-      if (host && !host.startsWith("localhost") && !host.startsWith("127.")) {
-        domains.push(`.${host}`);
-        if (host.startsWith("www.")) {
-          const root = host.slice(4);
-          if (root) {
-            domains.push(root);
-            domains.push(`.${root}`);
-          }
-        }
-      }
-
-      const cookieNames = document.cookie
-        .split(";")
-        .map((entry) => entry.split("=")[0].trim())
-        .filter((name) => {
-          if (!name) return false;
-          if (name.startsWith("sb-")) return true;
-          if (cookieName && name.startsWith(cookieName)) return true;
-          return false;
-        });
-
-      if (cookieName) cookieNames.push(cookieName);
-      const uniqueNames = Array.from(new Set(cookieNames));
-
-      // Clear without domain (works for localhost)
-      uniqueNames.forEach((name) => {
-        try {
-          document.cookie = `${name}=; path=/; max-age=0; sameSite=lax`;
-        } catch (err) {
-          console.warn("Could not clear auth cookie (no domain)", name, err);
-        }
-      });
-
-      const uniqueDomains = Array.from(new Set(domains.filter(Boolean)));
-      uniqueDomains.forEach((domain) => {
-        uniqueNames.forEach((name) => {
-          try {
-            document.cookie = `${name}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;
-          } catch (err) {
-            console.warn("Could not clear auth cookie for domain", domain, name, err);
-          }
-        });
-      });
-    };
 
     const runWithTimeout = (label, task, timeoutMs) => {
       let timeoutId;
@@ -802,34 +749,18 @@ export function AuthProvider({ children }) {
       runWithTimeout("signOut:global", client.auth.signOut({ scope: "global" }), 4000);
     }
 
-    const fetchController = new AbortController();
-    const fetchTimeoutId = setTimeout(() => fetchController.abort(), 4000);
-    fetch("/api/logout", {
-      method: "POST",
-      credentials: "include",
-      keepalive: true,
-      signal: fetchController.signal,
-    })
-      .catch((err) => console.error("Logout task failed", "api/logout", err))
-      .finally(() => clearTimeout(fetchTimeoutId));
-
-    clearCookies();
-
     setAuthUser(null);
     setProfile(null);
     setLoadingUser(false);
 
-    const target =
-      lastRole === "business" || currentPath.startsWith("/business")
-        ? "/business"
-        : "/";
-
     if (typeof window !== "undefined") {
-      window.location.assign(target);
-    } else {
-      router.replace(target);
-      router.refresh();
+      window.location.replace("/api/auth/logout");
+      return;
     }
+
+    const target = lastRole === "business" ? "/business" : "/";
+    router.replace(target);
+    router.refresh();
   }
 
   return (
