@@ -266,18 +266,24 @@ export function AuthProvider({ children }) {
     const resolveFallbackUser = async () => {
       const cached = authUserRef.current || (await getCachedUser());
       if (!cached) return null;
-
       console.log("AuthProvider: Returning cached user while handling error");
-
-      client.auth.refreshSession().then(({ error: refreshError }) => {
-        if (refreshError) {
-          console.error("AuthProvider: Background refresh failed", refreshError);
-        } else {
-          console.log("AuthProvider: Background refresh succeeded");
-        }
-      });
-
       return cached;
+    };
+
+    const refreshSessionSafe = async () => {
+      try {
+        const timeoutMs = 3500;
+        const { data, error } = await Promise.race([
+          client.auth.refreshSession(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("refreshSession timeout")), timeoutMs)
+          ),
+        ]);
+        if (error) return { ok: false, error };
+        return { ok: true, session: data?.session ?? null };
+      } catch (err) {
+        return { ok: false, error: err };
+      }
     };
 
     try {
@@ -288,7 +294,26 @@ export function AuthProvider({ children }) {
       if (error) {
         console.warn("AuthProvider: getUser error", error);
 
-        return await resolveFallbackUser();
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          return await resolveFallbackUser();
+        }
+
+        const refreshResult = await refreshSessionSafe();
+        if (!refreshResult.ok) {
+          console.warn("AuthProvider: refreshSession failed", refreshResult.error);
+          await clearBrokenSession();
+          return null;
+        }
+
+        const { data: refreshedData, error: refreshedError } =
+          await client.auth.getUser();
+        if (refreshedError) {
+          console.warn("AuthProvider: getUser after refresh failed", refreshedError);
+          await clearBrokenSession();
+          return null;
+        }
+
+        return sanitizeAuthUser(refreshedData?.user ?? null);
       }
 
       return sanitizeAuthUser(data?.user ?? null);
@@ -349,11 +374,65 @@ export function AuthProvider({ children }) {
   };
 
   const clearBrokenSession = async () => {
+    const clearAuthCookies = () => {
+      if (typeof document === "undefined") return;
+      const cookieName = getCookieName();
+      const host = window.location.hostname;
+      const domains = [host];
+      if (host && !host.startsWith("localhost") && !host.startsWith("127.")) {
+        domains.push(`.${host}`);
+      }
+
+      const cookieNames = document.cookie
+        .split(";")
+        .map((entry) => entry.split("=")[0].trim())
+        .filter((name) => {
+          if (!name) return false;
+          if (name.startsWith("sb-")) return true;
+          if (cookieName && name.startsWith(cookieName)) return true;
+          return false;
+        });
+
+      if (cookieName) cookieNames.push(cookieName);
+      const uniqueNames = Array.from(new Set(cookieNames));
+
+      uniqueNames.forEach((name) => {
+        try {
+          document.cookie = `${name}=; path=/; max-age=0; sameSite=lax`;
+        } catch (err) {
+          console.warn("Could not clear auth cookie (no domain)", name, err);
+        }
+      });
+
+      domains.forEach((domain) => {
+        uniqueNames.forEach((name) => {
+          try {
+            document.cookie = `${name}=; path=/; domain=${domain}; max-age=0; sameSite=lax`;
+          } catch (err) {
+            console.warn("Could not clear auth cookie for domain", domain, name, err);
+          }
+        });
+      });
+    };
+
+    const clearAuthStorage = () => {
+      if (typeof localStorage === "undefined") return;
+      try {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("sb-"))
+          .forEach((key) => localStorage.removeItem(key));
+      } catch (err) {
+        console.warn("Could not clear auth storage", err);
+      }
+    };
+
     try {
       await supabase?.auth?.signOut();
     } catch (err) {
       console.warn("Supabase signOut failed while clearing session", err);
     }
+    clearAuthCookies();
+    clearAuthStorage();
     resetState();
   };
 
