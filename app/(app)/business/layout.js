@@ -40,7 +40,7 @@ export default async function BusinessLayout({ children }) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/business/login");
+    redirect("/business-auth/login");
   }
 
   const role = await resolveRole(supabase, user);
