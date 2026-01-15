@@ -20,11 +20,14 @@ const getCookieDomain = (host) => {
   return undefined;
 };
 
-const applyCookies = (fromRes, toRes, log) => {
+const applyCookies = (fromRes, toRes, baseOptions, log) => {
   const cookies = fromRes.cookies.getAll();
   cookies.forEach((cookie) => {
     const { name, value, ...options } = cookie;
-    toRes.cookies.set(name, value, options);
+    toRes.cookies.set(name, value, {
+      ...options,
+      ...baseOptions,
+    });
   });
 
   if (log && cookies.length) {
@@ -36,6 +39,12 @@ export async function middleware(req) {
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   const isProd = process.env.NODE_ENV === "production";
   const cookieDomain = getCookieDomain(req.headers.get("host"));
+  const cookieBaseOptions = {
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
+  };
 
   // Use a single base response for Supabase to mutate; copy its cookies
   // into any redirect/rewrite response to avoid dropping Set-Cookie.
@@ -58,14 +67,11 @@ export async function middleware(req) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            const baseOptions = {
+            response.cookies.set(name, value, {
               ...options,
-              sameSite: "lax",
-              secure: isProd,
-              path: options?.path ?? "/",
-              ...(cookieDomain ? { domain: cookieDomain } : {}),
-            };
-            response.cookies.set(name, value, baseOptions);
+              ...cookieBaseOptions,
+              path: options?.path ?? cookieBaseOptions.path,
+            });
           });
         },
       },
@@ -80,11 +86,8 @@ export async function middleware(req) {
 
     targets.forEach((name) => {
       response.cookies.set(name, "", {
-        path: "/",
+        ...cookieBaseOptions,
         maxAge: 0,
-        sameSite: "lax",
-        secure: isProd,
-        ...(cookieDomain ? { domain: cookieDomain } : {}),
       });
     });
 
@@ -140,13 +143,13 @@ export async function middleware(req) {
     }
 
     const redirectRes = NextResponse.redirect(new URL(redirectTarget, req.url));
-    applyCookies(response, redirectRes, debug ? log : null);
+    applyCookies(response, redirectRes, cookieBaseOptions, debug ? log : null);
     return redirectRes;
   }
 
   if (isCustomerPath && !hasSession) {
     const redirectRes = NextResponse.redirect(new URL("/", req.url));
-    applyCookies(response, redirectRes, debug ? log : null);
+    applyCookies(response, redirectRes, cookieBaseOptions, debug ? log : null);
     return redirectRes;
   }
 
@@ -154,7 +157,7 @@ export async function middleware(req) {
     const redirectRes = NextResponse.redirect(
       new URL("/business-auth/login", req.url)
     );
-    applyCookies(response, redirectRes, debug ? log : null);
+    applyCookies(response, redirectRes, cookieBaseOptions, debug ? log : null);
     return redirectRes;
   }
 
@@ -164,7 +167,7 @@ export async function middleware(req) {
       const rewritten = req.nextUrl.clone();
       rewritten.pathname = `/customer${path}`;
       const rewriteRes = NextResponse.rewrite(rewritten);
-      applyCookies(response, rewriteRes, debug ? log : null);
+      applyCookies(response, rewriteRes, cookieBaseOptions, debug ? log : null);
       return rewriteRes;
     }
   }
