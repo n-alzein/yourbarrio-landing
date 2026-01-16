@@ -5,12 +5,28 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabaseClient";
 
+const getCookieDomain = (host) => {
+  if (!host) return undefined;
+  const hostname = host.split(":")[0];
+  if (hostname.endsWith("yourbarrio.com")) {
+    return ".yourbarrio.com";
+  }
+  return undefined;
+};
+
 export async function GET(request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const cookieName = getCookieName();
   const pendingCookies = [];
   const isProd = process.env.NODE_ENV === "production";
+  const cookieDomain = getCookieDomain(request.headers.get("host"));
+  const cookieBaseOptions = {
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
+  };
 
   // Redirect back to login if no code is present
   if (!code) {
@@ -94,9 +110,7 @@ export async function GET(request) {
   pendingCookies.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, {
       ...options,
-      sameSite: "lax",
-      secure: isProd,
-      path: options?.path ?? "/",
+      ...cookieBaseOptions,
     });
   });
 

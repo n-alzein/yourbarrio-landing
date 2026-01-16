@@ -6,24 +6,38 @@ import { createServerClient } from "@supabase/ssr";
 const getCookieDomain = (host) => {
   if (!host) return undefined;
   const hostname = host.split(":")[0];
-  if (
-    hostname === "localhost" ||
-    hostname.startsWith("127.") ||
-    hostname.endsWith(".local")
-  ) {
-    return undefined;
-  }
-
   if (hostname.endsWith("yourbarrio.com")) {
     return ".yourbarrio.com";
   }
-
   return undefined;
+};
+
+const clearCookieVariants = (response, name, isProd) => {
+  const baseOptions = {
+    path: "/",
+    sameSite: "lax",
+    secure: isProd,
+    maxAge: 0,
+    expires: new Date(0),
+  };
+
+  [".yourbarrio.com", "www.yourbarrio.com", undefined].forEach((domain) => {
+    response.cookies.set(name, "", {
+      ...baseOptions,
+      ...(domain ? { domain } : {}),
+    });
+  });
 };
 
 export async function GET(request) {
   const isProd = process.env.NODE_ENV === "production";
   const cookieDomain = getCookieDomain(request.headers.get("host"));
+  const cookieBaseOptions = {
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
+  };
 
   const response = NextResponse.redirect(new URL("/", request.url));
   response.headers.set(
@@ -47,10 +61,7 @@ export async function GET(request) {
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, {
               ...options,
-              sameSite: "lax",
-              secure: isProd,
-              path: options?.path ?? "/",
-              ...(cookieDomain ? { domain: cookieDomain } : {}),
+              ...cookieBaseOptions,
             });
           });
         },
@@ -71,13 +82,7 @@ export async function GET(request) {
 
   const uniqueNames = Array.from(new Set(sbCookieNames));
   uniqueNames.forEach((name) => {
-    response.cookies.set(name, "", {
-      path: "/",
-      maxAge: 0,
-      sameSite: "lax",
-      secure: isProd,
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    });
+    clearCookieVariants(response, name, isProd);
   });
 
   return response;

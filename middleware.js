@@ -5,19 +5,27 @@ import { createServerClient } from "@supabase/ssr";
 const getCookieDomain = (host) => {
   if (!host) return undefined;
   const hostname = host.split(":")[0];
-  if (
-    hostname === "localhost" ||
-    hostname.startsWith("127.") ||
-    hostname.endsWith(".local")
-  ) {
-    return undefined;
-  }
-
   if (hostname.endsWith("yourbarrio.com")) {
     return ".yourbarrio.com";
   }
-
   return undefined;
+};
+
+const findDuplicateSbAuthTokens = (cookieHeader) => {
+  if (!cookieHeader) return [];
+  const counts = new Map();
+  cookieHeader.split(";").forEach((pair) => {
+    const trimmed = pair.trim();
+    if (!trimmed) return;
+    const eqIndex = trimmed.indexOf("=");
+    if (eqIndex === -1) return;
+    const name = trimmed.slice(0, eqIndex);
+    if (!name.startsWith("sb-") || !name.endsWith("-auth-token")) return;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .filter(([, count]) => count > 1)
+    .map(([name]) => name);
 };
 
 const applyCookies = (fromRes, toRes, baseOptions, log) => {
@@ -25,8 +33,8 @@ const applyCookies = (fromRes, toRes, baseOptions, log) => {
   cookies.forEach((cookie) => {
     const { name, value, ...options } = cookie;
     toRes.cookies.set(name, value, {
-      ...baseOptions,
       ...options,
+      ...baseOptions,
     });
   });
 
@@ -57,6 +65,16 @@ export async function middleware(req) {
 
   log("executing for path", path);
 
+  if (debug) {
+    const duplicates = findDuplicateSbAuthTokens(req.headers.get("cookie"));
+    if (duplicates.length) {
+      log("duplicate auth cookies detected", {
+        names: duplicates,
+        domains: [".yourbarrio.com", "www.yourbarrio.com", "(host-only)"],
+      });
+    }
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -68,8 +86,8 @@ export async function middleware(req) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, {
-              ...cookieBaseOptions,
               ...options,
+              ...cookieBaseOptions,
             });
           });
         },
@@ -83,15 +101,30 @@ export async function middleware(req) {
       .map((c) => c.name)
       .filter((name) => name.startsWith("sb-"));
 
+    const clearOptions = {
+      path: "/",
+      sameSite: "lax",
+      secure: isProd,
+      maxAge: 0,
+      expires: new Date(0),
+    };
+
+    const domainsToClear = [".yourbarrio.com", "www.yourbarrio.com", undefined];
+
     targets.forEach((name) => {
-      response.cookies.set(name, "", {
-        ...cookieBaseOptions,
-        maxAge: 0,
+      domainsToClear.forEach((domain) => {
+        response.cookies.set(name, "", {
+          ...clearOptions,
+          ...(domain ? { domain } : {}),
+        });
       });
     });
 
     if (targets.length && debug) {
-      log("cleared invalid supabase cookies", targets);
+      log("cleared supabase cookies (triple-clear)", {
+        names: targets,
+        domains: [".yourbarrio.com", "www.yourbarrio.com", "(host-only)"],
+      });
     }
   };
 

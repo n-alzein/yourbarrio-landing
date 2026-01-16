@@ -8,15 +8,27 @@ import { getCookieName } from "@/lib/supabaseClient";
 const getCookieDomain = (host) => {
   if (!host) return undefined;
   const hostname = host.split(":")[0];
-  if (
-    hostname === "localhost" ||
-    hostname.startsWith("127.") ||
-    hostname.endsWith(".local")
-  ) {
-    return undefined;
+  if (hostname.endsWith("yourbarrio.com")) {
+    return ".yourbarrio.com";
   }
-  const root = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
-  return root ? `.${root}` : undefined;
+  return undefined;
+};
+
+const clearCookieVariants = (response, name, isProd) => {
+  const baseOptions = {
+    path: "/",
+    sameSite: "lax",
+    secure: isProd,
+    maxAge: 0,
+    expires: new Date(0),
+  };
+
+  [".yourbarrio.com", "www.yourbarrio.com", undefined].forEach((domain) => {
+    response.cookies.set(name, "", {
+      ...baseOptions,
+      ...(domain ? { domain } : {}),
+    });
+  });
 };
 
 export async function POST() {
@@ -27,6 +39,12 @@ export async function POST() {
     const cookieStore = await cookies();
     const host = (await headers()).get("host");
     const cookieDomain = getCookieDomain(host);
+    const cookieBaseOptions = {
+      sameSite: "lax",
+      secure: isProd,
+      path: "/",
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
+    };
 
     const res = NextResponse.json({ success: true });
 
@@ -39,19 +57,16 @@ export async function POST() {
           getAll() {
             return cookieStore.getAll();
           },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              res.cookies.set(name, value, {
-                ...options,
-                sameSite: "lax",
-                secure: isProd,
-                path: options?.path ?? "/",
-                ...(cookieDomain ? { domain: cookieDomain } : {}),
-              });
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, {
+              ...options,
+              ...cookieBaseOptions,
             });
-          },
+          });
         },
-      }
+      },
+    }
     );
 
     await supabase.auth.signOut();
@@ -70,13 +85,7 @@ export async function POST() {
 
     uniqueNames.forEach((name) => {
       // Explicitly clear auth cookies in case Supabase helper skips them
-      res.cookies.set(name, "", {
-        path: "/",
-        maxAge: 0,
-        sameSite: "lax",
-        secure: isProd,
-        ...(cookieDomain ? { domain: cookieDomain } : {}),
-      });
+      clearCookieVariants(res, name, isProd);
     });
 
     return res;

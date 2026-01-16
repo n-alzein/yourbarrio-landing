@@ -6,15 +6,10 @@ import { createServerClient } from "@supabase/ssr";
 const getCookieDomain = (host) => {
   if (!host) return undefined;
   const hostname = host.split(":")[0];
-  if (
-    hostname === "localhost" ||
-    hostname.startsWith("127.") ||
-    hostname.endsWith(".local")
-  ) {
-    return undefined;
+  if (hostname.endsWith("yourbarrio.com")) {
+    return ".yourbarrio.com";
   }
-  const root = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
-  return root ? `.${root}` : undefined;
+  return undefined;
 };
 
 export async function POST(request) {
@@ -23,6 +18,12 @@ export async function POST(request) {
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   let body = {};
   const cookieDomain = getCookieDomain(request.headers.get("host"));
+  const cookieBaseOptions = {
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
+  };
 
   try {
     body = await request.json();
@@ -43,15 +44,10 @@ export async function POST(request) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            const baseOptions = {
+            response.cookies.set(name, value, {
               ...options,
-              sameSite: "lax",
-              secure: isProd,
-              path: options?.path ?? "/",
-              ...(cookieDomain ? { domain: cookieDomain } : {}),
-            };
-
-            response.cookies.set(name, value, baseOptions);
+              ...cookieBaseOptions,
+            });
           });
         },
       },
