@@ -25,8 +25,8 @@ const applyCookies = (fromRes, toRes, baseOptions, log) => {
   cookies.forEach((cookie) => {
     const { name, value, ...options } = cookie;
     toRes.cookies.set(name, value, {
-      ...options,
       ...baseOptions,
+      ...options,
     });
   });
 
@@ -68,9 +68,8 @@ export async function middleware(req) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, {
-              ...options,
               ...cookieBaseOptions,
-              path: options?.path ?? cookieBaseOptions.path,
+              ...options,
             });
           });
         },
