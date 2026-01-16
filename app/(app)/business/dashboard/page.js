@@ -335,33 +335,50 @@ export default function BusinessDashboard() {
 
       <div className="max-w-6xl mx-auto">
 
-        {/* HEADER */}
-        <div className={`flex flex-col md:flex-row items-center gap-6 mb-12 p-8 rounded-3xl ${surfaceTone.header}`}>
+        {/* BANNER */}
+        <section
+          className={`flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-12 p-8 md:p-10 rounded-3xl ${surfaceTone.header}`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center gap-6 text-center md:text-left">
+            <div className={`w-32 h-32 rounded-2xl overflow-hidden ${isLight ? "ring-1 ring-slate-200" : ""}`}>
+              <SafeImage
+                src={business.profile_photo_url || "/business-placeholder.png"}
+                alt="Business Logo"
+                className="object-cover w-full h-full"
+              />
+            </div>
 
-          <div className={`w-32 h-32 rounded-2xl overflow-hidden ${isLight ? "ring-1 ring-slate-200" : ""}`}>
-            <SafeImage
-              src={business.profile_photo_url || "/business-placeholder.png"}
-              alt="Business Logo"
-              className="object-cover w-full h-full"
-            />
+            <div className="flex flex-col gap-1">
+              <h1 className="text-4xl font-bold">{business.business_name}</h1>
+              <p className={`text-lg ${textTone.soft}`}>{business.category}</p>
+
+              {business.city && (
+                <p className={`text-sm ${textTone.subtle}`}>📍 {business.city}</p>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1 text-center md:text-left">
-            <h1 className="text-4xl font-bold">{business.business_name}</h1>
-            <p className={`text-lg ${textTone.soft}`}>{business.category}</p>
-
-            {business.city && (
-              <p className={`text-sm ${textTone.subtle}`}>📍 {business.city}</p>
-            )}
-
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-3">
             <Link
               href="/business/settings"
-              className={`mt-4 inline-flex px-5 py-2 rounded-xl border transition ${surfaceTone.buttonSecondary}`}
+              className={`inline-flex px-5 py-2 rounded-xl border transition ${surfaceTone.buttonSecondary}`}
             >
               Manage Settings
             </Link>
+            <Link
+              href="/business/profile"
+              className={`inline-flex px-5 py-2 rounded-xl border transition ${surfaceTone.buttonSecondary}`}
+            >
+              Business profile
+            </Link>
+            <Link
+              href="/business/listings/new"
+              className={`inline-flex px-5 py-2 rounded-xl border transition ${surfaceTone.buttonSecondary}`}
+            >
+              + New listing
+            </Link>
           </div>
-        </div>
+        </section>
 
         {/* STATS */}
         {stats && (

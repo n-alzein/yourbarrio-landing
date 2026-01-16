@@ -26,9 +26,9 @@ export default function BusinessProfileHeader({
     : "No reviews yet";
 
   return (
-    <div className="sticky top-24 z-10">
+    <div className="sticky top-16 z-10">
       <div
-        className={`relative overflow-hidden rounded-2xl border ${tone.headerBorder} ${tone.headerSurface} shadow-[0_30px_70px_-50px_rgba(15,23,42,0.6)]`}
+        className={`relative overflow-hidden rounded-b-2xl border-x border-b ${tone.headerBorder} ${tone.headerSurface} shadow-[0_30px_70px_-50px_rgba(15,23,42,0.6)]`}
       >
         <div className="relative h-48 md:h-60">
           {!profile?.cover_photo_url ? (

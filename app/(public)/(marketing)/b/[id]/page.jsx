@@ -7,6 +7,7 @@ import BusinessGalleryGrid from "@/components/publicBusinessProfile/BusinessGall
 import BusinessListingsGrid from "@/components/publicBusinessProfile/BusinessListingsGrid";
 import BusinessReviewsPanel from "@/components/publicBusinessProfile/BusinessReviewsPanel";
 import PublicBusinessPreviewClient from "@/components/publicBusinessProfile/PublicBusinessPreviewClient";
+import ProfileViewTracker from "@/components/publicBusinessProfile/ProfileViewTracker";
 
 const PROFILE_FIELDS = [
   "id",
@@ -311,7 +312,7 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
   const isPreview = resolvedSearch?.preview === "1";
 
   if (isPreview) {
-    return <PublicBusinessPreviewClient businessId={businessId} />;
+    return <PublicBusinessPreviewClient businessId={businessId} trackView={false} />;
   }
 
   const supabase = await createSupabaseServerClient();
@@ -321,7 +322,7 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
   const role = user ? await resolveAuthRole(supabase, user) : null;
 
   if (role === "customer") {
-    return <PublicBusinessPreviewClient businessId={businessId} />;
+    return <PublicBusinessPreviewClient businessId={businessId} trackView />;
   }
 
   const profile = await fetchPublicProfile(supabase, businessId);
@@ -361,6 +362,7 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
 
   return (
     <div className="min-h-screen text-white -mt-20">
+      <ProfileViewTracker businessId={businessId} />
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}

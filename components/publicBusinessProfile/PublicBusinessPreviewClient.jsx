@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
@@ -86,7 +86,11 @@ function PreviewSkeleton() {
   );
 }
 
-export default function PublicBusinessPreviewClient({ businessId, onReady }) {
+export default function PublicBusinessPreviewClient({
+  businessId,
+  onReady,
+  trackView = true,
+}) {
   const [profile, setProfile] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [gallery, setGallery] = useState([]);
@@ -94,6 +98,7 @@ export default function PublicBusinessPreviewClient({ businessId, onReady }) {
   const [reviews, setReviews] = useState([]);
   const [ratingSummary, setRatingSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const viewTrackedRef = useRef(false);
 
   useEffect(() => {
     const cached = readPreviewCache(businessId);
@@ -107,6 +112,18 @@ export default function PublicBusinessPreviewClient({ businessId, onReady }) {
       setLoading(false);
     }
   }, [businessId]);
+
+  useEffect(() => {
+    if (!trackView || !businessId || viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
+
+    fetch("/api/business/views", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [businessId, trackView]);
 
   useEffect(() => {
     let active = true;
