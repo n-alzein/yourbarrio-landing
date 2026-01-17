@@ -406,6 +406,8 @@ export default function CustomerNavbar() {
     user?.full_name ||
     authUser?.user_metadata?.full_name ||
     authUser?.user_metadata?.name ||
+    authUser?.email ||
+    authUser?.user_metadata?.email ||
     "Account";
 
   const email =

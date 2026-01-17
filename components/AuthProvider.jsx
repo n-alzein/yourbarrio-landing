@@ -360,6 +360,57 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const buildFallbackProfile = (user) => {
+    if (!user) return null;
+    const fullName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      "";
+    const role =
+      user.user_metadata?.role ||
+      "customer";
+
+    return {
+      id: user.id,
+      email: user.email || "",
+      role,
+      full_name: fullName,
+      business_name: "",
+      profile_photo_url: user.user_metadata?.avatar_url || "",
+    };
+  };
+
+  async function ensureProfile(user, existingProfile) {
+    if (!user) return null;
+    if (existingProfile) return existingProfile;
+
+    const fallback = buildFallbackProfile(user);
+    const client = getSupabaseClient();
+    if (client && fallback) {
+      try {
+        const { error } = await client
+          .from("users")
+          .upsert(
+            {
+              id: fallback.id,
+              email: fallback.email,
+              role: fallback.role,
+              full_name: fallback.full_name || "",
+              profile_photo_url: fallback.profile_photo_url || "",
+            },
+            { onConflict: "id", ignoreDuplicates: true }
+          );
+        if (error) {
+          console.warn("Profile upsert failed", error);
+        }
+      } catch (err) {
+        console.warn("Profile upsert threw", err);
+      }
+    }
+
+    return fallback;
+  }
+
   /* -----------------------------------------------------------------
      SAFE RESET / CLEAR
   ----------------------------------------------------------------- */
@@ -463,9 +514,10 @@ export function AuthProvider({ children }) {
       if (cachedUser) {
         setAuthUser(cachedUser);
         const p = await loadProfile(cachedUser.id);
-        if (!p?.aborted && !p?.error) {
-          setProfile(p.profile);
-          await cacheGoogleAvatar(cachedUser, p.profile);
+        if (!p?.aborted) {
+          const resolvedProfile = p?.profile || (await ensureProfile(cachedUser, null));
+          setProfile(resolvedProfile);
+          await cacheGoogleAvatar(cachedUser, resolvedProfile);
         }
       }
 
@@ -475,9 +527,10 @@ export function AuthProvider({ children }) {
       if (user && user.id !== cachedUser?.id) {
         setAuthUser(user);
         const p = await loadProfile(user.id);
-        if (!p?.aborted && !p?.error) {
-          setProfile(p.profile);
-          await cacheGoogleAvatar(user, p.profile);
+        if (!p?.aborted) {
+          const resolvedProfile = p?.profile || (await ensureProfile(user, null));
+          setProfile(resolvedProfile);
+          await cacheGoogleAvatar(user, resolvedProfile);
         }
       } else if (!user && !cachedUser) {
         setAuthUser(null);
@@ -513,9 +566,11 @@ export function AuthProvider({ children }) {
           const p = await loadProfile(cachedUser.id, {
             signal: controller.signal,
           });
-          if (isMountedRef.current && !p?.aborted && !p?.error) {
-            setProfile(p.profile);
-            await cacheGoogleAvatar(cachedUser, p.profile);
+          if (isMountedRef.current && !p?.aborted) {
+            const resolvedProfile =
+              p?.profile || (await ensureProfile(cachedUser, null));
+            setProfile(resolvedProfile);
+            await cacheGoogleAvatar(cachedUser, resolvedProfile);
           }
         }
 
@@ -525,9 +580,10 @@ export function AuthProvider({ children }) {
         if (user && cachedUser?.id !== user?.id) {
           setAuthUser(user);
           const p = await loadProfile(user.id, { signal: controller.signal });
-          if (isMountedRef.current && !p?.aborted && !p?.error) {
-            setProfile(p.profile);
-            await cacheGoogleAvatar(user, p.profile);
+          if (isMountedRef.current && !p?.aborted) {
+            const resolvedProfile = p?.profile || (await ensureProfile(user, null));
+            setProfile(resolvedProfile);
+            await cacheGoogleAvatar(user, resolvedProfile);
           }
         } else if (!user && !cachedUser) {
           setProfile(null);
@@ -590,10 +646,11 @@ export function AuthProvider({ children }) {
 
             if (resolvedUser) {
               const p = await loadProfile(resolvedUser.id);
-              if (!p?.aborted && !p?.error) {
-                setProfile(p.profile);
-
-                await cacheGoogleAvatar(resolvedUser, p.profile);
+              if (!p?.aborted) {
+                const resolvedProfile =
+                  p?.profile || (await ensureProfile(resolvedUser, null));
+                setProfile(resolvedProfile);
+                await cacheGoogleAvatar(resolvedUser, resolvedProfile);
               }
 
               // Start proactive session refresh when user signs in
@@ -672,9 +729,10 @@ export function AuthProvider({ children }) {
 
         if (user) {
           const p = await loadProfile(user.id);
-          if (!p?.aborted && !p?.error) {
-            setProfile(p.profile);
-            await cacheGoogleAvatar(user, p.profile);
+          if (!p?.aborted) {
+            const resolvedProfile = p?.profile || (await ensureProfile(user, null));
+            setProfile(resolvedProfile);
+            await cacheGoogleAvatar(user, resolvedProfile);
           }
         }
       } catch (err) {
@@ -695,7 +753,10 @@ export function AuthProvider({ children }) {
   async function refreshProfile() {
     if (!authUser?.id) return;
     const p = await loadProfile(authUser.id);
-    if (p && !p.error && !p.aborted) setProfile(p.profile);
+    if (p && !p.aborted) {
+      const resolvedProfile = p?.profile || (await ensureProfile(authUser, null));
+      setProfile(resolvedProfile);
+    }
   }
 
   useEffect(() => {

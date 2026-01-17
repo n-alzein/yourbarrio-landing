@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useModal } from "./ModalProvider";
 
 export default function CustomerLoginModal({ onClose }) {
-  const searchParams = useSearchParams();
   const { supabase, loadingUser } = useAuth();
   const { openModal } = useModal();
 
@@ -51,12 +49,10 @@ export default function CustomerLoginModal({ onClose }) {
       return;
     }
 
-    const redirectParam = searchParams?.get("redirect");
-    const fallback =
+    const dest =
       profile?.role === "business"
         ? "/business/dashboard"
         : "/customer/home";
-    const dest = redirectParam || fallback;
 
     onClose?.();
 
