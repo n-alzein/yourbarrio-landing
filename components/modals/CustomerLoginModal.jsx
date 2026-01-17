@@ -104,7 +104,7 @@ export default function CustomerLoginModal({ onClose }) {
       return;
     }
 
-    window.location.assign(dest);
+    window.location.replace(dest);
     setLoading(false);
   }
 

@@ -2,12 +2,11 @@
 
 import { Suspense } from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getCookieName } from "@/lib/supabaseClient";
 
 function BusinessRegisterInner() {
-  const router = useRouter();
   const { supabase, authUser, role, loadingUser } = useAuth();
   const searchParams = useSearchParams();
   const isPopup = searchParams?.get("popup") === "1";
@@ -67,7 +66,7 @@ function BusinessRegisterInner() {
 
         setTimeout(() => {
           if (!window.closed) {
-            window.location.href = target;
+            window.location.replace(target);
           }
         }, 150);
 
@@ -75,7 +74,7 @@ function BusinessRegisterInner() {
       }
     }
 
-    window.location.href = target;
+    window.location.replace(target);
   }, [isPopup]);
 
   const redirectToOnboarding = useCallback(async () => {
@@ -95,9 +94,9 @@ function BusinessRegisterInner() {
     if (role === "business") {
       redirectToOnboarding();
     } else {
-      router.replace("/customer/home");
+      window.location.replace("/customer/home");
     }
-  }, [authUser, role, loadingUser, router, redirectToOnboarding]);
+  }, [authUser, role, loadingUser, redirectToOnboarding]);
 
   /* --------------------------------------------------------------
      EMAIL/PASSWORD BUSINESS SIGNUP

@@ -2,28 +2,17 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-
-const getCookieDomain = (host) => {
-  if (!host) return undefined;
-  const hostname = host.split(":")[0];
-  if (hostname.endsWith("yourbarrio.com")) {
-    return ".yourbarrio.com";
-  }
-  return undefined;
-};
+import { getCookieBaseOptions } from "@/lib/authCookies";
 
 export async function POST(request) {
   const response = NextResponse.json({ ok: true }, { status: 200 });
   const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   let body = {};
-  const cookieDomain = getCookieDomain(request.headers.get("host"));
-  const cookieBaseOptions = {
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    ...(cookieDomain ? { domain: cookieDomain } : {}),
-  };
+  const cookieBaseOptions = getCookieBaseOptions({
+    host: request.headers.get("host"),
+    isProd,
+  });
 
   try {
     body = await request.json();

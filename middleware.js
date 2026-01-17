@@ -1,32 +1,11 @@
 // middleware.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-
-const getCookieDomain = (host) => {
-  if (!host) return undefined;
-  const hostname = host.split(":")[0];
-  if (hostname.endsWith("yourbarrio.com")) {
-    return ".yourbarrio.com";
-  }
-  return undefined;
-};
-
-const findDuplicateSbAuthTokens = (cookieHeader) => {
-  if (!cookieHeader) return [];
-  const counts = new Map();
-  cookieHeader.split(";").forEach((pair) => {
-    const trimmed = pair.trim();
-    if (!trimmed) return;
-    const eqIndex = trimmed.indexOf("=");
-    if (eqIndex === -1) return;
-    const name = trimmed.slice(0, eqIndex);
-    if (!name.startsWith("sb-") || !name.endsWith("-auth-token")) return;
-    counts.set(name, (counts.get(name) || 0) + 1);
-  });
-  return Array.from(counts.entries())
-    .filter(([, count]) => count > 1)
-    .map(([name]) => name);
-};
+import {
+  clearSupabaseCookies,
+  getCookieBaseOptions,
+  logSupabaseCookieDiagnostics,
+} from "./lib/authCookies";
 
 const applyCookies = (fromRes, toRes, baseOptions, log) => {
   const cookies = fromRes.cookies.getAll();
@@ -46,13 +25,10 @@ const applyCookies = (fromRes, toRes, baseOptions, log) => {
 export async function middleware(req) {
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   const isProd = process.env.NODE_ENV === "production";
-  const cookieDomain = getCookieDomain(req.headers.get("host"));
-  const cookieBaseOptions = {
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    ...(cookieDomain ? { domain: cookieDomain } : {}),
-  };
+  const cookieBaseOptions = getCookieBaseOptions({
+    host: req.headers.get("host"),
+    isProd,
+  });
 
   // Use a single base response for Supabase to mutate; copy its cookies
   // into any redirect/rewrite response to avoid dropping Set-Cookie.
@@ -65,15 +41,7 @@ export async function middleware(req) {
 
   log("executing for path", path);
 
-  if (debug) {
-    const duplicates = findDuplicateSbAuthTokens(req.headers.get("cookie"));
-    if (duplicates.length) {
-      log("duplicate auth cookies detected", {
-        names: duplicates,
-        domains: [".yourbarrio.com", "www.yourbarrio.com", "(host-only)"],
-      });
-    }
-  }
+  logSupabaseCookieDiagnostics({ req, debug, log });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -95,39 +63,6 @@ export async function middleware(req) {
     }
   );
 
-  const clearSupabaseCookies = () => {
-    const targets = req.cookies
-      .getAll()
-      .map((c) => c.name)
-      .filter((name) => name.startsWith("sb-"));
-
-    const clearOptions = {
-      path: "/",
-      sameSite: "lax",
-      secure: isProd,
-      maxAge: 0,
-      expires: new Date(0),
-    };
-
-    const domainsToClear = [".yourbarrio.com", "www.yourbarrio.com", undefined];
-
-    targets.forEach((name) => {
-      domainsToClear.forEach((domain) => {
-        response.cookies.set(name, "", {
-          ...clearOptions,
-          ...(domain ? { domain } : {}),
-        });
-      });
-    });
-
-    if (targets.length && debug) {
-      log("cleared supabase cookies (triple-clear)", {
-        names: targets,
-        domains: [".yourbarrio.com", "www.yourbarrio.com", "(host-only)"],
-      });
-    }
-  };
-
   if (req.headers.get("x-supabase-callback") === "true") {
     return response;
   }
@@ -139,13 +74,9 @@ export async function middleware(req) {
     user = data?.user ?? null;
   } catch (err) {
     log("getUser failed; clearing cookies", err?.message);
-    clearSupabaseCookies();
+    clearSupabaseCookies(response, req, { isProd, debug, log });
     if (debug) {
-      const sbCookies = req.cookies
-        .getAll()
-        .map((c) => c.name)
-        .filter((name) => name.startsWith("sb-"));
-      log("session snapshot", { path, hasSession: false, sbCookies });
+      logSupabaseCookieDiagnostics({ req, debug, log });
     }
     return response;
   }
@@ -161,11 +92,8 @@ export async function middleware(req) {
   let role = null;
 
   if (debug) {
-    const sbCookies = req.cookies
-      .getAll()
-      .map((c) => c.name)
-      .filter((name) => name.startsWith("sb-"));
-    log("session snapshot", { path, hasSession, sbCookies });
+    log("session snapshot", { path, hasSession });
+    logSupabaseCookieDiagnostics({ req, debug, log });
   }
 
   async function resolveRole() {

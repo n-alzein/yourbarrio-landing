@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import InactivityLogout from "@/components/auth/InactivityLogout";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -51,7 +53,20 @@ export default async function BusinessLayout({ children }) {
   return (
     <>
       <BusinessNavbar requireAuth />
-      <BusinessRouteShell>{children}</BusinessRouteShell>
+      <InactivityLogout />
+      <BusinessRouteShell>
+        <Suspense
+          fallback={
+            <div className="min-h-screen px-6 md:px-10 pt-24 text-white">
+              <div className="max-w-5xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-8">
+                Loading business workspace...
+              </div>
+            </div>
+          }
+        >
+          {children}
+        </Suspense>
+      </BusinessRouteShell>
     </>
   );
 }

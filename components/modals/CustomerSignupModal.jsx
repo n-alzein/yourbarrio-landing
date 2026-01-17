@@ -96,7 +96,7 @@ export default function CustomerSignupModal({ onClose }) {
       return;
     }
 
-    window.location.assign("/customer/home");
+    window.location.replace("/customer/home");
     setLoading(false);
   }
 

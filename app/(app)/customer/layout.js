@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import CustomerNavbar from "@/components/navbars/CustomerNavbar";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import InactivityLogout from "@/components/auth/InactivityLogout";
 
 function CustomerRouteShell({ children = null }) {
   return <div className="pt-28 md:pt-20 min-h-screen">{children}</div>;
@@ -43,6 +44,7 @@ export default async function CustomerLayout({ children }) {
   return (
     <>
       <CustomerNavbar />
+      <InactivityLogout />
       <CustomerRouteShell>{children}</CustomerRouteShell>
     </>
   );

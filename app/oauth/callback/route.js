@@ -4,15 +4,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabaseClient";
-
-const getCookieDomain = (host) => {
-  if (!host) return undefined;
-  const hostname = host.split(":")[0];
-  if (hostname.endsWith("yourbarrio.com")) {
-    return ".yourbarrio.com";
-  }
-  return undefined;
-};
+import { getCookieBaseOptions } from "@/lib/authCookies";
 
 export async function GET(request) {
   const requestUrl = new URL(request.url);
@@ -20,13 +12,10 @@ export async function GET(request) {
   const cookieName = getCookieName();
   const pendingCookies = [];
   const isProd = process.env.NODE_ENV === "production";
-  const cookieDomain = getCookieDomain(request.headers.get("host"));
-  const cookieBaseOptions = {
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    ...(cookieDomain ? { domain: cookieDomain } : {}),
-  };
+  const cookieBaseOptions = getCookieBaseOptions({
+    host: request.headers.get("host"),
+    isProd,
+  });
 
   // Redirect back to login if no code is present
   if (!code) {

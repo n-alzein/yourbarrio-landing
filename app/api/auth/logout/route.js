@@ -2,42 +2,19 @@
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-
-const getCookieDomain = (host) => {
-  if (!host) return undefined;
-  const hostname = host.split(":")[0];
-  if (hostname.endsWith("yourbarrio.com")) {
-    return ".yourbarrio.com";
-  }
-  return undefined;
-};
-
-const clearCookieVariants = (response, name, isProd) => {
-  const baseOptions = {
-    path: "/",
-    sameSite: "lax",
-    secure: isProd,
-    maxAge: 0,
-    expires: new Date(0),
-  };
-
-  [".yourbarrio.com", "www.yourbarrio.com", undefined].forEach((domain) => {
-    response.cookies.set(name, "", {
-      ...baseOptions,
-      ...(domain ? { domain } : {}),
-    });
-  });
-};
+import {
+  clearSupabaseCookies,
+  getCookieBaseOptions,
+  logSupabaseCookieDiagnostics,
+} from "@/lib/authCookies";
 
 export async function GET(request) {
   const isProd = process.env.NODE_ENV === "production";
-  const cookieDomain = getCookieDomain(request.headers.get("host"));
-  const cookieBaseOptions = {
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    ...(cookieDomain ? { domain: cookieDomain } : {}),
-  };
+  const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+  const cookieBaseOptions = getCookieBaseOptions({
+    host: request.headers.get("host"),
+    isProd,
+  });
 
   const response = NextResponse.redirect(new URL("/", request.url));
   response.headers.set(
@@ -48,6 +25,12 @@ export async function GET(request) {
   response.headers.set("Expires", "0");
   response.headers.set("Clear-Site-Data", '"cookies", "storage"');
   response.headers.set("Vary", "Cookie");
+
+  const log = (message, ...args) => {
+    if (debug) console.log(`[auth/logout] ${message}`, ...args);
+  };
+
+  logSupabaseCookieDiagnostics({ req: request, debug, log });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -75,15 +58,7 @@ export async function GET(request) {
     // Best-effort: still clear cookies below.
   }
 
-  const sbCookieNames = request.cookies
-    .getAll()
-    .map((cookie) => cookie.name)
-    .filter((name) => name.startsWith("sb-"));
-
-  const uniqueNames = Array.from(new Set(sbCookieNames));
-  uniqueNames.forEach((name) => {
-    clearCookieVariants(response, name, isProd);
-  });
+  clearSupabaseCookies(response, request, { isProd, debug, log });
 
   return response;
 }

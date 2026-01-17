@@ -4,49 +4,31 @@ import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabaseClient";
-
-const getCookieDomain = (host) => {
-  if (!host) return undefined;
-  const hostname = host.split(":")[0];
-  if (hostname.endsWith("yourbarrio.com")) {
-    return ".yourbarrio.com";
-  }
-  return undefined;
-};
-
-const clearCookieVariants = (response, name, isProd) => {
-  const baseOptions = {
-    path: "/",
-    sameSite: "lax",
-    secure: isProd,
-    maxAge: 0,
-    expires: new Date(0),
-  };
-
-  [".yourbarrio.com", "www.yourbarrio.com", undefined].forEach((domain) => {
-    response.cookies.set(name, "", {
-      ...baseOptions,
-      ...(domain ? { domain } : {}),
-    });
-  });
-};
+import {
+  clearSupabaseCookies,
+  getCookieBaseOptions,
+  logSupabaseCookieDiagnostics,
+} from "@/lib/authCookies";
 
 export async function POST() {
   const cookieName = getCookieName();
   const isProd = process.env.NODE_ENV === "production";
+  const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
   try {
     const cookieStore = await cookies();
     const host = (await headers()).get("host");
-    const cookieDomain = getCookieDomain(host);
-    const cookieBaseOptions = {
-      sameSite: "lax",
-      secure: isProd,
-      path: "/",
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    };
+    const cookieBaseOptions = getCookieBaseOptions({ host, isProd });
 
     const res = NextResponse.json({ success: true });
+    const log = (message, ...args) => {
+      if (debug) console.log(`[api/logout] ${message}`, ...args);
+    };
+    logSupabaseCookieDiagnostics({
+      req: { cookies: cookieStore, headers: { get: () => null } },
+      debug,
+      log,
+    });
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -57,36 +39,30 @@ export async function POST() {
           getAll() {
             return cookieStore.getAll();
           },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            res.cookies.set(name, value, {
-              ...options,
-              ...cookieBaseOptions,
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              res.cookies.set(name, value, {
+                ...options,
+                ...cookieBaseOptions,
+              });
             });
-          });
+          },
         },
-      },
-    }
+      }
     );
 
     await supabase.auth.signOut();
 
-    const cookieNames = cookieStore
-      .getAll()
-      .map((cookie) => cookie.name)
-      .filter((name) => {
-        if (name.startsWith("sb-")) return true;
-        if (cookieName && name.startsWith(cookieName)) return true;
-        return false;
+    clearSupabaseCookies(res, { cookies: cookieStore }, { isProd, debug, log });
+    if (cookieName) {
+      res.cookies.set(cookieName, "", {
+        path: "/",
+        sameSite: "lax",
+        secure: isProd,
+        maxAge: 0,
+        expires: new Date(0),
       });
-
-    if (cookieName) cookieNames.push(cookieName);
-    const uniqueNames = Array.from(new Set(cookieNames));
-
-    uniqueNames.forEach((name) => {
-      // Explicitly clear auth cookies in case Supabase helper skips them
-      clearCookieVariants(res, name, isProd);
-    });
+    }
 
     return res;
   } catch (err) {
