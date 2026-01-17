@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import SafeImage from "@/components/SafeImage";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
-export default function BusinessGalleryGrid({ photos }) {
+export default function BusinessGalleryGrid({ photos, className = "" }) {
   const [activeIndex, setActiveIndex] = useState(null);
 
   const activePhoto = useMemo(() => {
@@ -36,7 +36,9 @@ export default function BusinessGalleryGrid({ photos }) {
   }, [activeIndex, photos?.length]);
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
+    <section
+      className={`rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)] ${className}`}
+    >
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold">Gallery</h2>
@@ -51,18 +53,18 @@ export default function BusinessGalleryGrid({ photos }) {
           No gallery photos yet.
         </div>
       ) : (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
           {photos.map((photo, index) => (
             <button
               key={photo.id || index}
               type="button"
               onClick={() => setActiveIndex(index)}
-              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-lg"
+              className="group relative flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-lg"
             >
               <SafeImage
                 src={photo.photo_url || "/business-placeholder.png"}
                 alt={photo.caption || "Gallery photo"}
-                className="h-44 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                className="h-44 w-auto max-w-none object-contain transition-transform duration-300 group-hover:scale-[1.02]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition" />
             </button>

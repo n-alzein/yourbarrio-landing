@@ -875,6 +875,17 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     return rows;
   }, [filteredListings, safeColumns]);
 
+  const [isMobileSafari, setIsMobileSafari] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = window.navigator?.userAgent || "";
+    const isIOS = /iP(hone|od|ad)/.test(ua);
+    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    setIsMobileSafari(isIOS && isSafari);
+  }, []);
+
+  const enableVirtualize = VIRTUALIZE && !isMobileSafari;
+
   const {
     virtualRows,
     totalHeight,
@@ -1026,7 +1037,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     };
     const timer = setTimeout(runProbe, 0);
     return () => clearTimeout(timer);
-  }, [allowGridDiag, search, filteredListings.length, VIRTUALIZE]);
+  }, [allowGridDiag, search, filteredListings.length, enableVirtualize]);
 
   const hasListings = filteredListings.length > 0;
   const hasRows = listingRows.length > 0;
@@ -1411,9 +1422,9 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                         data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
                         onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
                       >
-                        <div className="h-28 w-full border-b border-white/10 bg-white/5 flex items-center justify-center p-3 flex-shrink-0">
+                        <div className="h-28 w-full border-b border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
                           {businessPhotoFor(biz) ? (
-                            <div className="h-20 w-20">
+                            <div className="h-full w-full">
                               <SafeImage
                                 src={businessPhotoFor(biz)}
                                 alt={biz.name || "Business"}
@@ -1484,7 +1495,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         </div>
 
         {!search && (
-          <div className="space-y-3 mt-4 sm:mt-0 relative z-10" data-home-tiles="1">
+          <div className="space-y-3 mt-8 sm:mt-4 relative z-10" data-home-tiles="1">
                   <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
                 <p className="text-lg font-semibold">Browse listings</p>
@@ -1497,7 +1508,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               ) : null}
             </div>
             {filteredListings.length ? (
-              !VIRTUALIZE ? (
+              !enableVirtualize ? (
                 <div
                   ref={gridContainerRef}
                   className="grid gap-3 mt-3 grid-cols-2 md:grid-cols-4"

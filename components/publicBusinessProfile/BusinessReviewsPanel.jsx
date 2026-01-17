@@ -68,6 +68,7 @@ export default function BusinessReviewsPanel({
   ratingSummary,
   reviewCount,
   loading = false,
+  className = "",
 }) {
   const { user, authUser, role, supabase, loadingUser } = useAuth();
   const [reviews, setReviews] = useState(initialReviews || []);
@@ -483,7 +484,9 @@ export default function BusinessReviewsPanel({
   }, [reviews, customerId]);
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
+    <section
+      className={`rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)] ${className}`}
+    >
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold">Reviews</h2>

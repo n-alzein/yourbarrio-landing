@@ -370,20 +370,19 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
       />
 
       <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8">
-        <BusinessAbout profile={profile} />
-
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-          <BusinessAnnouncementsPreview announcements={announcements} />
-          <BusinessGalleryGrid photos={gallery} />
-        </div>
-
-        <BusinessListingsGrid listings={listings} />
-
+        <BusinessAbout profile={profile} className="rounded-none" />
+        <BusinessAnnouncementsPreview
+          announcements={announcements}
+          className="rounded-none"
+        />
+        <BusinessGalleryGrid photos={gallery} className="rounded-none" />
+        <BusinessListingsGrid listings={listings} className="rounded-none" />
         <BusinessReviewsPanel
           businessId={businessId}
           initialReviews={reviews}
           ratingSummary={ratingSummary}
           reviewCount={ratingSummary?.count || reviews?.length || 0}
+          className="rounded-b-3xl rounded-t-none"
         />
       </div>
     </div>

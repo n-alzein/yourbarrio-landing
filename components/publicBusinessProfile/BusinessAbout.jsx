@@ -98,7 +98,7 @@ function toObject(value) {
   return {};
 }
 
-export default function BusinessAbout({ profile }) {
+export default function BusinessAbout({ profile, className = "" }) {
   const hours = parseHours(profile?.hours_json);
   const addressLine = [profile?.address, profile?.city].filter(Boolean).join(", ");
   const website = profile?.website ? normalizeUrl(profile.website) : "";
@@ -109,7 +109,9 @@ export default function BusinessAbout({ profile }) {
   })).filter((entry) => entry.href);
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
+    <section
+      className={`rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)] ${className}`}
+    >
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl md:text-2xl font-semibold">About</h2>
       </div>

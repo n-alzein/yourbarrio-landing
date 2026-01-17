@@ -108,42 +108,44 @@ export default function PublicBusinessHero({
     <section className="relative text-white theme-lock">
       {showSticky ? (
         <div className="fixed top-20 inset-x-0 z-40">
-          <div className="mx-auto max-w-6xl px-6 md:px-10">
-            <div className="flex items-center justify-between gap-4 rounded-full border border-white/15 bg-black/60 backdrop-blur px-4 py-2 shadow-lg">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full border border-white/20 bg-white/10 overflow-hidden">
-                  <SafeImage
-                    src={profile?.profile_photo_url || "/business-placeholder.png"}
-                    alt={`${name} logo`}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold">{name}</div>
-                  <div className="text-xs text-white/70 flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 text-amber-300" fill="currentColor" />
-                    {ratingLabel}
+          <div className="w-full border-y border-white/10 bg-black/60 backdrop-blur shadow-lg">
+            <div className="mx-auto max-w-6xl px-6 md:px-10">
+              <div className="flex items-center justify-between gap-4 py-2">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full border border-white/20 bg-white/10 overflow-hidden">
+                    <SafeImage
+                      src={profile?.profile_photo_url || "/business-placeholder.png"}
+                      alt={`${name} logo`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white">{name}</div>
+                    <div className="text-xs text-white/70 flex items-center gap-1">
+                      <Star className="h-3.5 w-3.5 text-amber-300" fill="currentColor" />
+                      {ratingLabel}
+                    </div>
                   </div>
                 </div>
+                {primaryAction ? (
+                  <a
+                    href={primaryAction.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-white transition"
+                  >
+                    {primaryAction.label}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-white transition"
+                  >
+                    {copied ? "Copied link" : "Share"}
+                  </button>
+                )}
               </div>
-              {primaryAction ? (
-                <a
-                  href={primaryAction.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-white transition"
-                >
-                  {primaryAction.label}
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-slate-900 hover:bg-white transition"
-                >
-                  {copied ? "Copied link" : "Share"}
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -169,7 +171,7 @@ export default function PublicBusinessHero({
 
       <div className="relative -mt-16 sm:-mt-20">
         <div className="mx-auto max-w-6xl px-6 md:px-10">
-          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-10 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
+          <div className="rounded-t-3xl rounded-b-none border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-10 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl border border-white/20 bg-white/10 p-2 shadow-xl">

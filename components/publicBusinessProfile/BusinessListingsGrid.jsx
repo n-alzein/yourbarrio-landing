@@ -12,9 +12,11 @@ function formatPrice(value) {
   return `$${number.toFixed(2).replace(/\\.00$/, "")}`;
 }
 
-export default function BusinessListingsGrid({ listings }) {
+export default function BusinessListingsGrid({ listings, className = "" }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
+    <section
+      className={`rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)] ${className}`}
+    >
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold">Listings</h2>

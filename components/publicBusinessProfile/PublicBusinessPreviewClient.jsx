@@ -46,10 +46,10 @@ function readPreviewCache(businessId) {
   }
 }
 
-function PreviewSkeleton() {
-  return (
-    <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8 mt-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+function PreviewSkeleton({ withContainer = true }) {
+  const content = (
+    <>
+      <div className="rounded-none border border-white/10 bg-white/5 p-6 md:p-8">
         <div className="h-5 w-32 rounded bg-white/10" />
         <div className="mt-4 space-y-2">
           <div className="h-4 w-full rounded bg-white/10" />
@@ -59,11 +59,11 @@ function PreviewSkeleton() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8 space-y-4">
+        <div className="rounded-none border border-white/10 bg-white/5 p-6 md:p-8 space-y-4">
           <div className="h-5 w-40 rounded bg-white/10" />
           <div className="h-20 w-full rounded bg-white/10" />
         </div>
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+        <div className="rounded-none border border-white/10 bg-white/5 p-6 md:p-8">
           <div className="h-5 w-32 rounded bg-white/10" />
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="h-28 rounded bg-white/10" />
@@ -74,7 +74,7 @@ function PreviewSkeleton() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
+      <div className="rounded-3xl rounded-t-none border border-white/10 bg-white/5 p-6 md:p-8">
         <div className="h-5 w-32 rounded bg-white/10" />
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="h-40 rounded bg-white/10" />
@@ -82,6 +82,14 @@ function PreviewSkeleton() {
           <div className="h-40 rounded bg-white/10" />
         </div>
       </div>
+    </>
+  );
+
+  if (!withContainer) return content;
+
+  return (
+    <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8 mt-6">
+      {content}
     </div>
   );
 }
@@ -248,25 +256,25 @@ export default function PublicBusinessPreviewClient({
       />
 
       <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8">
-        <BusinessAbout profile={profile} />
+        <BusinessAbout profile={profile} className="rounded-none" />
 
         {loading ? (
-          <PreviewSkeleton />
+          <PreviewSkeleton withContainer={false} />
         ) : (
           <>
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-              <BusinessAnnouncementsPreview announcements={announcements} />
-              <BusinessGalleryGrid photos={gallery} />
-            </div>
-
-            <BusinessListingsGrid listings={listings} />
-
+            <BusinessAnnouncementsPreview
+              announcements={announcements}
+              className="rounded-none"
+            />
+            <BusinessGalleryGrid photos={gallery} className="rounded-none" />
+            <BusinessListingsGrid listings={listings} className="rounded-none" />
             <BusinessReviewsPanel
               businessId={businessId}
               initialReviews={reviews}
               ratingSummary={ratingSummary}
               reviewCount={ratingSummary?.count || reviews?.length || 0}
               loading={loading}
+              className="rounded-b-3xl rounded-t-none"
             />
           </>
         )}
