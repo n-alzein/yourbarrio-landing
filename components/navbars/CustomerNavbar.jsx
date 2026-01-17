@@ -823,6 +823,7 @@ export default function CustomerNavbar() {
               className="relative"
               ref={dropdownRef}
               data-clickdiag={clickDiagEnabled ? "dropdown" : undefined}
+              data-nav-guard="1"
             >
               <button
                 onClick={() => setProfileMenuOpen((open) => !open)}
@@ -845,6 +846,7 @@ export default function CustomerNavbar() {
                   className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl z-[5100]"
                   data-clickdiag={clickDiagEnabled ? "dropdown" : undefined}
                   ref={dropdownPanelRef}
+                  data-nav-guard="1"
                 >
                   <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
                     <div className="flex items-center gap-3 px-4 py-4">
@@ -883,7 +885,7 @@ export default function CustomerNavbar() {
                           ref={diag === "nav-saved" ? navSavedRef : undefined}
                           onClickCapture={diag === "nav-saved" ? diagClick("NAV_SAVED_CAPTURE") : undefined}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation text-left"
-                          data-safe-nav={href === "/customer/saved" ? "1" : undefined}
+                          data-safe-nav="1"
                         >
                           <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
                             <Icon className="h-5 w-5" />

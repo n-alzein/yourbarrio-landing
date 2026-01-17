@@ -392,3 +392,10 @@ html[data-nav-menu-open="1"] .home-map-shell,
 html[data-nav-menu-open="1"] .home-map-shell * {
   pointer-events: none !important;
 }
+html[data-nav-menu-open="1"] [data-home-tiles="1"],
+html[data-nav-menu-open="1"] [data-home-tiles="1"] * {
+  pointer-events: none !important;
+}
+html[data-nav-menu-open="1"] [data-listing-tile="1"] {
+  pointer-events: none !important;
+}

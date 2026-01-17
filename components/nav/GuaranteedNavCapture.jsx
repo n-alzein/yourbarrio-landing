@@ -39,6 +39,12 @@ export default function GuaranteedNavCapture() {
 
       for (const el of stack) {
         if (!el) continue;
+        if (el.matches?.('[data-nav-guard="1"]')) {
+          return { anchor: null, stack: toDescribe };
+        }
+        if (el.closest?.('[data-nav-guard="1"]')) {
+          return { anchor: null, stack: toDescribe };
+        }
         if (el.matches?.('[data-sticky-nav-block="1"]')) {
           return { anchor: null, stack: toDescribe };
         }
