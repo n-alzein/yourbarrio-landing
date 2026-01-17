@@ -11,6 +11,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import React from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -210,9 +211,15 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const authReady = !loadingUser || !!authUser || !!user;
   const galleryRef = useRef(null);
   const gridContainerRef = useRef(null);
-  const [gridColumns, setGridColumns] = useState(() =>
-    typeof window === "undefined" ? 2 : window.innerWidth >= 768 ? 4 : 2
-  );
+  const [gridColumns, setGridColumns] = useState(() => {
+    if (typeof window === "undefined") return 4;
+    const width = window.innerWidth;
+    if (width >= 1280) return 6;
+    if (width >= 1024) return 5;
+    if (width >= 768) return 4;
+    if (width >= 640) return 3;
+    return 2;
+  });
   const [rowHeight, setRowHeight] = useState(360);
   const [rowGap, setRowGap] = useState(12);
   const [supportsContentVisibility, setSupportsContentVisibility] = useState(false);
@@ -841,7 +848,18 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         CSS.supports("content-visibility: auto")
     );
     const updateColumns = () => {
-      setGridColumns(Math.max(1, window.innerWidth >= 768 ? 4 : 2));
+      const width = window.innerWidth;
+      const next =
+        width >= 1280
+          ? 6
+          : width >= 1024
+            ? 5
+            : width >= 768
+              ? 4
+              : width >= 640
+                ? 3
+                : 2;
+      setGridColumns(Math.max(1, next));
     };
     updateColumns();
     window.addEventListener("resize", updateColumns);
@@ -876,12 +894,27 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   }, [filteredListings, safeColumns]);
 
   const [isMobileSafari, setIsMobileSafari] = useState(false);
+  const [showNearbySticky, setShowNearbySticky] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const stickyBarRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ua = window.navigator?.userAgent || "";
     const isIOS = /iP(hone|od|ad)/.test(ua);
     const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
     setIsMobileSafari(isIOS && isSafari);
+  }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleScroll = () => {
+      setShowNearbySticky(window.scrollY > 240);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const enableVirtualize = VIRTUALIZE && !isMobileSafari;
@@ -1119,6 +1152,143 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     );
   };
 
+  const renderNearbySection = (compact = false) => (
+    <div className="grid grid-cols-1 gap-4 mt-0 pointer-events-auto">
+      <div
+        className={`border border-white/10 ${
+          compact ? "bg-black/80 shadow-lg" : "bg-white/5 backdrop-blur-xl shadow-xl"
+        } pointer-events-auto`}
+      >
+        {!compact ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-3 pt-3">
+            <div className={`text-sm uppercase tracking-[0.18em] ${textTone.subtle}`}>
+              Nearby businesses
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className={`inline-flex items-center gap-2 text-xs ${textTone.soft} bg-white/5 border border-white/10 px-3 py-1 backdrop-blur`}>
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                {filteredBusinesses.length} matches live
+              </div>
+              <button
+                type="button"
+                onClick={() => setMapOpen(true)}
+                disabled={!mapAvailable}
+                className={`px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold ${textTone.base} hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto`}
+              >
+                Map
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollGallery(-1)}
+                className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
+                aria-label="Scroll left"
+              >
+                <ChevronLeft className="h-4 w-4 mx-auto" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollGallery(1)}
+                className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
+                aria-label="Scroll right"
+              >
+                <ChevronRight className="h-4 w-4 mx-auto" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <div
+          ref={compact ? undefined : galleryRef}
+          className={`flex flex-nowrap overflow-x-auto snap-x snap-mandatory ${compact ? "" : "border-t border-white/10"}`}
+          onPointerDown={handleTilePointerDown}
+          onPointerMove={handleTilePointerMove}
+          onPointerUp={handleTilePointerUp}
+          onPointerCancel={handleTilePointerCancel}
+          onClickCapture={handleTileClickCapture}
+        >
+          {filteredBusinesses.map((biz) => (
+            <button
+              type="button"
+              key={biz.id || biz.name}
+              className={`${compact ? "h-[88px]" : "h-[260px]"} snap-start text-left border-r border-white/10 bg-white/5 hover:bg-white/10 transition shadow-sm rounded-none last:border-r-0 flex flex-col overflow-hidden ${
+                selectedBusiness?.id === biz.id ? "bg-white/10" : ""
+              }`}
+              style={{
+                width: compact ? "200px" : "260px",
+                minWidth: compact ? "200px" : "260px",
+                maxWidth: compact ? "200px" : "260px",
+                flex: compact ? "0 0 200px" : "0 0 260px",
+              }}
+              onClick={(event) => {
+                diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
+                if (event.defaultPrevented) return;
+                handleSelectBusiness(biz);
+              }}
+              data-clickdiag={clickDiagEnabled ? "tile" : undefined}
+              data-clickdiag-tile-id={clickDiagEnabled ? biz.id || biz.name : undefined}
+              data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+              onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
+            >
+              <div className={`${compact ? "h-full" : "h-28"} w-full ${compact ? "" : "border-b border-white/10"} bg-white/5 flex items-center ${compact ? "gap-2 px-2" : "justify-center"} flex-shrink-0`}>
+                {businessPhotoFor(biz) ? (
+                  <div className={`${compact ? "h-14 w-14 shrink-0" : "h-full w-full"}`}>
+                    <SafeImage
+                      src={businessPhotoFor(biz)}
+                      alt={biz.name || "Business"}
+                      className="block h-full w-full object-contain"
+                      fallbackSrc="/business-placeholder.png"
+                    />
+                  </div>
+                ) : (
+                  <div className={`text-[11px] ${textTone.subtle}`}>No photo</div>
+                )}
+                {compact ? (
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold line-clamp-1 !text-white">
+                      {biz.name}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className={`${compact ? "hidden" : "p-3 space-y-2"} flex-1 flex flex-col`}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="text-base font-semibold line-clamp-1">
+                      {biz.name}
+                    </div>
+                    <div className={`text-xs ${textTone.soft}`}>
+                      {biz.categoryLabel || biz.category || "Local spot"}
+                    </div>
+                  </div>
+                  {biz.distance_km ? (
+                    <div className={`text-[11px] ${textTone.soft} bg-white/10 border border-white/10 px-2 py-1`}>
+                      {biz.distance_km.toFixed(1)} km
+                    </div>
+                  ) : null}
+                </div>
+                {biz.address ? (
+                  <div className={`text-xs ${textTone.subtle} line-clamp-1`}>{biz.address}</div>
+                ) : (
+                  <div className={`text-xs ${textTone.subtle}`}>&nbsp;</div>
+                )}
+                {biz.description ? (
+                  <div className={`text-sm ${textTone.tint} leading-snug line-clamp-2`}>
+                    {biz.description}
+                  </div>
+                ) : null}
+              </div>
+            </button>
+          ))}
+          {!filteredBusinesses.length ? (
+            <div className={`text-sm ${textTone.soft}`}>
+              {ybBusinessesLoading ? "Loading businesses..." : ybBusinessesError || "No matches found."}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+
   useEffect(() => {
     let isActive = true;
     const term = search.trim();
@@ -1241,7 +1411,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
       </div>
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 relative z-10">
-        <div className="w-full max-w-6xl mx-auto">
+        <div className="w-full max-w-none">
         <div style={{ minHeight: "320px" }}>
           {authReady ? (
             <>
@@ -1353,128 +1523,35 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                 </div>
               ) : null}
 
-              {/* Header with gallery + map (compact) */}
+              {showNearbySticky && mounted
+                ? createPortal(
+                    <div
+                      className="fixed top-20 inset-x-0 z-[6000] pointer-events-auto isolate will-change-transform"
+                      data-sticky-nav-block="1"
+                      style={{
+                        transform: "translateZ(0)",
+                        WebkitBackfaceVisibility: "hidden",
+                        backfaceVisibility: "hidden",
+                      }}
+                    >
+                      <div className="w-full border-y border-white/10 bg-black/85 shadow-lg pointer-events-auto">
+                        <div
+                          ref={stickyBarRef}
+                          className="w-full px-5 sm:px-6 md:px-8 lg:px-12 py-2"
+                        >
+                          {renderNearbySection(true)}
+                        </div>
+                      </div>
+                    </div>,
+                    document.body
+                  )
+                : null}
+
               <div
-                className="grid grid-cols-1 gap-4 mt-0"
                 onClickCapture={handleHomeCapture}
                 data-clickdiag={clickDiagEnabled ? "home-grid" : undefined}
               >
-                <div className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl">
-                  <div className="flex flex-wrap items-center justify-between mb-3 gap-2 px-3 pt-3">
-                    <div className={`text-sm uppercase tracking-[0.18em] ${textTone.subtle}`}>
-                      Nearby businesses
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className={`inline-flex items-center gap-2 text-xs ${textTone.soft} bg-white/5 border border-white/10 px-3 py-1 backdrop-blur`}>
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        {filteredBusinesses.length} matches live
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setMapOpen(true)}
-                        disabled={!mapAvailable}
-                        className={`px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold ${textTone.base} hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto`}
-                      >
-                        Map
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => scrollGallery(-1)}
-                        className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
-                        aria-label="Scroll left"
-                      >
-                        <ChevronLeft className="h-4 w-4 mx-auto" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => scrollGallery(1)}
-                        className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
-                        aria-label="Scroll right"
-                      >
-                        <ChevronRight className="h-4 w-4 mx-auto" />
-                      </button>
-                    </div>
-                  </div>
-                  <div
-                    ref={galleryRef}
-                    className="flex flex-nowrap overflow-x-auto snap-x snap-mandatory border-t border-white/10"
-                    onPointerDown={handleTilePointerDown}
-                    onPointerMove={handleTilePointerMove}
-                    onPointerUp={handleTilePointerUp}
-                    onPointerCancel={handleTilePointerCancel}
-                    onClickCapture={handleTileClickCapture}
-                  >
-                    {filteredBusinesses.map((biz) => (
-                      <button
-                        type="button"
-                        key={biz.id || biz.name}
-                        className={`h-[260px] snap-start text-left border-r border-white/10 bg-white/5 hover:bg-white/10 transition shadow-sm rounded-none last:border-r-0 flex flex-col overflow-hidden ${
-                          selectedBusiness?.id === biz.id ? "bg-white/10" : ""
-                        }`}
-                        style={{ width: "260px", minWidth: "260px", maxWidth: "260px", flex: "0 0 260px" }}
-                        onClick={(event) => {
-                          diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
-                          if (event.defaultPrevented) return;
-                          handleSelectBusiness(biz);
-                        }}
-                        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
-                        data-clickdiag-tile-id={clickDiagEnabled ? biz.id || biz.name : undefined}
-                        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
-                        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
-                      >
-                        <div className="h-28 w-full border-b border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
-                          {businessPhotoFor(biz) ? (
-                            <div className="h-full w-full">
-                              <SafeImage
-                                src={businessPhotoFor(biz)}
-                                alt={biz.name || "Business"}
-                                className="block h-full w-full object-contain"
-                                fallbackSrc="/business-placeholder.png"
-                              />
-                            </div>
-                          ) : (
-                            <div className={`text-[11px] ${textTone.subtle}`}>No photo</div>
-                          )}
-                        </div>
-                        <div className="p-3 space-y-2 flex-1 flex flex-col">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <div className="text-base font-semibold line-clamp-1">
-                                {biz.name}
-                              </div>
-                              <div className={`text-xs ${textTone.soft}`}>
-                                {biz.categoryLabel || biz.category || "Local spot"}
-                              </div>
-                            </div>
-                            {biz.distance_km ? (
-                              <div className={`text-[11px] ${textTone.soft} bg-white/10 border border-white/10 px-2 py-1`}>
-                                {biz.distance_km.toFixed(1)} km
-                              </div>
-                            ) : null}
-                          </div>
-                          {biz.address ? (
-                            <div className={`text-xs ${textTone.subtle} line-clamp-1`}>{biz.address}</div>
-                          ) : (
-                            <div className={`text-xs ${textTone.subtle}`}>&nbsp;</div>
-                          )}
-                          {biz.description ? (
-                            <div className={`text-sm ${textTone.tint} leading-snug line-clamp-2`}>
-                              {biz.description}
-                            </div>
-                          ) : (
-                            <div className={`text-sm ${textTone.tint} leading-snug`}>&nbsp;</div>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                    {!filteredBusinesses.length ? (
-                      <div className={`text-sm ${textTone.soft}`}>
-                        {ybBusinessesLoading ? "Loading businesses..." : ybBusinessesError || "No matches found."}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
+                {renderNearbySection(false)}
               </div>
 
             </>
@@ -1495,8 +1572,11 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         </div>
 
         {!search && (
-          <div className="space-y-3 mt-8 sm:mt-4 relative z-10" data-home-tiles="1">
-                  <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
+          <div
+            className="space-y-3 mt-8 sm:mt-4 relative z-10"
+            data-home-tiles="1"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
               <div>
                 <p className="text-lg font-semibold">Browse listings</p>
               </div>
@@ -1511,7 +1591,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               !enableVirtualize ? (
                 <div
                   ref={gridContainerRef}
-                  className="grid gap-3 mt-3 grid-cols-2 md:grid-cols-4"
+                  className="grid gap-3 mt-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
                   onClickCapture={handleTileClickCapture}
                   style={allowGridDiag ? { outline: "1px solid red" } : undefined}
                 >
@@ -1581,7 +1661,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                   }}
                 >
                   {fallbackAll || fallbackPartial ? (
-                    <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                       {fallbackListings.map((item, idx) =>
                         renderListingTile(item, idx)
                       )}
@@ -1595,7 +1675,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                           <div
                             key={`row-${rowIndex}`}
                             ref={rowIndex === 0 ? firstRowRef : undefined}
-                            className="absolute left-0 right-0 grid gap-3 grid-cols-2 md:grid-cols-4"
+                            className="absolute left-0 right-0 grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
                             style={{ transform: `translateY(${start}px)` }}
                           >
                             {row.map((item, itemIdx) => {
