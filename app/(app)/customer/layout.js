@@ -1,8 +1,8 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import CustomerNavbar from "@/components/navbars/CustomerNavbar";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import InactivityLogout from "@/components/auth/InactivityLogout";
-import RequireSessionGate from "@/components/auth/RequireSessionGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,10 +46,22 @@ export default async function CustomerLayout({ children }) {
   }
 
   return (
-    <RequireSessionGate>
+    <>
       <CustomerNavbar />
       <InactivityLogout />
-      <CustomerRouteShell>{children}</CustomerRouteShell>
-    </RequireSessionGate>
+      <CustomerRouteShell>
+        <Suspense
+          fallback={
+            <div className="min-h-screen px-6 md:px-10 pt-24 text-white">
+              <div className="max-w-5xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-8">
+                Loading your account...
+              </div>
+            </div>
+          }
+        >
+          {children}
+        </Suspense>
+      </CustomerRouteShell>
+    </>
   );
 }
