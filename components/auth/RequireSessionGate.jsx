@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { useEffect, useRef, useState } from "react";
+import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { logDataDiag } from "@/lib/dataDiagnostics";
 
 const defaultLoading = (
@@ -14,28 +14,99 @@ const defaultLoading = (
 );
 
 export default function RequireSessionGate({ children, fallback }) {
-  const { authUser, loadingUser } = useAuth();
+  const [state, setState] = useState(() => ({
+    loading: true,
+    authed: false,
+    user: null,
+    error: null,
+  }));
   const redirectedRef = useRef(false);
 
-  useEffect(() => {
+  const setSnapshot = (next) => {
+    setState(next);
     logDataDiag("session", {
-      loading: loadingUser,
-      authed: Boolean(authUser),
-      hasUser: Boolean(authUser),
-      error: null,
+      loading: next.loading,
+      authed: next.authed,
+      hasUser: Boolean(next.user),
+      error: next.error ? String(next.error) : null,
     });
-  }, [authUser, loadingUser]);
+  };
 
   useEffect(() => {
-    if (loadingUser || authUser) return;
+    const client = getBrowserSupabaseClient();
+    if (!client) {
+      setSnapshot({
+        loading: false,
+        authed: false,
+        user: null,
+        error: "no-supabase-client",
+      });
+      return undefined;
+    }
+
+    let active = true;
+
+    const syncSession = async () => {
+      try {
+        const { data, error } = await client.auth.getSession();
+        if (!active) return;
+        if (error) {
+          setSnapshot({
+            loading: false,
+            authed: false,
+            user: null,
+            error: error?.message || String(error),
+          });
+          return;
+        }
+        const user = data?.session?.user ?? null;
+        setSnapshot({
+          loading: false,
+          authed: Boolean(user),
+          user,
+          error: null,
+        });
+      } catch (err) {
+        if (!active) return;
+        setSnapshot({
+          loading: false,
+          authed: false,
+          user: null,
+          error: err?.message || String(err),
+        });
+      }
+    };
+
+    syncSession();
+
+    const { data } = client.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      const user = session?.user ?? null;
+      setSnapshot({
+        loading: false,
+        authed: Boolean(user),
+        user,
+        error: null,
+      });
+      logDataDiag("session:event", { event, authed: Boolean(user) });
+    });
+
+    return () => {
+      active = false;
+      data?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (state.loading || state.authed) return;
     if (redirectedRef.current) return;
     redirectedRef.current = true;
     if (typeof window !== "undefined") {
       window.location.replace("/");
     }
-  }, [authUser, loadingUser]);
+  }, [state.loading, state.authed]);
 
-  if (loadingUser || !authUser) {
+  if (state.loading || !state.authed) {
     return fallback || defaultLoading;
   }
 

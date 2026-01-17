@@ -11,13 +11,12 @@ import { useRouter } from "next/navigation";
 import { getCookieName } from "@/lib/supabaseClient";
 
 export default function BusinessDashboard() {
-  const { authUser, user, loadingUser, session } = useAuth();
+  const { authUser, user, loadingUser, supabase } = useAuth();
   const { theme, hydrated: themeHydrated } = useTheme();
   const router = useRouter();
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const flowIdRef = useRef(null);
   const authUserRef = useRef(authUser);
-  const sessionRef = useRef(session);
   const refreshGuardRef = useRef(false);
   const hardReloadGuardRef = useRef(false);
   const isLight = themeHydrated ? theme === "light" : true;
@@ -64,10 +63,6 @@ export default function BusinessDashboard() {
   useEffect(() => {
     authUserRef.current = authUser;
   }, [authUser]);
-
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
 
   const authDiagLog = useCallback(
     (event, payload = {}) => {
@@ -135,9 +130,21 @@ export default function BusinessDashboard() {
       hasAuthCookie: cookieStatus?.hasAuthCookie ?? null,
     });
 
-    authDiagLog("dashboard:session_state", {
-      hasSession: Boolean(session?.access_token),
-    });
+    if (!supabase) return;
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        authDiagLog("dashboard:getSession", {
+          hasSession: Boolean(data?.session),
+          error: error?.message ?? null,
+        });
+      })
+      .catch((err) => {
+        authDiagLog("dashboard:getSession:error", {
+          error: err?.message ?? String(err),
+        });
+      });
 
     fetch("/api/auth/refresh", {
       method: "POST",
@@ -155,25 +162,28 @@ export default function BusinessDashboard() {
           error: err?.message ?? String(err),
         });
       });
-  }, [authDiagEnabled, authDiagLog, getCookieStatus, session]);
+  }, [authDiagEnabled, authDiagLog, getCookieStatus, supabase]);
 
   useEffect(() => {
-    if (loadingUser) return;
+    if (!supabase || loadingUser) return;
     if (refreshGuardRef.current) return;
 
     const run = async () => {
       try {
-        const activeSession = sessionRef.current;
-        if (activeSession && !authUserRef.current) {
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        if (session && !authUserRef.current) {
           refreshGuardRef.current = true;
           authDiagLog("dashboard:client_session_present_but_auth_missing", {
-            hasSession: Boolean(activeSession),
+            hasSession: Boolean(session),
           });
           router.refresh();
 
           setTimeout(async () => {
             if (typeof window === "undefined") return;
-            const stillSession = Boolean(sessionRef.current);
+            const { data: afterData } = await supabase.auth.getSession();
+            const stillSession = Boolean(afterData?.session);
             const params = new URLSearchParams(window.location.search);
             const hasReloaded = params.has("reloaded");
 
@@ -199,7 +209,7 @@ export default function BusinessDashboard() {
     };
 
     run();
-  }, [authDiagLog, loadingUser, router, session]);
+  }, [authDiagLog, loadingUser, router, supabase]);
 
   /* ------------------------------------------- */
   /* 2️⃣ Load business profile */

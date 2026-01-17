@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { supabase, authUser, user: authProfile, loadingUser } = useAuth();
+  const { supabase } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,22 +19,36 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (loadingUser) return;
-    if (!authUser) {
-      router.push("/business-auth/login");
-      return;
+    async function loadProfile() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/business-auth/login");
+        return;
+      }
+
+      setUser(user);
+
+      const { data: profileData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (profileData) {
+        setProfile({
+          full_name: profileData.full_name || "",
+          role: profileData.role || "",
+        });
+      }
+
+      setLoading(false);
     }
 
-    setUser(authUser);
-    if (authProfile) {
-      setProfile({
-        full_name: authProfile.full_name || "",
-        role: authProfile.role || "",
-      });
-    }
-
-    setLoading(false);
-  }, [authProfile, authUser, loadingUser, router]);
+    loadProfile();
+  }, []);
 
   async function handleSave(e) {
     e.preventDefault();

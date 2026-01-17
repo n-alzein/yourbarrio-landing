@@ -7,7 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { getCookieName } from "@/lib/supabaseClient";
 
 function BusinessLoginInner() {
-  const { supabase, authUser, role, loadingUser, session } = useAuth();
+  const { supabase, authUser, role, loadingUser } = useAuth();
   const searchParams = useSearchParams();
   const isPopup = searchParams?.get("popup") === "1";
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
@@ -20,7 +20,6 @@ function BusinessLoginInner() {
   const flowIdRef = useRef(
     `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
-  const sessionRef = useRef(session);
 
   const authDiagLog = useCallback(
     (event, payload = {}) => {
@@ -59,10 +58,6 @@ function BusinessLoginInner() {
     };
   }, []);
 
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
-
   const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
     if (typeof document === "undefined") return false;
     const cookieName = getCookieName();
@@ -91,24 +86,26 @@ function BusinessLoginInner() {
 
   const waitForSession = useCallback(
     async (timeoutMs = 2000) => {
+      if (!supabase) return false;
       const start = Date.now();
       let attempt = 0;
 
       while (Date.now() - start < timeoutMs) {
         attempt += 1;
         try {
-          const activeSession = sessionRef.current;
+          const { data, error } = await supabase.auth.getSession();
+          const session = data?.session;
           const cookieStatus = getCookieStatus();
 
           authDiagLog("login:pollSession", {
             attempt,
-            hasSession: Boolean(activeSession?.access_token),
+            hasSession: Boolean(session?.access_token),
             cookieLength: cookieStatus?.cookieLength ?? null,
             hasAuthCookie: cookieStatus?.hasAuthCookie ?? null,
-            error: null,
+            error: error?.message ?? null,
           });
 
-          if (activeSession?.access_token) return true;
+          if (session?.access_token) return true;
         } catch (err) {
           authDiagLog("login:pollSession:error", {
             attempt,
@@ -120,7 +117,7 @@ function BusinessLoginInner() {
 
       return false;
     },
-    [authDiagLog, getCookieStatus]
+    [authDiagLog, getCookieStatus, supabase]
   );
 
   const finishBusinessAuth = useCallback((target = "/business/dashboard") => {
@@ -232,7 +229,6 @@ function BusinessLoginInner() {
       }
 
       const user = data.user;
-      let session = data.session;
 
       // 2) 🔥 Fetch role immediately from DB (reliable)
       const { data: profile, error: profileErr } = await supabase
@@ -257,9 +253,8 @@ function BusinessLoginInner() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // 5) Verify session is accessible
-      if (!session) {
-        session = sessionRef.current;
-      }
+      const { data: sessionCheck } = await supabase.auth.getSession();
+      const session = sessionCheck?.session;
       console.log(
         "Login: Session check before redirect:",
         session ? "Session exists" : "No session"
@@ -326,7 +321,7 @@ function BusinessLoginInner() {
      AUTH LOADING
   -------------------------------------------------------------- */
   useEffect(() => {
-    if (!authDiagEnabled) return;
+    if (!authDiagEnabled || !supabase) return;
 
     try {
       sessionStorage.setItem("auth_flow_id", flowIdRef.current);
@@ -338,9 +333,28 @@ function BusinessLoginInner() {
     const cookieStatus = getCookieStatus();
     authDiagLog("login:cookies", cookieStatus ?? {});
 
-    authDiagLog("login:session_state", {
-      hasSession: Boolean(session?.access_token),
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        authDiagLog("login:getSession", {
+          hasSession: Boolean(data?.session),
+          error: error?.message ?? null,
+        });
+      })
+      .catch((err) => {
+        authDiagLog("login:getSession:error", {
+          error: err?.message ?? String(err),
+        });
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        authDiagLog("login:onAuthStateChange", {
+          event,
+          hasSession: Boolean(session),
+        });
+      }
+    );
 
     const handleError = (event) => {
       authDiagLog("login:window:error", {
@@ -362,10 +376,11 @@ function BusinessLoginInner() {
     window.addEventListener("unhandledrejection", handleRejection);
 
     return () => {
+      listener?.subscription?.unsubscribe();
       window.removeEventListener("error", handleError);
       window.removeEventListener("unhandledrejection", handleRejection);
     };
-  }, [authDiagEnabled, authDiagLog, getCookieStatus, isPopup, session]);
+  }, [authDiagEnabled, authDiagLog, getCookieStatus, isPopup, supabase]);
 
   /* --------------------------------------------------------------
      UI — PROFESSIONAL BUSINESS STYLE

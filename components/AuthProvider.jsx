@@ -1,18 +1,3 @@
-/*
-AUTH AUDIT REPORT
-- components/AuthProvider.jsx: getSession on mount + throttled sync; single onAuthStateChange subscription.
-- app/business-auth/login/page.js: signInWithPassword/signInWithOAuth; /api/auth/refresh after login (no getSession polling).
-- components/modals/CustomerLoginModal.jsx and components/modals/CustomerSignupModal.jsx:
-  signInWithPassword/signUp + /api/auth/refresh with session tokens.
-- app/(app)/business/onboarding/page.js and app/profile/page.js: use AuthProvider state (no direct auth calls).
-- lib/supabaseQuery.js: refreshAuthCookies calls getSession when runSupabaseQuery is used.
-- middleware.js: auth.getUser for protected routes only (matcher narrowed to protected paths).
-- Server layouts/pages (e.g. app/(app)/business/layout.js, app/(app)/customer/layout.js):
-  auth.getUser on protected SSR requests.
-- Runs on every navigation: middleware + protected layouts on matched protected routes.
-- Suspected loops before fixes: proactive refresh interval, per-page getSession polling,
-  broad middleware matcher.
-*/
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
@@ -22,14 +7,12 @@ import {
   getCookieName,
   resetSupabaseClient,
 } from "@/lib/supabaseClient";
-import { initAuthDiagnostics } from "@/lib/authDiagnostics";
 import {
   initDebugNav,
   logAuthTelemetry,
   logLogout,
 } from "@/lib/debugNav";
 import DebugNavOverlay from "./DebugNavOverlay";
-import AuthDiagBadge from "./AuthDiagBadge";
 
 const AuthContext = createContext();
 
@@ -53,29 +36,22 @@ export function AuthProvider({ children }) {
      STATE (declare all state first)
   ----------------------------------------------------------------- */
   const [supabase, setSupabase] = useState(() => getBrowserSupabaseClient());
-  const [session, setSession] = useState(null);
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
   const supabaseRef = useRef(supabase);
-  const sessionRef = useRef(null);
-  const sessionFetchPromiseRef = useRef(null);
-  const lastSessionFetchAtRef = useRef(0);
   const authUserRef = useRef(null);
   const loadingUserRef = useRef(loadingUser);
+  const sessionRefreshTimerRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
   const isMountedRef = useRef(true);
   const sessionRefreshInFlight = useRef(false);
   const lastRoleRef = useRef(null);
-  const SESSION_THROTTLE_MS = 8000;
 
   useEffect(() => {
     supabaseRef.current = supabase;
   }, [supabase]);
-
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
 
   useEffect(() => {
     authUserRef.current = authUser;
@@ -97,45 +73,64 @@ export function AuthProvider({ children }) {
     return client;
   }, []);
 
-  const setSessionState = useCallback((nextSession) => {
-    sessionRef.current = nextSession;
-    if (isMountedRef.current) {
-      setSession(nextSession);
-    }
+  // Track user activity to know when to refresh proactively
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    // Track user interactions
+    window.addEventListener("mousemove", updateActivity, { passive: true });
+    window.addEventListener("keydown", updateActivity, { passive: true });
+    window.addEventListener("click", updateActivity, { passive: true });
+    window.addEventListener("scroll", updateActivity, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", updateActivity);
+      window.removeEventListener("keydown", updateActivity);
+      window.removeEventListener("click", updateActivity);
+      window.removeEventListener("scroll", updateActivity);
+    };
   }, []);
 
-  const getSessionSnapshot = useCallback(
-    async (reason = "unknown") => {
-      const client = getSupabaseClient();
-      if (!client) return { data: { session: null }, error: new Error("no-client") };
+  // Proactive session refresh (like Amazon/Walmart)
+  // Refreshes session every 50 minutes (tokens typically last 60 minutes)
+  const startProactiveRefresh = useCallback(() => {
+    if (sessionRefreshTimerRef.current) {
+      clearInterval(sessionRefreshTimerRef.current);
+    }
 
-      const now = Date.now();
-      if (sessionFetchPromiseRef.current) {
-        return sessionFetchPromiseRef.current;
+    sessionRefreshTimerRef.current = setInterval(async () => {
+      // Only refresh if user has been active in the last 10 minutes
+      const timeSinceActivity = Date.now() - lastActivityRef.current;
+      const tenMinutes = 10 * 60 * 1000;
+
+      if (timeSinceActivity < tenMinutes && authUserRef.current) {
+        console.log("AuthProvider: Proactively refreshing session");
+        try {
+          const { error } = await supabaseRef.current.auth.refreshSession();
+          if (error) {
+            console.error("AuthProvider: Proactive refresh failed", error);
+          } else {
+            console.log("AuthProvider: Session refreshed proactively");
+          }
+        } catch (err) {
+          console.error("AuthProvider: Proactive refresh error", err);
+        }
       }
+    }, 50 * 60 * 1000); // 50 minutes
+  }, []); // Uses refs for current values - no dependencies needed
 
-      if (
-        sessionRef.current &&
-        now - lastSessionFetchAtRef.current < SESSION_THROTTLE_MS
-      ) {
-        return { data: { session: sessionRef.current }, error: null, reason, cached: true };
+  // Stop proactive refresh on unmount
+  useEffect(() => {
+    return () => {
+      if (sessionRefreshTimerRef.current) {
+        clearInterval(sessionRefreshTimerRef.current);
       }
-
-      sessionFetchPromiseRef.current = (async () => {
-        lastSessionFetchAtRef.current = Date.now();
-        const result = await client.auth.getSession();
-        setSessionState(result?.data?.session ?? null);
-        return result;
-      })();
-
-      try {
-        return await sessionFetchPromiseRef.current;
-      } finally {
-        sessionFetchPromiseRef.current = null;
-      }
-    },
-    [getSupabaseClient, setSessionState]
-  );
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -151,11 +146,6 @@ export function AuthProvider({ children }) {
       initDebugNav();
     }
   }, []);
-
-  useEffect(() => {
-    if (!authDiagEnabled) return;
-    initAuthDiagnostics();
-  }, [authDiagEnabled]);
 
   /* -----------------------------------------------------------------
      AUTH TELEMETRY (debug only)
@@ -252,6 +242,95 @@ export function AuthProvider({ children }) {
   /* -----------------------------------------------------------------
      VERIFIED USER FETCH (avoid untrusted session user)
   ----------------------------------------------------------------- */
+  async function getCachedUser() {
+    const client = getSupabaseClient();
+    if (!client) return null;
+
+    try {
+      const {
+        data: { session },
+        error,
+      } = await client.auth.getSession();
+      if (error) throw error;
+      return sanitizeAuthUser(session?.user ?? null);
+    } catch (err) {
+      console.warn("Supabase getSession failed while reading cache", err);
+      return null;
+    }
+  }
+
+  async function getVerifiedUser() {
+    const client = getSupabaseClient();
+    if (!client) return null;
+
+    const resolveFallbackUser = async () => {
+      const cached = authUserRef.current || (await getCachedUser());
+      if (!cached) return null;
+      console.log("AuthProvider: Returning cached user while handling error");
+      return cached;
+    };
+
+    const refreshSessionSafe = async () => {
+      try {
+        const timeoutMs = 3500;
+        const { data, error } = await Promise.race([
+          client.auth.refreshSession(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("refreshSession timeout")), timeoutMs)
+          ),
+        ]);
+        if (error) return { ok: false, error };
+        return { ok: true, session: data?.session ?? null };
+      } catch (err) {
+        return { ok: false, error: err };
+      }
+    };
+
+    try {
+      // No timeout - let Supabase SDK handle retries naturally
+      // This is how Amazon/Walmart do it - trust the SDK's built-in retry logic
+      const { data, error } = await client.auth.getUser();
+
+      if (error) {
+        console.warn("AuthProvider: getUser error", error);
+
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          return await resolveFallbackUser();
+        }
+
+        const refreshResult = await refreshSessionSafe();
+        if (!refreshResult.ok) {
+          console.warn("AuthProvider: refreshSession failed", refreshResult.error);
+          await clearBrokenSession();
+          return null;
+        }
+
+        const { data: refreshedData, error: refreshedError } =
+          await client.auth.getUser();
+        if (refreshedError) {
+          console.warn("AuthProvider: getUser after refresh failed", refreshedError);
+          await clearBrokenSession();
+          return null;
+        }
+
+        return sanitizeAuthUser(refreshedData?.user ?? null);
+      }
+
+      return sanitizeAuthUser(data?.user ?? null);
+    } catch (err) {
+      console.error("AuthProvider: getUser exception", err);
+
+      // Return cached user if available (Amazon pattern - never disrupt user)
+      const cached = authUserRef.current || (await getCachedUser());
+      if (cached) {
+        console.log("AuthProvider: Exception occurred, returning cached user");
+        return cached;
+      }
+
+      return null;
+    }
+  }
+
   /* -----------------------------------------------------------------
      LOAD PROFILE
   ----------------------------------------------------------------- */
@@ -341,7 +420,6 @@ export function AuthProvider({ children }) {
 
   const resetState = () => {
     if (!isMountedRef.current) return;
-    setSessionState(null);
     setAuthUser(null);
     setProfile(null);
   };
@@ -432,26 +510,29 @@ export function AuthProvider({ children }) {
       shouldBlock = !authUserRef.current && !loadingUserRef.current;
       if (shouldBlock) setLoadingUser(true);
 
-      const sessionResult = await getSessionSnapshot("sync");
-      const nextSession = sessionResult?.data?.session ?? null;
-      const sessionUser = sanitizeAuthUser(nextSession?.user ?? null);
+      const cachedUser = (await getCachedUser()) ?? authUserRef.current;
+      if (cachedUser) {
+        setAuthUser(cachedUser);
+        const p = await loadProfile(cachedUser.id);
+        if (!p?.aborted) {
+          const resolvedProfile = p?.profile || (await ensureProfile(cachedUser, null));
+          setProfile(resolvedProfile);
+          await cacheGoogleAvatar(cachedUser, resolvedProfile);
+        }
+      }
 
-      if (sessionUser) {
-        if (authUserRef.current?.id !== sessionUser.id) {
-          setAuthUser(sessionUser);
+      if (!isMountedRef.current) return;
+
+      const user = await getVerifiedUser();
+      if (user && user.id !== cachedUser?.id) {
+        setAuthUser(user);
+        const p = await loadProfile(user.id);
+        if (!p?.aborted) {
+          const resolvedProfile = p?.profile || (await ensureProfile(user, null));
+          setProfile(resolvedProfile);
+          await cacheGoogleAvatar(user, resolvedProfile);
         }
-        const shouldLoadProfile =
-          !profile || profile.id !== sessionUser.id;
-        if (shouldLoadProfile) {
-          const p = await loadProfile(sessionUser.id);
-          if (!p?.aborted) {
-            const resolvedProfile =
-              p?.profile || (await ensureProfile(sessionUser, null));
-            setProfile(resolvedProfile);
-            await cacheGoogleAvatar(sessionUser, resolvedProfile);
-          }
-        }
-      } else {
+      } else if (!user && !cachedUser) {
         setAuthUser(null);
         setProfile(null);
       }
@@ -479,24 +560,40 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const sessionResult = await getSessionSnapshot("init");
-        const nextSession = sessionResult?.data?.session ?? null;
-        const sessionUser = sanitizeAuthUser(nextSession?.user ?? null);
-
-        if (isMountedRef.current && sessionUser) {
-          setAuthUser(sessionUser);
-          const p = await loadProfile(sessionUser.id, {
+        const cachedUser = await getCachedUser();
+        if (isMountedRef.current && cachedUser) {
+          setAuthUser(cachedUser);
+          const p = await loadProfile(cachedUser.id, {
             signal: controller.signal,
           });
           if (isMountedRef.current && !p?.aborted) {
             const resolvedProfile =
-              p?.profile || (await ensureProfile(sessionUser, null));
+              p?.profile || (await ensureProfile(cachedUser, null));
             setProfile(resolvedProfile);
-            await cacheGoogleAvatar(sessionUser, resolvedProfile);
+            await cacheGoogleAvatar(cachedUser, resolvedProfile);
           }
-        } else if (isMountedRef.current && !sessionUser) {
+        }
+
+        if (!isMountedRef.current) return;
+
+        const user = await getVerifiedUser();
+        if (user && cachedUser?.id !== user?.id) {
+          setAuthUser(user);
+          const p = await loadProfile(user.id, { signal: controller.signal });
+          if (isMountedRef.current && !p?.aborted) {
+            const resolvedProfile = p?.profile || (await ensureProfile(user, null));
+            setProfile(resolvedProfile);
+            await cacheGoogleAvatar(user, resolvedProfile);
+          }
+        } else if (!user && !cachedUser) {
           setProfile(null);
           setAuthUser(null);
+        }
+
+        // Start proactive session refresh if user is logged in
+        if (user || cachedUser) {
+          console.log("AuthProvider: Starting proactive session refresh on init");
+          startProactiveRefresh();
         }
       } catch (err) {
         console.error("Auth init failed — clearing stale session", err);
@@ -519,7 +616,6 @@ export function AuthProvider({ children }) {
               hasSession: Boolean(session),
               sessionUserId: null,
             });
-            setSessionState(session ?? null);
             // Skip only the synthetic initial event; handle real sign-ins immediately
             if (event === "INITIAL_SESSION") return;
 
@@ -531,7 +627,6 @@ export function AuthProvider({ children }) {
             }
 
             if (event === "SIGNED_OUT" || event === "USER_DELETED") {
-              setSessionState(null);
               setAuthUser(null);
               setProfile(null);
               return;
@@ -541,13 +636,27 @@ export function AuthProvider({ children }) {
             if (sessionUser) {
               setAuthUser(sessionUser);
             }
-            if (sessionUser) {
-              const p = await loadProfile(sessionUser.id);
+
+            const user = await getVerifiedUser();
+            const resolvedUser = user || sessionUser;
+
+            if (user && sessionUser?.id !== user?.id) {
+              setAuthUser(user);
+            }
+
+            if (resolvedUser) {
+              const p = await loadProfile(resolvedUser.id);
               if (!p?.aborted) {
                 const resolvedProfile =
-                  p?.profile || (await ensureProfile(sessionUser, null));
+                  p?.profile || (await ensureProfile(resolvedUser, null));
                 setProfile(resolvedProfile);
-                await cacheGoogleAvatar(sessionUser, resolvedProfile);
+                await cacheGoogleAvatar(resolvedUser, resolvedProfile);
+              }
+
+              // Start proactive session refresh when user signs in
+              if (event === "SIGNED_IN") {
+                console.log("AuthProvider: Starting proactive session refresh");
+                startProactiveRefresh();
               }
             } else {
               setProfile(null);
@@ -565,7 +674,7 @@ export function AuthProvider({ children }) {
       controller.abort();
       listener.subscription.unsubscribe();
     };
-  }, [supabase, getSessionSnapshot, setSessionState]);
+  }, [supabase, startProactiveRefresh]);
 
   /* -----------------------------------------------------------------
      KEEP SESSION FRESH AFTER LONG IDLE PERIODS
@@ -615,22 +724,16 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const sessionResult = await getSessionSnapshot("storage");
-        const nextSession = sessionResult?.data?.session ?? null;
-        const sessionUser = sanitizeAuthUser(nextSession?.user ?? null);
+        const user = await getVerifiedUser();
+        setAuthUser(user);
 
-        setAuthUser(sessionUser);
-
-        if (sessionUser) {
-          const p = await loadProfile(sessionUser.id);
+        if (user) {
+          const p = await loadProfile(user.id);
           if (!p?.aborted) {
-            const resolvedProfile =
-              p?.profile || (await ensureProfile(sessionUser, null));
+            const resolvedProfile = p?.profile || (await ensureProfile(user, null));
             setProfile(resolvedProfile);
-            await cacheGoogleAvatar(sessionUser, resolvedProfile);
+            await cacheGoogleAvatar(user, resolvedProfile);
           }
-        } else {
-          setProfile(null);
         }
       } catch (err) {
         console.error("Storage auth sync failed", err);
@@ -707,7 +810,6 @@ export function AuthProvider({ children }) {
       runWithTimeout("signOut:global", client.auth.signOut({ scope: "global" }), 4000);
     }
 
-    setSessionState(null);
     setAuthUser(null);
     setProfile(null);
     setLoadingUser(false);
@@ -726,19 +828,16 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         supabase,
-        session,
         authUser,
         user: profile,
         role: profile?.role ?? null,
         loadingUser,
-        loading: loadingUser,
         refreshProfile,
         logout,
       }}
     >
       {children}
       <DebugNavOverlay />
-      <AuthDiagBadge />
     </AuthContext.Provider>
   );
 }
