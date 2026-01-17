@@ -69,8 +69,28 @@ const isSameBusinessList = (prev, next) => {
   return true;
 };
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
-function HomeGuardFallback({ children }) {
-  return <>{children}</>;
+function HomeGuardFallback() {
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
+  const textBase = isLight ? "text-slate-900" : "text-white";
+  const textMuted = isLight ? "text-slate-600" : "text-white/70";
+
+  return (
+    <div className={`min-h-screen ${textBase} relative px-6 pt-3`}>
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-[#05010d]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
+        <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
+        <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+      </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
+          <p className={`text-lg ${textMuted}`}>Loading your account...</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 const SafeNavFallback = dynamic(() => import("@/components/nav/SafeNavFallback"), { ssr: false });
 import GuaranteedNavCapture from "@/components/nav/GuaranteedNavCapture";
@@ -1526,7 +1546,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               {showNearbySticky && mounted
                 ? createPortal(
                     <div
-                      className="fixed top-20 inset-x-0 z-[4800] pointer-events-auto isolate will-change-transform"
+                      className="fixed top-36 sm:top-20 inset-x-0 z-[4800] pointer-events-auto isolate will-change-transform"
                       data-sticky-nav-block="1"
                       style={{
                         transform: "translateZ(0)",
