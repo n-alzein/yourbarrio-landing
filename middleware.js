@@ -151,5 +151,8 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/", "/customer/:path*", "/business/:path*", "/b/:path*"],
+  matcher: [
+    "/customer/:path*",
+    "/business/(dashboard|listings|settings|onboarding|messages|profile|preview)/:path*",
+  ],
 };

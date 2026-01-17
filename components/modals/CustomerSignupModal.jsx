@@ -55,8 +55,7 @@ export default function CustomerSignupModal({ onClose }) {
     const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
+      const session = signUpData?.session;
 
       if (debugAuth) {
         console.log("[customer-signup] refreshing cookies with tokens");

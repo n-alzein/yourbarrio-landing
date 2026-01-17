@@ -34,7 +34,7 @@ function formReducer(state, action) {
 // MAIN COMPONENT (only ONE export default)
 // ------------------------------
 export default function BusinessOnboardingPage() {
-  const { supabase } = useAuth();
+  const { authUser, loadingUser } = useAuth();
   const router = useRouter();
 
   const [form, dispatch] = useReducer(formReducer, initialForm);
@@ -153,14 +153,13 @@ export default function BusinessOnboardingPage() {
     setMessage("");
 
     try {
-      // 1) Get logged-in user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      // 1) Get logged-in user from AuthProvider
+      if (loadingUser) {
+        setLoading(false);
+        return;
+      }
 
-      if (userError) throw userError;
-
+      const user = authUser;
       if (!user) {
         setMessage("You must be logged in to create a business.");
         setLoading(false);
