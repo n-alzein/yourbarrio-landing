@@ -5,6 +5,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { retry } from "@/lib/retry";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { createFetchSafe } from "@/lib/fetchSafe";
+import { memoizeRequest } from "@/lib/requestMemo";
 import InboxList from "@/components/messages/InboxList";
 
 export default function CustomerMessagesPage() {
@@ -17,6 +19,7 @@ export default function CustomerMessagesPage() {
   const [error, setError] = useState(null);
   const requestIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
+  const inflightRef = useRef(null);
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
@@ -39,28 +42,44 @@ export default function CustomerMessagesPage() {
   const loadConversations = useCallback(async () => {
     if (!userId) return;
     const requestId = ++requestIdRef.current;
+    inflightRef.current?.abort?.();
     setLoading((prev) => (hasLoadedRef.current ? prev : true));
     setError(null);
+    const safeRequest = createFetchSafe(
+      async ({ signal }) => {
+        const response = await retry(
+          () =>
+            fetchWithTimeout("/api/customer/conversations", {
+              method: "GET",
+              credentials: "include",
+              timeoutMs: 12000,
+              signal,
+            }),
+          { retries: 1, delayMs: 600 }
+        );
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || "Failed to load conversations");
+        }
+        const payload = await response.json();
+        return Array.isArray(payload?.conversations)
+          ? payload.conversations
+          : [];
+      },
+      { label: "customer-conversations" }
+    );
+    inflightRef.current = safeRequest;
     try {
-      const response = await retry(
-        () =>
-          fetchWithTimeout("/api/customer/conversations", {
-            method: "GET",
-            credentials: "include",
-            timeoutMs: 12000,
-          }),
-        { retries: 1, delayMs: 600 }
+      const result = await memoizeRequest(
+        `customer-conversations:${userId}`,
+        safeRequest.run
       );
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to load conversations");
-      }
-      const payload = await response.json();
-      const data = Array.isArray(payload?.conversations)
-        ? payload.conversations
-        : [];
+      if (!result || result.aborted) return;
       if (requestId !== requestIdRef.current) return;
-      setConversations(data);
+      if (!result.ok) {
+        throw result.error || new Error("Failed to load conversations");
+      }
+      setConversations(result.result || []);
       hasLoadedRef.current = true;
     } catch (err) {
       console.error("Failed to load conversations", err);
@@ -73,6 +92,12 @@ export default function CustomerMessagesPage() {
       }
     }
   }, [userId]);
+
+  useEffect(() => {
+    return () => {
+      inflightRef.current?.abort?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!hydrated || loadingUser || !userId) return;

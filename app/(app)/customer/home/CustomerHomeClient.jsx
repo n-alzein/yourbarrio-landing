@@ -32,6 +32,7 @@ import { appendCrashLog } from "@/lib/crashlog";
 import MapModal from "@/components/customer/MapModal";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 import { useGridVirtualRows } from "@/components/home/useGridVirtualRows";
+import { logDataDiag } from "@/lib/dataDiagnostics";
 
 const SAMPLE_BUSINESSES = [
   {
@@ -228,6 +229,9 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   );
   const ybFetchedRef = useRef(false);
   const allListingsFetchedRef = useRef(false);
+  const ybRequestIdRef = useRef(0);
+  const allListingsRequestIdRef = useRef(0);
+  const hybridRequestIdRef = useRef(0);
   const authReady = !loadingUser || !!authUser || !!user;
   const galleryRef = useRef(null);
   const gridContainerRef = useRef(null);
@@ -573,9 +577,11 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     if (!isVisible && ybFetchedRef.current) return undefined;
     let active = true;
     const loadYb = async () => {
+      const requestId = ++ybRequestIdRef.current;
       ybFetchedRef.current = true;
       setYbBusinessesLoading((prev) => (hasLoadedYb ? prev : true));
       setYbBusinessesError(null);
+      logDataDiag("request:start", { label: "home:yb-businesses", requestId });
       const client = supabase ?? getBrowserSupabaseClient();
       try {
         let rows = [];
@@ -600,7 +606,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               kind: "timeout",
               message: "/api/public-businesses timed out after 12s",
             });
-            if (active) {
+            if (active && requestId === ybRequestIdRef.current) {
               setYbBusinesses(sampleBusinesses);
               setHasLoadedYb(true);
               setYbBusinessesError("Still loading businesses. Please refresh to retry.");
@@ -650,7 +656,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           }
         }
 
-        if (!active) return;
+        if (!active || requestId !== ybRequestIdRef.current) return;
 
         if (!rows.length) {
           setYbBusinesses((prev) =>
@@ -708,14 +714,20 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         }
       } catch (err) {
         console.warn("Failed to load YourBarrio businesses", err);
-        if (!active) return;
+        if (!active || requestId !== ybRequestIdRef.current) return;
         setYbBusinesses((prev) =>
           isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
         );
         setHasLoadedYb(true);
         setYbBusinessesError("Could not load businesses yet. Showing sample locations.");
       } finally {
-        if (active) setYbBusinessesLoading(false);
+        if (active && requestId === ybRequestIdRef.current) {
+          setYbBusinessesLoading(false);
+          logDataDiag("request:finish", {
+            label: "home:yb-businesses",
+            requestId,
+          });
+        }
       }
     };
 
@@ -783,6 +795,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     if (!isVisible && allListingsFetchedRef.current) return undefined;
     let active = true;
     const loadAll = async () => {
+      const requestId = ++allListingsRequestIdRef.current;
       allListingsFetchedRef.current = true;
       const client = supabase ?? getBrowserSupabaseClient();
       if (!client) {
@@ -790,6 +803,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         return;
       }
       setAllListingsLoading((prev) => (hasLoadedListings ? prev : true));
+      logDataDiag("request:start", { label: "home:listings", requestId });
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(
@@ -806,7 +820,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         }
         const { data, error } = await query;
         clearTimeout(timeoutId);
-        if (!active) return;
+        if (!active || requestId !== allListingsRequestIdRef.current) return;
         if (error) {
           console.error("Load all listings failed", error);
           if (process.env.NEXT_PUBLIC_HOME_GRID_DIAG === "1") {
@@ -834,7 +848,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           }
         }
       } catch (err) {
-        if (active) {
+        if (active && requestId === allListingsRequestIdRef.current) {
           if (err?.name === "AbortError") {
             logCrashEvent({
               context: "all-listings",
@@ -851,7 +865,13 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           setAllListings([]);
         }
       } finally {
-        if (active) setAllListingsLoading(false);
+        if (active && requestId === allListingsRequestIdRef.current) {
+          setAllListingsLoading(false);
+          logDataDiag("request:finish", {
+            label: "home:listings",
+            requestId,
+          });
+        }
       }
     };
     loadAll();
@@ -1311,6 +1331,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
 
   useEffect(() => {
     let isActive = true;
+    const requestId = ++hybridRequestIdRef.current;
     const term = search.trim();
     const categoryValue = categoryFilter.trim();
 
@@ -1327,6 +1348,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     const loadHybridItems = async () => {
       setHybridItemsLoading(true);
       setHybridItemsError(null);
+      logDataDiag("request:start", { label: "home:hybrid-search", requestId });
 
       const safe = term.replace(/[%_]/g, "");
       if (!safe) {
@@ -1361,7 +1383,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
 
         const { data, error } = await query;
 
-        if (!isActive) return;
+        if (!isActive || requestId !== hybridRequestIdRef.current) return;
 
         if (error) {
           console.error("Hybrid item search failed", error);
@@ -1371,7 +1393,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           setHybridItems(data || []);
         }
       } catch (err) {
-        if (!isActive) return;
+        if (!isActive || requestId !== hybridRequestIdRef.current) return;
         if (err?.name === "AbortError") {
           logCrashEvent({
             context: "hybrid-search",
@@ -1386,7 +1408,13 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         setHybridItems([]);
       } finally {
         clearTimeout(timeoutId);
-        if (isActive) setHybridItemsLoading(false);
+        if (isActive && requestId === hybridRequestIdRef.current) {
+          setHybridItemsLoading(false);
+          logDataDiag("request:finish", {
+            label: "home:hybrid-search",
+            requestId,
+          });
+        }
       }
     };
 

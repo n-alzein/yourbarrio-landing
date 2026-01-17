@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
@@ -13,6 +13,8 @@ import {
   normalizeInventory,
   sortListingsByAvailability,
 } from "@/lib/inventory";
+import { createFetchSafe } from "@/lib/fetchSafe";
+import { memoizeRequest } from "@/lib/requestMemo";
 
 export default function CustomerSavedPage() {
   const { user, authUser, supabase, loadingUser } = useAuth();
@@ -24,9 +26,16 @@ export default function CustomerSavedPage() {
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
+  const requestIdRef = useRef(0);
+  const inflightRef = useRef(null);
   const sortedSaved = useMemo(() => sortListingsByAvailability(saved), [saved]);
   const userId = authUser?.id || user?.id || null;
   const showLoading = !hasLoaded && (loading || (!userId && loadingUser));
+
+  useEffect(() => {
+    setHasLoaded(false);
+    setSaved([]);
+  }, [userId]);
 
   useEffect(() => {
     const handleVisibility = () => setIsVisible(!document.hidden);
@@ -68,48 +77,52 @@ export default function CustomerSavedPage() {
       return undefined;
     }
 
-    let active = true;
+    const requestId = ++requestIdRef.current;
+    inflightRef.current?.abort?.();
     setLoading((prev) => (hasLoaded ? prev : true));
-
-    (async () => {
-      try {
-        const { data: savedRows, error } = await client
+    const safeRequest = createFetchSafe(
+      async ({ signal }) => {
+        let savedQuery = client
           .from("saved_listings")
           .select("listing_id")
           .eq("user_id", userId);
-
+        if (typeof savedQuery.abortSignal === "function") {
+          savedQuery = savedQuery.abortSignal(signal);
+        }
+        const { data: savedRows, error } = await savedQuery;
         if (error) throw error;
-        if (!active) return;
 
         const ids = (savedRows || [])
           .map((row) => row.listing_id)
           .filter(Boolean);
 
         if (ids.length === 0) {
-          setSaved([]);
-          setHasLoaded(true);
-          if (typeof window !== "undefined") {
-            try {
-              sessionStorage.setItem(`yb_saved_${userId}`, JSON.stringify([]));
-            } catch {
-              /* ignore */
-            }
-          }
-          return;
+          return [];
         }
 
-        const { data: listings, error: listError } = await client
+        let listingQuery = client
           .from("listings")
           .select("*")
           .in("id", ids);
-
+        if (typeof listingQuery.abortSignal === "function") {
+          listingQuery = listingQuery.abortSignal(signal);
+        }
+        const { data: listings, error: listError } = await listingQuery;
         if (listError) throw listError;
-        if (!active) return;
+        return Array.isArray(listings) ? listings : [];
+      },
+      { label: "customer-saved" }
+    );
+    inflightRef.current = safeRequest;
 
-        const normalized = Array.isArray(listings) ? listings : [];
+    memoizeRequest(`customer-saved:${userId}`, safeRequest.run)
+      .then((result) => {
+        if (!result || result.aborted) return;
+        if (requestId !== requestIdRef.current) return;
+        if (!result.ok) throw result.error;
+        const normalized = result.result || [];
         setSaved(normalized);
         setHasLoaded(true);
-
         if (typeof window !== "undefined") {
           try {
             sessionStorage.setItem(
@@ -120,18 +133,22 @@ export default function CustomerSavedPage() {
             /* ignore */
           }
         }
-      } catch (err) {
-        if (!active) return;
+      })
+      .catch((err) => {
+        if (requestId !== requestIdRef.current) return;
+        if (err?.name === "AbortError" || String(err?.message || "").includes("AbortError")) {
+          return;
+        }
         console.error("Saved listings load failed", err);
         setSaved([]);
         setHasLoaded(true);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
 
     return () => {
-      active = false;
+      inflightRef.current?.abort?.();
     };
   }, [supabase, userId, hasLoaded]);
 
@@ -156,7 +173,14 @@ export default function CustomerSavedPage() {
   );
 
   if (loadingUser && !authUser && !user) {
-    return <div className="min-h-screen bg-black" />;
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
+          <p className="text-lg text-white/70">Loading your account...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

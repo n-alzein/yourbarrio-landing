@@ -129,11 +129,12 @@ export default function CustomerNavbar() {
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
-    document.documentElement.dataset.navMenuOpen = profileMenuOpen ? "1" : "0";
+    const isOpen = profileMenuOpen || mobileMenuOpen;
+    document.documentElement.dataset.navMenuOpen = isOpen ? "1" : "0";
     return () => {
       delete document.documentElement.dataset.navMenuOpen;
     };
-  }, [profileMenuOpen]);
+  }, [profileMenuOpen, mobileMenuOpen]);
 
   // DEBUG_CLICK_DIAG: trace search focus behavior on home
   useEffect(() => {
@@ -608,7 +609,10 @@ export default function CustomerNavbar() {
   --------------------------------------------------- */
   if (loadingUser && !user && !authUser) {
     return (
-      <nav className="fixed top-0 inset-x-0 z-[5000] h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto" />
+      <nav
+        className="fixed top-0 inset-x-0 z-[5000] h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
+        data-nav-guard="1"
+      />
     );
   }
 
@@ -620,6 +624,7 @@ export default function CustomerNavbar() {
       className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
       data-clickdiag={clickDiagEnabled ? "navbar" : undefined}
       onClickCapture={handleNavCapture}
+      data-nav-guard="1"
     >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20 gap-6">
         <Link
@@ -998,7 +1003,10 @@ export default function CustomerNavbar() {
 
       {/* MOBILE MENU */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white">
+        <div
+          className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white"
+          data-nav-guard="1"
+        >
           {!hasAuth && (
             <>
               <button

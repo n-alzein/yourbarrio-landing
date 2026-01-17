@@ -177,7 +177,14 @@ export default function SettingsPage() {
      UI GUARD
   ----------------------------------------------------------- */
   if (loadingUser) {
-    return <div className="min-h-screen bg-black" />;
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-12 w-12 rounded-full border-4 border-white/10 border-t-white/70 animate-spin mx-auto" />
+          <p className="text-lg text-white/70">Loading your account...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!authUser) {

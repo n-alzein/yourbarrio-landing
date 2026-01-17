@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,6 +14,8 @@ import {
 } from "@/lib/messages";
 import { retry } from "@/lib/retry";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { createFetchSafe } from "@/lib/fetchSafe";
+import { memoizeRequest } from "@/lib/requestMemo";
 import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
 
@@ -34,6 +36,9 @@ export default function CustomerConversationPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
+  const requestIdRef = useRef(0);
+  const inflightRef = useRef(null);
+  const loadOlderRequestIdRef = useRef(0);
 
   useEffect(() => {
     setHydrated(true);
@@ -41,56 +46,87 @@ export default function CustomerConversationPage() {
 
   const loadThread = useCallback(async () => {
     if (!conversationKey) return;
+    const requestId = ++requestIdRef.current;
+    inflightRef.current?.abort?.();
     setLoading(true);
     setError(null);
-    try {
-      const convoResponse = await fetchWithTimeout(
-        `/api/customer/conversations?conversationId=${encodeURIComponent(
-          conversationKey
-        )}`,
-        {
-          method: "GET",
-          credentials: "include",
-          timeoutMs: 12000,
+    const safeRequest = createFetchSafe(
+      async ({ signal }) => {
+        const convoResponse = await fetchWithTimeout(
+          `/api/customer/conversations?conversationId=${encodeURIComponent(
+            conversationKey
+          )}`,
+          {
+            method: "GET",
+            credentials: "include",
+            timeoutMs: 12000,
+            signal,
+          }
+        );
+        if (!convoResponse.ok) {
+          const message = await convoResponse.text();
+          throw new Error(message || "Failed to load conversation");
         }
-      );
-      if (!convoResponse.ok) {
-        const message = await convoResponse.text();
-        throw new Error(message || "Failed to load conversation");
-      }
-      const convoPayload = await convoResponse.json();
-      const convo = convoPayload?.conversation ?? null;
-      setConversation(convo);
+        const convoPayload = await convoResponse.json();
+        const convo = convoPayload?.conversation ?? null;
 
-      const initialMessages = await retry(
-        () =>
-          fetchWithTimeout(
-            `/api/customer/messages?conversationId=${encodeURIComponent(
-              conversationKey
-            )}`,
-            {
-              method: "GET",
-              credentials: "include",
-              timeoutMs: 12000,
-            }
-          ),
-        { retries: 1, delayMs: 600 }
+        const initialMessages = await retry(
+          () =>
+            fetchWithTimeout(
+              `/api/customer/messages?conversationId=${encodeURIComponent(
+                conversationKey
+              )}`,
+              {
+                method: "GET",
+                credentials: "include",
+                timeoutMs: 12000,
+                signal,
+              }
+            ),
+          { retries: 1, delayMs: 600 }
+        );
+        if (!initialMessages.ok) {
+          const message = await initialMessages.text();
+          throw new Error(message || "Failed to load messages");
+        }
+        const payload = await initialMessages.json();
+        const nextMessages = Array.isArray(payload?.messages)
+          ? payload.messages
+          : [];
+        return { convo, nextMessages };
+      },
+      { label: "customer-conversation-thread" }
+    );
+    inflightRef.current = safeRequest;
+    try {
+      const result = await memoizeRequest(
+        `customer-conversation:${conversationKey}`,
+        safeRequest.run
       );
-      if (!initialMessages.ok) {
-        const message = await initialMessages.text();
-        throw new Error(message || "Failed to load messages");
-      }
-      const payload = await initialMessages.json();
-      const nextMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+      if (!result || result.aborted) return;
+      if (requestId !== requestIdRef.current) return;
+      if (!result.ok) throw result.error;
+      setConversation(result.result?.convo ?? null);
+      const nextMessages = result.result?.nextMessages ?? [];
       setMessages(nextMessages);
       setHasMore(nextMessages.length === MESSAGE_PAGE_SIZE);
     } catch (err) {
       console.error("Failed to load conversation", err);
-      setError("We couldn’t load this conversation. Try again soon.");
+      if (requestId === requestIdRef.current) {
+        setError("We couldn’t load this conversation. Try again soon.");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [conversationKey]);
+
+  useEffect(() => {
+    return () => {
+      inflightRef.current?.abort?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!hydrated || loadingUser || !conversationKey) return;
@@ -146,6 +182,7 @@ export default function CustomerConversationPage() {
     const oldest = messages[0]?.created_at;
     if (!oldest) return;
 
+    const requestId = ++loadOlderRequestIdRef.current;
     setLoadingMore(true);
     try {
       const response = await fetchWithTimeout(
@@ -164,6 +201,7 @@ export default function CustomerConversationPage() {
       }
       const payload = await response.json();
       const older = Array.isArray(payload?.messages) ? payload.messages : [];
+      if (requestId !== loadOlderRequestIdRef.current) return;
       if (older.length === 0) {
         setHasMore(false);
       } else {
