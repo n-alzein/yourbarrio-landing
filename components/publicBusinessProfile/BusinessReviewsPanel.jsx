@@ -93,7 +93,7 @@ export default function BusinessReviewsPanel({
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
-  const customerId = viewer.authUser?.id || null;
+  const customerId = viewer.user?.id || null;
 
   const reviewAverage = reviews.length
     ? reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) /
@@ -469,7 +469,7 @@ export default function BusinessReviewsPanel({
 
   const isBusinessViewer = viewer.isBusiness;
   const isOwnBusiness = Boolean(
-    isBusinessViewer && viewer.authUser?.id && businessId && viewer.authUser.id === businessId
+    isBusinessViewer && viewer.user?.id && businessId && viewer.user.id === businessId
   );
   const showReviewForm = viewer.isCustomer && !customerReviewId;
   const showLoginPrompt = viewer.status === "guest";

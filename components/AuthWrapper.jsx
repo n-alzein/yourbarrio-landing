@@ -3,6 +3,6 @@
 import { useAuth } from "@/components/AuthProvider";
 
 export default function AuthWrapper({ children }) {
-  const { authUser } = useAuth();
-  return <div key={authUser?.id || "guest"}>{children}</div>;
+  const { user } = useAuth();
+  return <div key={user?.id || "guest"}>{children}</div>;
 }

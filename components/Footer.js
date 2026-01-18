@@ -6,13 +6,13 @@ import { useAuth } from "./AuthProvider";
 
 export default function Footer() {
   const { openModal } = useModal();
-  const { user, authUser, role } = useAuth();
+  const { user, profile, role } = useAuth();
 
-  const resolvedRole = role || authUser?.app_metadata?.role || user?.role;
+  const resolvedRole = role || user?.app_metadata?.role || profile?.role;
   const aboutHref =
     resolvedRole === "business"
       ? "/business/about"
-      : user || authUser
+      : user || profile
         ? "/customer/about"
         : "/about";
 

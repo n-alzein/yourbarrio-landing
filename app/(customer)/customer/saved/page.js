@@ -17,10 +17,10 @@ import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
 
 export default function CustomerSavedPage() {
-  const { user, authUser, supabase, loadingUser } = useAuth();
+  const { user, supabase, loadingUser } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
-  const userId = authUser?.id || user?.id || null;
+  const userId = user?.id || null;
   const buildCacheKey = (id) => (id ? `yb_saved_${id}` : null);
   const initialSavedState = {
     saved: [],
@@ -287,7 +287,7 @@ export default function CustomerSavedPage() {
     new Set(saved.map((item) => item.category).filter(Boolean))
   );
 
-  if (loadingUser && !authUser && !user) {
+  if (loadingUser && !user) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center space-y-3">

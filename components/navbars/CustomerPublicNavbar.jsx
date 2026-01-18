@@ -28,9 +28,9 @@ export default function CustomerPublicNavbar() {
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
   const { hydrated, setTheme } = useTheme();
-  const { status } = useAuth();
+  const { authStatus } = useAuth();
   const hasForcedLight = useRef(false);
-  const hasSession = status === "signed_in";
+  const hasSession = authStatus === "authenticated";
 
   useEffect(() => {
     // Prevent background scroll when the mobile menu is open

@@ -10,7 +10,7 @@ import {
 } from "@/lib/getAuthProvider";
 
 export default function SettingsPage() {
-  const { authUser, user, supabase, loadingUser, logout, refreshProfile } =
+  const { user, profile, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
   const router = useRouter();
   const redirectPath = "/?redirect=/customer/settings";
@@ -30,26 +30,26 @@ export default function SettingsPage() {
     profile_photo_url: userValue?.profile_photo_url || "",
   });
 
-  const [form, setForm] = useState(() => buildInitialForm(user));
+  const [form, setForm] = useState(() => buildInitialForm(profile));
   const lastUserIdRef = useRef(null);
 
   /* -----------------------------------------------------------
      LOAD PROFILE INTO FORM
   ----------------------------------------------------------- */
   useEffect(() => {
-    if (!user?.id) return;
-    if (lastUserIdRef.current === user.id) return;
-    lastUserIdRef.current = user.id;
+    if (!profile?.id) return;
+    if (lastUserIdRef.current === profile.id) return;
+    lastUserIdRef.current = profile.id;
     queueMicrotask(() => {
-      setForm(buildInitialForm(user));
+      setForm(buildInitialForm(profile));
     });
-  }, [user]);
+  }, [profile]);
 
   /* -----------------------------------------------------------
      SAVE CHANGES
   ----------------------------------------------------------- */
   async function handleSave() {
-    if (!authUser) return;
+    if (!user) return;
     setSaving(true);
 
     const { error } = await supabase
@@ -61,7 +61,7 @@ export default function SettingsPage() {
         address: form.address,
         profile_photo_url: form.profile_photo_url,
       })
-      .eq("id", authUser.id);
+      .eq("id", user.id);
 
     setSaving(false);
     setEditMode(false);
@@ -73,13 +73,13 @@ export default function SettingsPage() {
      DELETE ACCOUNT
   ----------------------------------------------------------- */
   async function handleDeleteAccount() {
-    if (!authUser) return;
+    if (!user) return;
 
     if (!confirm("Are you sure you want to permanently delete your account?"))
       return;
 
-    await supabase.from("users").delete().eq("id", authUser.id);
-    await supabase.auth.admin.deleteUser(authUser.id);
+    await supabase.from("users").delete().eq("id", user.id);
+    await supabase.auth.admin.deleteUser(user.id);
 
     logout();
   }
@@ -93,7 +93,7 @@ export default function SettingsPage() {
 
     setPhotoUploading(true);
 
-    const fileName = `${authUser.id}-${Date.now()}`;
+    const fileName = `${user.id}-${Date.now()}`;
 
     const { error } = await supabase.storage
       .from("avatars")
@@ -115,13 +115,13 @@ export default function SettingsPage() {
      CHANGE DETECTION
   ----------------------------------------------------------- */
   const hasChanges =
-    user &&
+    profile &&
     JSON.stringify(form) !==
-      JSON.stringify(buildInitialForm(user));
+      JSON.stringify(buildInitialForm(profile));
 
-  const primaryProvider = getPrimaryAuthProvider(authUser);
-  const providerLabel = getAuthProviderLabel(authUser);
-  const userEmail = authUser?.email || user?.email || "";
+  const primaryProvider = getPrimaryAuthProvider(user);
+  const providerLabel = getAuthProviderLabel(user);
+  const userEmail = user?.email || profile?.email || "";
   const providerName = primaryProvider
     ? primaryProvider === "email" || primaryProvider === "google"
       ? userEmail || "Email"
@@ -153,19 +153,19 @@ export default function SettingsPage() {
     console.debug("[Settings:customer] auth provider debug", {
       resolvedProvider: primaryProvider,
       providerLabel,
-      sessionUserId: authUser?.id,
-      sessionUserEmail: authUser?.email,
-      app_metadata: authUser?.app_metadata,
-      user_metadata: authUser?.user_metadata,
+      sessionUserId: user?.id,
+      sessionUserEmail: user?.email,
+      app_metadata: user?.app_metadata,
+      user_metadata: user?.user_metadata,
       profileProvider: {
-        provider: user?.provider,
-        auth_provider: user?.auth_provider,
-        signup_method: user?.signup_method,
+        provider: profile?.provider,
+        auth_provider: profile?.auth_provider,
+        signup_method: profile?.signup_method,
       },
       storedLoginMethod,
       storedProvider,
     });
-  }, [authUser, user, primaryProvider, providerLabel]);
+  }, [primaryProvider, profile, providerLabel, user]);
 
   /* -----------------------------------------------------------
      UI GUARD
@@ -181,7 +181,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!authUser) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
         <div className="space-y-3 text-center">
@@ -237,7 +237,7 @@ export default function SettingsPage() {
               <SafeImage
                 src={
                   (form?.profile_photo_url ||
-                    user?.profile_photo_url ||
+                    profile?.profile_photo_url ||
                     "/customer-placeholder.png")
                 }
                 alt="Profile Photo"
@@ -302,11 +302,11 @@ export default function SettingsPage() {
                   onClick={() => {
                     setEditMode(false);
                     setForm({
-                      full_name: user.full_name || "",
-                      phone: user.phone || "",
-                      city: user.city || "",
-                      address: user.address || "",
-                      profile_photo_url: user.profile_photo_url || "",
+                      full_name: profile?.full_name || "",
+                      phone: profile?.phone || "",
+                      city: profile?.city || "",
+                      address: profile?.address || "",
+                      profile_photo_url: profile?.profile_photo_url || "",
                     });
                   }}
                   className="px-5 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-sm"

@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 const ViewerContext = createContext({
   status: "guest",
   role: null,
-  authUser: null,
+  user: null,
   profile: null,
   loading: true,
   isAuthenticated: false,
@@ -26,10 +26,10 @@ function resolveStatus(role, hasUser) {
 }
 
 export default function ViewerContextEnhancer({ children }) {
-  const { authUser, user: profile, role, status } = useAuth();
+  const { user, profile, role, status } = useAuth();
 
   const value = useMemo(() => {
-    const isAuthenticated = Boolean(authUser?.id);
+    const isAuthenticated = Boolean(user?.id);
     const resolvedRole = role ?? null;
     const computedStatus = resolveStatus(resolvedRole, isAuthenticated);
     const isBusiness = computedStatus === "business";
@@ -40,7 +40,7 @@ export default function ViewerContextEnhancer({ children }) {
     return {
       status: computedStatus,
       role: resolvedRole,
-      authUser,
+      user,
       profile,
       loading: status === "loading",
       isAuthenticated,
@@ -49,7 +49,7 @@ export default function ViewerContextEnhancer({ children }) {
       isAdmin,
       isInternal,
     };
-  }, [authUser, profile, role, status]);
+  }, [profile, role, status, user]);
 
   return <ViewerContext.Provider value={value}>{children}</ViewerContext.Provider>;
 }

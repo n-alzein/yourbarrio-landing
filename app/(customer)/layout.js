@@ -17,13 +17,12 @@ function CustomerRouteShell({ children = null }) {
 }
 
 export default async function CustomerLayout({ children }) {
-  const { user, profile, session } = await requireRole("customer");
+  const { user, profile } = await requireRole("customer");
 
   return (
     <AuthProvider
       initialUser={user}
       initialProfile={profile}
-      initialSession={session}
       initialRole="customer"
     >
       <GlobalHeader surface="customer" />

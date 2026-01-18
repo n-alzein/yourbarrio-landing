@@ -22,7 +22,7 @@ import { getAvailabilityBadgeStyle, normalizeInventory } from "@/lib/inventory";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function ListingDetails({ params }) {
-  const { supabase, user, authUser, role } = useAuth();
+  const { supabase, user, role } = useAuth();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
@@ -46,7 +46,7 @@ export default function ListingDetails({ params }) {
 
   useEffect(() => {
     let isMounted = true;
-    const accountId = user?.id || authUser?.id || null;
+    const accountId = user?.id || null;
     const shouldUseServer = Boolean(accountId);
 
     async function load() {
@@ -124,11 +124,11 @@ export default function ListingDetails({ params }) {
     return () => {
       isMounted = false;
     };
-  }, [supabase, id, user?.id, authUser?.id]);
+  }, [supabase, id, user?.id]);
 
   useEffect(() => {
     let active = true;
-    const accountId = user?.id || authUser?.id || null;
+    const accountId = user?.id || null;
     if (!accountId || !id) return () => {};
     const checkSaved = async () => {
       const client = supabase ?? getBrowserSupabaseClient();
@@ -146,7 +146,7 @@ export default function ListingDetails({ params }) {
     return () => {
       active = false;
     };
-  }, [supabase, user?.id, authUser?.id, id]);
+  }, [supabase, user?.id, id]);
 
   const handleToggleSave = async () => {
     if (!supabase || !id || !user?.id) {
@@ -180,7 +180,7 @@ export default function ListingDetails({ params }) {
   };
 
   const handleMessageBusiness = async () => {
-    const customerId = user?.id || authUser?.id;
+    const customerId = user?.id;
     const businessId = business?.id;
 
     if (!customerId) {

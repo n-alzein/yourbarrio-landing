@@ -83,7 +83,7 @@ export default function CustomerNavbar() {
 
 function CustomerNavbarInner({ pathname, searchParams }) {
   const router = useRouter();
-  const { user, authUser, loadingUser, supabase } = useAuth();
+  const { user, profile, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { openModal } = useModal();
@@ -127,7 +127,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
       profileMenuOpen,
       loadingUser,
       hasUser: !!user,
-      hasAuthUser: !!authUser,
+      hasProfile: !!profile,
       href: event.currentTarget?.getAttribute?.("href") || null,
     });
     queueMicrotask(() => {
@@ -392,26 +392,26 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   /* ---------------------------------------------------
      AVATAR PRIORITY
   --------------------------------------------------- */
-  const googleAvatar = authUser?.user_metadata?.avatar_url || null;
-  const hasAuth = Boolean(user || authUser);
+  const googleAvatar = user?.user_metadata?.avatar_url || null;
+  const hasAuth = Boolean(user);
 
   const avatar = resolveImageSrc(
-    user?.profile_photo_url?.trim() || googleAvatar || "",
+    profile?.profile_photo_url?.trim() || googleAvatar || "",
     "/customer-placeholder.png"
   );
 
   const displayName =
-    user?.full_name ||
-    authUser?.user_metadata?.full_name ||
-    authUser?.user_metadata?.name ||
-    authUser?.email ||
-    authUser?.user_metadata?.email ||
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email ||
+    user?.user_metadata?.email ||
     "Account";
 
   const email =
+    profile?.email ||
     user?.email ||
-    authUser?.email ||
-    authUser?.user_metadata?.email ||
+    user?.user_metadata?.email ||
     null;
 
   const isActive = (href) => pathname === href;
@@ -530,7 +530,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   const categorySelectWidth = Math.max(selectedCategory.length, 3) + 6;
 
   const loadUnreadCount = useCallback(async () => {
-    const userId = user?.id || authUser?.id;
+    const userId = user?.id;
     if (!userId) return;
     try {
       const total = await fetchUnreadTotal({
@@ -542,7 +542,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     } catch (err) {
       console.warn("Failed to load unread messages", err);
     }
-  }, [supabase, user?.id, authUser?.id]);
+  }, [supabase, user?.id]);
 
   useEffect(() => {
     if (!badgeReady) return;
@@ -553,7 +553,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   useEffect(() => {
     if (!badgeReady) return undefined;
-    const userId = user?.id || authUser?.id;
+    const userId = user?.id;
     if (!userId) return undefined;
     const client = supabase ?? getBrowserSupabaseClient();
     if (!client) return undefined;
@@ -577,12 +577,12 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     return () => {
       client.removeChannel(channel);
     };
-  }, [badgeReady, user?.id, authUser?.id, supabase, loadUnreadCount]);
+  }, [badgeReady, user?.id, supabase, loadUnreadCount]);
 
   /* ---------------------------------------------------
      LOADING STATE
   --------------------------------------------------- */
-  if (loadingUser && !user && !authUser) {
+  if (loadingUser && !user) {
     return (
       <nav
         className="fixed top-0 inset-x-0 z-[5000] h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"

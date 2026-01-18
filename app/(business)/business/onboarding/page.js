@@ -34,7 +34,7 @@ function formReducer(state, action) {
 // MAIN COMPONENT (only ONE export default)
 // ------------------------------
 export default function BusinessOnboardingPage() {
-  const { authUser, loadingUser } = useAuth();
+  const { user, loadingUser } = useAuth();
   const router = useRouter();
 
   const [form, dispatch] = useReducer(formReducer, initialForm);
@@ -158,8 +158,8 @@ export default function BusinessOnboardingPage() {
         return;
       }
 
-      const user = authUser;
-      if (!user) {
+      const verifiedUser = user;
+      if (!verifiedUser) {
         setMessage("You must be logged in to create a business.");
         setLoading(false);
         router.push("/business-auth/login");
@@ -171,7 +171,7 @@ export default function BusinessOnboardingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: user.id,
+          userId: verifiedUser.id,
           name: form.businessName,
           category: form.category,
           description: form.description,

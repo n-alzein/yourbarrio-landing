@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export default function LogoutButton({
   children,
@@ -10,15 +10,16 @@ export default function LogoutButton({
   onSuccess,
 }) {
   const { logout } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const resetTimerRef = useRef(null);
 
   async function handleClick() {
-    if (loading) return;
-    setLoading(true);
-    const reset = () => setLoading(false);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    const reset = () => setIsSubmitting(false);
 
     try {
-      await logout(); // global logout handles everything
+      void logout(); // fire-and-forget, redirects immediately
       onSuccess?.();
     } catch (err) {
       console.error("Logout failed", err);
@@ -26,8 +27,11 @@ export default function LogoutButton({
       return;
     }
 
-    // If navigation didn't unmount this component, ensure the button unlocks
-    setTimeout(reset, 500);
+    Promise.resolve().then(reset);
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+    }
+    resetTimerRef.current = setTimeout(reset, 500);
   }
 
   if (mobile) {
@@ -35,12 +39,12 @@ export default function LogoutButton({
       <button
         onClick={handleClick}
         type="button"
-        disabled={loading}
+        disabled={isSubmitting}
         className={`px-4 py-2 text-left text-white rounded-lg ${
-          loading ? "opacity-60 cursor-not-allowed" : "hover:bg-white/10"
+          isSubmitting ? "opacity-60 cursor-not-allowed" : "hover:bg-white/10"
         }`}
       >
-        {loading ? "Logging out..." : "Log out"}
+        {isSubmitting ? "Logging out..." : "Log out"}
       </button>
     );
   }
@@ -49,10 +53,10 @@ export default function LogoutButton({
     <button
       type="button"
       onClick={handleClick}
-      disabled={loading}
-      className={`${className} ${loading ? "opacity-60 cursor-not-allowed" : ""}`}
+      disabled={isSubmitting}
+      className={`${className} ${isSubmitting ? "opacity-60 cursor-not-allowed" : ""}`}
     >
-      {loading ? "Logging out..." : children}
+      {isSubmitting ? "Logging out..." : children}
     </button>
   );
 }

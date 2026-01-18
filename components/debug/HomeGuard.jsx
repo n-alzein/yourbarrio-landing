@@ -11,15 +11,15 @@ export default function HomeGuard({ children, fallback = null }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { authUser, user: profile, role, loadingUser } = useAuth();
+  const { user, profile, role, loadingUser } = useAuth();
 
   const blocker = useMemo(() => {
     if (loadingUser) return "AUTH_LOADING";
-    if (!authUser) return "NO_USER";
+    if (!user) return "NO_USER";
     if (!profile) return "NO_PROFILE";
     if (role && role !== "customer") return "ROLE_MISMATCH";
     return null;
-  }, [authUser, loadingUser, profile, role]);
+  }, [loadingUser, profile, role, user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

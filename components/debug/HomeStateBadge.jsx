@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 const enabled = () => process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
 
 export default function HomeStateBadge({ listingsCount = 0, ybCount = 0, selectedBusinessId = null, mapReady = false }) {
-  const { authUser, user: profile, loadingUser } = useAuth();
+  const { user, profile, loadingUser } = useAuth();
   if (!enabled()) return null;
 
   return (
@@ -24,7 +24,7 @@ export default function HomeStateBadge({ listingsCount = 0, ybCount = 0, selecte
         pointerEvents: "none",
       }}
     >
-      <div>AUTH: {loadingUser ? "loading" : authUser ? "yes" : "none"}</div>
+      <div>AUTH: {loadingUser ? "loading" : user ? "yes" : "none"}</div>
       <div>ROLE: {profile?.role || "n/a"}</div>
       <div>Listings: {listingsCount}</div>
       <div>YB: {ybCount}</div>

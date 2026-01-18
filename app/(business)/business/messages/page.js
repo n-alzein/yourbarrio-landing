@@ -8,8 +8,8 @@ import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import InboxList from "@/components/messages/InboxList";
 
 export default function BusinessMessagesPage() {
-  const { user, authUser, supabase, loadingUser } = useAuth();
-  const userId = user?.id || authUser?.id || null;
+  const { user, supabase, loadingUser } = useAuth();
+  const userId = user?.id || null;
 
   const [hydrated, setHydrated] = useState(false);
   const [conversations, setConversations] = useState([]);

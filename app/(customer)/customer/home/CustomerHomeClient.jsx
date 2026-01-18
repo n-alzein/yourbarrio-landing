@@ -150,7 +150,7 @@ class CustomerHomeErrorBoundary extends React.Component {
 
 function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const searchParams = useSearchParams();
-  const { user, authUser, loadingUser, supabase } = useAuth();
+  const { user, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const VIRTUALIZE = process.env.NEXT_PUBLIC_HOME_VIRTUALIZE === "1";
@@ -232,7 +232,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const ybRequestIdRef = useRef(0);
   const allListingsRequestIdRef = useRef(0);
   const hybridRequestIdRef = useRef(0);
-  const authReady = !loadingUser || !!authUser || !!user;
+  const authReady = !loadingUser || !!user;
   const galleryRef = useRef(null);
   const gridContainerRef = useRef(null);
   const [gridColumns, setGridColumns] = useState(() => {
@@ -1409,7 +1409,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     };
   }, [search, supabase, logCrashEvent, categoryFilter]);
 
-  if (loadingUser && !authUser && !user) {
+  if (loadingUser && !user) {
     return (
       <div className={`min-h-screen ${textTone.base} relative px-6 pt-3`}>
         <div className="absolute inset-0 -z-10 overflow-hidden">

@@ -7,14 +7,14 @@ const DEFAULT_MINUTES = 30;
 const THROTTLE_MS = 10_000;
 
 export default function InactivityLogout() {
-  const { authUser, user, loadingUser } = useAuth();
+  const { user, loadingUser } = useAuth();
   const timeoutIdRef = useRef(null);
   const lastActivityRef = useRef(0);
   const lastResetRef = useRef(0);
 
   useEffect(() => {
     if (loadingUser) return;
-    const isLoggedIn = Boolean(authUser?.id || user?.id);
+    const isLoggedIn = Boolean(user?.id);
     if (!isLoggedIn) return;
 
     const minutesValue = Number(
@@ -83,7 +83,7 @@ export default function InactivityLogout() {
       document.removeEventListener("visibilitychange", handleVisibility);
       clearTimer();
     };
-  }, [authUser?.id, user?.id, loadingUser]);
+  }, [loadingUser, user?.id]);
 
   return null;
 }

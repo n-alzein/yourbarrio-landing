@@ -15,13 +15,17 @@ import {
   getBrowserSupabaseClient,
   subscribeAuthGuard,
 } from "@/lib/supabaseClient";
+import {
+  clearVerifiedUserCache,
+  getVerifiedUser,
+  subscribeAuthChanges,
+  setAuthChangeSuppressed,
+} from "@/lib/auth/verifiedUserClient";
 import { PATHS } from "@/lib/auth/paths";
 
 const AuthContext = createContext({
   supabase: null,
-  status: "loading",
-  session: null,
-  authUser: null,
+  authStatus: "loading",
   user: null,
   profile: null,
   role: null,
@@ -34,27 +38,26 @@ const AuthContext = createContext({
   logout: async () => {},
 });
 
-const resolveRole = (profile, authUser, fallbackRole) => {
-  return profile?.role ?? fallbackRole ?? authUser?.app_metadata?.role ?? null;
+const resolveRole = (profile, user, fallbackRole) => {
+  return profile?.role ?? fallbackRole ?? user?.app_metadata?.role ?? null;
 };
 
 const buildSignedOutState = () => ({
-  status: "signed_out",
-  session: null,
-  authUser: null,
+  authStatus: "unauthenticated",
+  user: null,
   profile: null,
   role: null,
   error: null,
 });
 
-const buildSignedInState = ({ session, authUser, profile }) => ({
-  status: "signed_in",
-  session: session ?? null,
-  authUser: authUser ?? null,
+const buildSignedInState = ({ user, profile }) => ({
+  authStatus: "authenticated",
+  user: user ?? null,
   profile: profile ?? null,
-  role: resolveRole(profile, authUser, null),
+  role: resolveRole(profile, user, null),
   error: null,
 });
+
 const withGuardState = (base) => ({
   ...base,
   rateLimited: authStore.state.rateLimited,
@@ -65,9 +68,8 @@ const withGuardState = (base) => ({
 
 const authStore = {
   state: {
-    status: "loading",
-    session: null,
-    authUser: null,
+    authStatus: "loading",
+    user: null,
     profile: null,
     role: null,
     error: null,
@@ -78,12 +80,13 @@ const authStore = {
   },
   listeners: new Set(),
   supabase: null,
-  authSubscription: null,
   bootstrapPromise: null,
-  sessionPromise: null,
-  userPromise: null,
+  profilePromise: null,
+  profileUserId: null,
   providerCount: 0,
   guardSubscribed: false,
+  authUnsubscribe: null,
+  loggingOut: false,
 };
 
 let handledTokenInvalidAt = 0;
@@ -112,26 +115,17 @@ function getAuthStateSnapshot() {
   return authStore.state;
 }
 
-function seedAuthState({
-  initialSession,
-  initialUser,
-  initialProfile,
-  initialRole,
-}) {
-  if (!initialSession && !initialUser && !initialProfile && !initialRole) {
+function seedAuthState({ initialUser, initialProfile, initialRole }) {
+  if (!initialUser && !initialProfile && !initialRole) {
     return;
   }
 
   const nextState = { ...authStore.state };
   let changed = false;
 
-  if (initialSession && !nextState.session) {
-    nextState.session = initialSession;
-    changed = true;
-  }
-
-  if (initialUser && !nextState.authUser) {
-    nextState.authUser = initialUser;
+  if (initialUser && !nextState.user) {
+    nextState.user = initialUser;
+    nextState.authStatus = "authenticated";
     changed = true;
   }
 
@@ -146,13 +140,7 @@ function seedAuthState({
   }
 
   if (changed) {
-    nextState.role = resolveRole(
-      nextState.profile,
-      nextState.authUser,
-      nextState.role
-    );
-    nextState.status =
-      nextState.session || nextState.authUser ? "signed_in" : nextState.status;
+    nextState.role = resolveRole(nextState.profile, nextState.user, nextState.role);
     setAuthState(nextState);
   }
 }
@@ -190,10 +178,6 @@ function syncAuthGuardState(guard) {
   if (changed) {
     setAuthState(next);
   }
-
-  if (!rateLimited && !next.session && !next.authUser) {
-    void bootstrapAuth();
-  }
 }
 
 function ensureAuthGuardSubscription() {
@@ -205,90 +189,76 @@ function ensureAuthGuardSubscription() {
   });
 }
 
-async function getSessionOnce() {
-  if (!authStore.supabase) {
-    return { data: { session: null }, error: new Error("Supabase unavailable") };
-  }
-  if (authStore.sessionPromise) {
-    return authStore.sessionPromise;
-  }
-  authStore.sessionPromise = authStore.supabase.auth
-    .getSession()
-    .finally(() => {
-      authStore.sessionPromise = null;
-    });
-  return authStore.sessionPromise;
-}
-
-async function getTrustedUser() {
-  if (!authStore.supabase) {
-    return { user: null, error: new Error("Supabase unavailable") };
-  }
-  if (!authStore.userPromise) {
-    authStore.userPromise = authStore.supabase.auth
-      .getUser()
-      .then(({ data, error }) => ({ user: data?.user ?? null, error }))
-      .finally(() => {
-        authStore.userPromise = null;
-      });
-  }
-  return authStore.userPromise;
-}
-
-async function fetchProfile(authUser) {
-  if (!authStore.supabase || !authUser?.id) {
+async function fetchProfile(user) {
+  if (!authStore.supabase || !user?.id) {
     return { profile: null, error: null };
   }
   const { data, error } = await authStore.supabase
     .from("users")
     .select("*")
-    .eq("id", authUser.id)
+    .eq("id", user.id)
     .maybeSingle();
   return { profile: data ?? null, error };
 }
 
-async function hydrateSignedIn(session) {
-  const { user, error } = await getTrustedUser();
-  if (error || !user) {
-    updateAuthState({
-      status: "signed_out",
-      error: error?.message || "Unable to load user",
-      session: null,
-      authUser: null,
-      profile: null,
-      role: null,
+async function getProfileForUser(user) {
+  if (!user?.id) return { profile: null, error: null };
+  if (authStore.profilePromise && authStore.profileUserId === user.id) {
+    return authStore.profilePromise;
+  }
+  if (authStore.profileUserId === user.id && authStore.state.profile) {
+    return { profile: authStore.state.profile, error: null };
+  }
+
+  authStore.profileUserId = user.id;
+  authStore.profilePromise = fetchProfile(user)
+    .finally(() => {
+      authStore.profilePromise = null;
     });
+  return authStore.profilePromise;
+}
+
+async function applyUserUpdate(user) {
+  const currentId = authStore.state.user?.id || null;
+  const nextId = user?.id || null;
+  const nextStatus = user ? "authenticated" : "unauthenticated";
+  const statusChanged = authStore.state.authStatus !== nextStatus;
+  const needsProfile =
+    Boolean(user) &&
+    (!authStore.state.profile || authStore.profileUserId !== nextId);
+
+  if (currentId === nextId && !statusChanged && !needsProfile) {
     return;
   }
 
-  const { profile } = await fetchProfile(user);
-  setAuthState(
-    withGuardState(
-      buildSignedInState({
-        session,
-        authUser: user,
-        profile,
-      })
-    )
-  );
+  if (!user) {
+    updateAuthState(withGuardState(buildSignedOutState()));
+    return;
+  }
+
+  if (currentId !== nextId || statusChanged) {
+    updateAuthState({
+      ...withGuardState(buildSignedInState({ user })),
+      profile: authStore.state.profile,
+      role: resolveRole(authStore.state.profile, user, authStore.state.role),
+    });
+  }
+
+  const { profile } = await getProfileForUser(user);
+  if (authStore.state.user?.id !== user.id) return;
+  updateAuthState({
+    profile,
+    role: resolveRole(profile, user, authStore.state.role),
+  });
 }
 
 async function bootstrapAuth() {
   if (authStore.bootstrapPromise) return authStore.bootstrapPromise;
-  const guard = getAuthGuardState();
-  if (guard.cooldownMsRemaining > 0) {
-    syncAuthGuardState(guard);
-    return null;
-  }
 
   authStore.bootstrapPromise = (async () => {
-    updateAuthState({ status: "loading", error: null });
-    const { data, error } = await getSessionOnce();
-    if (error || !data?.session) {
-      updateAuthState(withGuardState(buildSignedOutState()));
-      return;
-    }
-    await hydrateSignedIn(data.session);
+    updateAuthState({ authStatus: "loading", error: null });
+    const user = await getVerifiedUser();
+    await applyUserUpdate(user);
   })().finally(() => {
     authStore.bootstrapPromise = null;
   });
@@ -297,24 +267,17 @@ async function bootstrapAuth() {
 }
 
 function ensureAuthListener() {
-  if (!authStore.supabase || authStore.authSubscription) return;
-  const { data } = authStore.supabase.auth.onAuthStateChange(
-    (_event, session) => {
-      if (!session) {
-        updateAuthState(withGuardState(buildSignedOutState()));
-        return;
-      }
-      void hydrateSignedIn(session);
-    }
-  );
-  authStore.authSubscription = data?.subscription || null;
+  if (authStore.authUnsubscribe) return;
+  authStore.authUnsubscribe = subscribeAuthChanges(({ user }) => {
+    if (authStore.loggingOut) return;
+    void applyUserUpdate(user);
+  });
 }
 
 function releaseAuthListener() {
-  if (authStore.authSubscription) {
-    authStore.authSubscription.unsubscribe();
-    authStore.authSubscription = null;
-  }
+  if (!authStore.authUnsubscribe) return;
+  authStore.authUnsubscribe();
+  authStore.authUnsubscribe = null;
 }
 
 function redirectWithGuard(target) {
@@ -340,7 +303,6 @@ function redirectWithGuard(target) {
 
 export function AuthProvider({
   children,
-  initialSession = null,
   initialUser = null,
   initialProfile = null,
   initialRole = null,
@@ -363,7 +325,6 @@ export function AuthProvider({
     }
 
     seedAuthState({
-      initialSession,
       initialUser,
       initialProfile,
       initialRole,
@@ -372,7 +333,7 @@ export function AuthProvider({
     ensureAuthGuardSubscription();
     ensureAuthListener();
 
-    if (!authStore.state.authUser && !authStore.state.session) {
+    if (!authStore.state.user) {
       void bootstrapAuth();
     }
 
@@ -383,13 +344,7 @@ export function AuthProvider({
         releaseAuthListener();
       }
     };
-  }, [
-    supabase,
-    initialSession,
-    initialUser,
-    initialProfile,
-    initialRole,
-  ]);
+  }, [initialProfile, initialRole, initialUser, supabase]);
 
   useEffect(() => {
     if (!authState.tokenInvalidAt) return;
@@ -404,6 +359,7 @@ export function AuthProvider({
           // best effort
         }
       }
+      clearVerifiedUserCache();
       updateAuthState(withGuardState(buildSignedOutState()));
       acknowledgeAuthTokenInvalid(authState.tokenInvalidAt);
 
@@ -416,16 +372,16 @@ export function AuthProvider({
   }, [authState.tokenInvalidAt]);
 
   const refreshProfile = useCallback(async () => {
-    if (!mountedRef.current || !authStore.supabase || !authState.authUser?.id) {
+    if (!mountedRef.current || !authStore.supabase || !authState.user?.id) {
       return;
     }
-    const { profile, error } = await fetchProfile(authState.authUser);
+    const { profile, error } = await fetchProfile(authState.user);
     if (error || !mountedRef.current) return;
     updateAuthState({
       profile,
-      role: resolveRole(profile, authState.authUser, authState.role),
+      role: resolveRole(profile, authState.user, authState.role),
     });
-  }, [authState.authUser, authState.role]);
+  }, [authState.role, authState.user]);
 
   const logout = useCallback(async () => {
     if (!authStore.supabase) {
@@ -435,29 +391,35 @@ export function AuthProvider({
       return;
     }
 
-    try {
-      await authStore.supabase.auth.signOut({ scope: "local" });
-    } catch {
-      // Ignore and let server route clear cookies.
-    } finally {
-      updateAuthState(withGuardState(buildSignedOutState()));
-      if (typeof window !== "undefined") {
-        window.location.replace("/api/auth/logout");
-      }
+    authStore.loggingOut = true;
+    setAuthChangeSuppressed(true);
+    clearVerifiedUserCache();
+    updateAuthState(withGuardState(buildSignedOutState()));
+
+    if (typeof window !== "undefined") {
+      window.location.replace("/api/auth/logout");
     }
+
+    setTimeout(() => {
+      try {
+        void authStore.supabase.auth.signOut({ scope: "local" });
+      } catch {
+        // best effort
+      }
+    }, 0);
   }, []);
 
   const value = useMemo(
     () => ({
       supabase: authStore.supabase,
-      status: authState.status,
-      session: authState.session,
-      authUser: authState.authUser,
-      user: authState.profile,
+      authStatus: authState.authStatus,
+      status: authState.authStatus,
+      user: authState.user,
       profile: authState.profile,
       role: authState.role,
       error: authState.error,
-      loadingUser: authState.status === "loading" || authState.rateLimited,
+      loadingUser:
+        authState.authStatus === "loading" || authState.rateLimited,
       rateLimited: authState.rateLimited,
       rateLimitUntil: authState.rateLimitUntil,
       rateLimitMessage: authState.rateLimitMessage,
@@ -465,15 +427,14 @@ export function AuthProvider({
       logout,
     }),
     [
-      authState.authUser,
+      authState.authStatus,
       authState.error,
       authState.profile,
       authState.rateLimitMessage,
       authState.rateLimitUntil,
       authState.rateLimited,
       authState.role,
-      authState.session,
-      authState.status,
+      authState.user,
       logout,
       refreshProfile,
     ]

@@ -17,13 +17,12 @@ function BusinessRouteShell({ children = null }) {
 }
 
 export default async function BusinessLayout({ children }) {
-  const { user, profile, session } = await requireRole("business");
+  const { user, profile } = await requireRole("business");
 
   return (
     <AuthProvider
       initialUser={user}
       initialProfile={profile}
-      initialSession={session}
       initialRole="business"
     >
       <BusinessNavbar requireAuth />

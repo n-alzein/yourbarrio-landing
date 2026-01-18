@@ -8,7 +8,7 @@ const diagEnabled = () => process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
 
 export default function HomeRenderTrace({ blocker }) {
   const pathname = usePathname();
-  const { authUser, user: profile, role, loadingUser } = useAuth();
+  const { user, profile, role, loadingUser } = useAuth();
 
   const enabled = diagEnabled();
 
@@ -20,14 +20,14 @@ export default function HomeRenderTrace({ blocker }) {
       pathname,
       blocker,
       loadingUser,
-      hasUser: !!authUser,
+      hasUser: !!user,
       hasProfile: !!profile,
-      role: role || profile?.role || authUser?.role || null,
+      role: role || profile?.role || user?.role || null,
     });
     if (typeof window !== "undefined") {
       window.__HOME_RENDERED__ = { ts, blocker };
     }
-  }, [enabled, pathname, blocker, loadingUser, authUser, profile, role]);
+  }, [enabled, pathname, blocker, loadingUser, profile, role, user]);
 
   useEffect(() => {
     if (!enabled || typeof document === "undefined") return undefined;

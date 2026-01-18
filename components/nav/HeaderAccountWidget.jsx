@@ -24,19 +24,21 @@ export default function HeaderAccountWidget({
   mobileMenuOpen = false,
   onCloseMobileMenu,
 }) {
-  const { supabase, authUser, user, role, status, rateLimited, rateLimitMessage } =
+  const { supabase, user, profile, role, authStatus, rateLimited, rateLimitMessage } =
     useAuth();
   const { openModal } = useModal();
-  const loading = status === "loading";
+  const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
   const lastUnreadUserIdRef = useRef(null);
+  const refreshTimerRef = useRef(null);
+  const unreadRequestIdRef = useRef(0);
 
   const client = supabase ?? getBrowserSupabaseClient();
 
-  const accountUser = authUser;
-  const accountProfile = user;
+  const accountUser = user;
+  const accountProfile = profile;
   const isCustomer = !role || role === "customer" || role === "admin" || role === "internal";
   const isBusiness = role === "business";
 
@@ -61,24 +63,51 @@ export default function HeaderAccountWidget({
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const loadUnreadCount = useCallback(async () => {
     if (!client || !unreadUserId || !isCustomer) return;
+    const requestId = ++unreadRequestIdRef.current;
     try {
       const total = await fetchUnreadTotal({
         supabase: client,
         userId: unreadUserId,
         role: "customer",
       });
+      if (requestId !== unreadRequestIdRef.current) return;
       setUnreadCount(total);
     } catch {
       // best effort
     }
   }, [client, unreadUserId, isCustomer]);
 
+  const scheduleUnreadRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = setTimeout(() => {
+      void loadUnreadCount();
+    }, 0);
+  }, [loadUnreadCount]);
+
   useEffect(() => {
-    if (!hasAuth || !isCustomer || !unreadUserId) return;
-    if (lastUnreadUserIdRef.current === unreadUserId) return;
+    if (!hasAuth || !isCustomer || !unreadUserId) return undefined;
+    if (lastUnreadUserIdRef.current === unreadUserId) return undefined;
     lastUnreadUserIdRef.current = unreadUserId;
-    loadUnreadCount();
-  }, [hasAuth, isCustomer, loadUnreadCount, unreadUserId]);
+    scheduleUnreadRefresh();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        scheduleUnreadRefresh();
+      }
+    };
+    window.addEventListener("focus", scheduleUnreadRefresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", scheduleUnreadRefresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
 
   useEffect(() => {
     if (!hasAuth || !isCustomer || !client) return undefined;

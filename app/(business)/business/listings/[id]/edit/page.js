@@ -19,8 +19,8 @@ export default function EditListingPage() {
     return typeof listingId === "string" ? listingId : "";
   }, [listingId]);
 
-  const { supabase, authUser, user, loadingUser } = useAuth();
-  const accountId = authUser?.id || user?.id || null;
+  const { supabase, user, profile, loadingUser } = useAuth();
+  const accountId = user?.id || profile?.id || null;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

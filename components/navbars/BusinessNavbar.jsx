@@ -47,7 +47,7 @@ function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) 
 }
 
 function BusinessNavbarInner({ pathname, requireAuth }) {
-  const { user, authUser, role, loadingUser, supabase } = useAuth();
+  const { user, profile, role, loadingUser, supabase } = useAuth();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -55,10 +55,10 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
   const displayName =
-    user?.business_name ||
-    user?.full_name ||
-    authUser?.user_metadata?.full_name ||
-    authUser?.user_metadata?.name ||
+    profile?.business_name ||
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
     "Account";
 
   const badgeReady = !loadingUser;
@@ -101,15 +101,15 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
   }, [user, supabase]);
 
   const avatar = resolveImageSrc(
-    photoUrl?.trim() || "",
+    profile?.profile_photo_url?.trim() || photoUrl?.trim() || "",
     "/business-placeholder.png"
   );
 
   const isActive = (href) => pathname === href;
   const email =
+    profile?.email ||
     user?.email ||
-    authUser?.email ||
-    authUser?.user_metadata?.email ||
+    user?.user_metadata?.email ||
     null;
 
   const handleBusinessAuthClick = (event, path) => {
@@ -151,7 +151,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
   ];
 
   const loadUnreadCount = useCallback(async () => {
-    const userId = user?.id || authUser?.id;
+    const userId = user?.id;
     if (!userId || role !== "business") return;
     try {
       const total = await fetchUnreadTotal({
@@ -163,7 +163,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
     } catch (err) {
       console.warn("Failed to load unread messages", err);
     }
-  }, [supabase, user?.id, authUser?.id, role]);
+  }, [supabase, user?.id, role]);
 
   useEffect(() => {
     if (!badgeReady) return;
@@ -174,7 +174,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
 
   useEffect(() => {
     if (!badgeReady) return undefined;
-    const userId = user?.id || authUser?.id;
+    const userId = user?.id;
     if (!userId || role !== "business") return undefined;
     const client = supabase ?? getBrowserSupabaseClient();
     if (!client) return undefined;
@@ -198,10 +198,10 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
     return () => {
       client.removeChannel(channel);
     };
-  }, [badgeReady, user?.id, authUser?.id, supabase, role, loadUnreadCount]);
+  }, [badgeReady, user?.id, supabase, role, loadUnreadCount]);
 
-  const isBusinessAuthed = Boolean(authUser) && role === "business";
-  const holdUntilAuthed = requireAuth && (!authUser || role !== "business");
+  const isBusinessAuthed = Boolean(user) && role === "business";
+  const holdUntilAuthed = requireAuth && (!user || role !== "business");
 
   if (loadingUser || holdUntilAuthed) {
     return (

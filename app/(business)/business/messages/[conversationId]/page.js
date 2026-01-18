@@ -21,8 +21,8 @@ import MessageComposer from "@/components/messages/MessageComposer";
 export default function BusinessConversationPage() {
   const params = useParams();
   const conversationId = params?.conversationId;
-  const { user, authUser, loadingUser, supabase } = useAuth();
-  const userId = user?.id || authUser?.id || null;
+  const { user, loadingUser, supabase } = useAuth();
+  const userId = user?.id || null;
   const conversationKey = useMemo(() => {
     if (Array.isArray(conversationId)) return conversationId[0] || "";
     return typeof conversationId === "string" ? conversationId : "";

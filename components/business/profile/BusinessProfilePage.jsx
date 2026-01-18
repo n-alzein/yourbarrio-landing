@@ -42,7 +42,7 @@ export default function BusinessProfilePage({
   initialAnnouncements,
   ratingSummary,
 }) {
-  const { supabase, authUser, user, refreshProfile } = useAuth();
+  const { supabase, user, profile: authProfile, refreshProfile } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const router = useRouter();
@@ -70,7 +70,7 @@ export default function BusinessProfilePage({
   }, []);
 
   const client = supabase ?? getBrowserSupabaseClient();
-  const businessId = profile?.id || authUser?.id || "";
+  const businessId = profile?.id || user?.id || "";
   const reviewCount = ratingSummary?.count ?? initialReviewCount ?? 0;
   const averageRating = ratingSummary?.average ?? 0;
 
@@ -99,20 +99,20 @@ export default function BusinessProfilePage({
   }, [toast]);
 
   useEffect(() => {
-    if (!user || !profile || user.id !== profile.id) return;
-    if (!profile.profile_photo_url && user.profile_photo_url) {
+    if (!authProfile || !profile || authProfile.id !== profile.id) return;
+    if (!profile.profile_photo_url && authProfile.profile_photo_url) {
       setProfile((prev) => ({
         ...prev,
-        profile_photo_url: user.profile_photo_url,
+        profile_photo_url: authProfile.profile_photo_url,
       }));
     }
-    if (!profile.cover_photo_url && user.cover_photo_url) {
+    if (!profile.cover_photo_url && authProfile.cover_photo_url) {
       setProfile((prev) => ({
         ...prev,
-        cover_photo_url: user.cover_photo_url,
+        cover_photo_url: authProfile.cover_photo_url,
       }));
     }
-  }, [user, profile]);
+  }, [authProfile, profile]);
 
   useEffect(() => {
     if (!businessId) return;

@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 export default function NavGate({ children }) {
   const pathname = usePathname();
-  const { user, role, authUser } = useAuth();
+  const { user, profile, role } = useAuth();
 
   if (!pathname) {
     // Wait for next/navigation to resolve the current route so we don't flash the public shell.
@@ -21,7 +21,7 @@ export default function NavGate({ children }) {
   // - on any app route
   // - when signed in
   if (isAppRoute) return null;
-  if (authUser || user || role) return null;
+  if (user || profile || role) return null;
 
   return children;
 }

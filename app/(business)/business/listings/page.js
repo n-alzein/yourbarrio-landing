@@ -12,7 +12,7 @@ import InventorySelfTest from "@/components/debug/InventorySelfTest";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function BusinessListingsPage() {
-  const { supabase, authUser, loadingUser } = useAuth();
+  const { supabase, user, loadingUser } = useAuth();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
@@ -46,7 +46,7 @@ export default function BusinessListingsPage() {
   const lastUpdated = listings[0]?.created_at
     ? new Date(listings[0].created_at).toLocaleDateString()
     : "—";
-  const showLoading = !hasLoaded && ((loadingUser && !authUser) || loading);
+  const showLoading = !hasLoaded && ((loadingUser && !user) || loading);
 
   useEffect(() => {
     const handleVisibility = () => setIsVisible(!document.hidden);
@@ -77,8 +77,8 @@ export default function BusinessListingsPage() {
   //  SAFE AUTH GUARD + FETCH
   // ------------------------------------------------------
   useEffect(() => {
-    if (loadingUser && !authUser) return; // Wait for auth only if we don't have a user
-    if (!authUser) {
+    if (loadingUser && !user) return; // Wait for auth only if we don't have a user
+    if (!user) {
       setLoading(false);
       return;
     }
@@ -125,7 +125,7 @@ export default function BusinessListingsPage() {
     return () => {
       if (typeof cleanup === "function") cleanup();
     };
-  }, [loadingUser, authUser, supabase, hasLoaded, isVisible]);
+  }, [loadingUser, user, supabase, hasLoaded, isVisible]);
 
   // ------------------------------------------------------
   // DELETE LISTING
@@ -153,7 +153,7 @@ export default function BusinessListingsPage() {
   }
 
   async function updateListingInventory(listingId, updates) {
-    if (!authUser) {
+    if (!user) {
       alert("Connection not ready. Please try again.");
       return;
     }
@@ -310,7 +310,7 @@ export default function BusinessListingsPage() {
       </p>
     );
   }
-  if (!authUser) {
+  if (!user) {
     return (
       <p className="text-slate-700 dark:text-slate-100 text-center py-20">
         Loading your account...

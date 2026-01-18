@@ -142,7 +142,7 @@ export default function OverviewEditor({
   onProfileUpdate,
   onToast,
 }) {
-  const { supabase, authUser, refreshProfile } = useAuth();
+  const { supabase, user, refreshProfile } = useAuth();
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [isDirty, setIsDirty] = useState(false);
@@ -297,7 +297,7 @@ export default function OverviewEditor({
   };
 
   const handleSave = async () => {
-    if (!authUser || !supabase) {
+    if (!user || !supabase) {
       onToast?.("error", "Session not ready. Please refresh and try again.");
       return;
     }
@@ -338,7 +338,7 @@ export default function OverviewEditor({
       const { data, error } = await supabase
         .from("users")
         .update(filteredPayload)
-        .eq("id", authUser.id)
+        .eq("id", user.id)
         .select("*")
         .maybeSingle();
 

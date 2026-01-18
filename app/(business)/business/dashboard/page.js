@@ -9,7 +9,7 @@ import { getDisplayName } from "@/lib/messages";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function BusinessDashboard() {
-  const { authUser, user, loadingUser } = useAuth();
+  const { user, profile, loadingUser } = useAuth();
   const { theme, hydrated: themeHydrated } = useTheme();
   const isLight = themeHydrated ? theme === "light" : true;
   const textTone = useMemo(
@@ -65,16 +65,16 @@ export default function BusinessDashboard() {
   /* 2️⃣ Load business profile */
   /* ------------------------------------------- */
   useEffect(() => {
-    if (business || !user) return;
-    if (authUser && user.id !== authUser.id) return;
-    setBusiness(user);
-  }, [business, user, authUser]);
+    if (business || !profile) return;
+    if (user && profile.id !== user.id) return;
+    setBusiness(profile);
+  }, [business, profile, user]);
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!authUser && loadingUser) return;
-    if (!authUser) return;
-    if (business?.id === authUser.id && stats?._businessId === authUser.id) {
+    if (!user && loadingUser) return;
+    if (!user) return;
+    if (business?.id === user.id && stats?._businessId === user.id) {
       return;
     }
 
@@ -100,7 +100,7 @@ export default function BusinessDashboard() {
           setBusiness(payload.business);
         }
 
-        if (!stats || stats._businessId !== authUser.id) {
+        if (!stats || stats._businessId !== user.id) {
           setStats(payload?.stats ?? null);
         }
 
@@ -115,7 +115,7 @@ export default function BusinessDashboard() {
             messages: 0,
             rating: "",
             reviewCount: 0,
-            _businessId: authUser.id,
+            _businessId: user.id,
           });
         }
         setLatestMessage(null);
@@ -127,7 +127,7 @@ export default function BusinessDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, loadingUser, authUser, business, stats]);
+  }, [hydrated, loadingUser, user, business, stats]);
 
   /* ------------------------------------------- */
   /* 3️⃣ Load stats AFTER business exists */

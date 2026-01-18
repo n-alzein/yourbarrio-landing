@@ -8,9 +8,9 @@ import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 
 export default function NewListingPage() {
-  const { supabase, authUser, user, loadingUser } = useAuth();
+  const { supabase, user, profile, loadingUser } = useAuth();
   const router = useRouter();
-  const accountId = authUser?.id || user?.id || null;
+  const accountId = user?.id || profile?.id || null;
 
   const [form, setForm] = useState({
     title: "",

@@ -10,14 +10,16 @@ function buildInitialProfile(authProfile) {
   };
 }
 
-function ProfileForm({ authUser, authProfile, supabase }) {
+function ProfileForm({ user, profile, supabase }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [profile, setProfile] = useState(() => buildInitialProfile(authProfile));
+  const [profileState, setProfileState] = useState(() =>
+    buildInitialProfile(profile)
+  );
 
   async function handleSave(e) {
     e.preventDefault();
-    if (!authUser) return;
+    if (!user) return;
 
     setSaving(true);
     setMessage("");
@@ -26,9 +28,9 @@ function ProfileForm({ authUser, authProfile, supabase }) {
     await supabase
       .from("users")
       .update({
-        full_name: profile.full_name,
+        full_name: profileState.full_name,
       })
-      .eq("id", authUser.id);
+      .eq("id", user.id);
 
     setMessage("✔ Profile updated!");
     setSaving(false);
@@ -43,7 +45,7 @@ function ProfileForm({ authUser, authProfile, supabase }) {
         <label className="block mb-1 text-sm font-semibold">Email</label>
         <input
           disabled
-          value={authUser.email}
+          value={user.email}
           className="w-full p-3 bg-white/20 border border-white/20 rounded-lg text-white/70"
         />
       </div>
@@ -52,9 +54,9 @@ function ProfileForm({ authUser, authProfile, supabase }) {
       <div className="mb-6">
         <label className="block mb-1 text-sm font-semibold">Full Name</label>
         <input
-          value={profile.full_name}
+          value={profileState.full_name}
           onChange={(e) =>
-            setProfile({ ...profile, full_name: e.target.value })
+            setProfileState({ ...profileState, full_name: e.target.value })
           }
           className="w-full p-3 bg-white/10 border border-white/20 rounded-lg"
         />
@@ -63,9 +65,9 @@ function ProfileForm({ authUser, authProfile, supabase }) {
       {/* ROLE (READ ONLY) */}
       <div className="mb-6">
         <label className="block mb-1 text-sm font-semibold">Role</label>
-        <input
+          <input
           disabled
-          value={profile.role}
+          value={profileState.role}
           className="w-full p-3 bg-white/20 border border-white/20 rounded-lg text-white/70"
         />
       </div>
@@ -84,17 +86,17 @@ function ProfileForm({ authUser, authProfile, supabase }) {
 }
 
 export default function ProfilePage() {
-  const { supabase, authUser, user: authProfile, loadingUser } = useAuth();
+  const { supabase, user, profile, loadingUser } = useAuth();
 
-  if (loadingUser || !authUser) {
+  if (loadingUser || !user) {
     return <div className="text-white text-center mt-24">Loading…</div>;
   }
 
   return (
     <ProfileForm
-      key={authUser.id}
-      authUser={authUser}
-      authProfile={authProfile}
+      key={user.id}
+      user={user}
+      profile={profile}
       supabase={supabase}
     />
   );
