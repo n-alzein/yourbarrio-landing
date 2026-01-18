@@ -92,7 +92,6 @@ export default function HeaderAccountWidget({
     if (!hasAuth || !isCustomer || !unreadUserId) return undefined;
     if (lastUnreadUserIdRef.current === unreadUserId) return undefined;
     lastUnreadUserIdRef.current = unreadUserId;
-<<<<<<< HEAD
     scheduleUnreadRefresh();
 
     const handleVisibility = () => {
@@ -111,14 +110,6 @@ export default function HeaderAccountWidget({
       }
     };
   }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
-=======
-    if (typeof queueMicrotask === "function") {
-      queueMicrotask(() => loadUnreadCount());
-    } else {
-      Promise.resolve().then(() => loadUnreadCount());
-    }
-  }, [hasAuth, isCustomer, loadUnreadCount, unreadUserId]);
->>>>>>> dd292d7 (Performance updates- Navbar update)
 
   useEffect(() => {
     if (!hasAuth || !isCustomer || !client) return undefined;

@@ -31,12 +31,8 @@ export default function CustomerPublicNavbar() {
   const { hydrated, setTheme } = useTheme();
   const { authStatus } = useAuth();
   const hasForcedLight = useRef(false);
-<<<<<<< HEAD
   const hasSession = authStatus === "authenticated";
-=======
-  const hasSession = status === "signed_in";
   const mobileDrawerId = useId();
->>>>>>> dd292d7 (Performance updates- Navbar update)
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
