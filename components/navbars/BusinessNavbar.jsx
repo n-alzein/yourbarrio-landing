@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
+import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
@@ -53,6 +54,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const mobileDrawerId = useId();
   const dropdownRef = useRef(null);
   const displayName =
     profile?.business_name ||
@@ -121,6 +123,21 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
     setProfileMenuOpen(false);
     setMobileMenuOpen(false);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(min-width: 768px)");
+    const handleChange = () => {
+      if (media.matches) setMobileMenuOpen(false);
+    };
+    handleChange();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
 
   const quickActions = [
     {
@@ -221,6 +238,21 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
       data-business-navbar="1"
     >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
+        {/* MOBILE MENU BUTTON */}
+        <button
+          onClick={() => {
+            setProfileMenuOpen(false);
+            setMobileMenuOpen((open) => !open);
+          }}
+          className="md:hidden text-white mr-3"
+          aria-label="Open menu"
+          aria-expanded={mobileMenuOpen}
+          aria-controls={mobileDrawerId}
+        >
+          <svg className="h-7 w-7" fill="none" stroke="currentColor">
+            <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
 
         {/* LEFT SIDE */}
         <div className="flex items-center gap-10">
@@ -397,73 +429,57 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
           )}
         </div>
 
-        {/* MOBILE MENU BUTTON */}
-        <button
-          onClick={() => setMobileMenuOpen((open) => !open)}
-          className="md:hidden text-white"
-          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-        >
-          {mobileMenuOpen ? (
-            <svg className="h-7 w-7" fill="none" stroke="currentColor">
-              <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="h-7 w-7" fill="none" stroke="currentColor">
-              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
       </div>
 
-    {/* MOBILE MENU */}
-    {mobileMenuOpen && (
-      <div className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-6 text-white">
-        {isBusinessAuthed && (
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
-            <img
-              src={avatar}
-              className="h-12 w-12 rounded-2xl object-cover border border-white/20"
-              alt="Avatar"
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate">
-                {displayName}
-              </p>
-              {email && (
-                <p className="text-xs text-white/60 truncate">{email}</p>
-              )}
-            </div>
+    <MobileSidebarDrawer
+      open={mobileMenuOpen}
+      onClose={() => setMobileMenuOpen(false)}
+      title={isBusinessAuthed ? "Business menu" : "Welcome"}
+      id={mobileDrawerId}
+    >
+      {isBusinessAuthed && (
+        <div className="mb-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+          <img
+            src={avatar}
+            className="h-12 w-12 rounded-2xl object-cover border border-white/20"
+            alt="Avatar"
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white truncate">
+              {displayName}
+            </p>
+            {email && <p className="text-xs text-white/60 truncate">{email}</p>}
           </div>
-        )}
+        </div>
+      )}
 
-        <ThemeToggle
-          showLabel
-          align="left"
-          className="self-start"
-          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-        />
+      <ThemeToggle
+        showLabel
+        align="left"
+        className="mb-5 self-start"
+        buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+      />
 
-        {/* Logged-out */}
+      <div className="flex flex-col gap-4 text-white">
         {!isBusinessAuthed && (
-          <NavItem
-            href="/business"
-            isActive={isActive}
-            closeMenus={closeMenus}
-          >
-            Businesses
-          </NavItem>
-        )}
-        {!isBusinessAuthed && (
-          <NavItem
-            href="/business/about"
-            isActive={isActive}
-            closeMenus={closeMenus}
-          >
-            About
-          </NavItem>
+          <>
+            <NavItem
+              href="/business"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              Businesses
+            </NavItem>
+            <NavItem
+              href="/business/about"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              About
+            </NavItem>
+          </>
         )}
 
-        {/* Logged-in business menu */}
         {isBusinessAuthed && (
           <>
             <NavItem
@@ -533,7 +549,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
           </>
         )}
       </div>
-    )}
+    </MobileSidebarDrawer>
   </nav>
   );
 }

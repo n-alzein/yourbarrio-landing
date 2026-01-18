@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import SafeImage from "@/components/SafeImage";
 import {
   Bookmark,
@@ -21,6 +21,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
+import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { useTheme } from "@/components/ThemeProvider";
 import { useModal } from "../modals/ModalProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
@@ -107,6 +108,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const badgeReady = !loadingUser;
+  const mobileDrawerId = useId();
   const dropdownRef = useRef(null);
   const dropdownPanelRef = useRef(null);
   const searchBoxRef = useRef(null);
@@ -421,6 +423,21 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     setProfileMenuOpen(false);
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(min-width: 768px)");
+    const handleChange = () => {
+      if (media.matches) setMobileMenuOpen(false);
+    };
+    handleChange();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
   const logNavDebug = (href, method) => {
     if (process.env.NODE_ENV === "production") return;
     if (href === "/customer/saved" || href === "/customer/settings") {
@@ -602,6 +619,21 @@ function CustomerNavbarInner({ pathname, searchParams }) {
       data-nav-guard="1"
     >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20 gap-6">
+        {/* MOBILE MENU BUTTON */}
+        <button
+          onClick={() => {
+            setProfileMenuOpen(false);
+            setMobileMenuOpen((open) => !open);
+          }}
+          className="md:hidden text-white mr-1"
+          aria-label="Open menu"
+          aria-expanded={mobileMenuOpen}
+          aria-controls={mobileDrawerId}
+        >
+          <svg className="h-7 w-7" fill="none" stroke="currentColor">
+            <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
         <Link
           href="/customer/home"
           onClick={closeMenus}
@@ -942,21 +974,6 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           )}
         </div>
 
-        {/* MOBILE MENU BUTTON */}
-        <button
-          onClick={() => setMobileMenuOpen((open) => !open)}
-          className="md:hidden text-white"
-        >
-          {mobileMenuOpen ? (
-            <svg className="h-7 w-7" fill="none" stroke="currentColor">
-              <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="h-7 w-7" fill="none" stroke="currentColor">
-              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
       </div>
 
       <div
@@ -986,12 +1003,13 @@ function CustomerNavbarInner({ pathname, searchParams }) {
         </form>
       </div>
 
-      {/* MOBILE MENU */}
-      {mobileMenuOpen && (
-        <div
-          className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white"
-          data-nav-guard="1"
-        >
+      <MobileSidebarDrawer
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        title={hasAuth ? "My account" : "Welcome"}
+        id={mobileDrawerId}
+      >
+        <div className="flex flex-col gap-5 text-white" data-nav-guard="1">
           {!hasAuth && (
             <>
               <button
@@ -1077,7 +1095,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
           {hasAuth ? <LogoutButton mobile /> : null}
         </div>
-      )}
+      </MobileSidebarDrawer>
     </nav>
   );
 }

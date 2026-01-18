@@ -14,6 +14,7 @@ import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useModal } from "@/components/modals/ModalProvider";
+import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
@@ -23,6 +24,7 @@ export default function HeaderAccountWidget({
   variant = "desktop",
   mobileMenuOpen = false,
   onCloseMobileMenu,
+  mobileDrawerId,
 }) {
   const { supabase, user, profile, role, authStatus, rateLimited, rateLimitMessage } =
     useAuth();
@@ -90,6 +92,7 @@ export default function HeaderAccountWidget({
     if (!hasAuth || !isCustomer || !unreadUserId) return undefined;
     if (lastUnreadUserIdRef.current === unreadUserId) return undefined;
     lastUnreadUserIdRef.current = unreadUserId;
+<<<<<<< HEAD
     scheduleUnreadRefresh();
 
     const handleVisibility = () => {
@@ -108,6 +111,14 @@ export default function HeaderAccountWidget({
       }
     };
   }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
+=======
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(() => loadUnreadCount());
+    } else {
+      Promise.resolve().then(() => loadUnreadCount());
+    }
+  }, [hasAuth, isCustomer, loadUnreadCount, unreadUserId]);
+>>>>>>> dd292d7 (Performance updates- Navbar update)
 
   useEffect(() => {
     if (!hasAuth || !isCustomer || !client) return undefined;
@@ -331,115 +342,120 @@ export default function HeaderAccountWidget({
     );
   }
 
-  if (!mobileMenuOpen) return null;
-
   return (
-    <div
-      className="md:hidden bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-t border-white/10 px-6 py-5 flex flex-col gap-5 text-white"
-      data-nav-surface={surface}
-      data-nav-guard="1"
+    <MobileSidebarDrawer
+      open={mobileMenuOpen}
+      onClose={() => onCloseMobileMenu?.()}
+      title={hasAuth ? "My account" : "Welcome"}
+      id={mobileDrawerId}
     >
-      {rateLimited ? (
-        <div className="text-sm text-white/70" aria-live="polite">
-          {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
-        </div>
-      ) : loading ? (
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-          <div className="h-11 w-11 rounded-2xl bg-white/10" />
-          <div className="h-4 w-24 rounded bg-white/10" />
-        </div>
-      ) : !hasAuth ? (
-        <>
-          <button
-            type="button"
-            onClick={() => {
-              onCloseMobileMenu?.();
-              openModal("customer-login");
-            }}
-            className="text-left text-white/70 hover:text-white"
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onCloseMobileMenu?.();
-              openModal("customer-signup");
-            }}
-            className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold"
-          >
-            Sign up
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-            <SafeImage
-              src={avatar}
-              alt="Profile avatar"
-              className="h-11 w-11 rounded-2xl object-cover border border-white/20"
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-              {email ? <p className="text-xs text-white/60 truncate">{email}</p> : null}
-            </div>
+      <div
+        className="flex flex-col gap-5 text-white"
+        data-nav-surface={surface}
+        data-nav-guard="1"
+      >
+        {rateLimited ? (
+          <div className="text-sm text-white/70" aria-live="polite">
+            {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
           </div>
-
-          {isBusiness ? (
-            <Link
-              href="/business/dashboard"
-              onClick={() => onCloseMobileMenu?.()}
+        ) : loading ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <div className="h-11 w-11 rounded-2xl bg-white/10" />
+            <div className="h-4 w-24 rounded bg-white/10" />
+          </div>
+        ) : !hasAuth ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                onCloseMobileMenu?.();
+                openModal("customer-login");
+              }}
               className="text-left text-white/70 hover:text-white"
-              data-safe-nav="1"
             >
-              Business dashboard
-            </Link>
-          ) : null}
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onCloseMobileMenu?.();
+                openModal("customer-signup");
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold"
+            >
+              Sign up
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+              <SafeImage
+                src={avatar}
+                alt="Profile avatar"
+                className="h-11 w-11 rounded-2xl object-cover border border-white/20"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                {email ? <p className="text-xs text-white/60 truncate">{email}</p> : null}
+              </div>
+            </div>
 
-          {isCustomer ? (
-            <>
+            {isBusiness ? (
               <Link
-                href="/customer/messages"
-                onClick={() => onCloseMobileMenu?.()}
-                className="text-left text-white/70 hover:text-white flex items-center justify-between"
-                data-safe-nav="1"
-              >
-                <span>Messages</span>
-                {unreadCount > 0 ? (
-                  <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                    {unreadCount}
-                  </span>
-                ) : null}
-              </Link>
-              <Link
-                href="/customer/saved"
+                href="/business/dashboard"
                 onClick={() => onCloseMobileMenu?.()}
                 className="text-left text-white/70 hover:text-white"
                 data-safe-nav="1"
               >
-                Saved items
+                Business dashboard
               </Link>
-              <Link
-                href="/customer/settings"
-                onClick={() => onCloseMobileMenu?.()}
-                className="text-left text-white/70 hover:text-white"
-                data-safe-nav="1"
-              >
-                Account settings
-              </Link>
-            </>
-          ) : null}
-        </>
-      )}
+            ) : null}
 
-      <ThemeToggle
-        showLabel
-        align="left"
-        className="self-start"
-        buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-      />
+            {isCustomer ? (
+              <>
+                <Link
+                  href="/customer/messages"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white flex items-center justify-between"
+                  data-safe-nav="1"
+                >
+                  <span>Messages</span>
+                  {unreadCount > 0 ? (
+                    <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      {unreadCount}
+                    </span>
+                  ) : null}
+                </Link>
+                <Link
+                  href="/customer/saved"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white"
+                  data-safe-nav="1"
+                >
+                  Saved items
+                </Link>
+                <Link
+                  href="/customer/settings"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white"
+                  data-safe-nav="1"
+                >
+                  Account settings
+                </Link>
+              </>
+            ) : null}
+          </>
+        )}
 
-      {hasAuth ? <LogoutButton mobile onSuccess={() => onCloseMobileMenu?.()} /> : null}
-    </div>
+        <ThemeToggle
+          showLabel
+          align="left"
+          className="self-start"
+          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+        />
+
+        {hasAuth ? <LogoutButton mobile onSuccess={() => onCloseMobileMenu?.()} /> : null}
+      </div>
+    </MobileSidebarDrawer>
   );
 }

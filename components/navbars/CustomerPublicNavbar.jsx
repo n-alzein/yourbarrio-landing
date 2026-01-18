@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
 import { useTheme } from "../ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
+import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 
 function NavItem({ href, children, active, onClick, className }) {
   return (
@@ -30,16 +31,27 @@ export default function CustomerPublicNavbar() {
   const { hydrated, setTheme } = useTheme();
   const { authStatus } = useAuth();
   const hasForcedLight = useRef(false);
+<<<<<<< HEAD
   const hasSession = authStatus === "authenticated";
+=======
+  const hasSession = status === "signed_in";
+  const mobileDrawerId = useId();
+>>>>>>> dd292d7 (Performance updates- Navbar update)
 
   useEffect(() => {
-    // Prevent background scroll when the mobile menu is open
-    if (typeof document === "undefined") return;
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(min-width: 768px)");
+    const handleChange = () => {
+      if (media.matches) setOpen(false);
     };
-  }, [open]);
+    handleChange();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
 
   useEffect(() => {
     if (!hydrated || hasForcedLight.current) return;
@@ -65,6 +77,32 @@ export default function CustomerPublicNavbar() {
       <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
         <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14">
           <div className="h-20 flex items-center justify-between">
+            {/* MOBILE MENU BUTTON */}
+            <button
+              aria-label="Toggle menu"
+              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition mr-2"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-controls={mobileDrawerId}
+            >
+              <div className="flex flex-col gap-1.5">
+                <span
+                  className={`block h-0.5 w-6 rounded-full bg-white transition-transform ${
+                    open ? "translate-y-2 rotate-45" : ""
+                  }`}
+                />
+                <span
+                  className={`block h-0.5 w-4 rounded-full bg-white transition ${
+                    open ? "opacity-0" : ""
+                  }`}
+                />
+                <span
+                  className={`block h-0.5 w-6 rounded-full bg-white transition-transform ${
+                    open ? "-translate-y-2 -rotate-45" : ""
+                  }`}
+                />
+              </div>
+            </button>
             {/* LEFT SIDE */}
             <div className="flex items-center gap-x-10">
               <Link href="/" className="select-none">
@@ -125,118 +163,87 @@ export default function CustomerPublicNavbar() {
               )}
             </div>
 
-            {/* MOBILE MENU BUTTON */}
-            <button
-              aria-label="Toggle menu"
-              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition"
-              onClick={() => setOpen((o) => !o)}
-            >
-              <div className="flex flex-col gap-1.5">
-                <span
-                  className={`block h-0.5 w-6 rounded-full bg-white transition-transform ${
-                    open ? "translate-y-2 rotate-45" : ""
-                  }`}
-                />
-                <span
-                  className={`block h-0.5 w-4 rounded-full bg-white transition ${
-                    open ? "opacity-0" : ""
-                  }`}
-                />
-                <span
-                  className={`block h-0.5 w-6 rounded-full bg-white transition-transform ${
-                    open ? "-translate-y-2 -rotate-45" : ""
-                  }`}
-                />
-              </div>
-            </button>
           </div>
         </div>
       </div>
 
-      {/* MOBILE MENU */}
-      {open && (
-        <div className="md:hidden fixed inset-0 z-40">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-xl"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute inset-x-0 top-20 px-4 pb-6">
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-purple-950/90 via-purple-900/80 to-fuchsia-900/80 shadow-2xl text-white">
-              <div className="px-6 pt-6 pb-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
-                <div className="flex flex-col gap-3 text-lg font-semibold">
-                  <NavItem
-                    href="/about"
-                    active={pathname === "/about"}
-                    onClick={() => setOpen(false)}
-                    className="text-lg font-semibold"
-                  >
-                    About YourBarrio
-                  </NavItem>
-                </div>
-              </div>
-
-              <div className="h-px bg-white/10 mx-6" />
-
-              <div className="px-6 py-5 flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold">Theme</div>
-                  <div className="text-xs text-white/60">Match your vibe</div>
-                </div>
-                <ThemeToggle showLabel={false} />
-              </div>
-
-              <div className="h-px bg-white/10 mx-6" />
-
-              <div className="px-6 py-6 flex flex-col gap-3">
-                <Link
-                  href="/business"
-                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
-                  onClick={() => setOpen(false)}
-                >
-                  For Business
-                </Link>
-                {hasSession ? (
-                  <Link
-                    href="/customer/home"
-                    className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
-                    onClick={() => setOpen(false)}
-                  >
-                    My account
-                  </Link>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
-                      onClick={() => {
-                        setOpen(false);
-                        openModal("customer-login");
-                      }}
-                    >
-                      Log in
-                    </button>
-                    <button
-                      type="button"
-                      className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 shadow-lg shadow-fuchsia-900/40"
-                      onClick={() => {
-                        setOpen(false);
-                        openModal("customer-signup");
-                      }}
-                    >
-                      Sign Up
-                    </button>
-                  </>
-                )}
-              </div>
-
-              <div className="px-6 pb-6 text-xs text-white/60">
-                Trusted community for local businesses and neighbors.
-              </div>
+      <MobileSidebarDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Explore"
+        id={mobileDrawerId}
+        footer={
+          <div className="text-xs text-white/60">
+            Trusted community for local businesses and neighbors.
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-5 text-white">
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
+            <div className="flex flex-col gap-3 text-lg font-semibold">
+              <NavItem
+                href="/about"
+                active={pathname === "/about"}
+                onClick={() => setOpen(false)}
+                className="text-lg font-semibold"
+              >
+                About YourBarrio
+              </NavItem>
             </div>
           </div>
+
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+            <div>
+              <div className="text-sm font-semibold">Theme</div>
+              <div className="text-xs text-white/60">Match your vibe</div>
+            </div>
+            <ThemeToggle showLabel={false} />
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <Link
+              href="/business"
+              className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+              onClick={() => setOpen(false)}
+            >
+              For Business
+            </Link>
+            {hasSession ? (
+              <Link
+                href="/customer/home"
+                className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                onClick={() => setOpen(false)}
+              >
+                My account
+              </Link>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                  onClick={() => {
+                    setOpen(false);
+                    openModal("customer-login");
+                  }}
+                >
+                  Log in
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 shadow-lg shadow-fuchsia-900/40"
+                  onClick={() => {
+                    setOpen(false);
+                    openModal("customer-signup");
+                  }}
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      )}
+      </MobileSidebarDrawer>
     </nav>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   Loader2,
@@ -38,6 +38,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileDrawerId = useId();
 
   const [searchTerm, setSearchTerm] = useState(() => getInitialSearchTerm(searchParams));
   const [selectedCategory, setSelectedCategory] = useState(() => getInitialCategory(searchParams));
@@ -214,6 +215,17 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       data-nav-guard="1"
     >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20 gap-6">
+        <button
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          className="md:hidden text-white mr-1"
+          aria-label="Open menu"
+          aria-expanded={mobileMenuOpen}
+          aria-controls={mobileDrawerId}
+        >
+          <svg className="h-7 w-7" fill="none" stroke="currentColor">
+            <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
         <Link href={logoHref} aria-label="Go to home" className="touch-manipulation">
           <img
             src="/logo.png"
@@ -221,6 +233,32 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
             alt="YourBarrio"
           />
         </Link>
+
+        {showSearch ? (
+          <div className="md:hidden flex-1" data-nav-guard="1">
+            <form
+              onSubmit={handleSubmitSearch}
+              className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+            >
+              <Search className="h-4 w-4 text-white/70" />
+              <input
+                id="global-nav-search-mobile"
+                name="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"
+                placeholder="Search for anything nearby"
+                type="search"
+              />
+              <button
+                type="submit"
+                className="px-3 py-1 rounded-lg bg-white text-xs font-semibold text-black"
+              >
+                Go
+              </button>
+            </form>
+          </div>
+        ) : null}
 
         {showSearch ? (
           <div className="hidden md:flex flex-1 justify-center" data-nav-guard="1">
@@ -392,57 +430,14 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           <HeaderAccountWidget surface={surface} variant="desktop" />
         </div>
 
-        <button
-          onClick={() => setMobileMenuOpen((open) => !open)}
-          className="md:hidden text-white"
-          aria-label="Toggle menu"
-        >
-          {mobileMenuOpen ? (
-            <svg className="h-7 w-7" fill="none" stroke="currentColor">
-              <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="h-7 w-7" fill="none" stroke="currentColor">
-              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
       </div>
-
-      {showSearch ? (
-        <div
-          className="md:hidden px-5 sm:px-6 pt-2 pb-4 border-t border-white/10"
-          data-nav-guard="1"
-        >
-          <form
-            onSubmit={handleSubmitSearch}
-            className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
-          >
-            <Search className="h-4 w-4 text-white/70" />
-            <input
-              id="global-nav-search-mobile"
-              name="search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"
-              placeholder="Search for anything nearby"
-              type="search"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1 rounded-lg bg-white text-xs font-semibold text-black"
-            >
-              Go
-            </button>
-          </form>
-        </div>
-      ) : null}
 
       <HeaderAccountWidget
         surface={surface}
         variant="mobile"
         mobileMenuOpen={mobileMenuOpen}
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
+        mobileDrawerId={mobileDrawerId}
       />
     </nav>
   );
