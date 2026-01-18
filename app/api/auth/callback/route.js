@@ -9,6 +9,7 @@ export async function GET(request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const isProd = process.env.NODE_ENV === "production";
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const cookieBaseOptions = getCookieBaseOptions({
     host: request.headers.get("host"),
     isProd,
@@ -37,6 +38,14 @@ export async function GET(request) {
 
   try {
     if (code) {
+      if (authDiagEnabled) {
+        console.log("[AUTH_DIAG]", {
+          timestamp: new Date().toISOString(),
+          pathname: requestUrl.pathname,
+          label: "auth:exchangeCodeForSession",
+          stack: new Error().stack,
+        });
+      }
       await supabase.auth.exchangeCodeForSession(code);
     }
 

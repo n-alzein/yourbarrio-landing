@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import HomeRenderTrace from "@/components/debug/HomeRenderTrace";
 
@@ -9,6 +9,8 @@ const diagEnabled = () => process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
 
 export default function HomeGuard({ children, fallback = null }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { authUser, user: profile, role, loadingUser } = useAuth();
 
   const blocker = useMemo(() => {
@@ -20,13 +22,23 @@ export default function HomeGuard({ children, fallback = null }) {
   }, [authUser, loadingUser, profile, role]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const redirectOnce = (target) => {
+      const url = new URL(target, window.location.origin);
+      if (pathname === url.pathname) {
+        if (searchParams?.get("redirected") === "1") return;
+      }
+      url.searchParams.set("redirected", "1");
+      router.replace(`${url.pathname}${url.search}`);
+    };
+
     if (blocker === "NO_USER") {
-      router.replace("/");
+      redirectOnce("/");
     }
     if (blocker === "ROLE_MISMATCH") {
-      router.replace("/business/dashboard");
+      redirectOnce("/business/dashboard");
     }
-  }, [blocker, router]);
+  }, [blocker, pathname, router, searchParams]);
 
   const message = (() => {
     switch (blocker) {

@@ -24,12 +24,14 @@ export default function HeaderAccountWidget({
   mobileMenuOpen = false,
   onCloseMobileMenu,
 }) {
-  const { supabase, authUser, user, role, status } = useAuth();
+  const { supabase, authUser, user, role, status, rateLimited, rateLimitMessage } =
+    useAuth();
   const { openModal } = useModal();
   const loading = status === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
+  const lastUnreadUserIdRef = useRef(null);
 
   const client = supabase ?? getBrowserSupabaseClient();
 
@@ -72,11 +74,11 @@ export default function HeaderAccountWidget({
   }, [client, unreadUserId, isCustomer]);
 
   useEffect(() => {
-    if (!hasAuth || !isCustomer) return;
-    queueMicrotask(() => {
-      loadUnreadCount();
-    });
-  }, [hasAuth, isCustomer, loadUnreadCount]);
+    if (!hasAuth || !isCustomer || !unreadUserId) return;
+    if (lastUnreadUserIdRef.current === unreadUserId) return;
+    lastUnreadUserIdRef.current = unreadUserId;
+    loadUnreadCount();
+  }, [hasAuth, isCustomer, loadUnreadCount, unreadUserId]);
 
   useEffect(() => {
     if (!hasAuth || !isCustomer || !client) return undefined;
@@ -141,6 +143,13 @@ export default function HeaderAccountWidget({
   ];
 
   if (variant === "desktop") {
+    if (rateLimited) {
+      return (
+        <div className="text-sm text-white/70" aria-live="polite">
+          {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
+        </div>
+      );
+    }
     if (loading) return desktopSkeleton;
 
     if (!hasAuth) {
@@ -301,7 +310,11 @@ export default function HeaderAccountWidget({
       data-nav-surface={surface}
       data-nav-guard="1"
     >
-      {loading ? (
+      {rateLimited ? (
+        <div className="text-sm text-white/70" aria-live="polite">
+          {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
+        </div>
+      ) : loading ? (
         <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
           <div className="h-11 w-11 rounded-2xl bg-white/10" />
           <div className="h-4 w-24 rounded bg-white/10" />

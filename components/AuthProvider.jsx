@@ -6,10 +6,15 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
+  useSyncExternalStore,
 } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import {
+  acknowledgeAuthTokenInvalid,
+  getAuthGuardState,
+  getBrowserSupabaseClient,
+  subscribeAuthGuard,
+} from "@/lib/supabaseClient";
 import { PATHS } from "@/lib/auth/paths";
 
 const AuthContext = createContext({
@@ -22,6 +27,9 @@ const AuthContext = createContext({
   role: null,
   error: null,
   loadingUser: true,
+  rateLimited: false,
+  rateLimitUntil: 0,
+  rateLimitMessage: null,
   refreshProfile: async () => {},
   logout: async () => {},
 });
@@ -47,26 +55,287 @@ const buildSignedInState = ({ session, authUser, profile }) => ({
   role: resolveRole(profile, authUser, null),
   error: null,
 });
+const withGuardState = (base) => ({
+  ...base,
+  rateLimited: authStore.state.rateLimited,
+  rateLimitUntil: authStore.state.rateLimitUntil,
+  rateLimitMessage: authStore.state.rateLimitMessage,
+  tokenInvalidAt: authStore.state.tokenInvalidAt,
+});
 
-function authReducer(state, action) {
-  switch (action.type) {
-    case "SET_LOADING":
-      return { ...state, status: "loading", error: null };
-    case "SIGNED_OUT":
-      return buildSignedOutState();
-    case "SIGNED_IN":
-      return buildSignedInState(action.payload);
-    case "PROFILE_REFRESHED":
-      return {
-        ...state,
-        profile: action.profile ?? null,
-        role: resolveRole(action.profile, state.authUser, null),
-      };
-    case "ERROR":
-      return { ...state, status: "signed_out", error: action.error || "Auth error" };
-    default:
-      return state;
+const authStore = {
+  state: {
+    status: "loading",
+    session: null,
+    authUser: null,
+    profile: null,
+    role: null,
+    error: null,
+    rateLimited: false,
+    rateLimitUntil: 0,
+    rateLimitMessage: null,
+    tokenInvalidAt: 0,
+  },
+  listeners: new Set(),
+  supabase: null,
+  authSubscription: null,
+  bootstrapPromise: null,
+  sessionPromise: null,
+  userPromise: null,
+  providerCount: 0,
+  guardSubscribed: false,
+};
+
+let handledTokenInvalidAt = 0;
+
+function emitAuthState() {
+  authStore.listeners.forEach((listener) => listener());
+}
+
+function setAuthState(nextState) {
+  authStore.state = nextState;
+  emitAuthState();
+}
+
+function updateAuthState(partial) {
+  setAuthState({ ...authStore.state, ...partial });
+}
+
+function subscribeAuthState(listener) {
+  authStore.listeners.add(listener);
+  return () => {
+    authStore.listeners.delete(listener);
+  };
+}
+
+function getAuthStateSnapshot() {
+  return authStore.state;
+}
+
+function seedAuthState({
+  initialSession,
+  initialUser,
+  initialProfile,
+  initialRole,
+}) {
+  if (!initialSession && !initialUser && !initialProfile && !initialRole) {
+    return;
   }
+
+  const nextState = { ...authStore.state };
+  let changed = false;
+
+  if (initialSession && !nextState.session) {
+    nextState.session = initialSession;
+    changed = true;
+  }
+
+  if (initialUser && !nextState.authUser) {
+    nextState.authUser = initialUser;
+    changed = true;
+  }
+
+  if (initialProfile && !nextState.profile) {
+    nextState.profile = initialProfile;
+    changed = true;
+  }
+
+  if (initialRole && !nextState.role) {
+    nextState.role = initialRole;
+    changed = true;
+  }
+
+  if (changed) {
+    nextState.role = resolveRole(
+      nextState.profile,
+      nextState.authUser,
+      nextState.role
+    );
+    nextState.status =
+      nextState.session || nextState.authUser ? "signed_in" : nextState.status;
+    setAuthState(nextState);
+  }
+}
+
+function syncAuthGuardState(guard) {
+  const rateLimited = guard.cooldownMsRemaining > 0;
+  const rateLimitUntil = guard.cooldownUntil || 0;
+  const rateLimitMessage = rateLimited
+    ? "We're having trouble connecting. Please wait a moment."
+    : null;
+
+  const next = { ...authStore.state };
+  let changed = false;
+
+  if (next.rateLimited !== rateLimited) {
+    next.rateLimited = rateLimited;
+    changed = true;
+  }
+
+  if (next.rateLimitUntil !== rateLimitUntil) {
+    next.rateLimitUntil = rateLimitUntil;
+    changed = true;
+  }
+
+  if (next.rateLimitMessage !== rateLimitMessage) {
+    next.rateLimitMessage = rateLimitMessage;
+    changed = true;
+  }
+
+  if (guard.tokenInvalidAt && next.tokenInvalidAt !== guard.tokenInvalidAt) {
+    next.tokenInvalidAt = guard.tokenInvalidAt;
+    changed = true;
+  }
+
+  if (changed) {
+    setAuthState(next);
+  }
+
+  if (!rateLimited && !next.session && !next.authUser) {
+    void bootstrapAuth();
+  }
+}
+
+function ensureAuthGuardSubscription() {
+  if (authStore.guardSubscribed) return;
+  authStore.guardSubscribed = true;
+  syncAuthGuardState(getAuthGuardState());
+  subscribeAuthGuard((guard) => {
+    syncAuthGuardState(guard);
+  });
+}
+
+async function getSessionOnce() {
+  if (!authStore.supabase) {
+    return { data: { session: null }, error: new Error("Supabase unavailable") };
+  }
+  if (authStore.sessionPromise) {
+    return authStore.sessionPromise;
+  }
+  authStore.sessionPromise = authStore.supabase.auth
+    .getSession()
+    .finally(() => {
+      authStore.sessionPromise = null;
+    });
+  return authStore.sessionPromise;
+}
+
+async function getTrustedUser() {
+  if (!authStore.supabase) {
+    return { user: null, error: new Error("Supabase unavailable") };
+  }
+  if (!authStore.userPromise) {
+    authStore.userPromise = authStore.supabase.auth
+      .getUser()
+      .then(({ data, error }) => ({ user: data?.user ?? null, error }))
+      .finally(() => {
+        authStore.userPromise = null;
+      });
+  }
+  return authStore.userPromise;
+}
+
+async function fetchProfile(authUser) {
+  if (!authStore.supabase || !authUser?.id) {
+    return { profile: null, error: null };
+  }
+  const { data, error } = await authStore.supabase
+    .from("users")
+    .select("*")
+    .eq("id", authUser.id)
+    .maybeSingle();
+  return { profile: data ?? null, error };
+}
+
+async function hydrateSignedIn(session) {
+  const { user, error } = await getTrustedUser();
+  if (error || !user) {
+    updateAuthState({
+      status: "signed_out",
+      error: error?.message || "Unable to load user",
+      session: null,
+      authUser: null,
+      profile: null,
+      role: null,
+    });
+    return;
+  }
+
+  const { profile } = await fetchProfile(user);
+  setAuthState(
+    withGuardState(
+      buildSignedInState({
+        session,
+        authUser: user,
+        profile,
+      })
+    )
+  );
+}
+
+async function bootstrapAuth() {
+  if (authStore.bootstrapPromise) return authStore.bootstrapPromise;
+  const guard = getAuthGuardState();
+  if (guard.cooldownMsRemaining > 0) {
+    syncAuthGuardState(guard);
+    return null;
+  }
+
+  authStore.bootstrapPromise = (async () => {
+    updateAuthState({ status: "loading", error: null });
+    const { data, error } = await getSessionOnce();
+    if (error || !data?.session) {
+      updateAuthState(withGuardState(buildSignedOutState()));
+      return;
+    }
+    await hydrateSignedIn(data.session);
+  })().finally(() => {
+    authStore.bootstrapPromise = null;
+  });
+
+  return authStore.bootstrapPromise;
+}
+
+function ensureAuthListener() {
+  if (!authStore.supabase || authStore.authSubscription) return;
+  const { data } = authStore.supabase.auth.onAuthStateChange(
+    (_event, session) => {
+      if (!session) {
+        updateAuthState(withGuardState(buildSignedOutState()));
+        return;
+      }
+      void hydrateSignedIn(session);
+    }
+  );
+  authStore.authSubscription = data?.subscription || null;
+}
+
+function releaseAuthListener() {
+  if (authStore.authSubscription) {
+    authStore.authSubscription.unsubscribe();
+    authStore.authSubscription = null;
+  }
+}
+
+function redirectWithGuard(target) {
+  if (typeof window === "undefined") return;
+  const current = new URL(window.location.href);
+  const redirectUrl = new URL(target, window.location.origin);
+
+  if (current.pathname === redirectUrl.pathname) {
+    const alreadyRedirected =
+      current.searchParams.get("redirected") === "1" ||
+      redirectUrl.searchParams.get("redirected") === "1";
+    if (alreadyRedirected) return;
+  }
+
+  redirectUrl.searchParams.set("redirected", "1");
+  const nextPath = `${redirectUrl.pathname}${redirectUrl.search}`;
+  if (`${current.pathname}${current.search}` === nextPath) {
+    return;
+  }
+
+  window.location.replace(nextPath);
 }
 
 export function AuthProvider({
@@ -77,120 +346,89 @@ export function AuthProvider({
   initialRole = null,
 }) {
   const supabase = useMemo(() => getBrowserSupabaseClient(), []);
+  const authState = useSyncExternalStore(
+    subscribeAuthState,
+    getAuthStateSnapshot,
+    getAuthStateSnapshot
+  );
+
   const mountedRef = useRef(true);
-  const userPromiseRef = useRef(null);
-
-  const [state, dispatch] = useReducer(authReducer, {
-    status: initialSession || initialUser ? "signed_in" : "loading",
-    session: initialSession,
-    authUser: initialUser,
-    profile: initialProfile,
-    role: resolveRole(initialProfile, initialUser, initialRole),
-    error: null,
-  });
 
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+    mountedRef.current = true;
+    authStore.providerCount += 1;
 
-  useEffect(() => {
-    if (supabase || state.authUser || state.session) return;
-    dispatch({ type: "SIGNED_OUT" });
-  }, [state.authUser, state.session, supabase]);
-
-  const getTrustedUser = useCallback(async () => {
-    if (!supabase) {
-      return { user: null, error: new Error("Supabase unavailable") };
-    }
-    if (!userPromiseRef.current) {
-      userPromiseRef.current = supabase.auth
-        .getUser()
-        .then(({ data, error }) => ({ user: data?.user ?? null, error }))
-        .finally(() => {
-          userPromiseRef.current = null;
-        });
-    }
-    return userPromiseRef.current;
-  }, [supabase]);
-
-  const fetchProfile = useCallback(
-    async (authUser) => {
-      if (!supabase || !authUser?.id) return { profile: null, error: null };
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .maybeSingle();
-      return { profile: data ?? null, error };
-    },
-    [supabase]
-  );
-
-  const hydrateSignedIn = useCallback(
-    async (session) => {
-      const { user, error } = await getTrustedUser();
-      if (error || !user) {
-        dispatch({ type: "ERROR", error: error?.message || "Unable to load user" });
-        return;
-      }
-      const { profile } = await fetchProfile(user);
-      if (!mountedRef.current) return;
-      dispatch({
-        type: "SIGNED_IN",
-        payload: { session, authUser: user, profile },
-      });
-    },
-    [fetchProfile, getTrustedUser]
-  );
-
-  useEffect(() => {
-    if (!supabase) return undefined;
-    let active = true;
-
-    const shouldBootstrap = !state.authUser && !state.session;
-    if (shouldBootstrap) {
-      dispatch({ type: "SET_LOADING" });
+    if (supabase && !authStore.supabase) {
+      authStore.supabase = supabase;
     }
 
-    const bootstrap = async () => {
-      if (!shouldBootstrap) return;
-      const { data, error } = await supabase.auth.getSession();
-      if (!active || !mountedRef.current) return;
-      if (error || !data?.session) {
-        dispatch({ type: "SIGNED_OUT" });
-        return;
-      }
-      await hydrateSignedIn(data.session);
-    };
-
-    bootstrap();
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active || !mountedRef.current) return;
-      if (!session) {
-        dispatch({ type: "SIGNED_OUT" });
-        return;
-      }
-      hydrateSignedIn(session);
+    seedAuthState({
+      initialSession,
+      initialUser,
+      initialProfile,
+      initialRole,
     });
 
+    ensureAuthGuardSubscription();
+    ensureAuthListener();
+
+    if (!authStore.state.authUser && !authStore.state.session) {
+      void bootstrapAuth();
+    }
+
     return () => {
-      active = false;
-      data?.subscription?.unsubscribe();
+      mountedRef.current = false;
+      authStore.providerCount = Math.max(0, authStore.providerCount - 1);
+      if (authStore.providerCount === 0) {
+        releaseAuthListener();
+      }
     };
-  }, [hydrateSignedIn, state.authUser, state.session, supabase]);
+  }, [
+    supabase,
+    initialSession,
+    initialUser,
+    initialProfile,
+    initialRole,
+  ]);
+
+  useEffect(() => {
+    if (!authState.tokenInvalidAt) return;
+    if (authState.tokenInvalidAt <= handledTokenInvalidAt) return;
+    handledTokenInvalidAt = authState.tokenInvalidAt;
+
+    (async () => {
+      if (authStore.supabase) {
+        try {
+          await authStore.supabase.auth.signOut({ scope: "local" });
+        } catch {
+          // best effort
+        }
+      }
+      updateAuthState(withGuardState(buildSignedOutState()));
+      acknowledgeAuthTokenInvalid(authState.tokenInvalidAt);
+
+      const target =
+        authStore.state.role === "business"
+          ? PATHS.auth.businessLogin
+          : PATHS.auth.customerLogin;
+      redirectWithGuard(target);
+    })();
+  }, [authState.tokenInvalidAt]);
 
   const refreshProfile = useCallback(async () => {
-    if (!mountedRef.current || !supabase || !state.authUser?.id) return;
-    const { profile, error } = await fetchProfile(state.authUser);
+    if (!mountedRef.current || !authStore.supabase || !authState.authUser?.id) {
+      return;
+    }
+    const { profile, error } = await fetchProfile(authState.authUser);
     if (error || !mountedRef.current) return;
-    dispatch({ type: "PROFILE_REFRESHED", profile });
-  }, [fetchProfile, state.authUser, supabase]);
+    updateAuthState({
+      profile,
+      role: resolveRole(profile, authState.authUser, authState.role),
+    });
+  }, [authState.authUser, authState.role]);
 
   const logout = useCallback(async () => {
-    if (!supabase) {
+    if (!authStore.supabase) {
       if (typeof window !== "undefined") {
         window.location.replace(PATHS.public.root);
       }
@@ -198,41 +436,46 @@ export function AuthProvider({
     }
 
     try {
-      await supabase.auth.signOut({ scope: "local" });
+      await authStore.supabase.auth.signOut({ scope: "local" });
     } catch {
       // Ignore and let server route clear cookies.
     } finally {
-      dispatch({ type: "SIGNED_OUT" });
+      updateAuthState(withGuardState(buildSignedOutState()));
       if (typeof window !== "undefined") {
         window.location.replace("/api/auth/logout");
       }
     }
-  }, [supabase]);
+  }, []);
 
   const value = useMemo(
     () => ({
-      supabase,
-      status: state.status,
-      session: state.session,
-      authUser: state.authUser,
-      user: state.profile,
-      profile: state.profile,
-      role: state.role,
-      error: state.error,
-      loadingUser: state.status === "loading",
+      supabase: authStore.supabase,
+      status: authState.status,
+      session: authState.session,
+      authUser: authState.authUser,
+      user: authState.profile,
+      profile: authState.profile,
+      role: authState.role,
+      error: authState.error,
+      loadingUser: authState.status === "loading" || authState.rateLimited,
+      rateLimited: authState.rateLimited,
+      rateLimitUntil: authState.rateLimitUntil,
+      rateLimitMessage: authState.rateLimitMessage,
       refreshProfile,
       logout,
     }),
     [
+      authState.authUser,
+      authState.error,
+      authState.profile,
+      authState.rateLimitMessage,
+      authState.rateLimitUntil,
+      authState.rateLimited,
+      authState.role,
+      authState.session,
+      authState.status,
       logout,
       refreshProfile,
-      state.authUser,
-      state.error,
-      state.profile,
-      state.role,
-      state.session,
-      state.status,
-      supabase,
     ]
   );
 
