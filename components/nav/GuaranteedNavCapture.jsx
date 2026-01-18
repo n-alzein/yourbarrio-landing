@@ -71,6 +71,7 @@ export default function GuaranteedNavCapture() {
     const handle = (event) => {
       try {
         if (!event?.isTrusted) return;
+        if (event.target?.closest?.('[data-nav-guard="1"]')) return;
         const button = typeof event.button === "number" ? event.button : 0;
         if (button !== 0) return;
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {

@@ -6,6 +6,7 @@ import BusinessGalleryGrid from "@/components/publicBusinessProfile/BusinessGall
 import BusinessListingsGrid from "@/components/publicBusinessProfile/BusinessListingsGrid";
 import BusinessReviewsPanel from "@/components/publicBusinessProfile/BusinessReviewsPanel";
 import PreviewAutoRefresh from "@/components/business/preview/PreviewAutoRefresh";
+import ViewerContextEnhancer from "@/components/public/ViewerContextEnhancer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -230,13 +231,15 @@ export default async function BusinessPreviewPage() {
         />
         <BusinessGalleryGrid photos={gallery} className="rounded-none" />
         <BusinessListingsGrid listings={listings} className="rounded-none" />
-        <BusinessReviewsPanel
-          businessId={user.id}
-          initialReviews={reviews}
-          ratingSummary={ratingSummary}
-          reviewCount={ratingSummary?.count || reviews?.length || 0}
-          className="rounded-b-3xl rounded-t-none"
-        />
+        <ViewerContextEnhancer>
+          <BusinessReviewsPanel
+            businessId={user.id}
+            initialReviews={reviews}
+            ratingSummary={ratingSummary}
+            reviewCount={ratingSummary?.count || reviews?.length || 0}
+            className="rounded-b-3xl rounded-t-none"
+          />
+        </ViewerContextEnhancer>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import OverlayGuard from "@/components/OverlayGuard";
 import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,11 +57,13 @@ export default function RootLayout({ children }) {
             <div className="animated-bg" />
           </div>
 
-          <ModalMount>
-            {/* CONTENT */}
-            <main className="flex-1 w-full min-h-screen">{children}</main>
-            <Footer />
-          </ModalMount>
+          <AuthProvider>
+            <ModalMount>
+              {/* CONTENT */}
+              <main className="flex-1 w-full min-h-screen">{children}</main>
+              <Footer />
+            </ModalMount>
+          </AuthProvider>
         </ThemeProvider>
         {/* DEBUG_CLICK_DIAG / NAV_TRACE */}
         <DebugToolsClient />

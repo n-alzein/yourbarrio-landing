@@ -22,7 +22,7 @@ export default function HomeRenderTrace({ blocker }) {
       loadingUser,
       hasUser: !!authUser,
       hasProfile: !!profile,
-      role: role || profile?.role || authUser?.role || authUser?.user_metadata?.role || null,
+      role: role || profile?.role || authUser?.role || null,
     });
     if (typeof window !== "undefined") {
       window.__HOME_RENDERED__ = { ts, blocker };

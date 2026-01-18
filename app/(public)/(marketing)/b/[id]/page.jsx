@@ -8,6 +8,7 @@ import BusinessListingsGrid from "@/components/publicBusinessProfile/BusinessLis
 import BusinessReviewsPanel from "@/components/publicBusinessProfile/BusinessReviewsPanel";
 import PublicBusinessPreviewClient from "@/components/publicBusinessProfile/PublicBusinessPreviewClient";
 import ProfileViewTracker from "@/components/publicBusinessProfile/ProfileViewTracker";
+import ViewerContextEnhancer from "@/components/public/ViewerContextEnhancer";
 
 const PROFILE_FIELDS = [
   "id",
@@ -208,24 +209,6 @@ function descriptionSnippet(value) {
   return `${trimmed.slice(0, 157)}...`;
 }
 
-async function resolveAuthRole(supabase, user) {
-  const metaRole =
-    user?.app_metadata?.role || user?.user_metadata?.role || null;
-  if (metaRole) return metaRole;
-  if (!user?.id) return null;
-
-  const { data, error } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error("[public business] role lookup failed", error);
-  }
-
-  return data?.role ?? null;
-}
 
 export async function generateMetadata({ params }) {
   const resolvedParams = await Promise.resolve(params);
@@ -316,15 +299,6 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const role = user ? await resolveAuthRole(supabase, user) : null;
-
-  if (role === "customer") {
-    return <PublicBusinessPreviewClient businessId={businessId} trackView />;
-  }
-
   const profile = await fetchPublicProfile(supabase, businessId);
 
   if (!profile) {
@@ -377,13 +351,15 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
         />
         <BusinessGalleryGrid photos={gallery} className="rounded-none" />
         <BusinessListingsGrid listings={listings} className="rounded-none" />
-        <BusinessReviewsPanel
-          businessId={businessId}
-          initialReviews={reviews}
-          ratingSummary={ratingSummary}
-          reviewCount={ratingSummary?.count || reviews?.length || 0}
-          className="rounded-b-3xl rounded-t-none"
-        />
+        <ViewerContextEnhancer>
+          <BusinessReviewsPanel
+            businessId={businessId}
+            initialReviews={reviews}
+            ratingSummary={ratingSummary}
+            reviewCount={ratingSummary?.count || reviews?.length || 0}
+            className="rounded-b-3xl rounded-t-none"
+          />
+        </ViewerContextEnhancer>
       </div>
     </div>
   );

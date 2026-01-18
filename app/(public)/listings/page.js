@@ -22,10 +22,9 @@ export default function PublicListingsPage() {
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const category = searchParams.get("category")?.trim();
+  const searchTerm = searchParams.get("q")?.trim();
   const showListView = Boolean(category);
-  const cacheKey = category
-    ? `yb_public_listings_${category.toLowerCase()}`
-    : "yb_public_listings_all";
+  const cacheKey = `${category || "all"}::${searchTerm || "all"}`;
   const sortedListings = useMemo(
     () => sortListingsByAvailability(listings),
     [listings]
@@ -71,6 +70,12 @@ export default function PublicListingsPage() {
         if (category) {
           query = query.ilike("category", category);
         }
+        if (searchTerm) {
+          const escaped = searchTerm.replace(/,/g, "");
+          query = query.or(
+            `title.ilike.%${escaped}%,description.ilike.%${escaped}%`
+          );
+        }
         const { data, error } = await query;
         if (error) {
           console.error("Failed to load listings", error);
@@ -98,7 +103,7 @@ export default function PublicListingsPage() {
     return () => {
       active = false;
     };
-  }, [category, cacheKey, hasLoaded]);
+  }, [category, cacheKey, hasLoaded, searchTerm]);
 
   return (
     <div className="max-w-4xl mx-auto py-2 md:pt-1">
@@ -113,11 +118,17 @@ export default function PublicListingsPage() {
       ) : null}
       <div>
         <h1 className="text-3xl font-bold mb-2">
-          {category ? `${category} Listings` : "All Listings"}
+          {searchTerm
+            ? `Results for “${searchTerm}”`
+            : category
+            ? `${category} Listings`
+            : "All Listings"}
         </h1>
-        {category ? (
+        {category || searchTerm ? (
           <p className="text-sm text-gray-500 mb-6">
-            Showing {listings.length} in {category}
+            Showing {listings.length}
+            {category ? ` in ${category}` : ""}
+            {searchTerm ? ` · matching "${searchTerm}"` : ""}
           </p>
         ) : (
           <div className="mb-6" />

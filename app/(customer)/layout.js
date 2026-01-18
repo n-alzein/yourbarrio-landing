@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import CustomerNavbar from "@/components/navbars/CustomerNavbar";
+import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import { AuthProvider } from "@/components/AuthProvider";
 import { requireRole } from "@/lib/auth/server";
@@ -26,7 +26,7 @@ export default async function CustomerLayout({ children }) {
       initialSession={session}
       initialRole="customer"
     >
-      <CustomerNavbar />
+      <GlobalHeader surface="customer" />
       <InactivityLogout />
       <CustomerRouteShell>
         <Suspense

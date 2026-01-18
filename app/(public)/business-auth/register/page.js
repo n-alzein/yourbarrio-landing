@@ -11,7 +11,7 @@ export default async function BusinessRegisterPage() {
 
   if (user) {
     const profile = await getProfile(user.id);
-    const role = profile?.role || user?.app_metadata?.role || user?.user_metadata?.role || null;
+    const role = profile?.role || user?.app_metadata?.role || null;
     if (role === "business") {
       redirect(PATHS.business.onboarding || "/business/onboarding");
     }

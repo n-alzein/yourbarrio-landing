@@ -1,0 +1,449 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronDown,
+  Loader2,
+  MapPin,
+  PackageSearch,
+  Search,
+  Store,
+} from "lucide-react";
+import { useTheme } from "@/components/ThemeProvider";
+import HeaderAccountWidget from "@/components/nav/HeaderAccountWidget";
+import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import {
+  getAvailabilityBadgeStyle,
+  normalizeInventory,
+  sortListingsByAvailability,
+} from "@/lib/inventory";
+
+const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
+
+const getInitialSearchTerm = (params) => (params?.get("q") || "").trim();
+
+const getInitialCategory = (params) => {
+  const currentCategory = (params?.get("category") || "").trim();
+  const matchedCategory = SEARCH_CATEGORIES.find(
+    (category) => category.toLowerCase() === currentCategory.toLowerCase()
+  );
+  return matchedCategory || "All";
+};
+
+export default function GlobalHeader({ surface = "public", showSearch = true }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { theme, hydrated } = useTheme();
+  const isLight = hydrated ? theme === "light" : true;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState(() => getInitialSearchTerm(searchParams));
+  const [selectedCategory, setSelectedCategory] = useState(() => getInitialCategory(searchParams));
+  const [searchResults, setSearchResults] = useState({
+    items: [],
+    businesses: [],
+    places: [],
+  });
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const searchBoxRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchRequestIdRef = useRef(0);
+  const lastQueryRef = useRef("");
+
+  const sortedSearchItems = useMemo(
+    () => sortListingsByAvailability(searchResults.items || []),
+    [searchResults.items]
+  );
+
+  const baseSearchPath = surface === "customer" ? "/customer/home" : "/listings";
+  const listingPath = surface === "customer" ? "/customer/listings" : "/listings";
+  const logoHref = surface === "customer" ? "/customer/home" : "/";
+
+  const hasHybridResults =
+    (searchResults.items?.length || 0) +
+      (searchResults.businesses?.length || 0) +
+      (searchResults.places?.length || 0) >
+    0;
+
+  const navigateToSearch = (query, category) => {
+    const value = (query || "").trim();
+    const nextCategory = (category || "").trim();
+    const params = new URLSearchParams();
+    if (value) params.set("q", value);
+    if (nextCategory && nextCategory !== "All") params.set("category", nextCategory);
+    const target = params.toString() ? `${baseSearchPath}?${params.toString()}` : baseSearchPath;
+    setSuggestionsOpen(false);
+    router.push(target);
+  };
+
+  const handleSubmitSearch = (event) => {
+    event.preventDefault();
+    navigateToSearch(searchTerm || "", selectedCategory);
+  };
+
+  const handleCategoryChange = (event) => {
+    const next = event.target.value;
+    setSelectedCategory(next);
+    navigateToSearch(searchTerm || "", next);
+  };
+
+  const handleSuggestionSelect = (value, itemId) => {
+    const next = (value || "").trim();
+    if (!next) return;
+    setSearchTerm(next);
+    setSuggestionsOpen(false);
+    if (itemId) {
+      router.push(`${listingPath}/${itemId}`);
+      return;
+    }
+    navigateToSearch(next, selectedCategory);
+  };
+
+  const categorySelectWidth = Math.max(selectedCategory.length, 3) + 6;
+
+  // Hybrid search — fetch AI-style blend of items + businesses
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (term.length < 3) {
+      queueMicrotask(() => {
+        setSearchResults({ items: [], businesses: [], places: [] });
+        setSearchError(null);
+        setSearchLoading(false);
+        setSuggestionsOpen(false);
+      });
+      lastQueryRef.current = "";
+      return;
+    }
+
+    const normalized = `${term.toLowerCase()}::${selectedCategory.toLowerCase()}`;
+    if (normalized === lastQueryRef.current) {
+      queueMicrotask(() => {
+        setSuggestionsOpen(true);
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestId = ++searchRequestIdRef.current;
+
+    const handle = setTimeout(() => {
+      queueMicrotask(() => {
+        setSearchLoading(true);
+        setSearchError(null);
+      });
+      const categoryParam = selectedCategory !== "All" ? selectedCategory : "";
+      const params = new URLSearchParams();
+      params.set("q", term);
+      if (categoryParam) params.set("category", categoryParam);
+      fetch(`/api/search?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            let message = "search_failed";
+            try {
+              const body = await res.json();
+              message = body?.message || body?.error || message;
+            } catch {
+              // best effort
+            }
+            const err = new Error(message);
+            err.code = res.status;
+            throw err;
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (searchRequestIdRef.current !== requestId) return;
+          lastQueryRef.current = normalized;
+          setSearchResults({
+            items: data?.items || [],
+            businesses: data?.businesses || [],
+            places: data?.places || [],
+          });
+          setSuggestionsOpen(true);
+        })
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          if (searchRequestIdRef.current !== requestId) return;
+          const isRateLimited =
+            err?.code === 429 || err?.message === "rate_limit_exceeded";
+          setSearchError(
+            isRateLimited
+              ? "You are searching too fast. Please wait a moment."
+              : err?.message || "Search is warming up. Try again in a moment."
+          );
+        })
+        .finally(() => {
+          if (searchRequestIdRef.current === requestId) {
+            setSearchLoading(false);
+          }
+        });
+    }, 450);
+
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
+  }, [searchTerm, selectedCategory]);
+
+  // Close AI suggestions when clicking away
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const handleClick = (event) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(event.target)) {
+        setSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("touchstart", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("touchstart", handleClick);
+    };
+  }, [suggestionsOpen]);
+
+  return (
+    <nav
+      className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
+      data-nav-surface={surface}
+      data-nav-guard="1"
+    >
+      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20 gap-6">
+        <Link href={logoHref} aria-label="Go to home" className="touch-manipulation">
+          <img
+            src="/logo.png"
+            className="h-34 w-auto cursor-pointer select-none"
+            alt="YourBarrio"
+          />
+        </Link>
+
+        {showSearch ? (
+          <div className="hidden md:flex flex-1 justify-center" data-nav-guard="1">
+            <div ref={searchBoxRef} className="w-full max-w-3xl relative" data-nav-guard="1">
+              <form
+                onSubmit={handleSubmitSearch}
+                className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10 backdrop-blur-lg shadow-lg shadow-purple-950/20"
+              >
+                <div className="hidden lg:flex items-center gap-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 bg-white/5 border-r border-white/10">
+                  <label htmlFor="global-search-category" className="sr-only">
+                    Category
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="global-search-category"
+                      value={selectedCategory}
+                      onChange={handleCategoryChange}
+                      style={{ width: `${categorySelectWidth}ch` }}
+                      className="appearance-none bg-transparent pr-7 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
+                    >
+                      {SEARCH_CATEGORIES.map((category) => (
+                        <option key={category} value={category} className="text-black">
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-white/60" />
+                  </div>
+                </div>
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
+                  <input
+                    id="global-nav-search"
+                    name="search"
+                    ref={searchInputRef}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => setSuggestionsOpen(hasHybridResults || searchTerm.trim().length > 0)}
+                    className="w-full bg-transparent py-3 pl-11 pr-3 text-sm text-white placeholder:text-white/60 focus:outline-none"
+                    placeholder="Search tacos, coffee, salons, groceries..."
+                    type="search"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-5 bg-white text-sm font-semibold text-black hover:bg-white/90 transition"
+                >
+                  Search
+                </button>
+              </form>
+
+              {suggestionsOpen && (searchLoading || searchError || hasHybridResults) ? (
+                <div className="absolute left-0 right-0 top-full mt-2 z-50">
+                  <div className="rounded-2xl border border-white/10 bg-[#0b0618]/92 backdrop-blur-2xl shadow-xl shadow-purple-950/20 p-3 text-white">
+                    {searchError ? (
+                      <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-rose-200 mb-2">
+                        {searchError}
+                      </div>
+                    ) : null}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/60">
+                          <PackageSearch className="h-4 w-4" />
+                          Items
+                          {searchLoading ? (
+                            <Loader2 className="h-3 w-3 animate-spin text-white/60" />
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          {sortedSearchItems.slice(0, 4).map((item) => {
+                            const inventory = normalizeInventory(item);
+                            const badgeStyle = getAvailabilityBadgeStyle(
+                              inventory.availability,
+                              isLight
+                            );
+                            return (
+                              <button
+                                key={`item-${item.id}`}
+                                type="button"
+                                onClick={() => handleSuggestionSelect(item.title, item.id)}
+                                className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                              >
+                                <div className="h-10 w-10 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] font-semibold text-white/80">
+                                  {item.category
+                                    ? item.category.slice(0, 3).toUpperCase()
+                                    : "AI"}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="text-sm font-semibold leading-snug">{item.title}</div>
+                                  <div className="text-[11px] text-white/60">
+                                    {item.category || "Local listing"}
+                                    {item.price ? ` · $${item.price}` : ""}
+                                  </div>
+                                  <span
+                                    className="mt-2 inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"
+                                    style={
+                                      badgeStyle
+                                        ? { color: badgeStyle.color, borderColor: badgeStyle.border }
+                                        : undefined
+                                    }
+                                  >
+                                    {inventory.label}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/60">
+                          <Store className="h-4 w-4" />
+                          Businesses & places
+                        </div>
+                        <div className="space-y-2">
+                          {(searchResults.businesses || []).slice(0, 3).map((biz) => (
+                            <button
+                              key={`biz-${biz.id}`}
+                              type="button"
+                              onClick={() => handleSuggestionSelect(biz.name)}
+                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                            >
+                              <div className="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-200/30 flex items-center justify-center">
+                                <Store className="h-4 w-4 text-emerald-200" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-semibold leading-snug">{biz.name}</div>
+                                <div className="text-[11px] text-white/60">
+                                  {biz.category || "Local business"}
+                                  {biz.city ? ` · ${biz.city}` : ""}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+
+                          {(searchResults.places || []).slice(0, 3).map((place) => (
+                            <button
+                              key={`place-${place.id}`}
+                              type="button"
+                              onClick={() => handleSuggestionSelect(place.name)}
+                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                            >
+                              <div className="h-10 w-10 rounded-lg bg-blue-500/20 border border-blue-200/30 flex items-center justify-center">
+                                <MapPin className="h-4 w-4 text-blue-100" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-semibold leading-snug">{place.name}</div>
+                                <div className="text-[11px] text-white/60">
+                                  {place.address || "Nearby result"}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="hidden md:flex flex-1" />
+        )}
+
+        <div className="hidden md:flex items-center gap-8">
+          <HeaderAccountWidget surface={surface} variant="desktop" />
+        </div>
+
+        <button
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          className="md:hidden text-white"
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? (
+            <svg className="h-7 w-7" fill="none" stroke="currentColor">
+              <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="h-7 w-7" fill="none" stroke="currentColor">
+              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {showSearch ? (
+        <div
+          className="md:hidden px-5 sm:px-6 pt-2 pb-4 border-t border-white/10"
+          data-nav-guard="1"
+        >
+          <form
+            onSubmit={handleSubmitSearch}
+            className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+          >
+            <Search className="h-4 w-4 text-white/70" />
+            <input
+              id="global-nav-search-mobile"
+              name="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"
+              placeholder="Search for anything nearby"
+              type="search"
+            />
+            <button
+              type="submit"
+              className="px-3 py-1 rounded-lg bg-white text-xs font-semibold text-black"
+            >
+              Go
+            </button>
+          </form>
+        </div>
+      ) : null}
+
+      <HeaderAccountWidget
+        surface={surface}
+        variant="mobile"
+        mobileMenuOpen={mobileMenuOpen}
+        onCloseMobileMenu={() => setMobileMenuOpen(false)}
+      />
+    </nav>
+  );
+}

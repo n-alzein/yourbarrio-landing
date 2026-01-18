@@ -1,4 +1,4 @@
-import PublicNavbar from "@/components/navbars/PublicNavbar";
+import GlobalHeader from "@/components/nav/GlobalHeader";
 import { AuthProvider } from "@/components/AuthProvider";
 import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
 
@@ -11,7 +11,7 @@ export const metadata = {
 export default function PublicLayout({ children }) {
   return (
     <AuthProvider>
-      <PublicNavbar />
+      <GlobalHeader surface="public" />
       <BusinessAuthRedirector />
       {children}
     </AuthProvider>

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthProvider";
+import { useModal } from "@/components/modals/ModalProvider";
+import { useViewerContext } from "@/components/public/ViewerContextEnhancer";
 
 function formatReviewer(id) {
   if (!id) return "Customer";
@@ -70,7 +72,9 @@ export default function BusinessReviewsPanel({
   loading = false,
   className = "",
 }) {
-  const { user, authUser, role, supabase, loadingUser } = useAuth();
+  const { supabase } = useAuth();
+  const { openModal } = useModal();
+  const viewer = useViewerContext();
   const [reviews, setReviews] = useState(initialReviews || []);
   const [summary, setSummary] = useState(() => normalizeSummary(ratingSummary, []));
   const [loadingMore, setLoadingMore] = useState(false);
@@ -89,7 +93,7 @@ export default function BusinessReviewsPanel({
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
-  const customerId = user?.id || authUser?.id || null;
+  const customerId = viewer.authUser?.id || null;
 
   const reviewAverage = reviews.length
     ? reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) /
@@ -230,7 +234,7 @@ export default function BusinessReviewsPanel({
       setSubmitSuccess("");
       return;
     }
-    if (role && role !== "customer") {
+    if (viewer.role && viewer.role !== "customer" && viewer.role !== "admin" && viewer.role !== "internal") {
       setSubmitError("Only customers can leave reviews.");
       setSubmitSuccess("");
       return;
@@ -463,11 +467,13 @@ export default function BusinessReviewsPanel({
     }
   };
 
-  const showReviewForm =
-    !loadingUser &&
-    (role === "customer" || (!role && (user || authUser))) &&
-    !customerReviewId;
-  const showLoginPrompt = !loadingUser && !user && !authUser;
+  const isBusinessViewer = viewer.isBusiness;
+  const isOwnBusiness = Boolean(
+    isBusinessViewer && viewer.authUser?.id && businessId && viewer.authUser.id === businessId
+  );
+  const showReviewForm = viewer.isCustomer && !customerReviewId;
+  const showLoginPrompt = viewer.status === "guest";
+  const showBusinessNote = isBusinessViewer;
 
   const orderedReviews = useMemo(() => {
     if (!customerId) return reviews;
@@ -578,9 +584,35 @@ export default function BusinessReviewsPanel({
             {submitting ? "Submitting..." : "Post review"}
           </button>
         </form>
-      ) : showLoginPrompt ? (
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/70">
-          Log in as a customer to leave a review.
+      ) : null}
+
+      {!showReviewForm && showLoginPrompt ? (
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">
+                Sign in to write a review
+              </p>
+              <p className="text-xs text-white/60">
+                Join as a customer to share your experience.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openModal("customer-login")}
+              className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 hover:bg-white/20 transition"
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {!showReviewForm && showBusinessNote ? (
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 text-xs text-white/60">
+          {isOwnBusiness
+            ? "Business owners can’t review their own business."
+            : "Business accounts can’t leave reviews."}
         </div>
       ) : null}
 

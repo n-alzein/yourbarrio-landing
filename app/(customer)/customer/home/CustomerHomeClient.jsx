@@ -1442,7 +1442,10 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
       </div>
 
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 relative z-10">
+      <div
+        className="w-full px-5 sm:px-6 md:px-8 lg:px-12 relative z-10"
+        data-home-content="1"
+      >
         <div className="w-full max-w-none">
         <div style={{ minHeight: "320px" }}>
           {authReady ? (

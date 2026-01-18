@@ -54,11 +54,7 @@ export async function GET(request) {
       .eq("id", user.id)
       .maybeSingle();
 
-    const role =
-      profile?.role ||
-      user?.app_metadata?.role ||
-      user?.user_metadata?.role ||
-      null;
+    const role = profile?.role || user?.app_metadata?.role || null;
 
     const target =
       role === "business" ? PATHS.business.dashboard : PATHS.customer.home;

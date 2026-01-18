@@ -54,6 +54,7 @@ function NavItem({ href, children, badgeCount, badgeReady, active, onNavigate })
       className={`w-full text-left text-sm md:text-base transition ${
         active ? "text-white font-semibold" : "text-white/70 hover:text-white"
       }`}
+      data-nav-guard="1"
     >
       <span className="flex items-center gap-2">
         {children}
@@ -806,6 +807,15 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               data-clickdiag={clickDiagEnabled ? "dropdown" : undefined}
               data-nav-guard="1"
             >
+              {profileMenuOpen ? (
+                <button
+                  type="button"
+                  aria-label="Close profile menu"
+                  className="fixed inset-0 z-[5050] cursor-default"
+                  onClick={() => setProfileMenuOpen(false)}
+                  data-nav-guard="1"
+                />
+              ) : null}
               <button
                 onClick={() => setProfileMenuOpen((open) => !open)}
                 data-clickdiag={clickDiagEnabled ? "navbar-user" : undefined}
@@ -949,7 +959,10 @@ function CustomerNavbarInner({ pathname, searchParams }) {
         </button>
       </div>
 
-      <div className="md:hidden px-5 sm:px-6 pt-2 pb-4 border-t border-white/10">
+      <div
+        className="md:hidden px-5 sm:px-6 pt-2 pb-4 border-t border-white/10"
+        data-nav-guard="1"
+      >
         <form
           onSubmit={handleSubmitSearch}
           className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
