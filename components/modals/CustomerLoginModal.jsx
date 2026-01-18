@@ -9,6 +9,7 @@ import { useModal } from "./ModalProvider";
 export default function CustomerLoginModal({ onClose }) {
   const { supabase, loadingUser } = useAuth();
   const { openModal } = useModal();
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,108 +20,138 @@ export default function CustomerLoginModal({ onClose }) {
     event.preventDefault();
     setError("");
     setLoading(true);
+    const client = supabase ?? getBrowserSupabaseClient();
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword(
-      { email, password }
-    );
-
-    if (signInError) {
-      setError(signInError.message);
-      setLoading(false);
-      return;
+    if (authDiagEnabled) {
+      console.log("[AUTH_DIAG] customer login submit", {
+        route: typeof window !== "undefined" ? window.location.pathname : null,
+        supabaseType: typeof supabase,
+        supabaseKeys: supabase ? Object.keys(supabase) : null,
+        hasSupabaseAuth: Boolean(supabase?.auth),
+        clientType: typeof client,
+        clientKeys: client ? Object.keys(client) : null,
+        hasClientAuth: Boolean(client?.auth),
+        hasModalContext: typeof openModal === "function",
+      });
     }
-
-    const user = data?.user;
-    if (!user) {
-      setError("Login succeeded but no user was returned. Try again.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      setError("Logged in, but could not load your profile. Try again.");
-      setLoading(false);
-      return;
-    }
-
-    const dest =
-      profile?.role === "business"
-        ? "/business/dashboard"
-        : "/customer/home";
-
-    onClose?.();
-
-    const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
     try {
-      const session = data?.session;
-
-      if (debugAuth) {
-        console.log("[customer-login] refreshing cookies with tokens");
+      if (!client || !client.auth) {
+        setError("Auth is unavailable. Please refresh and try again.");
+        return;
       }
 
-      const res = await fetch("/api/auth/refresh", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          access_token: session?.access_token,
-          refresh_token: session?.refresh_token,
-        }),
-      });
+      const { data, error: signInError } = await client.auth.signInWithPassword(
+        { email, password }
+      );
 
-      const refreshed = res.headers.get("x-auth-refresh-user") === "1";
-      if (debugAuth) {
-        console.log(
-          "[customer-login] refresh user header",
-          res.headers.get("x-auth-refresh-user")
-        );
+      if (signInError) {
+        setError(signInError.message);
+        return;
       }
 
-      if (!refreshed) {
+      const user = data?.user;
+      if (!user) {
+        setError("Login succeeded but no user was returned. Try again.");
+        return;
+      }
+
+      const { data: profile, error: profileError } = await client
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        setError("Logged in, but could not load your profile. Try again.");
+        return;
+      }
+
+      const dest =
+        profile?.role === "business"
+          ? "/business/dashboard"
+          : "/customer/home";
+
+      onClose?.();
+
+      const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+
+      try {
+        const session = data?.session;
+
+        if (debugAuth) {
+          console.log("[customer-login] refreshing cookies with tokens");
+        }
+
+        const res = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_token: session?.access_token,
+            refresh_token: session?.refresh_token,
+          }),
+        });
+
+        const refreshed = res.headers.get("x-auth-refresh-user") === "1";
+        if (debugAuth) {
+          console.log(
+            "[customer-login] refresh user header",
+            res.headers.get("x-auth-refresh-user")
+          );
+        }
+
+        if (!refreshed) {
+          setError(
+            "Login succeeded but session could not be persisted in Safari. Please try again."
+          );
+          return;
+        }
+      } catch (err) {
+        console.error("Auth refresh call failed", err);
         setError(
           "Login succeeded but session could not be persisted in Safari. Please try again."
         );
-        setLoading(false);
         return;
       }
-    } catch (err) {
-      console.error("Auth refresh call failed", err);
-      setError(
-        "Login succeeded but session could not be persisted in Safari. Please try again."
-      );
-      setLoading(false);
-      return;
-    }
 
-    window.location.replace(dest);
-    setLoading(false);
+      window.location.replace(dest);
+    } catch (err) {
+      console.error("Customer login failed", err);
+      setError("Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleGoogleLogin() {
     setError("");
     setLoading(true);
 
-    const client = getBrowserSupabaseClient();
+    try {
+      const client = supabase ?? getBrowserSupabaseClient();
+      if (!client || !client.auth) {
+        setError("Auth is unavailable. Please refresh and try again.");
+        return;
+      }
 
-    const { error: oauthError } = await client.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
-      },
-    });
+      const { error: oauthError } = await client.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/api/auth/callback`,
+        },
+      });
 
-    if (oauthError) {
-      setError(oauthError.message);
+      if (oauthError) {
+        setError(oauthError.message);
+      } else {
+        onClose?.();
+      }
+    } catch (err) {
+      console.error("Customer OAuth login failed", err);
+      setError("Login failed. Please try again.");
+    } finally {
       setLoading(false);
-    } else {
-      onClose?.();
     }
   }
 
