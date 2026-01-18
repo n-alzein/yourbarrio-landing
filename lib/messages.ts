@@ -83,7 +83,6 @@ export async function fetchConversations({
 
   if (diagEnabled && typeof window !== "undefined") {
     const durationMs = Date.now() - startTime;
-    // eslint-disable-next-line no-console
     console.log("[MSG_DIAG]", {
       phase: "fetchConversations",
       role,

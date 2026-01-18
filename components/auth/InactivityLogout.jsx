@@ -9,7 +9,7 @@ const THROTTLE_MS = 10_000;
 export default function InactivityLogout() {
   const { authUser, user, loadingUser } = useAuth();
   const timeoutIdRef = useRef(null);
-  const lastActivityRef = useRef(Date.now());
+  const lastActivityRef = useRef(0);
   const lastResetRef = useRef(0);
 
   useEffect(() => {

@@ -83,7 +83,7 @@ export default function BusinessHome() {
         </p>
 
         <p className="text-white/80 text-lg leading-relaxed text-center max-w-3xl mx-auto mt-6">
-          Whether you're a restaurant, barber shop, boutique, contractor, or service provider,
+          Whether you&apos;re a restaurant, barber shop, boutique, contractor, or service provider,
           YourBarrio increases your local exposure and connects you directly with nearby customers.
         </p>
       </motion.section>

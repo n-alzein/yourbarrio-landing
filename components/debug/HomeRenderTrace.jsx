@@ -11,10 +11,10 @@ export default function HomeRenderTrace({ blocker }) {
   const { authUser, user: profile, role, loadingUser } = useAuth();
 
   const enabled = diagEnabled();
-  const ts = Date.now();
 
-  if (enabled) {
-    // eslint-disable-next-line no-console
+  useEffect(() => {
+    if (!enabled) return;
+    const ts = Date.now();
     console.log("[HOME_TRACE] render", {
       ts,
       pathname,
@@ -27,7 +27,7 @@ export default function HomeRenderTrace({ blocker }) {
     if (typeof window !== "undefined") {
       window.__HOME_RENDERED__ = { ts, blocker };
     }
-  }
+  }, [enabled, pathname, blocker, loadingUser, authUser, profile, role]);
 
   useEffect(() => {
     if (!enabled || typeof document === "undefined") return undefined;
@@ -36,13 +36,11 @@ export default function HomeRenderTrace({ blocker }) {
     try {
       const styles = window.getComputedStyle(main);
       const rect = main.getBoundingClientRect();
-      // eslint-disable-next-line no-console
       console.log("[HOME_TRACE] mainStyle", {
         display: styles.display,
         visibility: styles.visibility,
         opacity: styles.opacity,
       });
-      // eslint-disable-next-line no-console
       console.log("[HOME_TRACE] mainRect", {
         width: rect.width,
         height: rect.height,

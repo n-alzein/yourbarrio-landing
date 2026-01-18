@@ -96,7 +96,6 @@ export default function BusinessReviewsPanel({
       reviews.length
     : 0;
   const averageRating = summary?.count ? summary.average : reviewAverage;
-  const breakdown = summary?.breakdown || {};
   const totalReviews = Math.max(
     summary?.count ?? 0,
     reviewCount ?? 0,
@@ -105,12 +104,13 @@ export default function BusinessReviewsPanel({
   const pageSize = 6;
 
   const ratingRows = useMemo(() => {
+    const breakdown = summary?.breakdown || {};
     return [5, 4, 3, 2, 1].map((value) => {
       const count = breakdown[value] || 0;
       const percent = totalReviews ? Math.round((count / totalReviews) * 100) : 0;
       return { value, count, percent };
     });
-  }, [breakdown, totalReviews]);
+  }, [summary, totalReviews]);
 
   const canLoadMore = reviews.length < totalReviews;
 

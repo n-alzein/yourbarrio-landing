@@ -25,7 +25,6 @@ export default function ReviewsPanel({
   const pageSize = 6;
 
   const averageRating = ratingSummary?.average || 0;
-  const breakdown = ratingSummary?.breakdown || {};
 
   const canLoadMore = reviews.length < reviewCount;
 
@@ -132,12 +131,13 @@ export default function ReviewsPanel({
 
   const ratingRows = useMemo(() => {
     const total = ratingSummary?.count || reviewCount || 0;
+    const breakdown = ratingSummary?.breakdown || {};
     return [5, 4, 3, 2, 1].map((value) => {
       const count = breakdown[value] || 0;
       const percent = total ? Math.round((count / total) * 100) : 0;
       return { value, count, percent };
     });
-  }, [breakdown, reviewCount, ratingSummary]);
+  }, [ratingSummary, reviewCount]);
 
   return (
     <div className="space-y-6">

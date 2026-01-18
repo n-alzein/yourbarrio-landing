@@ -92,7 +92,6 @@ export default function SafeNavFallback() {
         setTimeout(() => {
           if (!navFlagRef.current.didNavigate) {
             if (isDiag()) {
-              // eslint-disable-next-line no-console
               console.log("[SAFE_NAV] fallback push", { path, reason: "timeout" });
             }
             router.push(path);
@@ -101,7 +100,6 @@ export default function SafeNavFallback() {
         }, 250);
       } catch (err) {
         if (isDiag()) {
-          // eslint-disable-next-line no-console
           console.warn("[SAFE_NAV] error", err);
         }
       }

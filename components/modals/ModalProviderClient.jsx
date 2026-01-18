@@ -1,0 +1,115 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  Suspense,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import CustomerLoginModal from "./CustomerLoginModal";
+import CustomerSignupModal from "./CustomerSignupModal";
+
+const ModalContext = createContext(null);
+
+const MODAL_COMPONENTS = {
+  "customer-login": CustomerLoginModal,
+  "customer-signup": CustomerSignupModal,
+};
+
+function getModalRoot() {
+  if (typeof document === "undefined") return null;
+  let root = document.getElementById("modal-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "modal-root";
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+export default function ModalProviderClient({ children }) {
+  const [modal, setModal] = useState({ type: null, props: {} });
+  const [modalRoot] = useState(() => getModalRoot());
+
+  const closeModal = useCallback(() => {
+    setModal({ type: null, props: {} });
+  }, []);
+
+  const openModal = useCallback((type, props = {}) => {
+    if (!MODAL_COMPONENTS[type]) return;
+    setModal({ type, props });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const modalParam = params.get("modal");
+    if (!modalParam || !MODAL_COMPONENTS[modalParam]) return;
+
+    queueMicrotask(() => {
+      openModal(modalParam);
+    });
+
+    params.delete("modal");
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [openModal]);
+
+  useEffect(() => {
+    if (!modal.type) return undefined;
+    const handler = (event) => {
+      if (event.key === "Escape") closeModal();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [modal.type, closeModal]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (modal.type) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = previous;
+      };
+    }
+    return undefined;
+  }, [modal.type]);
+
+  const value = useMemo(
+    () => ({
+      openModal,
+      closeModal,
+      activeModal: modal.type,
+    }),
+    [openModal, closeModal, modal.type]
+  );
+
+  const ModalComponent = modal.type ? MODAL_COMPONENTS[modal.type] : null;
+  return (
+    <ModalContext.Provider value={value}>
+      {children}
+      {ModalComponent && modalRoot
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ModalComponent {...modal.props} onClose={closeModal} />
+            </Suspense>,
+            modalRoot
+          )
+        : null}
+    </ModalContext.Provider>
+  );
+}
+
+export function useModal() {
+  const context = useContext(ModalContext);
+  if (!context) {
+    throw new Error("useModal must be used within a ModalProvider");
+  }
+  return context;
+}

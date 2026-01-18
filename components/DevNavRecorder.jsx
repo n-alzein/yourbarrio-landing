@@ -25,15 +25,14 @@ function safeStringify(value) {
 }
 
 export default function DevNavRecorder() {
-  if (process.env.NODE_ENV !== "development") {
-    return null;
-  }
+  const enabled = process.env.NODE_ENV === "development";
 
   const eventsRef = useRef([]);
   const lastClickRef = useRef(null);
   const pathname = usePathname();
 
   useEffect(() => {
+    if (!enabled) return;
     const logEvent = (event) => {
       try {
         const entry = { ts: Date.now(), ...event };
@@ -49,8 +48,8 @@ export default function DevNavRecorder() {
     const recordNavigation = () => {
       logEvent({
         type: "nav",
-        pathname: typeof window !== "undefined" ? window.location.pathname : pathname,
-        search: typeof window !== "undefined" ? window.location.search : "",
+        pathname: window.location.pathname,
+        search: window.location.search,
       });
     };
     recordNavigation();
@@ -130,15 +129,14 @@ export default function DevNavRecorder() {
     const unpatchReplace = patchHistory("replaceState") || (() => {});
 
     window.__dumpNavLog = () => {
-      // eslint-disable-next-line no-console
       console.log(JSON.stringify({ events: eventsRef.current, lastClick: lastClickRef.current }, null, 2));
     };
 
     const handlePopState = () => {
       logEvent({
         type: "popstate",
-        pathname: typeof window !== "undefined" ? window.location.pathname : pathname,
-        search: typeof window !== "undefined" ? window.location.search : "",
+        pathname: window.location.pathname,
+        search: window.location.search,
       });
     };
 
@@ -157,10 +155,10 @@ export default function DevNavRecorder() {
       unpatchPush();
       unpatchReplace();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const entry = {
       type: "path-change",
       ts: Date.now(),
@@ -172,7 +170,11 @@ export default function DevNavRecorder() {
       eventsRef.current = eventsRef.current.slice(-MAX_EVENTS);
     }
     return undefined;
-  }, [pathname]);
+  }, [enabled, pathname]);
+
+  if (!enabled) {
+    return null;
+  }
 
   return null;
 }

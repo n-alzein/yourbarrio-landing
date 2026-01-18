@@ -46,15 +46,13 @@ function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) 
   );
 }
 
-export default function BusinessNavbar({ requireAuth = false }) {
-  const pathname = usePathname();
+function BusinessNavbarInner({ pathname, requireAuth }) {
   const { user, authUser, role, loadingUser, supabase } = useAuth();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [badgeReady, setBadgeReady] = useState(false);
   const dropdownRef = useRef(null);
   const displayName =
     user?.business_name ||
@@ -63,14 +61,7 @@ export default function BusinessNavbar({ requireAuth = false }) {
     authUser?.user_metadata?.name ||
     "Account";
 
-  useEffect(() => {
-    setProfileMenuOpen(false);
-    setMobileMenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!loadingUser) setBadgeReady(true);
-  }, [loadingUser]);
+  const badgeReady = !loadingUser;
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -176,7 +167,9 @@ export default function BusinessNavbar({ requireAuth = false }) {
 
   useEffect(() => {
     if (!badgeReady) return;
-    loadUnreadCount();
+    queueMicrotask(() => {
+      loadUnreadCount();
+    });
   }, [badgeReady, loadUnreadCount]);
 
   useEffect(() => {
@@ -543,4 +536,9 @@ export default function BusinessNavbar({ requireAuth = false }) {
     )}
   </nav>
   );
+}
+
+export default function BusinessNavbar({ requireAuth = false }) {
+  const pathname = usePathname();
+  return <BusinessNavbarInner key={pathname} pathname={pathname} requireAuth={requireAuth} />;
 }

@@ -35,10 +35,53 @@ import {
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
 
+const getInitialSearchTerm = (params) =>
+  (params?.get("q") || "").trim();
+
+const getInitialCategory = (params) => {
+  const currentCategory = (params?.get("category") || "").trim();
+  const matchedCategory = SEARCH_CATEGORIES.find(
+    (category) => category.toLowerCase() === currentCategory.toLowerCase()
+  );
+  return matchedCategory || "All";
+};
+
+function NavItem({ href, children, badgeCount, badgeReady, active, onNavigate }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(href, "nav-item")}
+      className={`w-full text-left text-sm md:text-base transition ${
+        active ? "text-white font-semibold" : "text-white/70 hover:text-white"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        {children}
+        {badgeReady && badgeCount > 0 ? (
+          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+            {badgeCount}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
 export default function CustomerNavbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const searchKey = `${pathname}?${searchParams?.toString() || ""}`;
+  return (
+    <CustomerNavbarInner
+      key={searchKey}
+      pathname={pathname}
+      searchParams={searchParams}
+    />
+  );
+}
+
+function CustomerNavbarInner({ pathname, searchParams }) {
+  const router = useRouter();
   const { user, authUser, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
@@ -47,8 +90,8 @@ export default function CustomerNavbar() {
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [searchTerm, setSearchTerm] = useState(() => getInitialSearchTerm(searchParams));
+  const [selectedCategory, setSelectedCategory] = useState(() => getInitialCategory(searchParams));
   const [searchResults, setSearchResults] = useState({
     items: [],
     businesses: [],
@@ -62,7 +105,7 @@ export default function CustomerNavbar() {
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [badgeReady, setBadgeReady] = useState(false);
+  const badgeReady = !loadingUser;
   const dropdownRef = useRef(null);
   const dropdownPanelRef = useRef(null);
   const searchBoxRef = useRef(null);
@@ -73,33 +116,8 @@ export default function CustomerNavbar() {
   const lastQueryRef = useRef("");
   // DEBUG_CLICK_DIAG / NAV_TRACE
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
-  const navTraceEnabled =
-    clickDiagEnabled || process.env.NEXT_PUBLIC_NAV_TRACE === "1";
-  const routerPatchedRef = useRef(false);
-  useEffect(() => {
-    if (!navTraceEnabled || routerPatchedRef.current) return undefined;
-    routerPatchedRef.current = true;
-    const originalPush = router.push;
-    router.push = (...args) => {
-      // eslint-disable-next-line no-console
-      console.log("[NAV_TRACE] router.push CALLED", args, new Error().stack);
-      // eslint-disable-next-line no-console
-      console.log("[CLICK_DIAG] router.push CALLED", args, new Error().stack);
-      try {
-        return originalPush(...args);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("[NAV_TRACE] router.push error", err);
-        throw err;
-      }
-    };
-    return () => {
-      router.push = originalPush;
-    };
-  }, [navTraceEnabled, router, clickDiagEnabled]);
   const diagClick = (label) => (event) => {
     if (!clickDiagEnabled) return;
-    // eslint-disable-next-line no-console
     console.log("[CLICK_DIAG] REACT_ONCLICK", label, {
       defaultPrevented: event.defaultPrevented,
       target: event.target?.tagName,
@@ -112,20 +130,9 @@ export default function CustomerNavbar() {
       href: event.currentTarget?.getAttribute?.("href") || null,
     });
     queueMicrotask(() => {
-      // eslint-disable-next-line no-console
       console.log("[CLICK_DIAG] REACT_ONCLICK_POST", { label, href: window.location.href });
     });
   };
-
-  // Close menus when the route changes
-  useEffect(() => {
-    setProfileMenuOpen(false);
-    setMobileMenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!loadingUser) setBadgeReady(true);
-  }, [loadingUser]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -153,7 +160,6 @@ export default function CustomerNavbar() {
             topAtClick && typeof window !== "undefined"
               ? window.getComputedStyle(topAtClick)
               : null;
-          // eslint-disable-next-line no-console
           console.log("[CLICK_DIAG] search focus check", {
             active,
             topAtClick: topAtClick?.className || topAtClick?.tagName,
@@ -170,7 +176,6 @@ export default function CustomerNavbar() {
           });
         }, 50);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] search focus check error", err);
       }
     };
@@ -185,7 +190,6 @@ export default function CustomerNavbar() {
     if (!clickDiagEnabled || !pathname?.startsWith("/customer/home")) return undefined;
     const logEventCapture = (event) => {
       try {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] HOME_TRACE", {
           type: event.type,
           phase: "capture",
@@ -200,7 +204,6 @@ export default function CustomerNavbar() {
     };
     const logEventBubble = (event) => {
       try {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] HOME_TRACE", {
           type: event.type,
           phase: "bubble",
@@ -247,7 +250,6 @@ export default function CustomerNavbar() {
         panel && typeof window !== "undefined"
           ? window.getComputedStyle(panel).zIndex
           : null;
-      // eslint-disable-next-line no-console
       console.log("[CLICK_DIAG] dropdown metrics", {
         navRect,
         panelRect,
@@ -256,38 +258,30 @@ export default function CustomerNavbar() {
         topAtPanel: topAtPanel?.className || topAtPanel?.tagName,
       });
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn("[CLICK_DIAG] dropdown metrics error", err);
     }
     return undefined;
   }, [clickDiagEnabled, profileMenuOpen]);
 
-  // Keep the search bar in sync with the current URL query
-  useEffect(() => {
-    const currentQuery = (searchParams?.get("q") || "").trim();
-    setSearchTerm(currentQuery);
-    const currentCategory = (searchParams?.get("category") || "").trim();
-    const matchedCategory = SEARCH_CATEGORIES.find(
-      (category) => category.toLowerCase() === currentCategory.toLowerCase()
-    );
-    setSelectedCategory(matchedCategory || "All");
-  }, [searchParams]);
-
   // Hybrid search — fetch AI-style blend of items + businesses
   useEffect(() => {
     const term = searchTerm.trim();
     if (term.length < 3) {
-      setSearchResults({ items: [], businesses: [], places: [] });
-      setSearchError(null);
-      setSearchLoading(false);
-      setSuggestionsOpen(false);
+      queueMicrotask(() => {
+        setSearchResults({ items: [], businesses: [], places: [] });
+        setSearchError(null);
+        setSearchLoading(false);
+        setSuggestionsOpen(false);
+      });
       lastQueryRef.current = "";
       return;
     }
 
     const normalized = `${term.toLowerCase()}::${selectedCategory.toLowerCase()}`;
     if (normalized === lastQueryRef.current) {
-      setSuggestionsOpen(true);
+      queueMicrotask(() => {
+        setSuggestionsOpen(true);
+      });
       return;
     }
 
@@ -295,8 +289,10 @@ export default function CustomerNavbar() {
     const requestId = ++searchRequestIdRef.current;
 
     const handle = setTimeout(() => {
-      setSearchLoading(true);
-      setSearchError(null);
+      queueMicrotask(() => {
+        setSearchLoading(true);
+        setSearchError(null);
+      });
       const categoryParam = selectedCategory !== "All" ? selectedCategory : "";
       const params = new URLSearchParams();
       params.set("q", term);
@@ -427,7 +423,6 @@ export default function CustomerNavbar() {
   const logNavDebug = (href, method) => {
     if (process.env.NODE_ENV === "production") return;
     if (href === "/customer/saved" || href === "/customer/settings") {
-      // eslint-disable-next-line no-console
       console.info("[nav-debug]", { from: pathname, href, method });
     }
   };
@@ -439,7 +434,6 @@ export default function CustomerNavbar() {
       try {
         router.push(href);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error("[NAV_TRACE] router.push error", err);
         throw err;
       }
@@ -461,33 +455,11 @@ export default function CustomerNavbar() {
 
   const handleNavCapture = (event) => {
     if (!clickDiagEnabled) return;
-    // eslint-disable-next-line no-console
     console.log("[CLICK_DIAG] navbar capture", {
       target: event.target,
       currentTarget: event.currentTarget,
     });
   };
-
-  const NavItem = ({ href, children, badgeCount }) => (
-    <button
-      type="button"
-      onClick={() => handleNavigate(href, "nav-item")}
-      className={`w-full text-left text-sm md:text-base transition ${
-        isActive(href)
-          ? "text-white font-semibold"
-          : "text-white/70 hover:text-white"
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        {children}
-        {badgeReady && badgeCount > 0 ? (
-          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-            {badgeCount}
-          </span>
-        ) : null}
-      </span>
-    </button>
-  );
 
   const quickActions = [
     {
@@ -573,7 +545,9 @@ export default function CustomerNavbar() {
 
   useEffect(() => {
     if (!badgeReady) return;
-    loadUnreadCount();
+    queueMicrotask(() => {
+      loadUnreadCount();
+    });
   }, [badgeReady, loadUnreadCount]);
 
   useEffect(() => {
@@ -877,7 +851,6 @@ export default function CustomerNavbar() {
                           href={href}
                           onClick={(e) => {
                             if (clickDiagEnabled && e.defaultPrevented) {
-                              // eslint-disable-next-line no-console
                               console.warn("[CLICK_DIAG] nav link defaultPrevented", {
                                 href,
                                 stack: new Error().stack,
@@ -925,7 +898,6 @@ export default function CustomerNavbar() {
                         href="/customer/settings"
                         onClick={(e) => {
                           if (clickDiagEnabled && e.defaultPrevented) {
-                            // eslint-disable-next-line no-console
                             console.warn("[CLICK_DIAG] nav link defaultPrevented", {
                               href: "/customer/settings",
                               stack: new Error().stack,
@@ -1047,12 +1019,39 @@ export default function CustomerNavbar() {
                   ) : null}
                 </div>
               </div>
-              <NavItem href="/customer/home">Discover</NavItem>
-              <NavItem href="/customer/messages" badgeCount={unreadCount}>
+              <NavItem
+                href="/customer/home"
+                active={isActive("/customer/home")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
+                Discover
+              </NavItem>
+              <NavItem
+                href="/customer/messages"
+                badgeCount={unreadCount}
+                active={isActive("/customer/messages")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
                 Messages
               </NavItem>
-              <NavItem href="/customer/saved">Saved items</NavItem>
-              <NavItem href="/customer/settings">Account settings</NavItem>
+              <NavItem
+                href="/customer/saved"
+                active={isActive("/customer/saved")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
+                Saved items
+              </NavItem>
+              <NavItem
+                href="/customer/settings"
+                active={isActive("/customer/settings")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
+                Account settings
+              </NavItem>
             </>
           )}
 

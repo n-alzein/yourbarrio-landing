@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import SafeImage from "@/components/SafeImage";
 import { Globe, MapPin, Phone, Share2, Star } from "lucide-react";
 import BusinessPreviewToolbar from "@/components/publicBusinessProfile/BusinessPreviewToolbar";
@@ -44,35 +44,32 @@ export default function PublicBusinessHero({
     ? `${average.toFixed(1)} - ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
     : "No reviews yet";
 
-  const actions = useMemo(() => {
-    const next = [];
-    if (profile?.website) {
-      next.push({
-        key: "website",
-        label: "Website",
-        href: normalizeUrl(profile.website),
-        type: "website",
-      });
-    }
-    if (profile?.phone) {
-      next.push({
-        key: "phone",
-        label: "Call",
-        href: `tel:${profile.phone}`,
-        type: "phone",
-      });
-    }
-    const directionsUrl = buildDirectionsUrl(profile?.address, profile?.city);
-    if (directionsUrl) {
-      next.push({
-        key: "directions",
-        label: "Directions",
-        href: directionsUrl,
-        type: "directions",
-      });
-    }
-    return next;
-  }, [profile?.address, profile?.city, profile?.phone, profile?.website]);
+  const actions = [];
+  if (profile?.website) {
+    actions.push({
+      key: "website",
+      label: "Website",
+      href: normalizeUrl(profile.website),
+      type: "website",
+    });
+  }
+  if (profile?.phone) {
+    actions.push({
+      key: "phone",
+      label: "Call",
+      href: `tel:${profile.phone}`,
+      type: "phone",
+    });
+  }
+  const directionsUrl = buildDirectionsUrl(profile?.address, profile?.city);
+  if (directionsUrl) {
+    actions.push({
+      key: "directions",
+      label: "Directions",
+      href: directionsUrl,
+      type: "directions",
+    });
+  }
 
   useEffect(() => {
     const handleScroll = () => {

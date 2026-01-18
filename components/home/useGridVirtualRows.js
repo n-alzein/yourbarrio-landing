@@ -14,8 +14,8 @@ export function useGridVirtualRows({
     scrollTop: 0,
     height: 0,
     containerHeight: 0,
+    containerTop: 0,
   }));
-  const containerTopRef = useRef(0);
   const rafRef = useRef(0);
 
   const updateMetrics = useCallback(() => {
@@ -28,10 +28,14 @@ export function useGridVirtualRows({
       window.innerHeight || document.documentElement?.clientHeight || 800;
     const containerTop = rect ? rect.top + scrollTop : 0;
     const containerHeight = rect?.height ?? 0;
-    containerTopRef.current = containerTop;
     setViewport((prev) => {
-      const next = { scrollTop, height, containerHeight };
-      if (prev.scrollTop === next.scrollTop && prev.height === next.height) {
+      const next = { scrollTop, height, containerHeight, containerTop };
+      if (
+        prev.scrollTop === next.scrollTop &&
+        prev.height === next.height &&
+        prev.containerHeight === next.containerHeight &&
+        prev.containerTop === next.containerTop
+      ) {
         return prev;
       }
       return next;
@@ -39,7 +43,11 @@ export function useGridVirtualRows({
   }, [containerRef]);
 
   useLayoutEffect(() => {
-    updateMetrics();
+    if (typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      updateMetrics();
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [updateMetrics, rowCount, rowHeight, rowGap]);
 
   useLayoutEffect(() => {
@@ -75,8 +83,8 @@ export function useGridVirtualRows({
   const rowStride = safeRowHeight + safeRowGap;
   const totalHeight = rowCount > 0 ? rowCount * rowStride - safeRowGap : 0;
 
-  const { scrollTop, height, containerHeight } = viewport;
-  const relativeTop = scrollTop - containerTopRef.current;
+  const { scrollTop, height, containerHeight, containerTop } = viewport;
+  const relativeTop = scrollTop - containerTop;
   const startIndex =
     rowCount > 0
       ? Math.max(0, Math.floor(relativeTop / rowStride) - safeOverscan)

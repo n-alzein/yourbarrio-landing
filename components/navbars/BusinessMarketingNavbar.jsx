@@ -7,6 +7,21 @@ import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "../ThemeProvider";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 
+function NavItem({ href, children, active, onClick, className }) {
+  return (
+    <Link
+      href={href}
+      className={`relative text-sm md:text-base font-medium transition-all ${
+        active ? "text-white" : "text-white/70 hover:text-white"
+      } ${className || ""}`}
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function BusinessMarketingNavbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -34,20 +49,6 @@ export default function BusinessMarketingNavbar() {
     }
   }, [hydrated, pathname, setTheme]);
 
-  const isActive = (href) => pathname === href;
-
-  const NavItem = ({ href, children }) => (
-    <Link
-      href={href}
-      className={`relative text-sm md:text-base font-medium transition-all ${
-        isActive(href) ? "text-white" : "text-white/70 hover:text-white"
-      }`}
-      onClick={() => setOpen(false)}
-    >
-      {children}
-    </Link>
-  );
-
   const handlePopup = (event, path) => {
     event.preventDefault();
     openBusinessAuthPopup(path);
@@ -73,7 +74,13 @@ export default function BusinessMarketingNavbar() {
               </Link>
 
               <div className="hidden md:flex items-center gap-x-8">
-                <NavItem href="/business/about">About</NavItem>
+                <NavItem
+                  href="/business/about"
+                  active={pathname === "/business/about"}
+                  onClick={() => setOpen(false)}
+                >
+                  About
+                </NavItem>
               </div>
             </div>
 
@@ -145,7 +152,14 @@ export default function BusinessMarketingNavbar() {
               <div className="px-6 pt-6 pb-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
                 <div className="flex flex-col gap-3 text-lg font-semibold">
-                  <NavItem href="/business/about">About YourBarrio</NavItem>
+                  <NavItem
+                    href="/business/about"
+                    active={pathname === "/business/about"}
+                    onClick={() => setOpen(false)}
+                    className="text-lg font-semibold"
+                  >
+                    About YourBarrio
+                  </NavItem>
                 </div>
               </div>
 

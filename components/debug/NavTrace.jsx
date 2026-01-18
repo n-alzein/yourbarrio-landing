@@ -16,7 +16,6 @@ function safePatch(label, target, key, wrapperFactory, statusMap) {
       desc = Object.getOwnPropertyDescriptor(owner, key);
     }
     if (!desc) {
-      // eslint-disable-next-line no-console
       console.warn("[NAV_TRACE] patch skipped", { label, key, reason: "missing descriptor" });
       if (statusMap) statusMap[label] = "skipped";
       return null;
@@ -24,7 +23,6 @@ function safePatch(label, target, key, wrapperFactory, statusMap) {
     const writable = desc.writable !== false || typeof desc.set === "function";
     const configurable = desc.configurable !== false;
     if (!writable || !configurable) {
-      // eslint-disable-next-line no-console
       console.warn("[NAV_TRACE] patch skipped", {
         label,
         key,
@@ -46,7 +44,6 @@ function safePatch(label, target, key, wrapperFactory, statusMap) {
       }
     };
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[NAV_TRACE] patch skipped", { label, key, reason: `${err}` });
     if (statusMap) statusMap[label] = "skipped";
     return null;
@@ -85,7 +82,6 @@ export default function NavTrace() {
     if (window.__NAV_TRACE_ACTIVE__ && window.__NAV_TRACE_ACTIVE__ !== instanceId.current) return undefined;
     const onErr = (event) => {
       try {
-        // eslint-disable-next-line no-console
         console.error("[NAV_TRACE] RUNTIME_ERROR", {
           type: "error",
           message: event?.message || event?.reason || "unknown",
@@ -99,7 +95,6 @@ export default function NavTrace() {
     };
     const onRej = (event) => {
       try {
-        // eslint-disable-next-line no-console
         console.error("[NAV_TRACE] RUNTIME_ERROR", {
           type: "unhandledrejection",
           message: event?.reason ? `${event.reason}` : "unhandled rejection",
@@ -125,7 +120,6 @@ export default function NavTrace() {
     if (window.__NAV_TRACE_ACTIVE__ && window.__NAV_TRACE_ACTIVE__ !== instanceId.current) return undefined;
     window.__NAV_TRACE_ACTIVE__ = instanceId.current;
     mountedRef.current = true;
-    // eslint-disable-next-line no-console
     console.log("[NAV_TRACE] mounted", { href: window.location.href });
     return undefined;
   }, []);
@@ -133,7 +127,6 @@ export default function NavTrace() {
   useEffect(() => {
     if (!isActiveInstance()) return undefined;
     if (pathname) {
-      // eslint-disable-next-line no-console
       console.log("[NAV_TRACE] pathname change", { pathname, href: window.location.href, ts: Date.now() });
     }
     return undefined;
@@ -149,16 +142,13 @@ export default function NavTrace() {
     const unpatches = [];
     const patchWrapper = (label) => (original) =>
       function patched(...args) {
-        // eslint-disable-next-line no-console
         console.groupCollapsed("[NAV_TRACE] push/replace", label);
-        // eslint-disable-next-line no-console
         console.log({
           from: window.location.href,
           args,
           ts: Date.now(),
           stack: new Error().stack,
         });
-        // eslint-disable-next-line no-console
         console.groupEnd();
         return original?.apply?.(this, args);
       };
@@ -176,25 +166,20 @@ export default function NavTrace() {
 
     const onPop = (event) => {
       try {
-        // eslint-disable-next-line no-console
         console.log("[NAV_TRACE] popstate", { state: event.state, href: window.location.href, ts: Date.now() });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[NAV_TRACE] popstate log error", err);
       }
     };
     const onHash = (event) => {
       try {
-        // eslint-disable-next-line no-console
         console.log("[NAV_TRACE] hashchange", { oldURL: event.oldURL, newURL: event.newURL, ts: Date.now() });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[NAV_TRACE] hashchange log error", err);
       }
     };
     window.addEventListener("popstate", onPop);
     window.addEventListener("hashchange", onHash);
-    // eslint-disable-next-line no-console
     console.log("[NAV_TRACE] patch status", patchStatus);
 
     return () => {
@@ -231,14 +216,10 @@ export default function NavTrace() {
         };
         queueMicrotask(() => {
           try {
-            // eslint-disable-next-line no-console
             console.groupCollapsed("[NAV_TRACE] EVENT", phase, event.type);
-            // eslint-disable-next-line no-console
             console.log(payload);
-            // eslint-disable-next-line no-console
             console.groupEnd();
             if (payload.href && payload.defaultPrevented) {
-              // eslint-disable-next-line no-console
               console.warn("[NAV_TRACE] defaultPrevented observed (read-only)", {
                 href: payload.href,
                 phase,
@@ -247,12 +228,10 @@ export default function NavTrace() {
               });
             }
           } catch (err) {
-            // eslint-disable-next-line no-console
             console.warn("[NAV_TRACE] EVENT log error", err);
           }
         });
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[NAV_TRACE] EVENT handler error", err);
       }
     };
@@ -280,7 +259,6 @@ export default function NavTrace() {
       const back = window.location.href;
       const delta = Date.now() - ts;
       if (back === fromHref && delta <= 500) {
-        // eslint-disable-next-line no-console
         console.warn("[NAV_TRACE] BOUNCE detected", { awayTo: toHref, backTo: back, deltaMs: delta });
       }
     };
@@ -291,7 +269,6 @@ export default function NavTrace() {
       const handler = setInterval(() => {
         const current = window.location.href;
         if (current !== lastHrefRef.current) {
-          // eslint-disable-next-line no-console
           console.log("[NAV_TRACE] HREF_POLL", { label, from: lastHrefRef.current, to: current, ts: Date.now() });
           lastHrefRef.current = current;
           detectBounce(startHref, current, start);
@@ -319,7 +296,6 @@ export default function NavTrace() {
           pollHref(label);
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[NAV_TRACE] clickWatcher error", err);
       }
     };
@@ -342,7 +318,6 @@ export default function NavTrace() {
       const ts = Date.now();
       mutations.forEach((m) => {
         if (m.type === "attributes" && (m.attributeName === "class" || m.attributeName === "style")) {
-          // eslint-disable-next-line no-console
           console.log("[NAV_TRACE] body mutation", {
             attr: m.attributeName,
             value: body.getAttribute(m.attributeName),
@@ -363,7 +338,6 @@ export default function NavTrace() {
       if (href !== lastChangeRef.current.href) {
         const prev = lastChangeRef.current;
         lastChangeRef.current = { href, ts: Date.now() };
-        // eslint-disable-next-line no-console
         console.log("[NAV_TRACE] href changed (poll)", { from: prev.href, to: href, ts: Date.now() });
       }
     }, 400);

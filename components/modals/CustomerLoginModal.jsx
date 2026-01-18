@@ -59,8 +59,7 @@ export default function CustomerLoginModal({ onClose }) {
     const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
+      const session = data?.session;
 
       if (debugAuth) {
         console.log("[customer-login] refreshing cookies with tokens");
@@ -109,12 +108,11 @@ export default function CustomerLoginModal({ onClose }) {
     setLoading(true);
 
     const client = getBrowserSupabaseClient();
-    await client.auth.getSession();
 
     const { error: oauthError } = await client.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/oauth/callback`,
+        redirectTo: `${window.location.origin}/api/auth/callback`,
       },
     });
 

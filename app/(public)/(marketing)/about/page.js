@@ -68,7 +68,7 @@ export default function AboutPage() {
             <h3 className="text-xl font-semibold mb-2">What We Offer</h3>
             <p className="text-white/80 leading-relaxed">
               From restaurants and salons to home services — YourBarrio maps
-              what's around you and highlights the best local gems.
+              what&apos;s around you and highlights the best local gems.
             </p>
           </motion.div>
 
@@ -101,7 +101,7 @@ export default function AboutPage() {
             Join Your Local Community
           </h2>
           <p className="text-white/80 text-lg mb-8">
-            Whether you're a resident or a business owner, YourBarrio helps
+            Whether you&apos;re a resident or a business owner, YourBarrio helps
             strengthen local connections.
           </p>
 

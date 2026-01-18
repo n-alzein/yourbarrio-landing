@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "yb-theme";
 const THEMES = ["light", "dark"];
@@ -8,24 +8,34 @@ const THEMES = ["light", "dark"];
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState("light");
-  const [hydrated, setHydrated] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved && THEMES.includes(saved) ? saved : "light";
+  });
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    if (saved && THEMES.includes(saved)) {
-      setTheme(saved);
-    }
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
     const root = document.documentElement;
     THEMES.forEach((name) => root.classList.remove(`theme-${name}`));
     root.classList.add(`theme-${theme}`);
     localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme, hydrated]);
+  }, [theme]);
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key !== STORAGE_KEY) return;
+      if (event.newValue && THEMES.includes(event.newValue)) {
+        setTheme(event.newValue);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const setThemeSafe = (next) => setTheme(THEMES.includes(next) ? next : "light");
 

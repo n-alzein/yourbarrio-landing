@@ -63,7 +63,6 @@ export default function useTapGuard({
 
     const log = (label, payload) => {
       if (!isDiagEnabled()) return;
-      // eslint-disable-next-line no-console
       console.log(`[TAP_GUARD] ${label}`, payload);
     };
 

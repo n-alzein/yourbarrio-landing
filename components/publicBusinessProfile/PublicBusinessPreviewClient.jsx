@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
@@ -99,25 +99,93 @@ export default function PublicBusinessPreviewClient({
   onReady,
   trackView = true,
 }) {
-  const [profile, setProfile] = useState(null);
-  const [announcements, setAnnouncements] = useState([]);
-  const [gallery, setGallery] = useState([]);
-  const [listings, setListings] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [ratingSummary, setRatingSummary] = useState(EMPTY_SUMMARY);
-  const [loading, setLoading] = useState(true);
+  const initialState = {
+    profile: null,
+    announcements: [],
+    gallery: [],
+    listings: [],
+    reviews: [],
+    ratingSummary: EMPTY_SUMMARY,
+    loading: true,
+    error: null,
+  };
+
+  const initState = (id) => {
+    const cached = readPreviewCache(id);
+    if (cached?.profile) {
+      return {
+        profile: cached.profile ?? null,
+        announcements: cached.announcements || [],
+        gallery: cached.gallery || [],
+        listings: cached.listings || [],
+        reviews: cached.reviews || [],
+        ratingSummary: cached.ratingSummary || EMPTY_SUMMARY,
+        loading: false,
+        error: null,
+      };
+    }
+    return initialState;
+  };
+
+  const reducer = (state, action) => {
+    switch (action.type) {
+      case "RESET":
+        return initialState;
+      case "HYDRATE_FROM_CACHE":
+        return {
+          ...state,
+          profile: action.payload.profile ?? null,
+          announcements: action.payload.announcements || [],
+          gallery: action.payload.gallery || [],
+          listings: action.payload.listings || [],
+          reviews: action.payload.reviews || [],
+          ratingSummary: action.payload.ratingSummary || EMPTY_SUMMARY,
+          loading: false,
+          error: null,
+        };
+      case "REQUEST":
+        return {
+          ...state,
+          loading: true,
+          error: null,
+        };
+      case "SUCCESS":
+        return {
+          profile: action.payload.profile ?? null,
+          announcements: action.payload.announcements || [],
+          gallery: action.payload.gallery || [],
+          listings: action.payload.listings || [],
+          reviews: action.payload.reviews || [],
+          ratingSummary: action.payload.ratingSummary || EMPTY_SUMMARY,
+          loading: false,
+          error: null,
+        };
+      case "ERROR":
+        return {
+          ...state,
+          loading: false,
+          error: action.error || "preview-load-failed",
+        };
+      default:
+        return state;
+    }
+  };
+
+  const [state, dispatch] = useReducer(reducer, businessId, initState);
+  const { profile, announcements, gallery, listings, reviews, ratingSummary, loading } =
+    state;
   const viewTrackedRef = useRef(false);
 
   useEffect(() => {
+    if (!businessId) {
+      dispatch({ type: "RESET" });
+      return;
+    }
     const cached = readPreviewCache(businessId);
     if (cached?.profile) {
-      setProfile(cached.profile);
-      setAnnouncements(cached.announcements || []);
-      setGallery(cached.gallery || []);
-      setListings(cached.listings || []);
-      setReviews(cached.reviews || []);
-      setRatingSummary(cached.ratingSummary || EMPTY_SUMMARY);
-      setLoading(false);
+      dispatch({ type: "HYDRATE_FROM_CACHE", payload: cached });
+    } else {
+      dispatch({ type: "RESET" });
     }
   }, [businessId]);
 
@@ -139,6 +207,7 @@ export default function PublicBusinessPreviewClient({
       if (!businessId) return;
       const client = getBrowserSupabaseClient();
       if (!client) return;
+      dispatch({ type: "REQUEST" });
 
       const profileQuery = client
         .from("users")
@@ -214,19 +283,30 @@ export default function PublicBusinessPreviewClient({
 
       if (!active) return;
 
-      if (profileResult?.data) setProfile(profileResult.data);
-      if (announcementsResult?.data) setAnnouncements(announcementsResult.data);
-      if (galleryResult?.data) setGallery(galleryResult.data);
-      if (listingsResult?.data) setListings(listingsResult.data);
-      if (reviewsResult?.data) setReviews(reviewsResult.data);
-      if (ratingsResult?.data) {
-        setRatingSummary(buildRatingSummary(ratingsResult.data));
-      }
+      if (!active) return;
 
-      setLoading(false);
+      dispatch({
+        type: "SUCCESS",
+        payload: {
+          profile: profileResult?.data ?? null,
+          announcements: announcementsResult?.data || [],
+          gallery: galleryResult?.data || [],
+          listings: listingsResult?.data || [],
+          reviews: reviewsResult?.data || [],
+          ratingSummary: ratingsResult?.data
+            ? buildRatingSummary(ratingsResult.data)
+            : EMPTY_SUMMARY,
+        },
+      });
     }
 
-    load();
+    load().catch((err) => {
+      if (!active) return;
+      dispatch({
+        type: "ERROR",
+        error: err?.message || "preview-load-failed",
+      });
+    });
     return () => {
       active = false;
     };

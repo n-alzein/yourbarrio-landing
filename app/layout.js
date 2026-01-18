@@ -2,15 +2,13 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import { AuthProvider } from "@/components/AuthProvider";
 import Footer from "@/components/Footer";
-import { ModalProvider } from "@/components/modals/ModalProvider";
+import ModalMount from "@/components/modals/ModalMount";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import OverlayGuard from "@/components/OverlayGuard";
 import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
-import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,28 +42,25 @@ export default function RootLayout({ children }) {
         <DevOnlyNavRecorderLoader />
         <ThemeProvider>
           <OverlayGuard />
-          <AuthProvider>
-            <BusinessAuthRedirector />
-            <ModalProvider>
-              {/* GLOBAL BACKGROUND */}
-              <div className="absolute inset-0 -z-10 overflow-hidden h-full">
-                <div className="absolute inset-0" style={{ background: "var(--bg-solid)" }} />
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: "linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end))",
-                  }}
-                />
-                <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
-                <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
-                <div className="animated-bg" />
-              </div>
+          {/* GLOBAL BACKGROUND */}
+          <div className="absolute inset-0 -z-10 overflow-hidden h-full">
+            <div className="absolute inset-0" style={{ background: "var(--bg-solid)" }} />
+            <div
+              className="absolute inset-0"
+              style={{
+                background: "linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end))",
+              }}
+            />
+            <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
+            <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
+            <div className="animated-bg" />
+          </div>
 
-              {/* CONTENT */}
-              <main className="flex-1 w-full min-h-screen">{children}</main>
-              <Footer />
-            </ModalProvider>
-          </AuthProvider>
+          <ModalMount>
+            {/* CONTENT */}
+            <main className="flex-1 w-full min-h-screen">{children}</main>
+            <Footer />
+          </ModalMount>
         </ThemeProvider>
         {/* DEBUG_CLICK_DIAG / NAV_TRACE */}
         <DebugToolsClient />

@@ -85,7 +85,6 @@ function safePatch(label, target, key, wrapperFactory, statusMap) {
       descriptor = Object.getOwnPropertyDescriptor(owner, key);
     }
     if (!descriptor) {
-      // eslint-disable-next-line no-console
       console.warn("[CLICK_DIAG] patch skipped", { label, key, reason: "missing descriptor" });
       if (statusMap) statusMap[label] = "skipped";
       return null;
@@ -93,7 +92,6 @@ function safePatch(label, target, key, wrapperFactory, statusMap) {
     const writable = descriptor.writable !== false || typeof descriptor.set === "function";
     const configurable = descriptor.configurable !== false;
     if (!writable || !configurable) {
-      // eslint-disable-next-line no-console
       console.warn("[CLICK_DIAG] patch skipped", {
         label,
         key,
@@ -115,7 +113,6 @@ function safePatch(label, target, key, wrapperFactory, statusMap) {
       }
     };
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[CLICK_DIAG] patch skipped", { label, key, reason: `${err}` });
     if (statusMap) statusMap[label] = "skipped";
     return null;
@@ -181,9 +178,7 @@ function walkUpStyles(el, depth = 6) {
 
 export default function ClickDiagnostics() {
   // Proof-of-mount logs
-  // eslint-disable-next-line no-console
   console.log("[CLICK_DIAG] mounted", { href: typeof location !== "undefined" ? location.href : "n/a", ts: Date.now() });
-  // eslint-disable-next-line no-console
   console.log("[CLICK_DIAG] env", { NEXT_PUBLIC_CLICK_DIAG: process.env.NEXT_PUBLIC_CLICK_DIAG });
   if (typeof window !== "undefined") {
     window.__CLICK_DIAG_MOUNTED__ = {
@@ -202,11 +197,8 @@ export default function ClickDiagnostics() {
   useEffect(() => {
     if (!CLICK_DIAG_ENABLED) return undefined;
 
-    // eslint-disable-next-line no-console
     console.log("[CLICK_DIAG] mounted effect", { href: location.href, ts: Date.now() });
-    // eslint-disable-next-line no-console
     console.log("[CLICK_DIAG] verify: window.__CLICK_DIAG_MOUNTED__", window.__CLICK_DIAG_MOUNTED__);
-    // eslint-disable-next-line no-console
     console.log("[CLICK_DIAG] verify: UA", navigator.userAgent);
 
     if (typeof window !== "undefined") {
@@ -224,7 +216,6 @@ export default function ClickDiagnostics() {
         href: location.href,
         time: Date.now(),
       };
-      // eslint-disable-next-line no-console
       console.error("[CLICK_DIAG] RUNTIME_ERROR", payload);
     };
 
@@ -240,7 +231,6 @@ export default function ClickDiagnostics() {
           error: event?.error ? `${event.error}` : null,
         };
         pushBuffer(errorsRef, payload);
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] runtime error captured", payload);
         logRuntimeError("error", event);
       } catch {
@@ -256,7 +246,6 @@ export default function ClickDiagnostics() {
           time: Date.now(),
         };
         pushBuffer(errorsRef, payload);
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] unhandled rejection captured", payload);
         logRuntimeError("unhandledrejection", event);
       } catch {
@@ -267,7 +256,6 @@ export default function ClickDiagnostics() {
     const onPageShow = (event) => {
       pageshowPersistedRef.current = !!event?.persisted;
       lastPersistEventRef.current = event?.timeStamp || Date.now();
-      // eslint-disable-next-line no-console
       console.info("[CLICK_DIAG] pageshow", {
         persisted: event?.persisted,
         time: new Date().toISOString(),
@@ -294,12 +282,10 @@ export default function ClickDiagnostics() {
       const now = Date.now();
       window.__CLICK_DIAG_HEARTBEAT__ = now;
       if (tickCount % 5 === 0) {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] heartbeat", now, location.href);
       }
       const currentHref = location.href;
       if (currentHref !== lastHref) {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] HREF_CHANGED", { from: lastHref, to: currentHref, ts: now });
         lastHref = currentHref;
       }
@@ -316,7 +302,6 @@ export default function ClickDiagnostics() {
     raf = requestAnimationFrame(tick);
 
     const frameLog = setInterval(() => {
-      // eslint-disable-next-line no-console
       console.log("[CLICK_DIAG] raf_frames", frames);
     }, 2000);
 
@@ -338,16 +323,13 @@ export default function ClickDiagnostics() {
     };
 
     const logNavIntent = (label, args) => {
-      // eslint-disable-next-line no-console
       console.groupCollapsed("[CLICK_DIAG] NAV_INTENT", label);
-      // eslint-disable-next-line no-console
       console.log({
         ts: Date.now(),
         href: location.href,
         args,
         stack: new Error().stack,
       });
-      // eslint-disable-next-line no-console
       console.groupEnd();
     };
 
@@ -379,7 +361,6 @@ export default function ClickDiagnostics() {
     );
     if (replaceUnpatch) unpatches.push(replaceUnpatch);
 
-    // eslint-disable-next-line no-console
     console.log("[CLICK_DIAG] patch status", patchStatus);
 
     const onPopstate = (event) => logNavIntent("popstate", [event.state]);
@@ -427,10 +408,8 @@ export default function ClickDiagnostics() {
           y,
         };
         window.__CLICK_DIAG_LAST_EVENT__ = record;
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] EVENT", event.type, x, y, event.target?.tagName, event.target?.className);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] EVENT handler error", err);
       }
     };
@@ -485,7 +464,6 @@ export default function ClickDiagnostics() {
           id: top?.id || null,
           ts: Date.now(),
         };
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] hover top", desc);
       }
 
@@ -496,7 +474,6 @@ export default function ClickDiagnostics() {
       if (navDesc !== lastNavDescriptor) {
         lastNavDescriptor = navDesc;
         window.__CLICK_DIAG_NAV_TOP__ = navDesc;
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] nav top", navDesc);
       }
     };
@@ -596,22 +573,17 @@ export default function ClickDiagnostics() {
         pathTags: path.slice(0, 7).map((n) => n?.tagName || n?.nodeName || "null"),
       };
 
-      // eslint-disable-next-line no-console
       console.groupCollapsed(`[CLICK_DIAG] ACTION_TRACE ${label || type.toUpperCase()} @ ${clientX},${clientY}`);
-      // eslint-disable-next-line no-console
       console.log(payload);
-      // eslint-disable-next-line no-console
       console.groupEnd();
 
       queueMicrotask(() => {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] POST_CLICK_STATE", {
           href: location.href,
           activeEl: document.activeElement?.tagName,
         });
       });
       requestAnimationFrame(() => {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] HREF_AFTER_CLICK", {
           label,
           href: location.href,
@@ -619,7 +591,6 @@ export default function ClickDiagnostics() {
         });
       });
       setTimeout(() => {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] HREF_AFTER_CLICK", {
           label,
           href: location.href,
@@ -627,7 +598,6 @@ export default function ClickDiagnostics() {
         });
       }, 50);
       setTimeout(() => {
-        // eslint-disable-next-line no-console
         console.log("[CLICK_DIAG] HREF_AFTER_CLICK", {
           label,
           href: location.href,
@@ -652,7 +622,6 @@ export default function ClickDiagnostics() {
       try {
         logPointerEvent("pointerdown", event);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] pointerdown log error", err);
       }
     };
@@ -660,7 +629,6 @@ export default function ClickDiagnostics() {
       try {
         logPointerEvent("pointerup", event);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] pointerup log error", err);
       }
     };
@@ -668,7 +636,6 @@ export default function ClickDiagnostics() {
       try {
         logPointerEvent("click", event);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[CLICK_DIAG] click log error", err);
       }
     };
@@ -717,7 +684,6 @@ export default function ClickDiagnostics() {
         <button
           type="button"
           onClick={() => {
-            // eslint-disable-next-line no-console
             console.log("[CLICK_DIAG] PING CLICK", Date.now());
           }}
           style={{

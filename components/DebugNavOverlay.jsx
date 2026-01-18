@@ -3,23 +3,16 @@
 import { useEffect, useState } from "react";
 import { clearDebugLog, debugNavEnabled, getDebugLog } from "@/lib/debugNav";
 
-export default function DebugNavOverlay() {
-  const enabled = debugNavEnabled();
-  const [events, setEvents] = useState([]);
+function DebugNavOverlayInner() {
+  const [events, setEvents] = useState(() => getDebugLog());
 
   useEffect(() => {
-    if (!enabled) return;
-    // Prime from storage/buffer
-    setEvents(getDebugLog());
-
     const interval = setInterval(() => {
       setEvents(getDebugLog());
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [enabled]);
-
-  if (!enabled) return null;
+  }, []);
 
   const last = events.slice(-10);
 
@@ -113,4 +106,10 @@ export default function DebugNavOverlay() {
       )}
     </div>
   );
+}
+
+export default function DebugNavOverlay() {
+  const enabled = debugNavEnabled();
+  if (!enabled) return null;
+  return <DebugNavOverlayInner />;
 }

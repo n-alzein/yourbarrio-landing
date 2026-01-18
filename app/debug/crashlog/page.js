@@ -37,7 +37,6 @@ export default function CrashlogViewer() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("Failed to copy crashlog", err);
     }
   };

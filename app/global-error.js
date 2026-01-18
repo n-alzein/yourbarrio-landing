@@ -6,7 +6,6 @@ export default function GlobalError({ error, reset }) {
   useEffect(() => {
     const pathname =
       typeof window !== "undefined" ? window.location.pathname : "";
-    // eslint-disable-next-line no-console
     console.error("[GLOBAL_ERROR]", {
       message: error?.message,
       stack: error?.stack,

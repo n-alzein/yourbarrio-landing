@@ -7,6 +7,21 @@ import ThemeToggle from "../ThemeToggle";
 import { useModal } from "../modals/ModalProvider";
 import { useTheme } from "../ThemeProvider";
 
+function NavItem({ href, children, active, onClick, className }) {
+  return (
+    <Link
+      href={href}
+      className={`relative text-sm md:text-base font-medium transition-all ${
+        active ? "text-white" : "text-white/70 hover:text-white"
+      } ${className || ""}`}
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function CustomerPublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
@@ -38,20 +53,6 @@ export default function CustomerPublicNavbar() {
     }
   }, [hydrated, pathname, setTheme]);
 
-  const isActive = (href) => pathname === href;
-
-  const NavItem = ({ href, children }) => (
-    <Link
-      href={href}
-      className={`relative text-sm md:text-base font-medium transition-all ${
-        isActive(href) ? "text-white" : "text-white/70 hover:text-white"
-      }`}
-      onClick={() => setOpen(false)}
-    >
-      {children}
-    </Link>
-  );
-
   return (
     <nav
       className="fixed top-0 inset-x-0 z-50 theme-lock"
@@ -72,7 +73,13 @@ export default function CustomerPublicNavbar() {
               </Link>
 
               <div className="hidden md:flex items-center gap-x-8">
-                <NavItem href="/about">About</NavItem>
+                <NavItem
+                  href="/about"
+                  active={pathname === "/about"}
+                  onClick={() => setOpen(false)}
+                >
+                  About
+                </NavItem>
               </div>
             </div>
 
@@ -144,7 +151,14 @@ export default function CustomerPublicNavbar() {
               <div className="px-6 pt-6 pb-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
                 <div className="flex flex-col gap-3 text-lg font-semibold">
-                  <NavItem href="/about">About YourBarrio</NavItem>
+                  <NavItem
+                    href="/about"
+                    active={pathname === "/about"}
+                    onClick={() => setOpen(false)}
+                    className="text-lg font-semibold"
+                  >
+                    About YourBarrio
+                  </NavItem>
                 </div>
               </div>
 

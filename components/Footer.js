@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useModal } from "./modals/ModalProvider";
 import { useAuth } from "./AuthProvider";
 
@@ -23,9 +24,9 @@ export default function Footer() {
           {/* BRAND COLUMN */}
           <div>
             {/* 🔥 YourBarrio title now acts as a link */}
-            <a href="/" className="text-xl font-bold text-indigo-600 hover:text-indigo-700">
+            <Link href="/" className="text-xl font-bold text-indigo-600 hover:text-indigo-700">
               YourBarrio
-            </a>
+            </Link>
 
             <p className="mt-2 text-slate-500">
               Discover your neighborhood like never before.
@@ -33,9 +34,9 @@ export default function Footer() {
 
             {/* Business home link */}
             <div className="mt-4">
-              <a href="/business" className="hover:text-indigo-600">
+              <Link href="/business" className="hover:text-indigo-600">
                 YourBarrio for Business
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -43,9 +44,9 @@ export default function Footer() {
           <div>
             <h4 className="text-lg font-semibold">Navigation</h4>
             <ul className="mt-3 space-y-2">
-              <li><a href={aboutHref} className="hover:text-indigo-600">About</a></li>
-              <li><a href="/privacy" className="hover:text-indigo-600">Privacy</a></li>
-              <li><a href="/terms" className="hover:text-indigo-600">Terms</a></li>
+              <li><Link href={aboutHref} className="hover:text-indigo-600">About</Link></li>
+              <li><Link href="/privacy" className="hover:text-indigo-600">Privacy</Link></li>
+              <li><Link href="/terms" className="hover:text-indigo-600">Terms</Link></li>
             </ul>
           </div>
 

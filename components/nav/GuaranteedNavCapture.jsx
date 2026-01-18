@@ -75,7 +75,6 @@ export default function GuaranteedNavCapture() {
         if (button !== 0) return;
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
           if (clickDiagEnabled) {
-            // eslint-disable-next-line no-console
             console.log("[GUARDED_NAV] ignore modifier", {
               type: event.type,
               metaKey: event.metaKey,
@@ -97,7 +96,6 @@ export default function GuaranteedNavCapture() {
 
         const { anchor, stack } = findAnchorAtPoint(x, y);
         if (clickDiagEnabled) {
-          // eslint-disable-next-line no-console
           console.log("[GUARDED_NAV] hit-test", {
             type: event.type,
             x,
@@ -155,7 +153,6 @@ export default function GuaranteedNavCapture() {
         const targetPath = `${url.pathname}${url.search}${url.hash}`;
 
         if (clickDiagEnabled) {
-          // eslint-disable-next-line no-console
           console.log("[GUARDED_NAV] force push", {
             href: targetPath,
             type: event.type,
@@ -178,7 +175,6 @@ export default function GuaranteedNavCapture() {
           window.removeEventListener("hashchange", onNavEvent, { passive: true });
           if (didNavigateRef.current) return;
           if (clickDiagEnabled) {
-            // eslint-disable-next-line no-console
             console.warn("[GUARDED_NAV_ESCALATE]", { href: targetPath, stack: new Error().stack });
           }
           window.location.assign(targetPath);
