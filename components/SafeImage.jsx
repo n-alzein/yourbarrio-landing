@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 
@@ -9,6 +10,7 @@ export default function SafeImage({
   fallbackSrc = "/business-placeholder.png",
   onError,
   onLoad,
+  useNextImage = false,
   ...rest
 }) {
   const resolvedFallback = useMemo(
@@ -41,6 +43,21 @@ export default function SafeImage({
   };
 
   const isPlaceholder = currentSrc === resolvedFallback;
+  const canUseNextImage =
+    useNextImage && (rest.fill || (rest.width && rest.height));
+
+  if (canUseNextImage) {
+    return (
+      <Image
+        {...rest}
+        src={currentSrc}
+        alt={alt}
+        data-placeholder={isPlaceholder ? "true" : undefined}
+        onError={handleError}
+        onLoad={handleLoad}
+      />
+    );
+  }
 
   return (
     <img

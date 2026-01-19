@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieBaseOptions } from "@/lib/authCookies";
 import { PATHS } from "@/lib/auth/paths";
+import { safeGetUser } from "@/lib/auth/safeGetUser";
 
 export async function GET(request) {
   const requestUrl = new URL(request.url);
@@ -49,9 +50,7 @@ export async function GET(request) {
       await supabase.auth.exchangeCodeForSession(code);
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { user } = await safeGetUser(supabase);
 
     if (!user) {
       return response;

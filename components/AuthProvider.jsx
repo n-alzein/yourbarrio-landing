@@ -22,14 +22,19 @@ import {
   setAuthChangeSuppressed,
 } from "@/lib/auth/verifiedUserClient";
 import { PATHS } from "@/lib/auth/paths";
+import AuthStateDebug from "@/components/debug/AuthStateDebug";
+import { stopRealtime } from "@/lib/realtimeManager";
 
 const AuthContext = createContext({
   supabase: null,
   authStatus: "loading",
+  status: "loading",
   user: null,
   profile: null,
   role: null,
   error: null,
+  lastAuthEvent: null,
+  lastError: null,
   loadingUser: true,
   rateLimited: false,
   rateLimitUntil: 0,
@@ -73,6 +78,8 @@ const authStore = {
     profile: null,
     role: null,
     error: null,
+    lastAuthEvent: null,
+    lastError: null,
     rateLimited: false,
     rateLimitUntil: 0,
     rateLimitMessage: null,
@@ -102,6 +109,19 @@ function setAuthState(nextState) {
 
 function updateAuthState(partial) {
   setAuthState({ ...authStore.state, ...partial });
+}
+
+async function cleanupRealtimeChannels() {
+  await stopRealtime(authStore.supabase);
+}
+
+function setAuthError(error) {
+  if (!error) return;
+  const message = error?.message || String(error);
+  updateAuthState({
+    error,
+    lastError: message,
+  });
 }
 
 function subscribeAuthState(listener) {
@@ -257,7 +277,38 @@ async function bootstrapAuth() {
 
   authStore.bootstrapPromise = (async () => {
     updateAuthState({ authStatus: "loading", error: null });
-    const user = await getVerifiedUser();
+    let user = null;
+    let sessionChecked = false;
+    let sessionError = null;
+
+    if (authStore.supabase?.auth?.getSession) {
+      sessionChecked = true;
+      try {
+        const { data, error } = await authStore.supabase.auth.getSession();
+        if (error) {
+          sessionError = error;
+          setAuthError(error);
+        }
+        user = data?.session?.user ?? null;
+      } catch (err) {
+        sessionError = err;
+        setAuthError(err);
+      }
+    }
+
+    if (sessionChecked) {
+      if (!user || sessionError) {
+        await applyUserUpdate(null);
+        return;
+      }
+    } else if (!user) {
+      user = await getVerifiedUser();
+    }
+
+    if (!user) {
+      await applyUserUpdate(null);
+      return;
+    }
     await applyUserUpdate(user);
   })().finally(() => {
     authStore.bootstrapPromise = null;
@@ -268,8 +319,24 @@ async function bootstrapAuth() {
 
 function ensureAuthListener() {
   if (authStore.authUnsubscribe) return;
-  authStore.authUnsubscribe = subscribeAuthChanges(({ user }) => {
+  authStore.authUnsubscribe = subscribeAuthChanges(({ user, event }) => {
     if (authStore.loggingOut) return;
+    if (event) {
+      if (event === "SIGNED_OUT") {
+        updateAuthState({
+          ...buildSignedOutState(),
+          rateLimited: false,
+          rateLimitUntil: 0,
+          rateLimitMessage: null,
+          tokenInvalidAt: 0,
+          lastAuthEvent: event,
+          lastError: null,
+        });
+        void cleanupRealtimeChannels();
+        return;
+      }
+      updateAuthState({ lastAuthEvent: event });
+    }
     void applyUserUpdate(user);
   });
 }
@@ -285,14 +352,6 @@ function redirectWithGuard(target) {
   const current = new URL(window.location.href);
   const redirectUrl = new URL(target, window.location.origin);
 
-  if (current.pathname === redirectUrl.pathname) {
-    const alreadyRedirected =
-      current.searchParams.get("redirected") === "1" ||
-      redirectUrl.searchParams.get("redirected") === "1";
-    if (alreadyRedirected) return;
-  }
-
-  redirectUrl.searchParams.set("redirected", "1");
   const nextPath = `${redirectUrl.pathname}${redirectUrl.search}`;
   if (`${current.pathname}${current.search}` === nextPath) {
     return;
@@ -315,6 +374,7 @@ export function AuthProvider({
   );
 
   const mountedRef = useRef(true);
+  const fetchWrappedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -347,6 +407,20 @@ export function AuthProvider({
   }, [initialProfile, initialRole, initialUser, supabase]);
 
   useEffect(() => {
+    if (process.env.NODE_ENV === "production") return undefined;
+    if (authState.authStatus !== "loading") return undefined;
+    const timer = setTimeout(() => {
+      if (authStore.state.authStatus === "loading") {
+        console.warn(
+          "[AUTH_DIAG] authStatus still loading after 2s",
+          authStore.state
+        );
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [authState.authStatus]);
+
+  useEffect(() => {
     if (!authState.tokenInvalidAt) return;
     if (authState.tokenInvalidAt <= handledTokenInvalidAt) return;
     handledTokenInvalidAt = authState.tokenInvalidAt;
@@ -359,8 +433,15 @@ export function AuthProvider({
           // best effort
         }
       }
+      await cleanupRealtimeChannels();
       clearVerifiedUserCache();
-      updateAuthState(withGuardState(buildSignedOutState()));
+      updateAuthState({
+        ...buildSignedOutState(),
+        rateLimited: false,
+        rateLimitUntil: 0,
+        rateLimitMessage: null,
+        tokenInvalidAt: 0,
+      });
       acknowledgeAuthTokenInvalid(authState.tokenInvalidAt);
 
       const target =
@@ -393,8 +474,18 @@ export function AuthProvider({
 
     authStore.loggingOut = true;
     setAuthChangeSuppressed(true);
+    updateAuthState({
+      ...buildSignedOutState(),
+      rateLimited: false,
+      rateLimitUntil: 0,
+      rateLimitMessage: null,
+      tokenInvalidAt: 0,
+      lastAuthEvent: "SIGNED_OUT",
+      lastError: null,
+    });
+
+    await cleanupRealtimeChannels();
     clearVerifiedUserCache();
-    updateAuthState(withGuardState(buildSignedOutState()));
 
     if (typeof window !== "undefined") {
       window.location.replace("/api/auth/logout");
@@ -413,13 +504,20 @@ export function AuthProvider({
     () => ({
       supabase: authStore.supabase,
       authStatus: authState.authStatus,
-      status: authState.authStatus,
+      status:
+        authState.authStatus === "authenticated"
+          ? "signed_in"
+          : authState.authStatus === "unauthenticated"
+            ? "signed_out"
+            : "loading",
       user: authState.user,
       profile: authState.profile,
       role: authState.role,
       error: authState.error,
+      lastAuthEvent: authState.lastAuthEvent,
+      lastError: authState.lastError,
       loadingUser:
-        authState.authStatus === "loading" || authState.rateLimited,
+        authState.authStatus === "loading",
       rateLimited: authState.rateLimited,
       rateLimitUntil: authState.rateLimitUntil,
       rateLimitMessage: authState.rateLimitMessage,
@@ -435,12 +533,98 @@ export function AuthProvider({
       authState.rateLimited,
       authState.role,
       authState.user,
+      authState.lastAuthEvent,
+      authState.lastError,
       logout,
       refreshProfile,
     ]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const diagEnabled =
+    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
+    process.env.NODE_ENV !== "production";
+
+  useEffect(() => {
+    if (!diagEnabled) return;
+    console.log("[AUTH_DIAG] status", {
+      authStatus: authState.authStatus,
+      status:
+        authState.authStatus === "authenticated"
+          ? "signed_in"
+          : authState.authStatus === "unauthenticated"
+            ? "signed_out"
+            : "loading",
+      hasUser: Boolean(authState.user),
+      hasProfile: Boolean(authState.profile),
+      lastAuthEvent: authState.lastAuthEvent,
+      lastError: authState.lastError,
+    });
+  }, [
+    authState.authStatus,
+    authState.lastAuthEvent,
+    authState.lastError,
+    authState.profile,
+    authState.user,
+    diagEnabled,
+  ]);
+
+  useEffect(() => {
+    if (!diagEnabled || fetchWrappedRef.current) return;
+    if (typeof window === "undefined" || typeof window.fetch !== "function") return;
+    fetchWrappedRef.current = true;
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const input = args[0];
+      const init = args[1] || {};
+      const url = typeof input === "string" ? input : input?.url || "";
+      const requestHeaders =
+        input instanceof Request
+          ? input.headers
+          : new Headers(init?.headers || {});
+      const hasRscHeader = requestHeaders.has("RSC") || requestHeaders.has("rsc");
+      const isRedirectParam = url.includes("redirected=1");
+      const response = await originalFetch(...args);
+
+      if (
+        (hasRscHeader || isRedirectParam) &&
+        (response.redirected || response.status >= 300)
+      ) {
+        console.warn("[AUTH_DIAG] fetch:rsc", {
+          url,
+          status: response.status,
+          redirected: response.redirected,
+          location: response.headers.get("location"),
+          authStatus: authStore.state.authStatus,
+          stack: new Error().stack,
+        });
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        console.warn("[AUTH_DIAG] fetch:unauthorized", {
+          url,
+          status: response.status,
+          authStatus: authStore.state.authStatus,
+          stack: new Error().stack,
+        });
+      }
+
+      return response;
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+      fetchWrappedRef.current = false;
+    };
+  }, [diagEnabled]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {diagEnabled ? (
+        <AuthStateDebug />
+      ) : null}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

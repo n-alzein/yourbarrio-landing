@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { safeGetUser } from "@/lib/auth/safeGetUser";
 import { perfLog, perfTimer } from "@/lib/perf";
 
 const allowedFields = new Set([
@@ -20,8 +21,7 @@ function sanitizeUpdates(updates) {
 
 export async function POST(request) {
   const supabase = await createSupabaseServerClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
+  const { user, error: userError } = await safeGetUser(supabase);
 
   if (userError || !user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

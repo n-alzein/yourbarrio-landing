@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { safeGetUser } from "@/lib/auth/safeGetUser";
 
 export async function POST(request) {
   const supabase = await createSupabaseServerClient();
@@ -16,9 +17,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Missing businessId" }, { status: 400 });
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await safeGetUser(supabase);
 
   if (user?.id && user.id === businessId) {
     return NextResponse.json({ ok: true }, { status: 200 });

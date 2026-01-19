@@ -25,10 +25,7 @@ export default function HomeGuard({ children, fallback = null }) {
     if (typeof window === "undefined") return;
     const redirectOnce = (target) => {
       const url = new URL(target, window.location.origin);
-      if (pathname === url.pathname) {
-        if (searchParams?.get("redirected") === "1") return;
-      }
-      url.searchParams.set("redirected", "1");
+      if (pathname === url.pathname) return;
       router.replace(`${url.pathname}${url.search}`);
     };
 

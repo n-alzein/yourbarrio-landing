@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -66,11 +67,16 @@ export default function BusinessMarketingNavbar() {
             {/* LEFT SIDE */}
             <div className="flex items-center gap-x-10">
               <Link href="/business" className="select-none">
-                <img
-                  src="/logo.png"
-                  alt="YourBarrio Logo"
-                  className="h-34 md:h-32 w-auto"
-                />
+                <span className="relative block h-10 w-10 md:h-11 md:w-11">
+                  <Image
+                    src="/logo.png"
+                    alt="YourBarrio Logo"
+                    fill
+                    sizes="44px"
+                    priority
+                    className="object-contain"
+                  />
+                </span>
               </Link>
 
               <div className="hidden md:flex items-center gap-x-8">

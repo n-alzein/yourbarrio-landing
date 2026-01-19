@@ -8,9 +8,10 @@ import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
 import InboxList from "@/components/messages/InboxList";
+import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
 
 export default function CustomerMessagesPage() {
-  const { user, supabase, loadingUser } = useAuth();
+  const { user, supabase, loadingUser, authStatus } = useAuth();
   const userId = user?.id || null;
 
   const [hydrated, setHydrated] = useState(false);
@@ -40,7 +41,7 @@ export default function CustomerMessagesPage() {
   }, []);
 
   const loadConversations = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || authStatus !== "authenticated") return;
     const requestId = ++requestIdRef.current;
     inflightRef.current?.abort?.();
     setLoading((prev) => (hasLoadedRef.current ? prev : true));
@@ -91,7 +92,7 @@ export default function CustomerMessagesPage() {
         setLoading(false);
       }
     }
-  }, [userId]);
+  }, [authStatus, userId]);
 
   useEffect(() => {
     return () => {
@@ -101,35 +102,52 @@ export default function CustomerMessagesPage() {
 
   useEffect(() => {
     if (!hydrated || loadingUser || !userId) return;
+    if (authStatus !== "authenticated") return;
     if (!isVisible && hasLoadedRef.current) return;
     loadConversations();
-  }, [hydrated, loadingUser, userId, loadConversations, isVisible]);
+  }, [authStatus, hydrated, loadingUser, userId, loadConversations, isVisible]);
 
   useEffect(() => {
     if (!hydrated || loadingUser || !userId) return undefined;
-    const client = supabase ?? getBrowserSupabaseClient();
-    if (!client) return undefined;
+    if (authStatus !== "authenticated") return undefined;
+    let cancelled = false;
+    let channel = null;
+    let client = null;
 
-    const channel = client
-      .channel(`conversations-customer-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversations",
-          filter: `customer_id=eq.${userId}`,
-        },
-        () => {
-          loadConversations();
-        }
-      )
-      .subscribe();
+    (async () => {
+      client = supabase ?? getBrowserSupabaseClient();
+      if (!client) return;
+      channel = await subscribeIfSession(
+        client,
+        (activeClient) =>
+          activeClient
+            .channel(`conversations-customer-${userId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "*",
+                schema: "public",
+                table: "conversations",
+                filter: `customer_id=eq.${userId}`,
+              },
+              () => {
+                loadConversations();
+              }
+            ),
+        "customer-conversations"
+      );
+      if (cancelled && channel && client) {
+        client.removeChannel(channel);
+      }
+    })();
 
     return () => {
-      client.removeChannel(channel);
+      cancelled = true;
+      if (channel && client) {
+        client.removeChannel(channel);
+      }
     };
-  }, [hydrated, loadingUser, userId, supabase, loadConversations]);
+  }, [authStatus, hydrated, loadingUser, userId, supabase, loadConversations]);
 
   const intro = useMemo(
     () =>

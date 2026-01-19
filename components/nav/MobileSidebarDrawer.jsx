@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import useBodyScrollLock from "./useBodyScrollLock";
@@ -180,7 +181,15 @@ export default function MobileSidebarDrawer({
         >
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="YourBarrio" className="h-7 w-auto" />
+              <span className="relative block h-7 w-7">
+                <Image
+                  src="/logo.png"
+                  alt="YourBarrio"
+                  fill
+                  sizes="28px"
+                  className="object-contain"
+                />
+              </span>
               <div>
                 <div id={titleId} className="text-sm font-semibold">
                   {title}

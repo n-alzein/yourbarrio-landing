@@ -162,6 +162,8 @@ export default function PublicListingsPage() {
                     height={160}
                     className="object-cover h-40 w-56"
                     fallbackSrc="/business-placeholder.png"
+                    sizes="(max-width: 768px) 90vw, 220px"
+                    useNextImage
                   />
                   <div className="p-4 flex-1">
                     <h2 className="font-semibold">{item.title}</h2>
@@ -199,6 +201,8 @@ export default function PublicListingsPage() {
                     height={300}
                     className="object-cover h-48 w-full"
                     fallbackSrc="/business-placeholder.png"
+                    sizes="(max-width: 768px) 90vw, (max-width: 1280px) 50vw, 33vw"
+                    useNextImage
                   />
                   <div className="p-4">
                     <h2 className="font-semibold">{item.title}</h2>

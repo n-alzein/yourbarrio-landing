@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -227,11 +228,16 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           </svg>
         </button>
         <Link href={logoHref} aria-label="Go to home" className="touch-manipulation">
-          <img
-            src="/logo.png"
-            className="h-34 w-auto cursor-pointer select-none"
-            alt="YourBarrio"
-          />
+          <span className="relative block h-10 w-10">
+            <Image
+              src="/logo.png"
+              alt="YourBarrio"
+              fill
+              sizes="40px"
+              priority
+              className="object-contain"
+            />
+          </span>
         </Link>
 
         {showSearch ? (

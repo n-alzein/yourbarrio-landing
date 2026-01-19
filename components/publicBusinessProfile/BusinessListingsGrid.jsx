@@ -42,7 +42,10 @@ export default function BusinessListingsGrid({ listings, className = "" }) {
                   <SafeImage
                     src={cover || "/business-placeholder.png"}
                     alt={item.title || "Listing"}
-                    className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
+                    className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    useNextImage
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-4">

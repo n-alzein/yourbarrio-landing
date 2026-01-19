@@ -1561,7 +1561,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               {showNearbySticky && mounted
                 ? createPortal(
                     <div
-                      className="fixed top-36 sm:top-20 inset-x-0 z-[4800] pointer-events-auto isolate will-change-transform"
+                      className="fixed top-20 sm:top-20 inset-x-0 z-[4800] pointer-events-auto isolate will-change-transform"
                       data-sticky-nav-block="1"
                       style={{
                         transform: "translateZ(0)",

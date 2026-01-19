@@ -4,7 +4,15 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export async function GET(request, { params }) {
   const user = await getUser(request);
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    if (process.env.NEXT_PUBLIC_AUTH_DIAG === "1") {
+      console.warn("[AUTH_DIAG] api:users:unauthorized", {
+        method: "GET",
+        pathname: new URL(request.url).pathname,
+      });
+    }
+    return new Response("Unauthorized", { status: 401 });
+  }
   const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
@@ -18,7 +26,15 @@ export async function GET(request, { params }) {
 
 export async function PUT(request, { params }) {
   const user = await getUser(request);
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    if (process.env.NEXT_PUBLIC_AUTH_DIAG === "1") {
+      console.warn("[AUTH_DIAG] api:users:unauthorized", {
+        method: "PUT",
+        pathname: new URL(request.url).pathname,
+      });
+    }
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   const updates = await request.json();
   const supabase = await createSupabaseServerClient();
@@ -39,7 +55,15 @@ export async function DELETE(request, { params }) {
   const user = await getUser(request);
   const supabase = await createSupabaseServerClient();
 
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    if (process.env.NEXT_PUBLIC_AUTH_DIAG === "1") {
+      console.warn("[AUTH_DIAG] api:users:unauthorized", {
+        method: "DELETE",
+        pathname: new URL(request.url).pathname,
+      });
+    }
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   await supabase.from("users").delete().eq("id", params.id);
 

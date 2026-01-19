@@ -44,7 +44,10 @@ export default function BusinessProfileHeader({
             <SafeImage
               src={profile.cover_photo_url}
               alt={`${name} cover`}
-              className="h-full w-full object-cover"
+              className="object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 80vw"
+              useNextImage
             />
           ) : null}
           {editMode ? (
@@ -84,7 +87,11 @@ export default function BusinessProfileHeader({
               <SafeImage
                 src={profile?.profile_photo_url || "/business-placeholder.png"}
                 alt={`${name} logo`}
-                className="h-full w-full rounded-lg object-cover"
+                className="rounded-lg object-cover"
+                width={96}
+                height={96}
+                sizes="96px"
+                useNextImage
               />
               {editMode ? (
                 <label

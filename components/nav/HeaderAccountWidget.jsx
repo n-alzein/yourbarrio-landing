@@ -18,6 +18,7 @@ import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
 
 export default function HeaderAccountWidget({
   surface = "public",
@@ -61,6 +62,8 @@ export default function HeaderAccountWidget({
 
   const email = accountProfile?.email || accountUser?.email || null;
   const hasAuth = Boolean(accountUser);
+  const disableCtas = loading && !hasAuth;
+  const showRateLimit = rateLimited && hasAuth;
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const loadUnreadCount = useCallback(async () => {
@@ -113,27 +116,44 @@ export default function HeaderAccountWidget({
 
   useEffect(() => {
     if (!hasAuth || !isCustomer || !client) return undefined;
+    if (authStatus !== "authenticated") return undefined;
     if (!unreadUserId) return undefined;
-    const channel = client
-      .channel(`customer-unread-${unreadUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversations",
-          filter: `customer_id=eq.${unreadUserId}`,
-        },
-        () => {
-          loadUnreadCount();
-        }
-      )
-      .subscribe();
+    let cancelled = false;
+    let channel = null;
+    const activeClient = client;
+
+    (async () => {
+      channel = await subscribeIfSession(
+        activeClient,
+        (scopedClient) =>
+          scopedClient
+            .channel(`customer-unread-${unreadUserId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "*",
+                schema: "public",
+                table: "conversations",
+                filter: `customer_id=eq.${unreadUserId}`,
+              },
+              () => {
+                loadUnreadCount();
+              }
+            ),
+        "header-unread"
+      );
+      if (cancelled && channel) {
+        activeClient.removeChannel(channel);
+      }
+    })();
 
     return () => {
-      client.removeChannel(channel);
+      cancelled = true;
+      if (channel) {
+        activeClient.removeChannel(channel);
+      }
     };
-  }, [hasAuth, isCustomer, client, unreadUserId, loadUnreadCount]);
+  }, [authStatus, hasAuth, isCustomer, client, unreadUserId, loadUnreadCount]);
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -174,35 +194,43 @@ export default function HeaderAccountWidget({
   ];
 
   if (variant === "desktop") {
-    if (rateLimited) {
+    if (showRateLimit) {
       return (
         <div className="text-sm text-white/70" aria-live="polite">
           {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
         </div>
       );
     }
-    if (loading) return desktopSkeleton;
-
     if (!hasAuth) {
       return (
         <>
           <button
             type="button"
             onClick={() => openModal("customer-login")}
-            className="text-sm md:text-base transition text-white/70 hover:text-white"
+            disabled={disableCtas}
+            aria-busy={disableCtas}
+            className={`text-sm md:text-base transition text-white/70 hover:text-white ${
+              disableCtas ? "opacity-60 cursor-not-allowed" : ""
+            }`}
           >
             Sign in
           </button>
           <button
             type="button"
             onClick={() => openModal("customer-signup")}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold"
+            disabled={disableCtas}
+            aria-busy={disableCtas}
+            className={`px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold ${
+              disableCtas ? "opacity-60 cursor-not-allowed" : ""
+            }`}
           >
             Sign up
           </button>
         </>
       );
     }
+
+    if (loading) return desktopSkeleton;
 
     return (
       <div className="flex items-center gap-3">
@@ -224,6 +252,11 @@ export default function HeaderAccountWidget({
               src={avatar}
               alt="Profile avatar"
               className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+              width={40}
+              height={40}
+              sizes="40px"
+              useNextImage
+              priority
             />
             <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
               {displayName}
@@ -242,6 +275,10 @@ export default function HeaderAccountWidget({
                     src={avatar}
                     alt="Profile avatar"
                     className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                    width={48}
+                    height={48}
+                    sizes="48px"
+                    useNextImage
                   />
                   <div>
                     <p className="text-sm font-semibold text-white">{displayName}</p>
@@ -345,14 +382,9 @@ export default function HeaderAccountWidget({
         data-nav-surface={surface}
         data-nav-guard="1"
       >
-        {rateLimited ? (
+        {showRateLimit ? (
           <div className="text-sm text-white/70" aria-live="polite">
             {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
-          </div>
-        ) : loading ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-            <div className="h-11 w-11 rounded-2xl bg-white/10" />
-            <div className="h-4 w-24 rounded bg-white/10" />
           </div>
         ) : !hasAuth ? (
           <>
@@ -362,7 +394,11 @@ export default function HeaderAccountWidget({
                 onCloseMobileMenu?.();
                 openModal("customer-login");
               }}
-              className="text-left text-white/70 hover:text-white"
+              disabled={disableCtas}
+              aria-busy={disableCtas}
+              className={`text-left text-white/70 hover:text-white ${
+                disableCtas ? "opacity-60 cursor-not-allowed" : ""
+              }`}
             >
               Sign in
             </button>
@@ -372,7 +408,11 @@ export default function HeaderAccountWidget({
                 onCloseMobileMenu?.();
                 openModal("customer-signup");
               }}
-              className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold"
+              disabled={disableCtas}
+              aria-busy={disableCtas}
+              className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
+                disableCtas ? "opacity-60 cursor-not-allowed" : ""
+              }`}
             >
               Sign up
             </button>
@@ -384,6 +424,10 @@ export default function HeaderAccountWidget({
                 src={avatar}
                 alt="Profile avatar"
                 className="h-11 w-11 rounded-2xl object-cover border border-white/20"
+                width={44}
+                height={44}
+                sizes="44px"
+                useNextImage
               />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{displayName}</p>

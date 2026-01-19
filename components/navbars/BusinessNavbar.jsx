@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,12 +21,27 @@ import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import SafeImage from "@/components/SafeImage";
+import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
 
-function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) {
+function NavItem({
+  href,
+  children,
+  onClick,
+  isActive,
+  closeMenus,
+  badgeCount,
+  disabled = false,
+}) {
   return (
     <Link
       href={href}
       onClick={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         onClick?.(e);
         closeMenus?.();
       }}
@@ -33,7 +49,7 @@ function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) 
         isActive?.(href)
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
-      }`}
+      } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
     >
       <span className="flex items-center gap-2">
         {children}
@@ -47,8 +63,8 @@ function NavItem({ href, children, onClick, isActive, closeMenus, badgeCount }) 
   );
 }
 
-function BusinessNavbarInner({ pathname, requireAuth }) {
-  const { user, profile, role, loadingUser, supabase } = useAuth();
+function BusinessNavbarInner({ pathname }) {
+  const { user, profile, role, loadingUser, supabase, authStatus } = useAuth();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -115,6 +131,11 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
     null;
 
   const handleBusinessAuthClick = (event, path) => {
+    if (disableCtas) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     event.preventDefault();
     openBusinessAuthPopup(path);
   };
@@ -191,43 +212,50 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
 
   useEffect(() => {
     if (!badgeReady) return undefined;
+    if (authStatus !== "authenticated") return undefined;
     const userId = user?.id;
     if (!userId || role !== "business") return undefined;
-    const client = supabase ?? getBrowserSupabaseClient();
-    if (!client) return undefined;
+    let cancelled = false;
+    let channel = null;
+    let client = null;
 
-    const channel = client
-      .channel(`business-unread-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversations",
-          filter: `business_id=eq.${userId}`,
-        },
-        () => {
-          loadUnreadCount();
-        }
-      )
-      .subscribe();
+    (async () => {
+      client = supabase ?? getBrowserSupabaseClient();
+      if (!client) return;
+      channel = await subscribeIfSession(
+        client,
+        (activeClient) =>
+          activeClient
+            .channel(`business-unread-${userId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "*",
+                schema: "public",
+                table: "conversations",
+                filter: `business_id=eq.${userId}`,
+              },
+              () => {
+                loadUnreadCount();
+              }
+            ),
+        "business-unread"
+      );
+      if (cancelled && channel && client) {
+        client.removeChannel(channel);
+      }
+    })();
 
     return () => {
-      client.removeChannel(channel);
+      cancelled = true;
+      if (channel && client) {
+        client.removeChannel(channel);
+      }
     };
-  }, [badgeReady, user?.id, supabase, role, loadUnreadCount]);
+  }, [authStatus, badgeReady, user?.id, supabase, role, loadUnreadCount]);
 
   const isBusinessAuthed = Boolean(user) && role === "business";
-  const holdUntilAuthed = requireAuth && (!user || role !== "business");
-
-  if (loadingUser || holdUntilAuthed) {
-    return (
-      <nav
-        className="fixed top-0 inset-x-0 z-50 h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock"
-        data-business-navbar="1"
-      />
-    );
-  }
+  const disableCtas = loadingUser && !user;
 
   /* ---------------------------------------------------
      NAVBAR
@@ -259,11 +287,16 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
           {/* Logo */}
           <div className="relative flex items-center">
             <Link href={user ? "/business/dashboard" : "/business"}>
-              <img
-                src="/logo.png"
-                className="h-34 w-auto cursor-pointer"
-                alt="YourBarrio"
-              />
+              <span className="relative block h-10 w-10">
+                <Image
+                  src="/logo.png"
+                  alt="YourBarrio"
+                  fill
+                  sizes="40px"
+                  priority
+                  className="object-contain"
+                />
+              </span>
             </Link>
 
             <span
@@ -316,6 +349,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
                 }
                 isActive={isActive}
                 closeMenus={closeMenus}
+                disabled={disableCtas}
               >
                 Login
               </NavItem>
@@ -324,7 +358,10 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
                 onClick={(e) =>
                   handleBusinessAuthClick(e, "/business-auth/register")
                 }
-                className="px-5 py-2 rounded-xl bg-white text-black font-semibold"
+                aria-disabled={disableCtas}
+                className={`px-5 py-2 rounded-xl bg-white text-black font-semibold ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
                 Sign Up
               </Link>
@@ -338,10 +375,15 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
                 onClick={() => setProfileMenuOpen((open) => !open)}
                 className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
               >
-                <img
+                <SafeImage
                   src={avatar}
-                  className="h-10 w-10 rounded-2xl object-cover border border-white/20"
                   alt="Avatar"
+                  className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                  width={40}
+                  height={40}
+                  sizes="40px"
+                  useNextImage
+                  priority
                 />
                 <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[140px] truncate">
                   {displayName}
@@ -353,10 +395,14 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
                 <div className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl">
                   <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
                     <div className="flex items-center gap-3 px-4 py-4">
-                      <img
+                      <SafeImage
                         src={avatar}
-                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
                         alt="Profile avatar"
+                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                        width={48}
+                        height={48}
+                        sizes="48px"
+                        useNextImage
                       />
                       <div>
                         <p className="text-sm font-semibold text-white">{displayName}</p>
@@ -439,10 +485,14 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
     >
       {isBusinessAuthed && (
         <div className="mb-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
-          <img
+          <SafeImage
             src={avatar}
-            className="h-12 w-12 rounded-2xl object-cover border border-white/20"
             alt="Avatar"
+            className="h-12 w-12 rounded-2xl object-cover border border-white/20"
+            width={48}
+            height={48}
+            sizes="48px"
+            useNextImage
           />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-white truncate">
@@ -523,6 +573,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
               }
               isActive={isActive}
               closeMenus={closeMenus}
+              disabled={disableCtas}
             >
               Login
             </NavItem>
@@ -531,7 +582,10 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
               onClick={(e) =>
                 handleBusinessAuthClick(e, "/business-auth/register")
               }
-              className="px-4 py-2 bg-white text-black rounded-lg text-center font-semibold"
+              aria-disabled={disableCtas}
+              className={`px-4 py-2 bg-white text-black rounded-lg text-center font-semibold ${
+                disableCtas ? "opacity-60 cursor-not-allowed" : ""
+              }`}
             >
               Sign Up
             </Link>
@@ -554,7 +608,7 @@ function BusinessNavbarInner({ pathname, requireAuth }) {
   );
 }
 
-export default function BusinessNavbar({ requireAuth = false }) {
+export default function BusinessNavbar() {
   const pathname = usePathname();
-  return <BusinessNavbarInner key={pathname} pathname={pathname} requireAuth={requireAuth} />;
+  return <BusinessNavbarInner key={pathname} pathname={pathname} />;
 }

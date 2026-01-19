@@ -11,12 +11,20 @@ import {
 export async function GET(request) {
   const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const cookieBaseOptions = getCookieBaseOptions({
     host: request.headers.get("host"),
     isProd,
   });
 
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = NextResponse.redirect(new URL("/", request.url), 303);
+  if (authDiagEnabled) {
+    console.warn("[AUTH_DIAG] logout:redirect", {
+      pathname: new URL(request.url).pathname,
+      status: response.status,
+      location: response.headers.get("location"),
+    });
+  }
   response.headers.set(
     "Cache-Control",
     "no-store, no-cache, must-revalidate, proxy-revalidate"

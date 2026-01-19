@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieBaseOptions } from "@/lib/authCookies";
+import { safeGetUser } from "@/lib/auth/safeGetUser";
 
 export async function POST(request) {
   const response = NextResponse.json({ ok: true }, { status: 200 });
@@ -55,10 +56,7 @@ export async function POST(request) {
       });
     }
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+    const { user, error } = await safeGetUser(supabase);
 
     if (debug) {
       console.log("[auth/refresh] user after refresh", Boolean(user), error);

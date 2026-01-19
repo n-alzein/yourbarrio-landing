@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
 import {
   getAvatarUrl,
   getDisplayName,
@@ -21,7 +22,7 @@ import MessageComposer from "@/components/messages/MessageComposer";
 export default function BusinessConversationPage() {
   const params = useParams();
   const conversationId = params?.conversationId;
-  const { user, loadingUser, supabase } = useAuth();
+  const { user, loadingUser, supabase, authStatus } = useAuth();
   const userId = user?.id || null;
   const conversationKey = useMemo(() => {
     if (Array.isArray(conversationId)) return conversationId[0] || "";
@@ -57,7 +58,7 @@ export default function BusinessConversationPage() {
   }, []);
 
   const loadThread = useCallback(async () => {
-    if (!conversationKey) return;
+    if (!conversationKey || authStatus !== "authenticated") return;
     setLoading((prev) => (threadLoadedRef.current ? prev : true));
     setError(null);
     setMessagesError(null);
@@ -126,10 +127,10 @@ export default function BusinessConversationPage() {
     } finally {
       setLoading(false);
     }
-  }, [conversationKey, conversationId]);
+  }, [authStatus, conversationKey, conversationId]);
 
   const reloadMessages = useCallback(async () => {
-    if (!conversationKey) return;
+    if (!conversationKey || authStatus !== "authenticated") return;
     setMessagesError(null);
     try {
       const refreshed = await retry(
@@ -160,16 +161,18 @@ export default function BusinessConversationPage() {
       console.error("Failed to reload messages", err);
       setMessagesError("We couldn’t load messages yet. Try again.");
     }
-  }, [conversationKey]);
+  }, [authStatus, conversationKey]);
 
   useEffect(() => {
     if (!hydrated || (!conversationKey && loadingUser)) return;
+    if (authStatus !== "authenticated") return;
     if (!isVisible && threadLoadedRef.current) return;
     loadThread();
-  }, [hydrated, loadingUser, conversationKey, loadThread, isVisible]);
+  }, [authStatus, hydrated, loadingUser, conversationKey, loadThread, isVisible]);
 
   useEffect(() => {
     if (!hydrated || !userId || !conversationKey) return;
+    if (authStatus !== "authenticated") return;
     const client = getBrowserSupabaseClient() ?? supabase;
     markConversationRead({
       supabase: client,
@@ -177,48 +180,64 @@ export default function BusinessConversationPage() {
     }).catch((err) => {
       console.warn("Failed to mark conversation read", err);
     });
-  }, [hydrated, userId, conversationKey, supabase]);
+  }, [authStatus, hydrated, userId, conversationKey, supabase]);
 
   useEffect(() => {
     if (!hydrated || !conversationKey) return undefined;
-    const client = getBrowserSupabaseClient() ?? supabase;
-    if (!client) return undefined;
+    if (authStatus !== "authenticated") return undefined;
+    let cancelled = false;
+    let channel = null;
+    let client = null;
 
-    const channel = client
-      .channel(`messages-${conversationKey}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `conversation_id=eq.${conversationKey}`,
-        },
-        (payload) => {
-          const next = payload.new;
-          if (!next?.id) return;
-          setMessages((prev) => {
-            if (prev.some((item) => item.id === next.id)) return prev;
-            return [...prev, next];
-          });
-          if (next.recipient_id === userId) {
-            const clientForRead = getBrowserSupabaseClient() ?? supabase;
-            markConversationRead({
-              supabase: clientForRead,
-              conversationId: conversationKey,
-            }).catch(() => {});
-          }
-        }
-      )
-      .subscribe();
+    (async () => {
+      client = getBrowserSupabaseClient() ?? supabase;
+      if (!client) return;
+      channel = await subscribeIfSession(
+        client,
+        (activeClient) =>
+          activeClient
+            .channel(`messages-${conversationKey}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "messages",
+                filter: `conversation_id=eq.${conversationKey}`,
+              },
+              (payload) => {
+                const next = payload.new;
+                if (!next?.id) return;
+                setMessages((prev) => {
+                  if (prev.some((item) => item.id === next.id)) return prev;
+                  return [...prev, next];
+                });
+                if (next.recipient_id === userId) {
+                  markConversationRead({
+                    supabase: client,
+                    conversationId: conversationKey,
+                  }).catch(() => {});
+                }
+              }
+            ),
+        "business-thread"
+      );
+      if (cancelled && channel && client) {
+        client.removeChannel(channel);
+      }
+    })();
 
     return () => {
-      client.removeChannel(channel);
+      cancelled = true;
+      if (channel && client) {
+        client.removeChannel(channel);
+      }
     };
-  }, [hydrated, conversationKey, supabase, userId]);
+  }, [authStatus, hydrated, conversationKey, supabase, userId]);
 
   const loadOlder = useCallback(async () => {
     if (!conversationKey || loadingMore || !hasMore) return;
+    if (authStatus !== "authenticated") return;
     const oldest = messages[0]?.created_at;
     if (!oldest) return;
 
@@ -253,7 +272,7 @@ export default function BusinessConversationPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [conversationKey, loadingMore, hasMore, messages]);
+  }, [authStatus, conversationKey, loadingMore, hasMore, messages]);
 
   const handleSend = useCallback(
     async (body) => {

@@ -338,8 +338,11 @@ export default function ListingDetails({ params }) {
                         <SafeImage
                           src={photo}
                           alt={`Listing photo ${idx + 1}`}
-                          className="h-full w-full"
-                          style={{ objectFit: "contain", objectPosition: "center" }}
+                          className="object-contain"
+                          width={64}
+                          height={64}
+                          sizes="64px"
+                          useNextImage
                           fallbackSrc="/business-placeholder.png"
                         />
                       </button>
@@ -352,8 +355,10 @@ export default function ListingDetails({ params }) {
                 <SafeImage
                   src={heroSrc || "/business-placeholder.png"}
                   alt={listing.title}
-                  className="h-full w-full"
-                  style={{ objectFit: "contain", objectPosition: "center" }}
+                  className="object-contain"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                  useNextImage
                   loading="lazy"
                   onError={() => {
                     if (heroSrc !== "/business-placeholder.png") {

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getCookieName } from "@/lib/supabaseClient";
 import { PATHS } from "@/lib/auth/paths";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 function BusinessLoginInner() {
   const { supabase } = useAuth();
@@ -18,6 +19,12 @@ function BusinessLoginInner() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const redirectingRef = useRef(false);
+  const mountedRef = useRef(false);
+  const pendingRef = useRef(false);
+  const attemptRef = useRef(0);
+  const didCompleteRef = useRef(false);
+  const timeoutIdRef = useRef(null);
+  const timeoutControllerRef = useRef(null);
   const flowIdRef = useRef(
     `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
@@ -110,6 +117,7 @@ function BusinessLoginInner() {
           // Close popup when possible; fall back to in-tab redirect if blocked
           if (window.opener && window.location.origin) {
             try {
+              authDiagLog("popup:postMessage", { target });
               window.opener.postMessage(
                 { type: "YB_BUSINESS_AUTH_SUCCESS", target },
                 window.location.origin
@@ -118,16 +126,18 @@ function BusinessLoginInner() {
               console.warn("Popup postMessage failed", err);
             }
           }
-          window.close();
-
-          // Some browsers ignore close() if not opened by script
           setTimeout(() => {
-            if (!window.closed) {
-              authDiagLog("popup:close:blocked", { target });
-              authDiagLog("redirect:assign", { target });
-              window.location.replace(target);
-            }
-          }, 150);
+            window.close();
+
+            // Some browsers ignore close() if not opened by script
+            setTimeout(() => {
+              if (!window.closed) {
+                authDiagLog("popup:close:blocked", { target });
+                authDiagLog("redirect:assign", { target });
+                window.location.replace(target);
+              }
+            }, 250);
+          }, 250);
 
           return;
         }
@@ -147,12 +157,40 @@ function BusinessLoginInner() {
 
   async function handleLogin(e) {
     e.preventDefault();
+    if (pendingRef.current || loading) return;
     if (!supabase) {
       setAuthError("Auth client not ready. Please refresh and try again.");
       return;
     }
-    setLoading(true);
-    setAuthError("");
+    const attemptId = attemptRef.current + 1;
+    attemptRef.current = attemptId;
+    didCompleteRef.current = false;
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+    }
+    if (timeoutControllerRef.current) {
+      timeoutControllerRef.current.abort();
+    }
+
+    const timeoutController = new AbortController();
+    timeoutControllerRef.current = timeoutController;
+    timeoutIdRef.current = setTimeout(() => {
+      if (didCompleteRef.current || attemptRef.current !== attemptId) return;
+      timeoutController.abort(new Error("timeout"));
+      pendingRef.current = false;
+      authDiagLog("login:timeout", { attemptId });
+      if (mountedRef.current) {
+        setLoading(false);
+        setAuthError("Login timed out. Please try again.");
+      }
+    }, 20000);
+
+    pendingRef.current = true;
+    if (mountedRef.current) {
+      setLoading(true);
+      setAuthError("");
+    }
+    authDiagLog("login:submit:start", { attemptId, isPopup });
 
     try {
       try {
@@ -165,6 +203,15 @@ function BusinessLoginInner() {
         email,
         password,
       });
+      authDiagLog("login:signIn:result", {
+        attemptId,
+        hasSession: Boolean(data?.session),
+        error: error?.message ?? null,
+      });
+
+      if (timeoutController.signal.aborted || attemptRef.current !== attemptId) {
+        return;
+      }
 
       if (error) {
         throw error;
@@ -179,6 +226,10 @@ function BusinessLoginInner() {
         .eq("id", user.id)
         .maybeSingle();
 
+      if (timeoutController.signal.aborted || attemptRef.current !== attemptId) {
+        return;
+      }
+
       if (profileErr) {
         throw profileErr;
       }
@@ -190,32 +241,76 @@ function BusinessLoginInner() {
 
       const session = sessionRef.current;
       if (session?.access_token && session?.refresh_token) {
-        await fetch("/api/auth/refresh", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          }),
-        });
+        const response = await fetchWithTimeout("/api/auth/refresh", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            }),
+            timeoutMs: 15000,
+            signal: timeoutController.signal,
+          });
+
+        if (timeoutController.signal.aborted || attemptRef.current !== attemptId) {
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Session refresh failed. Please try again.");
+        }
       }
 
+      didCompleteRef.current = true;
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
       await redirectToDashboard();
+      authDiagLog("login:submit:success", { attemptId });
     } catch (err) {
-      console.error("Business login failed", err);
-      const message =
-        err?.message ?? "Login failed. Please refresh and try again.";
-      alert(message);
-      setAuthError(message);
+      if (
+        timeoutController.signal.aborted ||
+        attemptRef.current !== attemptId
+      ) {
+        authDiagLog("login:submit:aborted", { attemptId });
+        return;
+      }
+      if (!didCompleteRef.current && attemptRef.current === attemptId) {
+        console.error("Business login failed", err);
+        const message =
+          err?.message ?? "Login failed. Please refresh and try again.";
+        authDiagLog("login:submit:error", { attemptId, message });
+        alert(message);
+        if (mountedRef.current) {
+          setAuthError(message);
+        }
+      }
     } finally {
-      setLoading(false);
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
+      if (attemptRef.current === attemptId) {
+        pendingRef.current = false;
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
+      authDiagLog("login:submit:end", { attemptId });
     }
   }
 
   async function handleGoogleLogin() {
-    setLoading(true);
-    setAuthError("");
+    if (pendingRef.current || loading) return;
+    if (!supabase) {
+      setAuthError("Auth client not ready. Please refresh and try again.");
+      return;
+    }
+    pendingRef.current = true;
+    if (mountedRef.current) {
+      setLoading(true);
+      setAuthError("");
+    }
 
     const origin =
       typeof window !== "undefined" ? window.location.origin : "";
@@ -229,11 +324,27 @@ function BusinessLoginInner() {
     if (error) {
       console.error("Google login error:", error);
       alert("Failed to sign in with Google.");
-      setAuthError("Failed to sign in with Google.");
-      setLoading(false);
+      if (mountedRef.current) {
+        setAuthError("Failed to sign in with Google.");
+        setLoading(false);
+      }
+      pendingRef.current = false;
       return;
     }
   }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
+      if (timeoutControllerRef.current) {
+        timeoutControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!authDiagEnabled) return;
@@ -272,6 +383,19 @@ function BusinessLoginInner() {
       window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, [authDiagEnabled, authDiagLog, getCookieStatus, isPopup]);
+
+  useEffect(() => {
+    if (!authDiagEnabled || !supabase) return;
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      authDiagLog("auth:event", {
+        event,
+        hasSession: Boolean(session),
+      });
+    });
+    return () => {
+      data?.subscription?.unsubscribe();
+    };
+  }, [authDiagEnabled, authDiagLog, supabase]);
 
   return (
     <div className="min-h-screen flex flex-col">

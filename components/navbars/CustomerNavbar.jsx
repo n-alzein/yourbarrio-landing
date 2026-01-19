@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
@@ -28,6 +29,7 @@ import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
 import {
   getAvailabilityBadgeStyle,
   normalizeInventory,
@@ -84,7 +86,7 @@ export default function CustomerNavbar() {
 
 function CustomerNavbarInner({ pathname, searchParams }) {
   const router = useRouter();
-  const { user, profile, loadingUser, supabase } = useAuth();
+  const { user, profile, loadingUser, supabase, authStatus } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { openModal } = useModal();
@@ -396,6 +398,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   --------------------------------------------------- */
   const googleAvatar = user?.user_metadata?.avatar_url || null;
   const hasAuth = Boolean(user);
+  const disableCtas = loadingUser && !user;
 
   const avatar = resolveImageSrc(
     profile?.profile_photo_url?.trim() || googleAvatar || "",
@@ -570,43 +573,47 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   useEffect(() => {
     if (!badgeReady) return undefined;
+    if (authStatus !== "authenticated") return undefined;
     const userId = user?.id;
     if (!userId) return undefined;
-    const client = supabase ?? getBrowserSupabaseClient();
-    if (!client) return undefined;
+    let cancelled = false;
+    let channel = null;
+    let client = null;
 
-    const channel = client
-      .channel(`customer-unread-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversations",
-          filter: `customer_id=eq.${userId}`,
-        },
-        () => {
-          loadUnreadCount();
-        }
-      )
-      .subscribe();
+    (async () => {
+      client = supabase ?? getBrowserSupabaseClient();
+      if (!client) return;
+      channel = await subscribeIfSession(
+        client,
+        (activeClient) =>
+          activeClient
+            .channel(`customer-unread-${userId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "*",
+                schema: "public",
+                table: "conversations",
+                filter: `customer_id=eq.${userId}`,
+              },
+              () => {
+                loadUnreadCount();
+              }
+            ),
+        "customer-unread"
+      );
+      if (cancelled && channel && client) {
+        client.removeChannel(channel);
+      }
+    })();
 
     return () => {
-      client.removeChannel(channel);
+      cancelled = true;
+      if (channel && client) {
+        client.removeChannel(channel);
+      }
     };
-  }, [badgeReady, user?.id, supabase, loadUnreadCount]);
-
-  /* ---------------------------------------------------
-     LOADING STATE
-  --------------------------------------------------- */
-  if (loadingUser && !user) {
-    return (
-      <nav
-        className="fixed top-0 inset-x-0 z-[5000] h-16 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
-        data-nav-guard="1"
-      />
-    );
-  }
+  }, [authStatus, badgeReady, user?.id, supabase, loadUnreadCount]);
 
   /* ---------------------------------------------------
      NAVBAR UI
@@ -640,11 +647,16 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           aria-label="Go to home"
           className="touch-manipulation"
         >
-          <img
-            src="/logo.png"
-            className="h-34 w-auto cursor-pointer select-none"
-            alt="YourBarrio"
-          />
+          <span className="relative block h-10 w-10">
+            <Image
+              src="/logo.png"
+              alt="YourBarrio"
+              fill
+              sizes="40px"
+              priority
+              className="object-contain"
+            />
+          </span>
         </Link>
 
         <div className="hidden md:flex flex-1 justify-center">
@@ -818,14 +830,22 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               <button
                 type="button"
                 onClick={() => openModal("customer-login")}
-                className="text-sm md:text-base transition text-white/70 hover:text-white"
+                disabled={disableCtas}
+                aria-busy={disableCtas}
+                className={`text-sm md:text-base transition text-white/70 hover:text-white ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
                 Login
               </button>
               <button
                 type="button"
                 onClick={() => openModal("customer-signup")}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold"
+                disabled={disableCtas}
+                aria-busy={disableCtas}
+                className={`px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
                 Sign Up
               </button>
@@ -857,6 +877,11 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                   src={avatar}
                   alt="Profile avatar"
                   className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                  width={40}
+                  height={40}
+                  sizes="40px"
+                  useNextImage
+                  priority
                 />
                 <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
                   {displayName}
@@ -877,6 +902,10 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                         src={avatar}
                         alt="Profile avatar"
                         className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                        width={48}
+                        height={48}
+                        sizes="48px"
+                        useNextImage
                       />
                       <div>
                         <p className="text-sm font-semibold text-white">{displayName}</p>
@@ -1018,7 +1047,11 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                   setMobileMenuOpen(false);
                   openModal("customer-login");
                 }}
-                className="text-left text-white/70 hover:text-white"
+                disabled={disableCtas}
+                aria-busy={disableCtas}
+                className={`text-left text-white/70 hover:text-white ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
                 Login
               </button>
@@ -1028,7 +1061,11 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                   setMobileMenuOpen(false);
                   openModal("customer-signup");
                 }}
-                className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold"
+                disabled={disableCtas}
+                aria-busy={disableCtas}
+                className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
                 Sign Up
               </button>
@@ -1042,6 +1079,10 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                   src={avatar}
                   alt="Profile avatar"
                   className="h-11 w-11 rounded-2xl object-cover border border-white/20"
+                  width={44}
+                  height={44}
+                  sizes="44px"
+                  useNextImage
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{displayName}</p>
