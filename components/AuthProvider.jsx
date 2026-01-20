@@ -1090,7 +1090,7 @@ export function AuthProvider({
 
     const target =
       pathname.startsWith("/business")
-        ? PATHS.auth.businessLogin
+        ? PATHS.public.businessLanding
         : PATHS.auth.customerLogin;
     if (pathname === target || pathname === `${target}/`) return;
 

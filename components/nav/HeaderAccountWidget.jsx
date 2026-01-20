@@ -518,7 +518,7 @@ export default function HeaderAccountWidget({
               }}
               disabled={disableCtas}
               aria-busy={disableCtas}
-              className={`text-left text-white/70 hover:text-white ${
+              className={`w-full text-center text-white/70 hover:text-white ${
                 disableCtas ? "opacity-60 cursor-not-allowed" : ""
               }`}
               data-public-cta="signin"

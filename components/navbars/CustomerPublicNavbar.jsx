@@ -113,12 +113,12 @@ export default function CustomerPublicNavbar() {
                     className="object-contain"
                   />
                 </span>
-                <span className="relative hidden h-10 w-10 md:block md:h-14 md:w-14">
+                <span className="relative hidden h-10 w-10 md:block md:h-32 md:w-32">
                   <Image
                     src="/logo.png"
                     alt="YourBarrio Logo"
                     fill
-                    sizes="56px"
+                    sizes="128px"
                     priority
                     className="object-contain"
                   />

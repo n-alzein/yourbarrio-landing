@@ -781,12 +781,12 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               className="object-contain"
             />
           </span>
-          <span className="relative hidden h-10 w-10 md:block">
+          <span className="relative hidden h-10 w-10 md:block md:h-32 md:w-32">
             <Image
               src="/logo.png"
               alt="YourBarrio"
               fill
-              sizes="40px"
+              sizes="128px"
               priority
               className="object-contain"
             />
