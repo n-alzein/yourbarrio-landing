@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useTheme } from "@/components/ThemeProvider";
 
@@ -7,20 +8,44 @@ export default function HomePageClient() {
   const { openModal } = useModal();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const bannerRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const root = document.documentElement;
+    const updateBannerHeight = () => {
+      const height = bannerRef.current?.offsetHeight || 0;
+      root.style.setProperty("--beta-banner-height", `${height}px`);
+    };
+    updateBannerHeight();
+
+    let observer;
+    if (typeof ResizeObserver !== "undefined" && bannerRef.current) {
+      observer = new ResizeObserver(updateBannerHeight);
+      observer.observe(bannerRef.current);
+    }
+
+    window.addEventListener("resize", updateBannerHeight);
+    return () => {
+      window.removeEventListener("resize", updateBannerHeight);
+      if (observer) observer.disconnect();
+      root.style.removeProperty("--beta-banner-height");
+    };
+  }, []);
 
   return (
     <>
-      <div className="fixed top-20 inset-x-0 z-40">
+      <div ref={bannerRef} className="fixed top-20 inset-x-0 z-40">
         <div className="bg-gradient-to-r from-amber-500 via-amber-500 to-amber-400 text-slate-950 border-b border-amber-300 shadow-lg shadow-amber-900/25">
           <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14">
             <div className="max-w-7xl mx-auto py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="flex items-center gap-3 text-sm md:text-base font-semibold">
+              <div className="flex items-center justify-center gap-3 text-center text-sm font-semibold md:justify-start md:text-left md:text-base">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-lg">
                   🚧
                 </span>
                 <span>YourBarrio is currently in private beta</span>
-                <span className="px-2.5 py-1 text-xs font-bold uppercase tracking-wide rounded-full bg-slate-900/80 text-amber-100 border border-slate-900/60">
-                  Limited access
+                <span className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-slate-900/60 bg-slate-900/80 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-100">
+                  Limited Access
                 </span>
               </div>
 
@@ -32,7 +57,10 @@ export default function HomePageClient() {
         </div>
       </div>
 
-      <main className="relative min-h-screen text-white pt-24">
+      <main
+        className="relative min-h-screen text-white"
+        style={{ paddingTop: "calc(5rem + var(--beta-banner-height, 0px))" }}
+      >
         <section className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14 pb-16 md:pb-24">
           <div className="max-w-7xl mx-auto">
             <div className="grid md:grid-cols-2 gap-10 items-center">

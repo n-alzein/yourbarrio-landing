@@ -9,7 +9,15 @@ import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 function BusinessLoginInner() {
-  const { supabase } = useAuth();
+  const {
+    supabase,
+    beginAuthAttempt,
+    endAuthAttempt,
+    authAttemptId,
+    authStatus,
+    user,
+    role,
+  } = useAuth();
   const searchParams = useSearchParams();
   const isPopup = searchParams?.get("popup") === "1";
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
@@ -22,6 +30,7 @@ function BusinessLoginInner() {
   const mountedRef = useRef(false);
   const pendingRef = useRef(false);
   const attemptRef = useRef(0);
+  const globalAttemptIdRef = useRef(0);
   const didCompleteRef = useRef(false);
   const timeoutIdRef = useRef(null);
   const timeoutControllerRef = useRef(null);
@@ -29,6 +38,7 @@ function BusinessLoginInner() {
     `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
   const sessionRef = useRef(null);
+  const authAttemptIdRef = useRef(authAttemptId);
 
   const authDiagLog = useCallback(
     (event, payload = {}) => {
@@ -45,6 +55,10 @@ function BusinessLoginInner() {
     },
     [authDiagEnabled]
   );
+
+  useEffect(() => {
+    authAttemptIdRef.current = authAttemptId;
+  }, [authAttemptId]);
 
   const getCookieStatus = useCallback(() => {
     if (typeof document === "undefined") return null;
@@ -155,6 +169,24 @@ function BusinessLoginInner() {
     finishBusinessAuth();
   }, [finishBusinessAuth, waitForAuthCookie]);
 
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !user?.id || role !== "business") return;
+    didCompleteRef.current = true;
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+    }
+    pendingRef.current = false;
+    if (mountedRef.current) {
+      setLoading(false);
+    }
+    if (globalAttemptIdRef.current) {
+      endAuthAttempt(globalAttemptIdRef.current, "session");
+      globalAttemptIdRef.current = 0;
+    }
+    authDiagLog("login:session:ready", { userId: user.id });
+    void redirectToDashboard();
+  }, [authStatus, authDiagLog, endAuthAttempt, redirectToDashboard, role, user?.id]);
+
   async function handleLogin(e) {
     e.preventDefault();
     if (pendingRef.current || loading) return;
@@ -162,6 +194,11 @@ function BusinessLoginInner() {
       setAuthError("Auth client not ready. Please refresh and try again.");
       return;
     }
+    globalAttemptIdRef.current = beginAuthAttempt("business_login");
+    authDiagLog("auth:attempt:begin", {
+      action: "business_login",
+      attemptId: globalAttemptIdRef.current,
+    });
     const attemptId = attemptRef.current + 1;
     attemptRef.current = attemptId;
     didCompleteRef.current = false;
@@ -296,6 +333,14 @@ function BusinessLoginInner() {
           setLoading(false);
         }
       }
+      if (globalAttemptIdRef.current) {
+        endAuthAttempt(globalAttemptIdRef.current, "password");
+        authDiagLog("auth:attempt:end", {
+          action: "business_login",
+          attemptId: globalAttemptIdRef.current,
+        });
+        globalAttemptIdRef.current = 0;
+      }
       authDiagLog("login:submit:end", { attemptId });
     }
   }
@@ -306,30 +351,50 @@ function BusinessLoginInner() {
       setAuthError("Auth client not ready. Please refresh and try again.");
       return;
     }
-    pendingRef.current = true;
-    if (mountedRef.current) {
-      setLoading(true);
-      setAuthError("");
-    }
-
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "";
-    const redirectTo = `${origin}/api/auth/callback`;
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
-
-    if (error) {
-      console.error("Google login error:", error);
-      alert("Failed to sign in with Google.");
+    let attemptId = 0;
+    try {
+      attemptId = beginAuthAttempt("business_oauth");
+      globalAttemptIdRef.current = attemptId;
+      authDiagLog("auth:attempt:begin", {
+        action: "business_oauth",
+        attemptId,
+      });
+      pendingRef.current = true;
       if (mountedRef.current) {
-        setAuthError("Failed to sign in with Google.");
-        setLoading(false);
+        setLoading(true);
+        setAuthError("");
       }
-      pendingRef.current = false;
-      return;
+
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      const redirectTo = `${origin}/api/auth/callback`;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+
+      if (error) {
+        console.error("Google login error:", error);
+        alert("Failed to sign in with Google.");
+        if (mountedRef.current) {
+          setAuthError("Failed to sign in with Google.");
+          setLoading(false);
+        }
+        pendingRef.current = false;
+        return;
+      }
+    } finally {
+      if (attemptId) {
+        endAuthAttempt(attemptId, "oauth");
+        authDiagLog("auth:attempt:end", {
+          action: "business_oauth",
+          attemptId,
+        });
+        if (globalAttemptIdRef.current === attemptId) {
+          globalAttemptIdRef.current = 0;
+        }
+      }
     }
   }
 
@@ -345,6 +410,27 @@ function BusinessLoginInner() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!globalAttemptIdRef.current) return;
+    if (authAttemptIdRef.current === globalAttemptIdRef.current) return;
+    authDiagLog("login:stale:reset", {
+      attemptId: globalAttemptIdRef.current,
+      currentAttemptId: authAttemptIdRef.current,
+    });
+    globalAttemptIdRef.current = 0;
+    pendingRef.current = false;
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+    }
+    if (timeoutControllerRef.current) {
+      timeoutControllerRef.current.abort();
+    }
+    if (mountedRef.current) {
+      setLoading(false);
+      setAuthError("");
+    }
+  }, [authAttemptId, authDiagLog]);
 
   useEffect(() => {
     if (!authDiagEnabled) return;

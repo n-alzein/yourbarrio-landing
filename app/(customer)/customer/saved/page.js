@@ -17,10 +17,11 @@ import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
 
 export default function CustomerSavedPage() {
-  const { user, supabase, loadingUser } = useAuth();
+  const { user, supabase, loadingUser, authStatus } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const userId = user?.id || null;
+  const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const buildCacheKey = (id) => (id ? `yb_saved_${id}` : null);
   const initialSavedState = {
     saved: [],
@@ -91,7 +92,7 @@ export default function CustomerSavedPage() {
     userId,
     initSavedState
   );
-  const { saved, hasLoaded } = savedState;
+  const { saved, hasLoaded, error } = savedState;
   const [loading, setLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
@@ -188,10 +189,43 @@ export default function CustomerSavedPage() {
     }
 
     const requestId = ++requestIdRef.current;
+    if (authDiagEnabled) {
+      console.log("[AUTH_DIAG] saved:request:start", {
+        requestId,
+        userId,
+        authStatus,
+        pathname: typeof window !== "undefined" ? window.location.pathname : null,
+      });
+    }
     inflightRef.current?.abort?.();
     setLoading((prev) => (hasLoaded ? prev : true));
     const safeRequest = createFetchSafe(
       async ({ signal }) => {
+        const { data: sessionData, error: sessionError } =
+          await client.auth.getSession();
+        if (authDiagEnabled) {
+          console.log("[AUTH_DIAG] saved:session", {
+            requestId,
+            sessionUserId: sessionData?.session?.user?.id ?? null,
+            error: sessionError
+              ? {
+                  status: sessionError.status,
+                  message: sessionError.message,
+                }
+              : null,
+          });
+        }
+        if (sessionError) throw sessionError;
+        if (!sessionData?.session?.user?.id) {
+          throw new Error("missing_session");
+        }
+        if (authDiagEnabled) {
+          console.log("[AUTH_DIAG] saved:query", {
+            requestId,
+            table: "saved_listings",
+            filters: { user_id: userId },
+          });
+        }
         let savedQuery = client
           .from("saved_listings")
           .select("listing_id")
@@ -200,6 +234,21 @@ export default function CustomerSavedPage() {
           savedQuery = savedQuery.abortSignal(signal);
         }
         const { data: savedRows, error } = await savedQuery;
+        if (authDiagEnabled) {
+          console.log("[AUTH_DIAG] saved:query:result", {
+            requestId,
+            table: "saved_listings",
+            count: Array.isArray(savedRows) ? savedRows.length : 0,
+            error: error
+              ? {
+                  status: error.status,
+                  message: error.message,
+                  details: error.details,
+                  hint: error.hint,
+                }
+              : null,
+          });
+        }
         if (error) throw error;
 
         const ids = (savedRows || [])
@@ -210,6 +259,13 @@ export default function CustomerSavedPage() {
           return [];
         }
 
+        if (authDiagEnabled) {
+          console.log("[AUTH_DIAG] saved:query", {
+            requestId,
+            table: "listings",
+            filters: { id: ids },
+          });
+        }
         let listingQuery = client
           .from("listings")
           .select("*")
@@ -218,6 +274,21 @@ export default function CustomerSavedPage() {
           listingQuery = listingQuery.abortSignal(signal);
         }
         const { data: listings, error: listError } = await listingQuery;
+        if (authDiagEnabled) {
+          console.log("[AUTH_DIAG] saved:query:result", {
+            requestId,
+            table: "listings",
+            count: Array.isArray(listings) ? listings.length : 0,
+            error: listError
+              ? {
+                  status: listError.status,
+                  message: listError.message,
+                  details: listError.details,
+                  hint: listError.hint,
+                }
+              : null,
+          });
+        }
         if (listError) throw listError;
         return Array.isArray(listings) ? listings : [];
       },
@@ -249,7 +320,10 @@ export default function CustomerSavedPage() {
           return;
         }
         console.error("Saved listings load failed", err);
-        dispatchSaved({ type: "LOAD_FROM_CACHE_EMPTY" });
+        dispatchSaved({
+          type: "LOAD_FROM_CACHE_ERROR",
+          error: err?.message || "saved_load_failed",
+        });
       })
       .finally(() => {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -258,7 +332,7 @@ export default function CustomerSavedPage() {
     return () => {
       inflightRef.current?.abort?.();
     };
-  }, [supabase, userId, hasLoaded]);
+  }, [authDiagEnabled, authStatus, supabase, userId, hasLoaded]);
 
   useEffect(() => {
     if (!isVisible && hasLoaded) return;
@@ -354,6 +428,12 @@ export default function CustomerSavedPage() {
             Fetching your saved picks...
           </div>
         )}
+
+        {!showLoading && authDiagEnabled && error ? (
+          <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            Saved listings failed to load: {error}
+          </div>
+        ) : null}
 
         {!showLoading && saved.length === 0 && (
           <div className="rounded-3xl border border-white/12 bg-white/5 backdrop-blur-xl shadow-2xl p-8 text-center space-y-4">

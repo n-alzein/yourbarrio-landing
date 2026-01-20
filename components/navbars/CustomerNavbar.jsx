@@ -19,7 +19,7 @@ import {
   Sparkles,
   Store,
 } from "lucide-react";
-import { useAuth } from "@/components/AuthProvider";
+import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "../ThemeToggle";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
@@ -86,10 +86,24 @@ export default function CustomerNavbar() {
 
 function CustomerNavbarInner({ pathname, searchParams }) {
   const router = useRouter();
-  const { user, profile, loadingUser, supabase, authStatus } = useAuth();
+  const {
+    user,
+    profile,
+    loadingUser,
+    supabase,
+    authStatus,
+    authBusy,
+    authAction,
+    authAttemptId,
+    lastAuthEvent,
+    providerInstanceId,
+  } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { openModal } = useModal();
+  const authDiagEnabled =
+    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
+    process.env.NODE_ENV !== "production";
   const [, startTransition] = useTransition();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -374,6 +388,17 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     };
   }, [profileMenuOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReset = () => {
+      setProfileMenuOpen(false);
+      setMobileMenuOpen(false);
+      setSuggestionsOpen(false);
+    };
+    window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
+  }, []);
+
   // Close AI suggestions when clicking away
   useEffect(() => {
     if (!suggestionsOpen) return;
@@ -398,7 +423,17 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   --------------------------------------------------- */
   const googleAvatar = user?.user_metadata?.avatar_url || null;
   const hasAuth = Boolean(user);
-  const disableCtas = loadingUser && !user;
+  const disableReasons = useMemo(() => {
+    const reasons = [];
+    if (authBusy && lastAuthEvent !== "SIGNED_OUT") {
+      reasons.push("authBusy");
+    }
+    if (loadingUser && !user && lastAuthEvent !== "SIGNED_OUT") {
+      reasons.push("loadingUser");
+    }
+    return reasons;
+  }, [authBusy, lastAuthEvent, loadingUser, user]);
+  const disableCtas = disableReasons.length > 0;
 
   const avatar = resolveImageSrc(
     profile?.profile_photo_url?.trim() || googleAvatar || "",
@@ -440,6 +475,95 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     media.addListener(handleChange);
     return () => media.removeListener(handleChange);
   }, []);
+
+  useEffect(() => {
+    if (!authDiagEnabled) return;
+    console.log("[AUTH_DIAG] cta:CustomerNavbar", {
+      providerInstanceId,
+      authStatus,
+      hasAuth: Boolean(user),
+      authBusy,
+      authAction,
+      authAttemptId,
+      lastAuthEvent,
+      disableReasons,
+    });
+  });
+
+  useEffect(() => {
+    if (!authDiagEnabled) return undefined;
+    if (typeof window === "undefined") return undefined;
+
+    const describeNode = (node) => {
+      if (!node || !node.tagName) return null;
+      const id = node.id ? `#${node.id}` : "";
+      const className =
+        typeof node.className === "string" && node.className.trim()
+          ? `.${node.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+          : "";
+      return `${node.tagName.toLowerCase()}${id}${className}`;
+    };
+
+    const logStyleChain = (el, label) => {
+      const chain = [];
+      let current = el;
+      let depth = 0;
+      while (current && depth < 7) {
+        const style = window.getComputedStyle(current);
+        chain.push({
+          label: depth === 0 ? label : `parent-${depth}`,
+          node: describeNode(current),
+          pointerEvents: style.pointerEvents,
+          opacity: style.opacity,
+          position: style.position,
+          zIndex: style.zIndex,
+        });
+        if (current.tagName?.toLowerCase() === "body") break;
+        current = current.parentElement;
+        depth += 1;
+      }
+      return chain;
+    };
+
+    const login = document.querySelector("[data-customer-cta='login']");
+    const signup = document.querySelector("[data-customer-cta='signup']");
+    const modalDialog = document.querySelector("[aria-modal='true']");
+    const drawerHost = document.querySelector("div[data-mobile-sidebar-drawer='1']");
+    const overlayPresent = Boolean(modalDialog || drawerHost);
+
+    const diagDisableReasons = [
+      authBusy ? "authBusy" : null,
+      loadingUser && !user ? "loadingUser" : null,
+      authStatus === "loading" ? "authStatus=loading" : null,
+      profileMenuOpen ? "profileMenuOpen" : null,
+      mobileMenuOpen ? "mobileMenuOpen" : null,
+      suggestionsOpen ? "suggestionsOpen" : null,
+      overlayPresent ? "overlayPresent" : null,
+      login?.disabled ? "login.disabled" : null,
+      login?.getAttribute?.("aria-disabled") ? "login.aria-disabled" : null,
+      signup?.disabled ? "signup.disabled" : null,
+      signup?.getAttribute?.("aria-disabled") ? "signup.aria-disabled" : null,
+    ].filter(Boolean);
+
+    console.log("[AUTH_DIAG] cta:CustomerNavbar:render", {
+      providerInstanceId,
+      authStatus,
+      hasAuth: Boolean(user),
+      authBusy,
+      authAction,
+      authAttemptId,
+      lastAuthEvent,
+      disableReasons,
+      diagDisableReasons,
+      loginStyle: login ? logStyleChain(login, "login") : null,
+      signupStyle: signup ? logStyleChain(signup, "signup") : null,
+      overlayPresent,
+      overlayNodes: {
+        modalDialog: modalDialog ? describeNode(modalDialog) : null,
+        drawerHost: drawerHost ? describeNode(drawerHost) : null,
+      },
+    });
+  });
 
   const logNavDebug = (href, method) => {
     if (process.env.NODE_ENV === "production") return;
@@ -835,6 +959,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 className={`text-sm md:text-base transition text-white/70 hover:text-white ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
+                data-customer-cta="login"
               >
                 Login
               </button>
@@ -846,6 +971,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 className={`px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
+                data-customer-cta="signup"
               >
                 Sign Up
               </button>
@@ -1011,7 +1137,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
       >
         <form
           onSubmit={handleSubmitSearch}
-          className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+          className="mr-3 flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
         >
           <Search className="h-4 w-4 text-white/70" />
           <input
@@ -1052,6 +1178,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 className={`text-left text-white/70 hover:text-white ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
+                data-customer-cta="login"
               >
                 Login
               </button>
@@ -1066,6 +1193,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
+                data-customer-cta="signup"
               >
                 Sign Up
               </button>

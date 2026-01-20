@@ -177,7 +177,7 @@ export default function MobileSidebarDrawer({
           aria-labelledby={titleId}
           id={panelId}
           tabIndex={-1}
-          className="flex h-full flex-col border-r border-white/10 bg-gradient-to-b from-purple-950/95 via-purple-900/90 to-fuchsia-900/90 text-white shadow-2xl"
+          className="theme-lock flex h-full flex-col border-r border-white/10 bg-gradient-to-b from-purple-950/95 via-purple-900/90 to-fuchsia-900/90 text-white shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div className="flex items-center gap-3">

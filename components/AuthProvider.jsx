@@ -9,10 +9,13 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   acknowledgeAuthTokenInvalid,
   getAuthGuardState,
   getBrowserSupabaseClient,
+  clearSupabaseAuthStorage,
+  getCookieName,
   subscribeAuthGuard,
 } from "@/lib/supabaseClient";
 import {
@@ -39,8 +42,18 @@ const AuthContext = createContext({
   rateLimited: false,
   rateLimitUntil: 0,
   rateLimitMessage: null,
+  refreshDisabledUntil: 0,
+  refreshDisabledReason: null,
+  authBusy: false,
+  authAction: null,
+  authAttemptId: 0,
+  authActionStartedAt: 0,
+  providerInstanceId: null,
   refreshProfile: async () => {},
   logout: async () => {},
+  beginAuthAttempt: () => 0,
+  endAuthAttempt: () => false,
+  resetAuthUiState: () => {},
 });
 
 const resolveRole = (profile, user, fallbackRole) => {
@@ -84,6 +97,12 @@ const authStore = {
     rateLimitUntil: 0,
     rateLimitMessage: null,
     tokenInvalidAt: 0,
+    refreshDisabledUntil: 0,
+    refreshDisabledReason: null,
+    authBusy: false,
+    authAction: null,
+    authAttemptId: 0,
+    authActionStartedAt: 0,
   },
   listeners: new Set(),
   supabase: null,
@@ -94,9 +113,17 @@ const authStore = {
   guardSubscribed: false,
   authUnsubscribe: null,
   loggingOut: false,
+  providerInstanceId: null,
 };
 
 let handledTokenInvalidAt = 0;
+const authDiagEnabled =
+  process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
+  process.env.NODE_ENV !== "production";
+export const AUTH_UI_RESET_EVENT = "yb-auth-ui-reset";
+
+let authClickTracerRefs = 0;
+let authClickTracerCleanup = null;
 
 function emitAuthState() {
   authStore.listeners.forEach((listener) => listener());
@@ -109,6 +136,176 @@ function setAuthState(nextState) {
 
 function updateAuthState(partial) {
   setAuthState({ ...authStore.state, ...partial });
+}
+
+function logAuthDiag(event, payload = {}) {
+  if (!authDiagEnabled || typeof window === "undefined") return;
+  console.log("[AUTH_DIAG]", {
+    event,
+    pathname: window.location.pathname,
+    authStatus: authStore.state.authStatus,
+    authBusy: authStore.state.authBusy,
+    authAction: authStore.state.authAction,
+    authAttemptId: authStore.state.authAttemptId,
+    providerInstanceId: authStore.providerInstanceId,
+    userId: authStore.state.user?.id ?? null,
+    ...payload,
+  });
+}
+
+function emitAuthUiReset(reason) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(AUTH_UI_RESET_EVENT, {
+      detail: { reason, ts: Date.now() },
+    })
+  );
+  logAuthDiag("ui:reset", { reason });
+}
+
+function clearSupabaseCookiesClient() {
+  if (typeof document === "undefined") return;
+  const cookieName = getCookieName();
+  const names = document.cookie
+    .split(";")
+    .map((entry) => entry.trim().split("=")[0])
+    .filter(Boolean)
+    .filter((name) => name.startsWith("sb-") || name === cookieName);
+
+  const hostname = window.location.hostname || "";
+  const domains = [undefined];
+  if (hostname.endsWith("yourbarrio.com")) {
+    domains.push(".yourbarrio.com", "www.yourbarrio.com");
+  }
+
+  names.forEach((name) => {
+    domains.forEach((domain) => {
+      const domainAttr = domain ? `domain=${domain};` : "";
+      document.cookie = `${name}=; ${domainAttr} path=/; Max-Age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+    });
+  });
+
+  try {
+    localStorage.removeItem("business_auth_redirect");
+    localStorage.removeItem("business_auth_success");
+    localStorage.removeItem("signup_role");
+  } catch {
+    // ignore
+  }
+  try {
+    sessionStorage.removeItem("yb_auto_logged_out");
+    sessionStorage.removeItem("auth_flow_id");
+  } catch {
+    // ignore
+  }
+}
+
+function describeNode(node) {
+  if (!node || !node.tagName) return null;
+  const id = node.id ? `#${node.id}` : "";
+  const className =
+    typeof node.className === "string" && node.className.trim()
+      ? `.${node.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+      : "";
+  return `${node.tagName.toLowerCase()}${id}${className}`;
+}
+
+function attachAuthClickTracer() {
+  if (typeof window === "undefined") return () => {};
+  const overlaySelectors = [
+    "div[data-mobile-sidebar-drawer=\"1\"]",
+    "#modal-root",
+    "[aria-modal=\"true\"]",
+  ];
+
+  const handler = (event) => {
+    const x = typeof event.clientX === "number" ? event.clientX : null;
+    const y = typeof event.clientY === "number" ? event.clientY : null;
+    const target = event.target;
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    const pathSummary = path
+      .slice(0, 6)
+      .map((node) => describeNode(node))
+      .filter(Boolean);
+    const hit =
+      x !== null && y !== null ? document.elementFromPoint(x, y) : null;
+    const nav =
+      document.querySelector("nav[data-nav-guard]") ||
+      document.querySelector("nav[data-business-navbar]") ||
+      document.querySelector("nav[data-nav-surface]") ||
+      document.querySelector("nav[data-public-nav]") ||
+      document.querySelector("nav");
+    const overlayNodes = overlaySelectors
+      .map((selector) => ({ selector, node: document.querySelector(selector) }))
+      .filter(({ node }) => node);
+    const overlayHit = overlayNodes.find(({ node }) => hit && node.contains(hit));
+
+    console.log("[AUTH_DIAG] click:capture", {
+      type: event.type,
+      coords: { x, y },
+      target: describeNode(target),
+      path: pathSummary,
+      elementFromPoint: describeNode(hit),
+      inNavbar: Boolean(nav && hit && nav.contains(hit)),
+      overlayHit: overlayHit
+        ? { selector: overlayHit.selector, node: describeNode(overlayHit.node) }
+        : null,
+    });
+  };
+
+  window.addEventListener("pointerdown", handler, true);
+  window.addEventListener("click", handler, true);
+  return () => {
+    window.removeEventListener("pointerdown", handler, true);
+    window.removeEventListener("click", handler, true);
+  };
+}
+
+function buildAuthUiResetState(reason) {
+  const nextAttemptId = authStore.state.authAttemptId + 1;
+  logAuthDiag("auth_ui:reset", { reason, nextAttemptId });
+  return {
+    authBusy: false,
+    authAction: null,
+    authAttemptId: nextAttemptId,
+    authActionStartedAt: 0,
+  };
+}
+
+function beginAuthAttempt(action) {
+  const nextAttemptId = authStore.state.authAttemptId + 1;
+  updateAuthState({
+    authBusy: true,
+    authAction: action || null,
+    authAttemptId: nextAttemptId,
+    authActionStartedAt: Date.now(),
+    lastError: null,
+  });
+  logAuthDiag("auth:attempt:begin", { action, attemptId: nextAttemptId });
+  return nextAttemptId;
+}
+
+function endAuthAttempt(attemptId, result) {
+  if (attemptId !== authStore.state.authAttemptId) {
+    logAuthDiag("auth:attempt:end:ignored", {
+      attemptId,
+      currentAttemptId: authStore.state.authAttemptId,
+      result,
+    });
+    return false;
+  }
+
+  updateAuthState({
+    authBusy: false,
+    authAction: null,
+    authActionStartedAt: 0,
+  });
+  logAuthDiag("auth:attempt:end", { attemptId, result });
+  return true;
+}
+
+function resetAuthUiState(reason) {
+  updateAuthState(buildAuthUiResetState(reason));
 }
 
 async function cleanupRealtimeChannels() {
@@ -195,6 +392,18 @@ function syncAuthGuardState(guard) {
     changed = true;
   }
 
+  if (typeof guard.refreshDisabledUntil === "number") {
+    if (next.refreshDisabledUntil !== guard.refreshDisabledUntil) {
+      next.refreshDisabledUntil = guard.refreshDisabledUntil;
+      changed = true;
+    }
+  }
+
+  if (next.refreshDisabledReason !== (guard.refreshDisabledReason || null)) {
+    next.refreshDisabledReason = guard.refreshDisabledReason || null;
+    changed = true;
+  }
+
   if (changed) {
     setAuthState(next);
   }
@@ -252,7 +461,12 @@ async function applyUserUpdate(user) {
   }
 
   if (!user) {
-    updateAuthState(withGuardState(buildSignedOutState()));
+    authStore.loggingOut = false;
+    setAuthChangeSuppressed(false);
+    updateAuthState({
+      ...withGuardState(buildSignedOutState()),
+      ...buildAuthUiResetState("apply_user_update:signed_out"),
+    });
     return;
   }
 
@@ -282,17 +496,41 @@ async function bootstrapAuth() {
     let sessionError = null;
 
     if (authStore.supabase?.auth?.getSession) {
-      sessionChecked = true;
-      try {
-        const { data, error } = await authStore.supabase.auth.getSession();
-        if (error) {
-          sessionError = error;
-          setAuthError(error);
+      const guard = getAuthGuardState();
+      if (guard.refreshDisabledMsRemaining > 0 || guard.cooldownMsRemaining > 0) {
+        logAuthDiag("auth:bootstrap:skip", {
+          reason:
+            guard.refreshDisabledMsRemaining > 0
+              ? "refresh_disabled"
+              : "rate_limited",
+          refreshDisabledMsRemaining: guard.refreshDisabledMsRemaining,
+          cooldownMsRemaining: guard.cooldownMsRemaining,
+        });
+      } else {
+        sessionChecked = true;
+        try {
+          const { data, error } = await authStore.supabase.auth.getSession();
+          if (error) {
+            sessionError = error;
+            setAuthError(error);
+          }
+          user = data?.session?.user ?? null;
+          logAuthDiag("auth:getSession:result", {
+            ok: !error,
+            hasUser: Boolean(user),
+            sessionUserId: user?.id ?? null,
+            error: error?.message ?? null,
+          });
+        } catch (err) {
+          sessionError = err;
+          setAuthError(err);
+          logAuthDiag("auth:getSession:result", {
+            ok: false,
+            hasUser: false,
+            sessionUserId: null,
+            error: err?.message ?? String(err),
+          });
         }
-        user = data?.session?.user ?? null;
-      } catch (err) {
-        sessionError = err;
-        setAuthError(err);
       }
     }
 
@@ -322,13 +560,20 @@ function ensureAuthListener() {
   authStore.authUnsubscribe = subscribeAuthChanges(({ user, event }) => {
     if (authStore.loggingOut) return;
     if (event) {
+      logAuthDiag("auth:event", {
+        event,
+        hasUser: Boolean(user),
+        sessionUserId: user?.id ?? null,
+      });
       if (event === "SIGNED_OUT") {
+        emitAuthUiReset("auth_event:signed_out");
         updateAuthState({
           ...buildSignedOutState(),
           rateLimited: false,
           rateLimitUntil: 0,
           rateLimitMessage: null,
           tokenInvalidAt: 0,
+          ...buildAuthUiResetState("auth_event:signed_out"),
           lastAuthEvent: event,
           lastError: null,
         });
@@ -366,6 +611,15 @@ export function AuthProvider({
   initialProfile = null,
   initialRole = null,
 }) {
+  const parentAuth = useContext(AuthContext);
+  const isNestedProviderRef = useRef(Boolean(parentAuth?.providerInstanceId));
+  const isNestedProvider = isNestedProviderRef.current;
+  const authDiagEnabledLocal = useMemo(
+    () =>
+      process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
+      process.env.NODE_ENV !== "production",
+    []
+  );
   const supabase = useMemo(() => getBrowserSupabaseClient(), []);
   const authState = useSyncExternalStore(
     subscribeAuthState,
@@ -375,10 +629,31 @@ export function AuthProvider({
 
   const mountedRef = useRef(true);
   const fetchWrappedRef = useRef(false);
+  const providerInstanceIdRef = useRef(
+    `auth-${Math.random().toString(36).slice(2, 10)}`
+  );
+  const authUiFailsafeTimerRef = useRef(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const lastKnownRoleRef = useRef(null);
+
+  useEffect(() => {
+    if (authState.role) {
+      lastKnownRoleRef.current = authState.role;
+    }
+  }, [authState.role]);
 
   useEffect(() => {
     mountedRef.current = true;
     authStore.providerCount += 1;
+    authStore.providerInstanceId = providerInstanceIdRef.current;
+    if (authDiagEnabledLocal && authStore.providerCount > 1) {
+      console.warn("[AUTH_DIAG] provider:multiple", {
+        providerInstanceId: providerInstanceIdRef.current,
+        providerCount: authStore.providerCount,
+        pathname: typeof window !== "undefined" ? window.location.pathname : null,
+      });
+    }
 
     if (supabase && !authStore.supabase) {
       authStore.supabase = supabase;
@@ -390,11 +665,13 @@ export function AuthProvider({
       initialRole,
     });
 
-    ensureAuthGuardSubscription();
-    ensureAuthListener();
+    if (!isNestedProvider) {
+      ensureAuthGuardSubscription();
+      ensureAuthListener();
 
-    if (!authStore.state.user) {
-      void bootstrapAuth();
+      if (!authStore.state.user) {
+        void bootstrapAuth();
+      }
     }
 
     return () => {
@@ -404,9 +681,38 @@ export function AuthProvider({
         releaseAuthListener();
       }
     };
-  }, [initialProfile, initialRole, initialUser, supabase]);
+  }, [
+    initialProfile,
+    initialRole,
+    initialUser,
+    isNestedProvider,
+    supabase,
+    authDiagEnabledLocal,
+  ]);
 
   useEffect(() => {
+    if (!authDiagEnabledLocal) return undefined;
+    authClickTracerRefs += 1;
+    if (authClickTracerRefs === 1) {
+      authClickTracerCleanup = attachAuthClickTracer();
+    }
+    return () => {
+      authClickTracerRefs = Math.max(0, authClickTracerRefs - 1);
+      if (authClickTracerRefs === 0 && authClickTracerCleanup) {
+        authClickTracerCleanup();
+        authClickTracerCleanup = null;
+      }
+    };
+  }, [authDiagEnabledLocal]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (!pathname) return;
+    emitAuthUiReset("route_change");
+  }, [isNestedProvider, pathname]);
+
+  useEffect(() => {
+    if (isNestedProvider) return undefined;
     if (process.env.NODE_ENV === "production") return undefined;
     if (authState.authStatus !== "loading") return undefined;
     const timer = setTimeout(() => {
@@ -418,14 +724,19 @@ export function AuthProvider({
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [authState.authStatus]);
+  }, [authState.authStatus, isNestedProvider]);
 
   useEffect(() => {
+    if (isNestedProvider) return;
     if (!authState.tokenInvalidAt) return;
     if (authState.tokenInvalidAt <= handledTokenInvalidAt) return;
     handledTokenInvalidAt = authState.tokenInvalidAt;
 
     (async () => {
+      logAuthDiag("auth:token_invalid:handle", {
+        tokenInvalidAt: authState.tokenInvalidAt,
+      });
+      clearSupabaseAuthStorage();
       if (authStore.supabase) {
         try {
           await authStore.supabase.auth.signOut({ scope: "local" });
@@ -441,6 +752,7 @@ export function AuthProvider({
         rateLimitUntil: 0,
         rateLimitMessage: null,
         tokenInvalidAt: 0,
+        ...buildAuthUiResetState("token_invalid"),
       });
       acknowledgeAuthTokenInvalid(authState.tokenInvalidAt);
 
@@ -450,7 +762,7 @@ export function AuthProvider({
           : PATHS.auth.customerLogin;
       redirectWithGuard(target);
     })();
-  }, [authState.tokenInvalidAt]);
+  }, [authState.tokenInvalidAt, isNestedProvider]);
 
   const refreshProfile = useCallback(async () => {
     if (!mountedRef.current || !authStore.supabase || !authState.user?.id) {
@@ -464,14 +776,21 @@ export function AuthProvider({
     });
   }, [authState.role, authState.user]);
 
-  const logout = useCallback(async () => {
-    if (!authStore.supabase) {
-      if (typeof window !== "undefined") {
-        window.location.replace(PATHS.public.root);
-      }
-      return;
-    }
+  const resetAuthUiStateCb = useCallback((reason) => {
+    resetAuthUiState(reason);
+  }, []);
 
+  const logout = useCallback(async (options = {}) => {
+    const { redirectTo, reason = "logout" } = options;
+    const role = authStore.state.role;
+    const resolvedRedirect =
+      redirectTo ||
+      (role === "business" ? "/business" : PATHS.public.root);
+    const shouldRedirect = typeof window !== "undefined";
+    let redirectPending = shouldRedirect;
+
+    resetAuthUiState("logout:pre");
+    emitAuthUiReset("logout:pre");
     authStore.loggingOut = true;
     setAuthChangeSuppressed(true);
     updateAuthState({
@@ -484,25 +803,64 @@ export function AuthProvider({
       lastError: null,
     });
 
-    await cleanupRealtimeChannels();
-    clearVerifiedUserCache();
+    logAuthDiag("logout", {
+      hasUser: Boolean(authStore.state.user),
+      authStatus: authStore.state.authStatus,
+      authBusy: authStore.state.authBusy,
+      reason,
+      role,
+      redirectTo: resolvedRedirect,
+    });
 
-    if (typeof window !== "undefined") {
-      window.location.replace("/api/auth/logout");
-    }
-
-    setTimeout(() => {
+    try {
       try {
-        void authStore.supabase.auth.signOut({ scope: "local" });
-      } catch {
-        // best effort
+        await cleanupRealtimeChannels();
+      } catch (err) {
+        logAuthDiag("logout:realtime:error", {
+          message: err?.message || String(err),
+        });
       }
-    }, 0);
+      clearVerifiedUserCache();
+      clearSupabaseAuthStorage();
+      clearSupabaseCookiesClient();
+      if (authStore.supabase?.auth?.signOut) {
+        try {
+          await authStore.supabase.auth.signOut({ scope: "global" });
+          await authStore.supabase.auth.signOut({ scope: "local" });
+        } catch (err) {
+          logAuthDiag("logout:supabase:error", {
+            message: err?.message || String(err),
+          });
+        }
+      }
+
+      if (shouldRedirect) {
+        try {
+          await fetch("/api/logout", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err) {
+          logAuthDiag("logout:server:error", {
+            message: err?.message || String(err),
+          });
+        }
+      }
+    } finally {
+      resetAuthUiState("logout:finally");
+      if (redirectPending) {
+        redirectPending = false;
+        window.location.replace(
+          `/api/auth/logout?redirect=${encodeURIComponent(resolvedRedirect)}`
+        );
+      }
+    }
   }, []);
 
   const value = useMemo(
     () => ({
-      supabase: authStore.supabase,
+      supabase: authStore.supabase ?? supabase,
       authStatus: authState.authStatus,
       status:
         authState.authStatus === "authenticated"
@@ -521,8 +879,18 @@ export function AuthProvider({
       rateLimited: authState.rateLimited,
       rateLimitUntil: authState.rateLimitUntil,
       rateLimitMessage: authState.rateLimitMessage,
+      refreshDisabledUntil: authState.refreshDisabledUntil,
+      refreshDisabledReason: authState.refreshDisabledReason,
+      authBusy: authState.authBusy,
+      authAction: authState.authAction,
+      authAttemptId: authState.authAttemptId,
+      authActionStartedAt: authState.authActionStartedAt,
+      providerInstanceId: providerInstanceIdRef.current,
       refreshProfile,
       logout,
+      beginAuthAttempt,
+      endAuthAttempt,
+      resetAuthUiState: resetAuthUiStateCb,
     }),
     [
       authState.authStatus,
@@ -531,22 +899,28 @@ export function AuthProvider({
       authState.rateLimitMessage,
       authState.rateLimitUntil,
       authState.rateLimited,
+      authState.refreshDisabledReason,
+      authState.refreshDisabledUntil,
       authState.role,
       authState.user,
       authState.lastAuthEvent,
       authState.lastError,
+      authState.authBusy,
+      authState.authAction,
+      authState.authAttemptId,
+      authState.authActionStartedAt,
+      supabase,
       logout,
       refreshProfile,
+      resetAuthUiStateCb,
     ]
   );
 
-  const diagEnabled =
-    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
-    process.env.NODE_ENV !== "production";
-
   useEffect(() => {
-    if (!diagEnabled) return;
+    if (isNestedProvider) return;
+    if (!authDiagEnabledLocal) return;
     console.log("[AUTH_DIAG] status", {
+      providerInstanceId: providerInstanceIdRef.current,
       authStatus: authState.authStatus,
       status:
         authState.authStatus === "authenticated"
@@ -558,18 +932,28 @@ export function AuthProvider({
       hasProfile: Boolean(authState.profile),
       lastAuthEvent: authState.lastAuthEvent,
       lastError: authState.lastError,
+      authBusy: authState.authBusy,
+      authAction: authState.authAction,
+      authAttemptId: authState.authAttemptId,
+      authActionStartedAt: authState.authActionStartedAt,
     });
   }, [
     authState.authStatus,
+    authState.authAction,
+    authState.authAttemptId,
+    authState.authBusy,
+    authState.authActionStartedAt,
     authState.lastAuthEvent,
     authState.lastError,
     authState.profile,
     authState.user,
-    diagEnabled,
+    authDiagEnabledLocal,
+    isNestedProvider,
   ]);
 
   useEffect(() => {
-    if (!diagEnabled || fetchWrappedRef.current) return;
+    if (isNestedProvider) return;
+    if (!authDiagEnabledLocal || fetchWrappedRef.current) return;
     if (typeof window === "undefined" || typeof window.fetch !== "function") return;
     fetchWrappedRef.current = true;
     const originalFetch = window.fetch.bind(window);
@@ -615,15 +999,140 @@ export function AuthProvider({
       window.fetch = originalFetch;
       fetchWrappedRef.current = false;
     };
-  }, [diagEnabled]);
+  }, [authDiagEnabledLocal, isNestedProvider]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (authState.authStatus !== "unauthenticated" || authState.user) return;
+    if (authStore.loggingOut) {
+      authStore.loggingOut = false;
+      setAuthChangeSuppressed(false);
+    }
+  }, [authState.authStatus, authState.user, isNestedProvider]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (typeof window === "undefined") return;
+    if (authState.authStatus !== "unauthenticated" || authState.user) return;
+    if (!pathname) return;
+    if (pathname.startsWith("/business-auth")) return;
+
+    const target =
+      pathname.startsWith("/business") ? "/business" : PATHS.public.root;
+    if (pathname === target || pathname === `${target}/`) return;
+
+    logAuthDiag("route_guard:client_redirect", {
+      from: pathname,
+      to: target,
+      role: lastKnownRoleRef.current,
+    });
+    router.replace(target);
+    router.refresh();
+  }, [authState.authStatus, authState.user, isNestedProvider, pathname, router]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (typeof window === "undefined") return;
+    if (authState.authStatus !== "authenticated" || !authState.user) return;
+    if (!pathname) return;
+    if (!pathname.startsWith("/business-auth")) return;
+
+    const target =
+      authState.role === "business"
+        ? PATHS.business.dashboard
+        : PATHS.customer.home;
+    if (pathname === target || pathname === `${target}/`) return;
+
+    logAuthDiag("route_guard:auth_redirect", {
+      from: pathname,
+      to: target,
+      role: authState.role,
+    });
+    router.replace(target);
+    router.refresh();
+  }, [
+    authState.authStatus,
+    authState.role,
+    authState.user,
+    isNestedProvider,
+    pathname,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (authState.authStatus !== "unauthenticated" || authState.user) {
+      if (authUiFailsafeTimerRef.current) {
+        clearTimeout(authUiFailsafeTimerRef.current);
+        authUiFailsafeTimerRef.current = null;
+      }
+      return;
+    }
+    if (!authState.authBusy && !authState.authAction) {
+      if (authUiFailsafeTimerRef.current) {
+        clearTimeout(authUiFailsafeTimerRef.current);
+        authUiFailsafeTimerRef.current = null;
+      }
+      return;
+    }
+
+    const startedAt = authState.authActionStartedAt || 0;
+    const ageMs = startedAt ? Date.now() - startedAt : 0;
+    const remainingMs = startedAt ? Math.max(0, 5000 - ageMs) : 0;
+
+    if (remainingMs === 0) {
+      logAuthDiag("auth_ui:failsafe", {
+        ageMs,
+        authAction: authState.authAction,
+        authAttemptId: authState.authAttemptId,
+      });
+      updateAuthState({
+        authBusy: false,
+        authAction: null,
+        authActionStartedAt: 0,
+      });
+      return;
+    }
+
+    if (authUiFailsafeTimerRef.current) {
+      clearTimeout(authUiFailsafeTimerRef.current);
+    }
+    authUiFailsafeTimerRef.current = setTimeout(() => {
+      authUiFailsafeTimerRef.current = null;
+      if (authStore.state.authStatus !== "unauthenticated") return;
+      if (authStore.state.user) return;
+      logAuthDiag("auth_ui:failsafe", {
+        ageMs: Date.now() - startedAt,
+        authAction: authStore.state.authAction,
+        authAttemptId: authStore.state.authAttemptId,
+      });
+      updateAuthState({
+        authBusy: false,
+        authAction: null,
+        authActionStartedAt: 0,
+      });
+    }, remainingMs);
+  }, [
+    authState.authAction,
+    authState.authBusy,
+    authState.authActionStartedAt,
+    authState.authStatus,
+    authState.user,
+    authState.authAttemptId,
+    isNestedProvider,
+  ]);
 
   return (
-    <AuthContext.Provider value={value}>
-      {children}
-      {diagEnabled ? (
-        <AuthStateDebug />
-      ) : null}
-    </AuthContext.Provider>
+    isNestedProvider ? (
+      <>{children}</>
+    ) : (
+      <AuthContext.Provider value={value}>
+        {children}
+        {authDiagEnabledLocal ? (
+          <AuthStateDebug />
+        ) : null}
+      </AuthContext.Provider>
+    )
   );
 }
 

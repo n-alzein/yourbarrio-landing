@@ -20,6 +20,7 @@ import {
   normalizeInventory,
   sortListingsByAvailability,
 } from "@/lib/inventory";
+import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
 
@@ -209,6 +210,16 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
     };
   }, [suggestionsOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReset = () => {
+      setMobileMenuOpen(false);
+      setSuggestionsOpen(false);
+    };
+    window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
+  }, []);
+
   return (
     <nav
       className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
@@ -244,7 +255,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           <div className="md:hidden flex-1" data-nav-guard="1">
             <form
               onSubmit={handleSubmitSearch}
-              className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+              className="mr-3 flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
             >
               <Search className="h-4 w-4 text-white/70" />
               <input

@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import CustomerLoginModal from "./CustomerLoginModal";
 import CustomerSignupModal from "./CustomerSignupModal";
+import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
 const ModalContext = createContext(null);
 
@@ -68,6 +69,15 @@ export default function ModalProviderClient({ children }) {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [modal.type, closeModal]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReset = () => {
+      closeModal();
+    };
+    window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
+  }, [closeModal]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;

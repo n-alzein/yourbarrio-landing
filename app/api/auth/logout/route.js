@@ -17,7 +17,10 @@ export async function GET(request) {
     isProd,
   });
 
-  const response = NextResponse.redirect(new URL("/", request.url), 303);
+  const nextUrl = new URL(request.url);
+  const redirectParam = nextUrl.searchParams.get("redirect") || "/";
+  const safeRedirect = redirectParam.startsWith("/") ? redirectParam : "/";
+  const response = NextResponse.redirect(new URL(safeRedirect, request.url), 303);
   if (authDiagEnabled) {
     console.warn("[AUTH_DIAG] logout:redirect", {
       pathname: new URL(request.url).pathname,

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 
 const DEFAULT_MINUTES = 30;
 const THROTTLE_MS = 10_000;
 
 export default function InactivityLogout() {
-  const { user, loadingUser } = useAuth();
+  const { user, loadingUser, resetAuthUiState, logout } = useAuth();
   const timeoutIdRef = useRef(null);
   const lastActivityRef = useRef(0);
   const lastResetRef = useRef(0);
@@ -33,7 +33,15 @@ export default function InactivityLogout() {
       try {
         sessionStorage.setItem("yb_auto_logged_out", "1");
       } catch {}
-      window.location.replace("/api/auth/logout");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(AUTH_UI_RESET_EVENT, {
+            detail: { reason: "inactivity_logout", ts: Date.now() },
+          })
+        );
+      }
+      resetAuthUiState("inactivity_logout");
+      void logout({ reason: "inactivity_logout" });
     };
 
     const scheduleLogout = (delayMs) => {
@@ -83,7 +91,7 @@ export default function InactivityLogout() {
       document.removeEventListener("visibilitychange", handleVisibility);
       clearTimer();
     };
-  }, [loadingUser, user?.id]);
+  }, [loadingUser, logout, resetAuthUiState, user?.id]);
 
   return null;
 }

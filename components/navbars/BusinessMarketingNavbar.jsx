@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "../ThemeToggle";
 import { useTheme } from "../ThemeProvider";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
+import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
 function NavItem({ href, children, active, onClick, className }) {
   return (
@@ -37,6 +38,15 @@ export default function BusinessMarketingNavbar() {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReset = () => {
+      setOpen(false);
+    };
+    window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
+  }, []);
 
   useEffect(() => {
     if (!hydrated || hasForcedLight.current) return;

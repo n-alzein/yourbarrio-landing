@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useModal } from "./ModalProvider";
 
 export default function CustomerLoginModal({ onClose }) {
-  const { supabase, loadingUser } = useAuth();
+  const {
+    supabase,
+    loadingUser,
+    beginAuthAttempt,
+    endAuthAttempt,
+    authAttemptId,
+    authStatus,
+    user,
+    role,
+  } = useAuth();
   const { openModal } = useModal();
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
 
@@ -15,11 +24,36 @@ export default function CustomerLoginModal({ onClose }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const attemptIdRef = useRef(0);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!attemptIdRef.current) return;
+    if (authAttemptId === attemptIdRef.current) return;
+    attemptIdRef.current = 0;
+    setLoading(false);
+  }, [authAttemptId]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !user?.id) return;
+    const dest =
+      role === "business" ? "/business/dashboard" : "/customer/home";
+    onClose?.();
+    window.location.replace(dest);
+  }, [authStatus, onClose, role, user?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   async function handleLogin(event) {
     event.preventDefault();
     setError("");
-    setLoading(true);
     const client = supabase ?? getBrowserSupabaseClient();
 
     if (authDiagEnabled) {
@@ -35,16 +69,49 @@ export default function CustomerLoginModal({ onClose }) {
       });
     }
 
-    try {
-      if (!client || !client.auth) {
-        setError("Auth is unavailable. Please refresh and try again.");
-        return;
-      }
+    if (!client || !client.auth) {
+      setError("Auth is unavailable. Please refresh and try again.");
+      return;
+    }
 
+    const attemptId = beginAuthAttempt("customer_login");
+    attemptIdRef.current = attemptId;
+    setLoading(true);
+
+    const isStale = () => attemptIdRef.current !== attemptId;
+    const finishAttempt = (result) => {
+      endAuthAttempt(attemptId, result);
+      if (attemptIdRef.current !== attemptId) return;
+      attemptIdRef.current = 0;
+      setLoading(false);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+
+    if (authDiagEnabled) {
+      console.log("[AUTH_DIAG] customer:login:begin", {
+        attemptId,
+        pathname: typeof window !== "undefined" ? window.location.pathname : null,
+      });
+    }
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      if (attemptIdRef.current !== attemptId) return;
+      setError("Login timed out. Please try again.");
+      finishAttempt("timeout");
+    }, 25000);
+
+    try {
       const { data, error: signInError } = await client.auth.signInWithPassword(
         { email, password }
       );
 
+      if (isStale()) return;
       if (signInError) {
         setError(signInError.message);
         return;
@@ -62,6 +129,7 @@ export default function CustomerLoginModal({ onClose }) {
         .eq("id", user.id)
         .maybeSingle();
 
+      if (isStale()) return;
       if (profileError) {
         setError("Logged in, but could not load your profile. Try again.");
         return;
@@ -93,6 +161,7 @@ export default function CustomerLoginModal({ onClose }) {
           }),
         });
 
+        if (isStale()) return;
         const refreshed = res.headers.get("x-auth-refresh-user") === "1";
         if (debugAuth) {
           console.log(
@@ -117,23 +186,34 @@ export default function CustomerLoginModal({ onClose }) {
 
       window.location.replace(dest);
     } catch (err) {
+      if (isStale()) return;
       console.error("Customer login failed", err);
       setError("Login failed. Please try again.");
     } finally {
-      setLoading(false);
+      finishAttempt("password");
+      if (authDiagEnabled) {
+        console.log("[AUTH_DIAG] customer:login:end", {
+          attemptId,
+          pathname: typeof window !== "undefined" ? window.location.pathname : null,
+        });
+      }
     }
   }
 
   async function handleGoogleLogin() {
     setError("");
-    setLoading(true);
 
+    let attemptId = 0;
     try {
       const client = supabase ?? getBrowserSupabaseClient();
       if (!client || !client.auth) {
         setError("Auth is unavailable. Please refresh and try again.");
         return;
       }
+
+      attemptId = beginAuthAttempt("customer_oauth");
+      attemptIdRef.current = attemptId;
+      setLoading(true);
 
       const { error: oauthError } = await client.auth.signInWithOAuth({
         provider: "google",
@@ -142,6 +222,7 @@ export default function CustomerLoginModal({ onClose }) {
         },
       });
 
+      if (attemptIdRef.current !== attemptId) return;
       if (oauthError) {
         setError(oauthError.message);
       } else {
@@ -151,7 +232,13 @@ export default function CustomerLoginModal({ onClose }) {
       console.error("Customer OAuth login failed", err);
       setError("Login failed. Please try again.");
     } finally {
-      setLoading(false);
+      if (attemptId) {
+        const finished = endAuthAttempt(attemptId, "oauth");
+        if (finished) {
+          attemptIdRef.current = 0;
+          setLoading(false);
+        }
+      }
     }
   }
 

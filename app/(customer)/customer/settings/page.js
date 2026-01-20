@@ -13,7 +13,6 @@ export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
   const router = useRouter();
-  const redirectPath = "/?redirect=/customer/settings";
 
   /* -----------------------------------------------------------
      HOOKS (always first — no conditional hooks)
@@ -44,6 +43,13 @@ export default function SettingsPage() {
       setForm(buildInitialForm(profile));
     });
   }, [profile]);
+
+  useEffect(() => {
+    if (loadingUser) return;
+    if (!user) {
+      router.replace("/");
+    }
+  }, [loadingUser, router, user]);
 
   /* -----------------------------------------------------------
      SAVE CHANGES
@@ -182,23 +188,7 @@ export default function SettingsPage() {
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
-        <div className="space-y-3 text-center">
-          <p className="text-lg font-semibold">Session expired</p>
-          <p className="text-sm text-white/70">
-            Please sign in again to get back to your account.
-          </p>
-          <button
-            type="button"
-            onClick={() => router.replace(redirectPath)}
-            className="px-4 py-2 rounded-lg bg-white text-black font-semibold"
-          >
-            Go to login
-          </button>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   /* -----------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,6 +23,7 @@ import { resolveImageSrc } from "@/lib/safeImage";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import SafeImage from "@/components/SafeImage";
 import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
+import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
 function NavItem({
   href,
@@ -32,6 +33,7 @@ function NavItem({
   closeMenus,
   badgeCount,
   disabled = false,
+  ...rest
 }) {
   return (
     <Link
@@ -50,6 +52,7 @@ function NavItem({
           ? "text-white font-semibold"
           : "text-white/70 hover:text-white"
       } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+      {...rest}
     >
       <span className="flex items-center gap-2">
         {children}
@@ -64,7 +67,22 @@ function NavItem({
 }
 
 function BusinessNavbarInner({ pathname }) {
-  const { user, profile, role, loadingUser, supabase, authStatus } = useAuth();
+  const {
+    user,
+    profile,
+    role,
+    loadingUser,
+    supabase,
+    authStatus,
+    authBusy,
+    authAction,
+    authAttemptId,
+    lastAuthEvent,
+    providerInstanceId,
+  } = useAuth();
+  const authDiagEnabled =
+    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
+    process.env.NODE_ENV !== "production";
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -144,6 +162,16 @@ function BusinessNavbarInner({ pathname }) {
     setProfileMenuOpen(false);
     setMobileMenuOpen(false);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReset = () => {
+      setProfileMenuOpen(false);
+      setMobileMenuOpen(false);
+    };
+    window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -254,8 +282,225 @@ function BusinessNavbarInner({ pathname }) {
     };
   }, [authStatus, badgeReady, user?.id, supabase, role, loadUnreadCount]);
 
+  const disableReasons = useMemo(() => {
+    const reasons = [];
+    if (authBusy && lastAuthEvent !== "SIGNED_OUT") {
+      reasons.push("authBusy");
+    }
+    if (loadingUser && !user && lastAuthEvent !== "SIGNED_OUT") {
+      reasons.push("loadingUser");
+    }
+    return reasons;
+  }, [authBusy, lastAuthEvent, loadingUser, user]);
+  const disableCtas = disableReasons.length > 0;
+
+  useEffect(() => {
+    if (!authDiagEnabled) return;
+    console.log("[AUTH_DIAG] cta:BusinessNavbar", {
+      providerInstanceId,
+      authStatus,
+      hasAuth: Boolean(user),
+      authBusy,
+      authAction,
+      authAttemptId,
+      lastAuthEvent,
+      disableReasons,
+    });
+  });
+
+  useEffect(() => {
+    if (!authDiagEnabled) return undefined;
+    if (typeof window === "undefined") return undefined;
+
+    const describeNode = (node) => {
+      if (!node || !node.tagName) return null;
+      const id = node.id ? `#${node.id}` : "";
+      const className =
+        typeof node.className === "string" && node.className.trim()
+          ? `.${node.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+          : "";
+      return `${node.tagName.toLowerCase()}${id}${className}`;
+    };
+
+    const logStyleChain = (el, label) => {
+      const chain = [];
+      let current = el;
+      let depth = 0;
+      while (current && depth < 7) {
+        const style = window.getComputedStyle(current);
+        chain.push({
+          label: depth === 0 ? label : `parent-${depth}`,
+          node: describeNode(current),
+          pointerEvents: style.pointerEvents,
+          opacity: style.opacity,
+          position: style.position,
+          zIndex: style.zIndex,
+        });
+        if (current.tagName?.toLowerCase() === "body") break;
+        current = current.parentElement;
+        depth += 1;
+      }
+      return chain;
+    };
+
+    const login = document.querySelector("[data-business-cta='login']");
+    const signup = document.querySelector("[data-business-cta='signup']");
+    const modalDialog = document.querySelector("[aria-modal='true']");
+    const drawerHost = document.querySelector("div[data-mobile-sidebar-drawer='1']");
+    const overlayPresent = Boolean(modalDialog || drawerHost);
+
+    const diagDisableReasons = [
+      authBusy ? "authBusy" : null,
+      loadingUser && !user ? "loadingUser" : null,
+      authStatus === "loading" ? "authStatus=loading" : null,
+      profileMenuOpen ? "profileMenuOpen" : null,
+      mobileMenuOpen ? "mobileMenuOpen" : null,
+      overlayPresent ? "overlayPresent" : null,
+      login?.disabled ? "login.disabled" : null,
+      login?.getAttribute?.("aria-disabled") ? "login.aria-disabled" : null,
+      signup?.getAttribute?.("aria-disabled") ? "signup.aria-disabled" : null,
+    ].filter(Boolean);
+
+    console.log("[AUTH_DIAG] cta:BusinessNavbar:render", {
+      providerInstanceId,
+      authStatus,
+      hasAuth: Boolean(user),
+      authBusy,
+      authAction,
+      authAttemptId,
+      lastAuthEvent,
+      disableReasons,
+      diagDisableReasons,
+      loginStyle: login ? logStyleChain(login, "login") : null,
+      signupStyle: signup ? logStyleChain(signup, "signup") : null,
+      overlayPresent,
+      overlayNodes: {
+        modalDialog: modalDialog ? describeNode(modalDialog) : null,
+        drawerHost: drawerHost ? describeNode(drawerHost) : null,
+      },
+    });
+  });
+
+  useEffect(() => {
+    if (!authDiagEnabled) return undefined;
+    if (typeof window === "undefined") return undefined;
+
+    const describeNode = (node) => {
+      if (!node || !node.tagName) return null;
+      const id = node.id ? `#${node.id}` : "";
+      const className =
+        typeof node.className === "string" && node.className.trim()
+          ? `.${node.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+          : "";
+      return `${node.tagName.toLowerCase()}${id}${className}`;
+    };
+
+    const logStyleChain = (el, label) => {
+      const chain = [];
+      let current = el;
+      let depth = 0;
+      while (current && depth < 7) {
+        const style = window.getComputedStyle(current);
+        chain.push({
+          label: depth === 0 ? label : `parent-${depth}`,
+          node: describeNode(current),
+          pointerEvents: style.pointerEvents,
+          opacity: style.opacity,
+          position: style.position,
+          zIndex: style.zIndex,
+        });
+        if (current.tagName?.toLowerCase() === "body") break;
+        current = current.parentElement;
+        depth += 1;
+      }
+      return chain;
+    };
+
+    const getCtas = () => {
+      const login =
+        document.querySelector("[data-business-cta='login']") || null;
+      const signup =
+        document.querySelector("[data-business-cta='signup']") || null;
+      return { login, signup };
+    };
+
+    const getOverlayNodes = () => {
+      const drawerHost = document.querySelector("div[data-mobile-sidebar-drawer='1']");
+      const modalRoot = document.getElementById("modal-root");
+      const drawerRoot = drawerHost?.firstElementChild || null;
+      const modalDialog = document.querySelector("[aria-modal='true']") || null;
+      return [
+        { label: "drawerHost", node: drawerHost },
+        { label: "drawerRoot", node: drawerRoot },
+        { label: "modalRoot", node: modalRoot },
+        { label: "modalDialog", node: modalDialog },
+      ];
+    };
+
+    const isInside = (target, el) => Boolean(el && target && el.contains(target));
+
+    const handler = (event) => {
+      const target = event.target;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      const pathSummary = path
+        .slice(0, 6)
+        .map((node) => describeNode(node))
+        .filter(Boolean);
+      const { login, signup } = getCtas();
+      const overlays = getOverlayNodes();
+      const coords = {
+        x: typeof event.clientX === "number" ? event.clientX : null,
+        y: typeof event.clientY === "number" ? event.clientY : null,
+      };
+      const hit =
+        coords.x !== null && coords.y !== null
+          ? document.elementFromPoint(coords.x, coords.y)
+          : null;
+
+      console.log("[AUTH_DIAG] nav-click-capture", {
+        type: event.type,
+        target: describeNode(target),
+        targetId: target?.id || null,
+        targetClass: target?.className || null,
+        path: pathSummary,
+        elementFromPoint: describeNode(hit),
+        coords,
+        inLoginCta: isInside(target, login),
+        inSignupCta: isInside(target, signup),
+        inDrawerHost: overlays[0]?.node ? isInside(target, overlays[0].node) : false,
+        inModalRoot: overlays[2]?.node ? isInside(target, overlays[2].node) : false,
+        disableCtas,
+      });
+
+      if (login) {
+        console.log("[AUTH_DIAG] cta-style:login", logStyleChain(login, "login"));
+      }
+      if (signup) {
+        console.log("[AUTH_DIAG] cta-style:signup", logStyleChain(signup, "signup"));
+      }
+      overlays.forEach(({ label, node }) => {
+        if (!node) return;
+        const styles = window.getComputedStyle(node);
+        console.log("[AUTH_DIAG] overlay-style", {
+          label,
+          node: describeNode(node),
+          pointerEvents: styles.pointerEvents,
+          opacity: styles.opacity,
+          position: styles.position,
+          zIndex: styles.zIndex,
+        });
+      });
+    };
+
+    window.addEventListener("pointerdown", handler, true);
+    window.addEventListener("click", handler, true);
+    return () => {
+      window.removeEventListener("pointerdown", handler, true);
+      window.removeEventListener("click", handler, true);
+    };
+  }, [authDiagEnabled, disableCtas]);
+
   const isBusinessAuthed = Boolean(user) && role === "business";
-  const disableCtas = loadingUser && !user;
 
   /* ---------------------------------------------------
      NAVBAR
@@ -350,6 +595,7 @@ function BusinessNavbarInner({ pathname }) {
                 isActive={isActive}
                 closeMenus={closeMenus}
                 disabled={disableCtas}
+                data-business-cta="login"
               >
                 Login
               </NavItem>
@@ -362,6 +608,7 @@ function BusinessNavbarInner({ pathname }) {
                 className={`px-5 py-2 rounded-xl bg-white text-black font-semibold ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
+                data-business-cta="signup"
               >
                 Sign Up
               </Link>
@@ -574,6 +821,7 @@ function BusinessNavbarInner({ pathname }) {
               isActive={isActive}
               closeMenus={closeMenus}
               disabled={disableCtas}
+              data-business-cta="login"
             >
               Login
             </NavItem>
@@ -586,6 +834,7 @@ function BusinessNavbarInner({ pathname }) {
               className={`px-4 py-2 bg-white text-black rounded-lg text-center font-semibold ${
                 disableCtas ? "opacity-60 cursor-not-allowed" : ""
               }`}
+              data-business-cta="signup"
             >
               Sign Up
             </Link>

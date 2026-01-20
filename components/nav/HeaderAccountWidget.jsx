@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
   ChevronDown,
@@ -10,7 +10,7 @@ import {
   Settings,
 } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
-import { useAuth } from "@/components/AuthProvider";
+import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useModal } from "@/components/modals/ModalProvider";
@@ -27,9 +27,24 @@ export default function HeaderAccountWidget({
   onCloseMobileMenu,
   mobileDrawerId,
 }) {
-  const { supabase, user, profile, role, authStatus, rateLimited, rateLimitMessage } =
-    useAuth();
+  const {
+    supabase,
+    user,
+    profile,
+    role,
+    authStatus,
+    rateLimited,
+    rateLimitMessage,
+    authBusy,
+    authAction,
+    authAttemptId,
+    lastAuthEvent,
+    providerInstanceId,
+  } = useAuth();
   const { openModal } = useModal();
+  const authDiagEnabled =
+    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
+    process.env.NODE_ENV !== "production";
   const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -62,7 +77,17 @@ export default function HeaderAccountWidget({
 
   const email = accountProfile?.email || accountUser?.email || null;
   const hasAuth = Boolean(accountUser);
-  const disableCtas = loading && !hasAuth;
+  const disableReasons = useMemo(() => {
+    const reasons = [];
+    if (authBusy && lastAuthEvent !== "SIGNED_OUT") {
+      reasons.push("authBusy");
+    }
+    if (loading && !hasAuth && lastAuthEvent !== "SIGNED_OUT") {
+      reasons.push("authStatus=loading");
+    }
+    return reasons;
+  }, [authBusy, hasAuth, lastAuthEvent, loading]);
+  const disableCtas = disableReasons.length > 0;
   const showRateLimit = rateLimited && hasAuth;
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
@@ -170,6 +195,101 @@ export default function HeaderAccountWidget({
     };
   }, [profileMenuOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleReset = () => {
+      setProfileMenuOpen(false);
+    };
+    window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
+    return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
+  }, []);
+
+  useEffect(() => {
+    if (!authDiagEnabled) return;
+    console.log("[AUTH_DIAG] cta:HeaderAccountWidget", {
+      providerInstanceId,
+      authStatus,
+      hasAuth,
+      authBusy,
+      authAction,
+      authAttemptId,
+      lastAuthEvent,
+      disableReasons,
+    });
+  });
+
+  useEffect(() => {
+    if (!authDiagEnabled) return undefined;
+    if (typeof window === "undefined") return undefined;
+
+    const describeNode = (node) => {
+      if (!node || !node.tagName) return null;
+      const id = node.id ? `#${node.id}` : "";
+      const className =
+        typeof node.className === "string" && node.className.trim()
+          ? `.${node.className.trim().split(/\s+/).slice(0, 3).join(".")}`
+          : "";
+      return `${node.tagName.toLowerCase()}${id}${className}`;
+    };
+
+    const logStyleChain = (el, label) => {
+      const chain = [];
+      let current = el;
+      let depth = 0;
+      while (current && depth < 7) {
+        const style = window.getComputedStyle(current);
+        chain.push({
+          label: depth === 0 ? label : `parent-${depth}`,
+          node: describeNode(current),
+          pointerEvents: style.pointerEvents,
+          opacity: style.opacity,
+          position: style.position,
+          zIndex: style.zIndex,
+        });
+        if (current.tagName?.toLowerCase() === "body") break;
+        current = current.parentElement;
+        depth += 1;
+      }
+      return chain;
+    };
+
+    const login = document.querySelector("[data-public-cta='signin']");
+    const signup = document.querySelector("[data-public-cta='signup']");
+    const modalDialog = document.querySelector("[aria-modal='true']");
+    const drawerHost = document.querySelector("div[data-mobile-sidebar-drawer='1']");
+    const overlayPresent = Boolean(modalDialog || drawerHost);
+
+    const diagDisableReasons = [
+      authBusy ? "authBusy" : null,
+      loading && !hasAuth ? "authStatus=loading" : null,
+      profileMenuOpen ? "profileMenuOpen" : null,
+      overlayPresent ? "overlayPresent" : null,
+      login?.disabled ? "signin.disabled" : null,
+      login?.getAttribute?.("aria-disabled") ? "signin.aria-disabled" : null,
+      signup?.disabled ? "signup.disabled" : null,
+      signup?.getAttribute?.("aria-disabled") ? "signup.aria-disabled" : null,
+    ].filter(Boolean);
+
+    console.log("[AUTH_DIAG] cta:HeaderAccountWidget:render", {
+      providerInstanceId,
+      authStatus,
+      hasAuth,
+      authBusy,
+      authAction,
+      authAttemptId,
+      lastAuthEvent,
+      disableReasons,
+      diagDisableReasons,
+      loginStyle: login ? logStyleChain(login, "signin") : null,
+      signupStyle: signup ? logStyleChain(signup, "signup") : null,
+      overlayPresent,
+      overlayNodes: {
+        modalDialog: modalDialog ? describeNode(modalDialog) : null,
+        drawerHost: drawerHost ? describeNode(drawerHost) : null,
+      },
+    });
+  });
+
   const desktopSkeleton = (
     <div className="flex items-center gap-3">
       <div className="h-10 w-10 rounded-2xl bg-white/10 border border-white/10" />
@@ -212,6 +332,7 @@ export default function HeaderAccountWidget({
             className={`text-sm md:text-base transition text-white/70 hover:text-white ${
               disableCtas ? "opacity-60 cursor-not-allowed" : ""
             }`}
+            data-public-cta="signin"
           >
             Sign in
           </button>
@@ -223,6 +344,7 @@ export default function HeaderAccountWidget({
             className={`px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold ${
               disableCtas ? "opacity-60 cursor-not-allowed" : ""
             }`}
+            data-public-cta="signup"
           >
             Sign up
           </button>
@@ -399,6 +521,7 @@ export default function HeaderAccountWidget({
               className={`text-left text-white/70 hover:text-white ${
                 disableCtas ? "opacity-60 cursor-not-allowed" : ""
               }`}
+              data-public-cta="signin"
             >
               Sign in
             </button>
@@ -413,6 +536,7 @@ export default function HeaderAccountWidget({
               className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
                 disableCtas ? "opacity-60 cursor-not-allowed" : ""
               }`}
+              data-public-cta="signup"
             >
               Sign up
             </button>
