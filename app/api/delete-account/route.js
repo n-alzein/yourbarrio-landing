@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(req) {
   const { userId } = await req.json();
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY // ⚠️ MUST be service key (never expose to client!)
-  );
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase service key not configured" },
+      { status: 500 }
+    );
+  }
 
   const { error } = await supabase.auth.admin.deleteUser(userId);
 

@@ -17,8 +17,8 @@ import { useModal } from "@/components/modals/ModalProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 
 export default function HeaderAccountWidget({
   surface = "public",
@@ -52,8 +52,6 @@ export default function HeaderAccountWidget({
   const lastUnreadUserIdRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const unreadRequestIdRef = useRef(0);
-
-  const client = supabase ?? getBrowserSupabaseClient();
 
   const accountUser = user;
   const accountProfile = profile;
@@ -92,11 +90,12 @@ export default function HeaderAccountWidget({
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const loadUnreadCount = useCallback(async () => {
-    if (!client || !unreadUserId || !isCustomer) return;
+    const activeClient = supabase ?? getSupabaseBrowserClient();
+    if (!activeClient || !unreadUserId || !isCustomer) return;
     const requestId = ++unreadRequestIdRef.current;
     try {
       const total = await fetchUnreadTotal({
-        supabase: client,
+        supabase: activeClient,
         userId: unreadUserId,
         role: "customer",
       });
@@ -105,7 +104,7 @@ export default function HeaderAccountWidget({
     } catch {
       // best effort
     }
-  }, [client, unreadUserId, isCustomer]);
+  }, [supabase, unreadUserId, isCustomer]);
 
   const scheduleUnreadRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -139,46 +138,32 @@ export default function HeaderAccountWidget({
     };
   }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
 
-  useEffect(() => {
-    if (!hasAuth || !isCustomer || !client) return undefined;
-    if (authStatus !== "authenticated") return undefined;
-    if (!unreadUserId) return undefined;
-    let cancelled = false;
-    let channel = null;
-    const activeClient = client;
+  const buildUnreadChannel = useCallback(
+    (scopedClient) =>
+      scopedClient
+        .channel(`customer-unread-${unreadUserId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "conversations",
+            filter: `customer_id=eq.${unreadUserId}`,
+          },
+          () => {
+            loadUnreadCount();
+          }
+        ),
+    [unreadUserId, loadUnreadCount]
+  );
 
-    (async () => {
-      channel = await subscribeIfSession(
-        activeClient,
-        (scopedClient) =>
-          scopedClient
-            .channel(`customer-unread-${unreadUserId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "*",
-                schema: "public",
-                table: "conversations",
-                filter: `customer_id=eq.${unreadUserId}`,
-              },
-              () => {
-                loadUnreadCount();
-              }
-            ),
-        "header-unread"
-      );
-      if (cancelled && channel) {
-        activeClient.removeChannel(channel);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (channel) {
-        activeClient.removeChannel(channel);
-      }
-    };
-  }, [authStatus, hasAuth, isCustomer, client, unreadUserId, loadUnreadCount]);
+  useRealtimeChannel({
+    supabase,
+    enabled:
+      hasAuth && isCustomer && authStatus === "authenticated" && Boolean(unreadUserId),
+    buildChannel: buildUnreadChannel,
+    diagLabel: "header-unread",
+  });
 
   useEffect(() => {
     if (!profileMenuOpen) return;

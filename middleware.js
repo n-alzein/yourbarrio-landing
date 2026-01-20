@@ -7,6 +7,15 @@ export function middleware(request) {
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
   const pathname = request.nextUrl.pathname;
+  if (
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    pathname.startsWith("/images/") ||
+    pathname.startsWith("/public/")
+  ) {
+    return NextResponse.next();
+  }
   const isPublicBusinessRoute =
     pathname === "/business" ||
     pathname === "/business/" ||

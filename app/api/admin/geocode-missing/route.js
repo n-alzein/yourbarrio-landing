@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const AUTH_TOKEN = process.env.ADMIN_GEOCODE_TOKEN || "";
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GEOCODE_KEY = process.env.GOOGLE_GEOCODING_API_KEY || "";
 
 const BATCH_LIMIT =
@@ -71,14 +69,13 @@ export async function POST(request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
     return NextResponse.json(
       { error: "Supabase service key not configured" },
       { status: 500 }
     );
   }
-
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   // pull candidates from both tables
   const [bizResult, userResult] = await Promise.all([

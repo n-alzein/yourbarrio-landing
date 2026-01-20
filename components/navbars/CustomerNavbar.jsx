@@ -27,9 +27,8 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useModal } from "../modals/ModalProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
-import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
+import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import {
   getAvailabilityBadgeStyle,
   normalizeInventory,
@@ -695,49 +694,31 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     });
   }, [badgeReady, loadUnreadCount]);
 
-  useEffect(() => {
-    if (!badgeReady) return undefined;
-    if (authStatus !== "authenticated") return undefined;
-    const userId = user?.id;
-    if (!userId) return undefined;
-    let cancelled = false;
-    let channel = null;
-    let client = null;
+  const buildUnreadChannel = useCallback(
+    (activeClient) =>
+      activeClient
+        .channel(`customer-unread-${user?.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "conversations",
+            filter: `customer_id=eq.${user?.id}`,
+          },
+          () => {
+            loadUnreadCount();
+          }
+        ),
+    [user?.id, loadUnreadCount]
+  );
 
-    (async () => {
-      client = supabase ?? getBrowserSupabaseClient();
-      if (!client) return;
-      channel = await subscribeIfSession(
-        client,
-        (activeClient) =>
-          activeClient
-            .channel(`customer-unread-${userId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "*",
-                schema: "public",
-                table: "conversations",
-                filter: `customer_id=eq.${userId}`,
-              },
-              () => {
-                loadUnreadCount();
-              }
-            ),
-        "customer-unread"
-      );
-      if (cancelled && channel && client) {
-        client.removeChannel(channel);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (channel && client) {
-        client.removeChannel(channel);
-      }
-    };
-  }, [authStatus, badgeReady, user?.id, supabase, loadUnreadCount]);
+  useRealtimeChannel({
+    supabase,
+    enabled: badgeReady && authStatus === "authenticated" && Boolean(user?.id),
+    buildChannel: buildUnreadChannel,
+    diagLabel: "customer-unread",
+  });
 
   /* ---------------------------------------------------
      NAVBAR UI

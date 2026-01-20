@@ -1,46 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { getCookieBaseOptions } from "@/lib/authCookies";
-
-function createSessionSupabaseClient(cookieStore, cookieBaseOptions) {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, {
-                ...options,
-                ...cookieBaseOptions,
-              });
-            });
-          } catch {}
-        },
-      },
-    }
-  );
-}
-
-function createServiceSupabaseClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    {
-      cookies: {
-        getAll() {
-          return [];
-        },
-        setAll() {},
-      },
-    }
-  );
-}
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 async function runHomeListingsQuery(client, { limit, city, category }) {
   let query = client
@@ -63,7 +24,6 @@ async function runHomeListingsQuery(client, { limit, city, category }) {
 
 export async function GET(request) {
   const url = new URL(request.url);
-  const isProd = process.env.NODE_ENV === "production";
   const limitParam = Number(url.searchParams.get("limit") || 80);
   const limit = Number.isFinite(limitParam) ? Math.max(1, limitParam) : 80;
   const city = url.searchParams.get("city") || null;
@@ -77,15 +37,9 @@ export async function GET(request) {
   })();
 
   const cookieStore = await cookies();
-  const cookieBaseOptions = getCookieBaseOptions({
-    host: request.headers.get("host"),
-    isProd,
-  });
   const sessionPresent = cookieStore.getAll().length > 0;
-  const sessionClient = createSessionSupabaseClient(cookieStore, cookieBaseOptions);
-  const serviceClient = process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createServiceSupabaseClient()
-    : null;
+  const sessionClient = await createSupabaseServerClient();
+  const serviceClient = getSupabaseServerClient();
 
   const errors = [];
   let listings = [];

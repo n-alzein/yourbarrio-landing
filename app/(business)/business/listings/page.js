@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getLowStockThreshold, normalizeInventory } from "@/lib/inventory";
 import { useTheme } from "@/components/ThemeProvider";
@@ -133,7 +133,7 @@ export default function BusinessListingsPage() {
   async function handleDelete(id) {
     if (!confirm("Are you sure you want to delete this listing?")) return;
 
-    const client = getBrowserSupabaseClient() ?? supabase;
+    const client = getSupabaseBrowserClient() ?? supabase;
     if (!client) {
       alert("Connection not ready. Please try again.");
       return;

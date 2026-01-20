@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { getCookieName } from "@/lib/supabaseClient";
+import { getCookieName } from "@/lib/supabase/browser";
 import {
   clearSupabaseCookies,
   getCookieBaseOptions,

@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { retry } from "@/lib/retry";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import InboxList from "@/components/messages/InboxList";
-import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
+import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 
 export default function BusinessMessagesPage() {
   const { user, supabase, loadingUser, authStatus } = useAuth();
@@ -91,48 +90,35 @@ export default function BusinessMessagesPage() {
     loadConversations();
   }, [authStatus, hydrated, loadingUser, userId, loadConversations, isVisible]);
 
-  useEffect(() => {
-    // Wait until auth is fully loaded before setting up realtime subscription
-    if (!hydrated || (!userId && loadingUser)) return undefined;
-    if (authStatus !== "authenticated") return undefined;
-    let cancelled = false;
-    let channel = null;
-    let client = null;
+  const buildConversationsChannel = useCallback(
+    (activeClient) =>
+      activeClient
+        .channel(`conversations-business-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "conversations",
+            filter: `business_id=eq.${userId}`,
+          },
+          () => {
+            loadConversations();
+          }
+        ),
+    [userId, loadConversations]
+  );
 
-    (async () => {
-      client = getBrowserSupabaseClient() ?? supabase;
-      if (!client) return;
-      channel = await subscribeIfSession(
-        client,
-        (activeClient) =>
-          activeClient
-            .channel(`conversations-business-${userId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "*",
-                schema: "public",
-                table: "conversations",
-                filter: `business_id=eq.${userId}`,
-              },
-              () => {
-                loadConversations();
-              }
-            ),
-        "business-conversations"
-      );
-      if (cancelled && channel && client) {
-        client.removeChannel(channel);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (channel && client) {
-        client.removeChannel(channel);
-      }
-    };
-  }, [authStatus, hydrated, loadingUser, userId, supabase, loadConversations]);
+  useRealtimeChannel({
+    supabase,
+    enabled:
+      hydrated &&
+      !loadingUser &&
+      authStatus === "authenticated" &&
+      Boolean(userId),
+    buildChannel: buildConversationsChannel,
+    diagLabel: "business-conversations",
+  });
 
   const intro = useMemo(
     () =>

@@ -13,11 +13,11 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   acknowledgeAuthTokenInvalid,
   getAuthGuardState,
-  getBrowserSupabaseClient,
+  getSupabaseBrowserClient,
   clearSupabaseAuthStorage,
   getCookieName,
   subscribeAuthGuard,
-} from "@/lib/supabaseClient";
+} from "@/lib/supabase/browser";
 import {
   clearVerifiedUserCache,
   getVerifiedUser,
@@ -54,6 +54,7 @@ const AuthContext = createContext({
   beginAuthAttempt: () => 0,
   endAuthAttempt: () => false,
   resetAuthUiState: () => {},
+  seedAuthState: () => {},
 });
 
 const resolveRole = (profile, user, fallbackRole) => {
@@ -689,7 +690,7 @@ export function AuthProvider({
       process.env.NODE_ENV !== "production",
     []
   );
-  const supabase = useMemo(() => getBrowserSupabaseClient(), []);
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const authState = useSyncExternalStore(
     subscribeAuthState,
     getAuthStateSnapshot,
@@ -845,6 +846,10 @@ export function AuthProvider({
     resetAuthUiState(reason);
   }, []);
 
+  const seedAuthStateCb = useCallback((payload) => {
+    seedAuthState(payload);
+  }, []);
+
   const logout = useCallback(async (options = {}) => {
     const { redirectTo, reason = "logout" } = options;
     const role = authStore.state.role;
@@ -962,6 +967,7 @@ export function AuthProvider({
       beginAuthAttempt,
       endAuthAttempt,
       resetAuthUiState: resetAuthUiStateCb,
+      seedAuthState: seedAuthStateCb,
     }),
     [
       authState.authStatus,
@@ -984,6 +990,7 @@ export function AuthProvider({
       logout,
       refreshProfile,
       resetAuthUiStateCb,
+      seedAuthStateCb,
     ]
   );
 

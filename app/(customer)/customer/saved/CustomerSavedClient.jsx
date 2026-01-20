@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { BookmarkCheck, Heart, Sparkles, Star } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { useTheme } from "@/components/ThemeProvider";
@@ -203,7 +203,7 @@ export default function CustomerSavedClient({
   }, [resolvedUserId]);
 
   const loadSaved = useCallback(() => {
-    const client = supabase ?? getBrowserSupabaseClient();
+    const client = supabase ?? getSupabaseBrowserClient();
 
     if (!client || !resolvedUserId || typeof resolvedUserId !== "string") {
       setLoading(false);

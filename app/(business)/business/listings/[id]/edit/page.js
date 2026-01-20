@@ -7,7 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 import { extractPhotoUrls } from "@/lib/listingPhotos";
 import { retry } from "@/lib/retry";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function EditListingPage() {
@@ -132,7 +132,7 @@ export default function EditListingPage() {
 
   async function uploadNewPhotos() {
     if (!newPhotos.length) return [];
-    const client = getBrowserSupabaseClient() ?? supabase;
+    const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) throw new Error("Connection not ready. Try again.");
 
     const uploaded = [];
@@ -179,7 +179,7 @@ export default function EditListingPage() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    const client = getBrowserSupabaseClient() ?? supabase;
+    const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) {
       alert("Connection not ready. Please try again.");
       return;
@@ -265,7 +265,7 @@ export default function EditListingPage() {
     return <div className="text-white text-center py-20">Redirecting to login...</div>;
   }
 
-  if (!supabase && !getBrowserSupabaseClient()) {
+  if (!supabase && !getSupabaseBrowserClient()) {
     return <div className="text-white text-center py-20">Connecting to your account...</div>;
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Link from "next/link";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
@@ -12,11 +12,14 @@ import {
   normalizeInventory,
   sortListingsByAvailability,
 } from "@/lib/inventory";
+import { installNetTrace } from "@/lib/netTrace";
 
 export default function PublicListingsPage() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const searchParams = useSearchParams();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
@@ -29,6 +32,37 @@ export default function PublicListingsPage() {
     () => sortListingsByAvailability(listings),
     [listings]
   );
+  const didInitTraceRef = useRef(false);
+  const loggedErrorRef = useRef(null);
+
+  useEffect(() => {
+    if (didInitTraceRef.current) return;
+    didInitTraceRef.current = true;
+    if (process.env.NEXT_PUBLIC_LISTINGS_NETTRACE === "1") {
+      installNetTrace({ enabled: true, tag: "LISTINGS" });
+      const onError = (event) => {
+        console.error("[LISTINGS][window:error]", {
+          message: event?.message,
+          filename: event?.filename,
+          lineno: event?.lineno,
+          colno: event?.colno,
+          error: event?.error?.stack || event?.error,
+        });
+      };
+      const onUnhandled = (event) => {
+        console.error("[LISTINGS][window:unhandledrejection]", {
+          reason: event?.reason?.stack || event?.reason,
+        });
+      };
+      window.addEventListener("error", onError);
+      window.addEventListener("unhandledrejection", onUnhandled);
+      return () => {
+        window.removeEventListener("error", onError);
+        window.removeEventListener("unhandledrejection", onUnhandled);
+      };
+    }
+    return undefined;
+  }, []);
   // Hydrate from session cache so the page feels instant on back/forward
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -53,16 +87,16 @@ export default function PublicListingsPage() {
   }, [loading]);
 
   useEffect(() => {
-    const client = getBrowserSupabaseClient();
+    const client = getSupabaseBrowserClient();
     if (!client) {
       setListings([]);
       setLoading(false);
       return undefined;
     }
     let active = true;
+    const controller = new AbortController();
 
-    async function load() {
-      setLoading((prev) => (hasLoaded ? prev : true));
+    async function getListingsSafe({ signal }) {
       try {
         let query = client.from("listings").select("*").order("created_at", {
           ascending: false,
@@ -76,12 +110,57 @@ export default function PublicListingsPage() {
             `title.ilike.%${escaped}%,description.ilike.%${escaped}%`
           );
         }
+        if (typeof query.abortSignal === "function") {
+          query = query.abortSignal(signal);
+        }
         const { data, error } = await query;
         if (error) {
-          console.error("Failed to load listings", error);
+          return { ok: false, error, status: error?.status };
         }
+        return { ok: true, data: Array.isArray(data) ? data : [] };
+      } catch (error) {
+        const message = typeof error?.message === "string" ? error.message : "";
+        const isAbort =
+          error?.name === "AbortError" || message.toLowerCase().includes("aborted");
+        if (isAbort) {
+          return { ok: false, aborted: true, error };
+        }
+        return { ok: false, error };
+      }
+    }
+
+    async function load() {
+      setLoading((prev) => (hasLoaded ? prev : true));
+      setLoadError(null);
+      try {
+        const result = await getListingsSafe({ signal: controller.signal });
         if (!active) return;
-        const next = Array.isArray(data) ? data : [];
+        if (!result.ok) {
+          if (result.aborted) return;
+          const requestKey = `${category || "all"}::${searchTerm || "all"}`;
+          const session = await client.auth.getSession().catch(() => null);
+          const userState = session?.data?.session?.user?.id
+            ? "signed_in"
+            : "signed_out";
+          const loggedKey = loggedErrorRef.current;
+          if (loggedKey !== requestKey) {
+            loggedErrorRef.current = requestKey;
+            console.error("[LISTINGS][load:error]", {
+              route: "/listings",
+              userState,
+              request: "supabase:listings",
+              status: result.status,
+              message: result.error?.message || "Unknown error",
+            });
+          }
+          setLoadError({
+            message:
+              result.error?.message || "We couldn't load listings right now.",
+          });
+          setListings([]);
+          return;
+        }
+        const next = result.data;
         setListings(next);
         setHasLoaded(true);
         if (typeof window !== "undefined") {
@@ -102,8 +181,9 @@ export default function PublicListingsPage() {
     load();
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [category, cacheKey, hasLoaded, searchTerm]);
+  }, [category, cacheKey, hasLoaded, retryKey, searchTerm]);
 
   return (
     <div className="max-w-4xl mx-auto py-2 md:pt-1">
@@ -137,6 +217,20 @@ export default function PublicListingsPage() {
 
       {loading ? (
         <div className="text-gray-500">Loading listings...</div>
+      ) : loadError ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-700">
+          <div className="font-semibold">Listings unavailable</div>
+          <p className="text-sm mt-1">
+            {loadError.message || "We couldn't load listings right now."}
+          </p>
+          <button
+            type="button"
+            className="mt-3 inline-flex items-center rounded-md border border-rose-200 bg-white px-3 py-1 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition"
+            onClick={() => setRetryKey((prev) => prev + 1)}
+          >
+            Retry
+          </button>
+        </div>
       ) : (
         <div
           className={

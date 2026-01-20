@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useParams, useRouter } from "next/navigation";
 import SafeImage from "@/components/SafeImage";
 import { getOrCreateConversation } from "@/lib/messages";
@@ -80,7 +80,7 @@ export default function ListingDetails({ params }) {
           return;
         }
 
-        const client = supabase ?? getBrowserSupabaseClient();
+        const client = supabase ?? getSupabaseBrowserClient();
         if (!client) {
           setError("We couldn’t connect. Try again.");
           setLoading(false);
@@ -131,7 +131,7 @@ export default function ListingDetails({ params }) {
     const accountId = user?.id || null;
     if (!accountId || !id) return () => {};
     const checkSaved = async () => {
-      const client = supabase ?? getBrowserSupabaseClient();
+      const client = supabase ?? getSupabaseBrowserClient();
       if (!client) return;
       const { data } = await client
         .from("saved_listings")

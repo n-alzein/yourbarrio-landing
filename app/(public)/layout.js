@@ -1,6 +1,6 @@
+import { Suspense } from "react";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import GlobalHeaderGate from "@/components/nav/GlobalHeaderGate";
-import { AuthProvider } from "@/components/AuthProvider";
 import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
 
 export const metadata = {
@@ -11,12 +11,14 @@ export const metadata = {
 
 export default function PublicLayout({ children }) {
   return (
-    <AuthProvider>
-      <GlobalHeaderGate>
-        <GlobalHeader surface="public" />
-      </GlobalHeaderGate>
+    <>
+      <Suspense fallback={null}>
+        <GlobalHeaderGate>
+          <GlobalHeader surface="public" />
+        </GlobalHeaderGate>
+      </Suspense>
       <BusinessAuthRedirector />
       {children}
-    </AuthProvider>
+    </>
   );
 }

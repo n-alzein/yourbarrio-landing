@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { getCookieName } from "@/lib/supabaseClient";
+import { getCookieName } from "@/lib/supabase/browser";
 import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 

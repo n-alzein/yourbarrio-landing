@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const CACHE_SECONDS = 120;
 const GEOCODE_KEY = process.env.MAPBOX_GEOCODING_TOKEN || process.env.GOOGLE_GEOCODING_API_KEY || "";
 
 function createSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || (!serviceKey && !anonKey)) {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
     throw new Error("Missing Supabase configuration");
   }
-
-  const keyToUse = serviceKey || anonKey;
-  return createClient(supabaseUrl, keyToUse);
+  return supabase;
 }
 
 const geocodeCache = new Map();

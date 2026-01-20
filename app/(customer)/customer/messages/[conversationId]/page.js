@@ -5,8 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
-import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import {
   getAvatarUrl,
   getDisplayName,
@@ -145,58 +145,42 @@ export default function CustomerConversationPage() {
     });
   }, [authStatus, hydrated, userId, conversationKey, supabase]);
 
-  useEffect(() => {
-    if (!hydrated || !conversationKey) return undefined;
-    if (authStatus !== "authenticated") return undefined;
-    let cancelled = false;
-    let channel = null;
-    let client = null;
+  const buildThreadChannel = useCallback(
+    (activeClient) =>
+      activeClient
+        .channel(`messages-${conversationKey}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `conversation_id=eq.${conversationKey}`,
+          },
+          (payload) => {
+            const next = payload.new;
+            if (!next?.id) return;
+            setMessages((prev) => {
+              if (prev.some((item) => item.id === next.id)) return prev;
+              return [...prev, next];
+            });
+            if (next.recipient_id === userId) {
+              markConversationRead({
+                supabase: activeClient,
+                conversationId: conversationKey,
+              }).catch(() => {});
+            }
+          }
+        ),
+    [conversationKey, userId]
+  );
 
-    (async () => {
-      client = supabase ?? getBrowserSupabaseClient();
-      if (!client) return;
-      channel = await subscribeIfSession(
-        client,
-        (activeClient) =>
-          activeClient
-            .channel(`messages-${conversationKey}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "INSERT",
-                schema: "public",
-                table: "messages",
-                filter: `conversation_id=eq.${conversationKey}`,
-              },
-              (payload) => {
-                const next = payload.new;
-                if (!next?.id) return;
-                setMessages((prev) => {
-                  if (prev.some((item) => item.id === next.id)) return prev;
-                  return [...prev, next];
-                });
-                if (next.recipient_id === userId) {
-                  markConversationRead({
-                    supabase: client,
-                    conversationId: conversationKey,
-                  }).catch(() => {});
-                }
-              }
-            ),
-        "customer-thread"
-      );
-      if (cancelled && channel && client) {
-        client.removeChannel(channel);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (channel && client) {
-        client.removeChannel(channel);
-      }
-    };
-  }, [authStatus, hydrated, conversationKey, supabase, userId]);
+  useRealtimeChannel({
+    supabase,
+    enabled: hydrated && authStatus === "authenticated" && Boolean(conversationKey),
+    buildChannel: buildThreadChannel,
+    diagLabel: "customer-thread",
+  });
 
   const loadOlder = useCallback(async () => {
     if (!conversationKey || loadingMore || !hasMore) return;

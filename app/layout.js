@@ -10,6 +10,7 @@ import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
 import { AuthProvider } from "@/components/AuthProvider";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({ children }) {
         ].join(" ")}
       >
         <CrashLoggerClient />
+        <ScrollToTop />
         <DevOnlyNavRecorderLoader />
         <ThemeProvider>
           <OverlayGuard />

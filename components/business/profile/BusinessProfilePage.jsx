@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Edit3, ImagePlus, Megaphone, ExternalLink } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { uploadPublicImage } from "@/lib/storageUpload";
 import BusinessProfileHeader from "@/components/business/profile/BusinessProfileHeader";
 import ProfileTabs from "@/components/business/profile/ProfileTabs";
@@ -69,7 +69,7 @@ export default function BusinessProfilePage({
     return () => previewChannelRef.current?.close();
   }, []);
 
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   const businessId = profile?.id || user?.id || "";
   const reviewCount = ratingSummary?.count ?? initialReviewCount ?? 0;
   const averageRating = ratingSummary?.average ?? 0;

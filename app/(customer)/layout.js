@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
-import { AuthProvider } from "@/components/AuthProvider";
+import AuthSeed from "@/components/auth/AuthSeed";
 import { requireRole } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +20,11 @@ export default async function CustomerLayout({ children }) {
   const { user, profile } = await requireRole("customer");
 
   return (
-    <AuthProvider
-      initialUser={user}
-      initialProfile={profile}
-      initialRole="customer"
-    >
-      <GlobalHeader surface="customer" />
+    <>
+      <AuthSeed user={user} profile={profile} role="customer" />
+      <Suspense fallback={null}>
+        <GlobalHeader surface="customer" />
+      </Suspense>
       <InactivityLogout />
       <CustomerRouteShell>
         <Suspense
@@ -40,6 +39,6 @@ export default async function CustomerLayout({ children }) {
           {children}
         </Suspense>
       </CustomerRouteShell>
-    </AuthProvider>
+    </>
   );
 }

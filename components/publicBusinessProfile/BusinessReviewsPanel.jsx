@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useAuth } from "@/components/AuthProvider";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useViewerContext } from "@/components/public/ViewerContextEnhancer";
@@ -122,7 +122,7 @@ export default function BusinessReviewsPanel({
     if (!businessId || loadingMore) return;
     setLoadingMore(true);
 
-    const client = getBrowserSupabaseClient();
+    const client = getSupabaseBrowserClient();
     if (!client) {
       setLoadingMore(false);
       return;
@@ -166,7 +166,7 @@ export default function BusinessReviewsPanel({
     }
 
     const loadCustomerReview = async () => {
-      const client = supabase ?? getBrowserSupabaseClient();
+      const client = supabase ?? getSupabaseBrowserClient();
       if (!client) return;
       const { data, error } = await client
         .from("business_reviews")
@@ -202,7 +202,7 @@ export default function BusinessReviewsPanel({
     if (!missing.length) return () => {};
 
     const loadNames = async () => {
-      const client = supabase ?? getBrowserSupabaseClient();
+      const client = supabase ?? getSupabaseBrowserClient();
       if (!client) return;
       const { data, error } = await client
         .from("users")
@@ -254,7 +254,7 @@ export default function BusinessReviewsPanel({
     setSubmitError("");
     setSubmitSuccess("");
 
-    const client = supabase ?? getBrowserSupabaseClient();
+    const client = supabase ?? getSupabaseBrowserClient();
     if (!client) {
       setSubmitError("We couldn’t connect. Try again.");
       setSubmitting(false);
@@ -349,7 +349,7 @@ export default function BusinessReviewsPanel({
     setEditLoading(true);
     setEditError("");
 
-    const client = supabase ?? getBrowserSupabaseClient();
+    const client = supabase ?? getSupabaseBrowserClient();
     if (!client) {
       setEditError("We couldn’t connect. Try again.");
       setEditLoading(false);
@@ -420,7 +420,7 @@ export default function BusinessReviewsPanel({
     setEditLoading(true);
     setEditError("");
 
-    const client = supabase ?? getBrowserSupabaseClient();
+    const client = supabase ?? getSupabaseBrowserClient();
     if (!client) {
       setEditError("We couldn’t connect. Try again.");
       setEditLoading(false);

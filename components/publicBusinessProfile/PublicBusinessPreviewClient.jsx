@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef } from "react";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
 import BusinessAnnouncementsPreview from "@/components/publicBusinessProfile/BusinessAnnouncementsPreview";
@@ -206,7 +206,7 @@ export default function PublicBusinessPreviewClient({
     let active = true;
     async function load() {
       if (!businessId) return;
-      const client = getBrowserSupabaseClient();
+      const client = getSupabaseBrowserClient();
       if (!client) return;
       dispatch({ type: "REQUEST" });
 

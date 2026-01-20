@@ -273,6 +273,11 @@ button {
   touch-action: manipulation;
 }
 
+/* Allow vertical scroll gestures on listing grids without firing taps. */
+.yb-tile-scroll-guard-y {
+  touch-action: pan-y;
+}
+
 /* ----------------------------------------------------- */
 /* Auth card theming                                    */
 /* ----------------------------------------------------- */

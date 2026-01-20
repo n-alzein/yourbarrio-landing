@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export default function NewListingPage() {
   const { supabase, user, profile, loadingUser } = useAuth();
@@ -63,7 +63,7 @@ export default function NewListingPage() {
 
   async function uploadPhotos() {
     if (!photos.length) return [];
-    const client = getBrowserSupabaseClient() ?? supabase;
+    const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) throw new Error("Connection not ready. Try again.");
 
     const uploaded = [];
@@ -100,7 +100,7 @@ export default function NewListingPage() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    const client = getBrowserSupabaseClient() ?? supabase;
+    const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) {
       alert("Connection not ready. Please try again.");
       return;
@@ -177,7 +177,7 @@ export default function NewListingPage() {
     );
   }
 
-  if (!supabase && !getBrowserSupabaseClient()) {
+  if (!supabase && !getSupabaseBrowserClient()) {
     return (
       <p className="text-white text-center py-20">
         Connecting to your account...

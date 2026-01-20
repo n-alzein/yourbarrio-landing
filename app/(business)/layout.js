@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import InactivityLogout from "@/components/auth/InactivityLogout";
-import { AuthProvider } from "@/components/AuthProvider";
+import AuthSeed from "@/components/auth/AuthSeed";
 import { requireRole } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +20,8 @@ export default async function BusinessLayout({ children }) {
   const { user, profile } = await requireRole("business");
 
   return (
-    <AuthProvider
-      initialUser={user}
-      initialProfile={profile}
-      initialRole="business"
-    >
+    <>
+      <AuthSeed user={user} profile={profile} role="business" />
       <BusinessNavbar requireAuth />
       <InactivityLogout />
       <BusinessRouteShell>
@@ -40,6 +37,6 @@ export default async function BusinessLayout({ children }) {
           {children}
         </Suspense>
       </BusinessRouteShell>
-    </AuthProvider>
+    </>
   );
 }

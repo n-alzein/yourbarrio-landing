@@ -20,7 +20,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   getAvailabilityBadgeStyle,
   normalizeInventory,
@@ -505,7 +505,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     if (!el) return;
     el.scrollBy({ left: dir * 320, behavior: "smooth" });
   };
-  const DRAG_DISTANCE_PX = 6;
+  const DRAG_DISTANCE_PX = 10;
   const DRAG_CANCEL_WINDOW_MS = 300;
   const handleTilePointerDown = useCallback((event) => {
     if (event.pointerType !== "touch") return;
@@ -515,6 +515,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     state.startX = event.clientX;
     state.startY = event.clientY;
     state.dragging = false;
+    state.lastDragAt = 0;
   }, []);
   const handleTilePointerMove = useCallback((event) => {
     const state = tileDragState.current;
@@ -562,7 +563,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
       setYbBusinessesLoading((prev) => (hasLoadedYbRef.current ? prev : true));
       setYbBusinessesError(null);
       logDataDiag("request:start", { label: "home:yb-businesses", requestId });
-      const client = supabase ?? getBrowserSupabaseClient();
+      const client = supabase ?? getSupabaseBrowserClient();
       try {
         let rows = [];
 
@@ -771,7 +772,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     const loadAll = async () => {
       const requestId = ++allListingsRequestIdRef.current;
       allListingsFetchedRef.current = true;
-      const client = supabase ?? getBrowserSupabaseClient();
+      const client = supabase ?? getSupabaseBrowserClient();
       if (!client) {
         setAllListingsLoading(false);
         return;
@@ -1303,7 +1304,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     const term = search.trim();
     const categoryValue = categoryFilter.trim();
 
-    const client = supabase ?? getBrowserSupabaseClient();
+    const client = supabase ?? getSupabaseBrowserClient();
     if (!client) return undefined;
 
     if (!term) {
@@ -1610,7 +1611,11 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               !enableVirtualize ? (
                 <div
                   ref={gridContainerRef}
-                  className="grid gap-3 mt-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                  className="grid gap-3 mt-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 yb-tile-scroll-guard-y"
+                  onPointerDown={handleTilePointerDown}
+                  onPointerMove={handleTilePointerMove}
+                  onPointerUp={handleTilePointerUp}
+                  onPointerCancel={handleTilePointerCancel}
                   onClickCapture={handleTileClickCapture}
                   style={allowGridDiag ? { outline: "1px solid red" } : undefined}
                 >
@@ -1672,7 +1677,11 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               ) : (
                 <div
                   ref={gridContainerRef}
-                  className="relative mt-3"
+                  className="relative mt-3 yb-tile-scroll-guard-y"
+                  onPointerDown={handleTilePointerDown}
+                  onPointerMove={handleTilePointerMove}
+                  onPointerUp={handleTilePointerUp}
+                  onPointerCancel={handleTilePointerCancel}
                   onClickCapture={handleTileClickCapture}
                   style={{
                     contain: "layout paint size",

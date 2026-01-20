@@ -1,5 +1,5 @@
 import { resolveImageSrc } from "@/lib/safeImage";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export const MESSAGE_PAGE_SIZE = 50;
 export const CONVERSATION_PAGE_SIZE = 40;
@@ -41,7 +41,7 @@ export async function fetchConversations({
   userId: string;
   role: "customer" | "business";
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return [];
 
   const diagEnabled =
@@ -102,7 +102,7 @@ export async function fetchConversationById({
   supabase?: any;
   conversationId: string;
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
   // Avoid embedded joins to reduce RLS overhead and slow query plans.
@@ -148,7 +148,7 @@ export async function fetchMessages({
   limit?: number;
   before?: string | null;
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return [];
 
   let query = client
@@ -181,7 +181,7 @@ export async function sendMessage({
   recipientId: string;
   body: string;
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
   const { data, error } = await client
@@ -208,7 +208,7 @@ export async function getOrCreateConversation({
   customerId: string;
   businessId: string;
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
   const { data, error } = await client.rpc("get_or_create_conversation", {
@@ -256,7 +256,7 @@ export async function markConversationRead({
   supabase?: any;
   conversationId: string;
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
   const { error } = await client.rpc("mark_conversation_read", {
@@ -276,7 +276,7 @@ export async function fetchUnreadTotal({
   userId: string;
   role: "customer" | "business";
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return 0;
   if (!userId) return 0;
 
@@ -313,7 +313,7 @@ async function fetchProfilesByIds({
   supabase?: any;
   ids: Array<string | null | undefined>;
 }) {
-  const client = supabase ?? getBrowserSupabaseClient();
+  const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return {};
   const uniqueIds = Array.from(
     new Set(ids.filter((id): id is string => Boolean(id)))

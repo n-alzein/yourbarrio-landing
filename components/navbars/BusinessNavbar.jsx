@@ -20,9 +20,8 @@ import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import SafeImage from "@/components/SafeImage";
-import { subscribeIfSession } from "@/lib/realtime/subscribeIfSession";
+import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
 function NavItem({
@@ -238,49 +237,35 @@ function BusinessNavbarInner({ pathname }) {
     });
   }, [badgeReady, loadUnreadCount]);
 
-  useEffect(() => {
-    if (!badgeReady) return undefined;
-    if (authStatus !== "authenticated") return undefined;
-    const userId = user?.id;
-    if (!userId || role !== "business") return undefined;
-    let cancelled = false;
-    let channel = null;
-    let client = null;
+  const buildUnreadChannel = useCallback(
+    (activeClient) =>
+      activeClient
+        .channel(`business-unread-${user?.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "conversations",
+            filter: `business_id=eq.${user?.id}`,
+          },
+          () => {
+            loadUnreadCount();
+          }
+        ),
+    [user?.id, loadUnreadCount]
+  );
 
-    (async () => {
-      client = supabase ?? getBrowserSupabaseClient();
-      if (!client) return;
-      channel = await subscribeIfSession(
-        client,
-        (activeClient) =>
-          activeClient
-            .channel(`business-unread-${userId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "*",
-                schema: "public",
-                table: "conversations",
-                filter: `business_id=eq.${userId}`,
-              },
-              () => {
-                loadUnreadCount();
-              }
-            ),
-        "business-unread"
-      );
-      if (cancelled && channel && client) {
-        client.removeChannel(channel);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (channel && client) {
-        client.removeChannel(channel);
-      }
-    };
-  }, [authStatus, badgeReady, user?.id, supabase, role, loadUnreadCount]);
+  useRealtimeChannel({
+    supabase,
+    enabled:
+      badgeReady &&
+      authStatus === "authenticated" &&
+      role === "business" &&
+      Boolean(user?.id),
+    buildChannel: buildUnreadChannel,
+    diagLabel: "business-unread",
+  });
 
   const disableReasons = useMemo(() => {
     const reasons = [];

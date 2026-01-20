@@ -1,4 +1,4 @@
-import { AuthProvider } from "@/components/AuthProvider";
+import AuthSeed from "@/components/auth/AuthSeed";
 import { getProfile, requireUser } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
@@ -9,12 +9,13 @@ export default async function ProfileLayout({ children }) {
   const profile = await getProfile(user.id);
 
   return (
-    <AuthProvider
-      initialUser={user}
-      initialProfile={profile}
-      initialRole={profile?.role ?? null}
-    >
+    <>
+      <AuthSeed
+        user={user}
+        profile={profile}
+        role={profile?.role ?? null}
+      />
       {children}
-    </AuthProvider>
+    </>
   );
 }

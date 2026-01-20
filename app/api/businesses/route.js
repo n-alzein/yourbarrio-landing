@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 async function geocodeAddress(address) {
   const key = process.env.GOOGLE_GEOCODING_API_KEY;
@@ -43,16 +43,13 @@ export async function POST(req) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
+    const supabase = getSupabaseServerClient();
+    if (!supabase) {
       return NextResponse.json(
         { error: "Server is missing Supabase credentials" },
         { status: 500 }
       );
     }
-
-    const supabase = createClient(supabaseUrl, serviceKey);
 
     const prefilledGeo =
       typeof latitude === "number" && typeof longitude === "number"

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
-import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useModal } from "./ModalProvider";
 import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
@@ -110,7 +110,7 @@ export default function CustomerLoginModal({ onClose }) {
     event.preventDefault();
     if (loading || loadingUser) return;
     setError("");
-    const client = supabase ?? getBrowserSupabaseClient();
+    const client = supabase ?? getSupabaseBrowserClient();
 
     if (authDiagEnabled) {
       console.log("[AUTH_DIAG] customer login submit", {
@@ -272,7 +272,7 @@ export default function CustomerLoginModal({ onClose }) {
 
     let attemptId = 0;
     try {
-      const client = supabase ?? getBrowserSupabaseClient();
+      const client = supabase ?? getSupabaseBrowserClient();
       if (!client || !client.auth) {
         setError("Auth is unavailable. Please refresh and try again.");
         return;
