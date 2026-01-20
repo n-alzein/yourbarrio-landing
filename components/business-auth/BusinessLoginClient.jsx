@@ -56,6 +56,20 @@ function BusinessLoginInner() {
     [authDiagEnabled]
   );
 
+  const closeAuthAttempt = useCallback(
+    (reason) => {
+      if (!globalAttemptIdRef.current) return;
+      endAuthAttempt(globalAttemptIdRef.current, reason);
+      authDiagLog("auth:attempt:end", {
+        action: "business_login",
+        attemptId: globalAttemptIdRef.current,
+        reason,
+      });
+      globalAttemptIdRef.current = 0;
+    },
+    [authDiagLog, endAuthAttempt]
+  );
+
   useEffect(() => {
     authAttemptIdRef.current = authAttemptId;
   }, [authAttemptId]);
@@ -169,6 +183,47 @@ function BusinessLoginInner() {
     finishBusinessAuth();
   }, [finishBusinessAuth, waitForAuthCookie]);
 
+  const handleLoginTimeout = useCallback(
+    async (attemptId, timeoutController) => {
+      if (didCompleteRef.current || attemptRef.current !== attemptId) return;
+      timeoutController.abort(new Error("timeout"));
+      pendingRef.current = false;
+
+      let activeSession = sessionRef.current;
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          activeSession = data.session;
+          sessionRef.current = data.session;
+        }
+      } catch (err) {
+        console.warn("Could not read session after timeout", err);
+      }
+
+      authDiagLog("login:timeout", {
+        attemptId,
+        hasSession: Boolean(activeSession),
+      });
+
+      if (activeSession) {
+        didCompleteRef.current = true;
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        closeAuthAttempt("session");
+        await redirectToDashboard();
+        return;
+      }
+
+      if (mountedRef.current) {
+        setLoading(false);
+        setAuthError("Login timed out. Please try again.");
+      }
+      closeAuthAttempt("timeout");
+    },
+    [authDiagLog, closeAuthAttempt, redirectToDashboard, supabase]
+  );
+
   useEffect(() => {
     if (authStatus !== "authenticated" || !user?.id || role !== "business") return;
     didCompleteRef.current = true;
@@ -179,13 +234,17 @@ function BusinessLoginInner() {
     if (mountedRef.current) {
       setLoading(false);
     }
-    if (globalAttemptIdRef.current) {
-      endAuthAttempt(globalAttemptIdRef.current, "session");
-      globalAttemptIdRef.current = 0;
-    }
+    closeAuthAttempt("session");
     authDiagLog("login:session:ready", { userId: user.id });
     void redirectToDashboard();
-  }, [authStatus, authDiagLog, endAuthAttempt, redirectToDashboard, role, user?.id]);
+  }, [
+    authStatus,
+    authDiagLog,
+    closeAuthAttempt,
+    redirectToDashboard,
+    role,
+    user?.id,
+  ]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -212,14 +271,7 @@ function BusinessLoginInner() {
     const timeoutController = new AbortController();
     timeoutControllerRef.current = timeoutController;
     timeoutIdRef.current = setTimeout(() => {
-      if (didCompleteRef.current || attemptRef.current !== attemptId) return;
-      timeoutController.abort(new Error("timeout"));
-      pendingRef.current = false;
-      authDiagLog("login:timeout", { attemptId });
-      if (mountedRef.current) {
-        setLoading(false);
-        setAuthError("Login timed out. Please try again.");
-      }
+      void handleLoginTimeout(attemptId, timeoutController);
     }, 20000);
 
     pendingRef.current = true;
@@ -257,11 +309,16 @@ function BusinessLoginInner() {
       const user = data.user;
       sessionRef.current = data?.session ?? null;
 
-      const { data: profile, error: profileErr } = await supabase
+      const profileQuery = supabase
         .from("users")
         .select("role")
         .eq("id", user.id)
         .maybeSingle();
+      const profileResult =
+        typeof profileQuery.abortSignal === "function"
+          ? await profileQuery.abortSignal(timeoutController.signal)
+          : await profileQuery;
+      const { data: profile, error: profileErr } = profileResult;
 
       if (timeoutController.signal.aborted || attemptRef.current !== attemptId) {
         return;
@@ -333,14 +390,7 @@ function BusinessLoginInner() {
           setLoading(false);
         }
       }
-      if (globalAttemptIdRef.current) {
-        endAuthAttempt(globalAttemptIdRef.current, "password");
-        authDiagLog("auth:attempt:end", {
-          action: "business_login",
-          attemptId: globalAttemptIdRef.current,
-        });
-        globalAttemptIdRef.current = 0;
-      }
+      closeAuthAttempt("password");
       authDiagLog("login:submit:end", { attemptId });
     }
   }

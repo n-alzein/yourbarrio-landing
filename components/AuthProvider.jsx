@@ -114,6 +114,7 @@ const authStore = {
   authUnsubscribe: null,
   loggingOut: false,
   providerInstanceId: null,
+  bootstrapAbortController: null,
 };
 
 let handledTokenInvalidAt = 0;
@@ -270,6 +271,50 @@ function buildAuthUiResetState(reason) {
     authAttemptId: nextAttemptId,
     authActionStartedAt: 0,
   };
+}
+
+function applySignedOutState(reason = "signed_out", options = {}) {
+  const {
+    resetGuardState = false,
+    clearAuthSuppression = false,
+    extraState = null,
+    resetAuthUi = true,
+  } = options;
+
+  if (authStore.bootstrapAbortController?.abort) {
+    authStore.bootstrapAbortController.abort();
+  }
+  authStore.bootstrapAbortController = null;
+  authStore.bootstrapPromise = null;
+  authStore.profilePromise = null;
+  authStore.profileUserId = null;
+
+  if (clearAuthSuppression) {
+    authStore.loggingOut = false;
+    setAuthChangeSuppressed(false);
+  }
+
+  const signedOutBase = resetGuardState
+    ? {
+        ...buildSignedOutState(),
+        rateLimited: false,
+        rateLimitUntil: 0,
+        rateLimitMessage: null,
+        tokenInvalidAt: 0,
+      }
+    : withGuardState(buildSignedOutState());
+
+  const authUiState = resetAuthUi
+    ? buildAuthUiResetState(`signed_out:${reason}`)
+    : null;
+
+  updateAuthState({
+    ...signedOutBase,
+    ...(authUiState || {}),
+    ...(extraState || {}),
+  });
+
+  logAuthDiag("auth:signed_out:applied", { reason, resetGuardState });
 }
 
 function beginAuthAttempt(action) {
@@ -461,11 +506,9 @@ async function applyUserUpdate(user) {
   }
 
   if (!user) {
-    authStore.loggingOut = false;
-    setAuthChangeSuppressed(false);
-    updateAuthState({
-      ...withGuardState(buildSignedOutState()),
-      ...buildAuthUiResetState("apply_user_update:signed_out"),
+    applySignedOutState("apply_user_update", {
+      resetGuardState: false,
+      clearAuthSuppression: true,
     });
     return;
   }
@@ -489,11 +532,20 @@ async function applyUserUpdate(user) {
 async function bootstrapAuth() {
   if (authStore.bootstrapPromise) return authStore.bootstrapPromise;
 
+  const abortController = new AbortController();
+  authStore.bootstrapAbortController = abortController;
+  const { signal } = abortController;
+
   authStore.bootstrapPromise = (async () => {
     updateAuthState({ authStatus: "loading", error: null });
     let user = null;
     let sessionChecked = false;
     let sessionError = null;
+
+    if (signal.aborted) {
+      logAuthDiag("auth:bootstrap:aborted", { step: "start" });
+      return;
+    }
 
     if (authStore.supabase?.auth?.getSession) {
       const guard = getAuthGuardState();
@@ -534,21 +586,40 @@ async function bootstrapAuth() {
       }
     }
 
+    if (signal.aborted) {
+      logAuthDiag("auth:bootstrap:aborted", { step: "session" });
+      return;
+    }
+
     if (sessionChecked) {
       if (!user || sessionError) {
-        await applyUserUpdate(null);
+        applySignedOutState("bootstrap:no_session", {
+          resetGuardState: false,
+          clearAuthSuppression: true,
+        });
         return;
       }
     } else if (!user) {
       user = await getVerifiedUser();
     }
 
+    if (signal.aborted) {
+      logAuthDiag("auth:bootstrap:aborted", { step: "verified_user" });
+      return;
+    }
+
     if (!user) {
-      await applyUserUpdate(null);
+      applySignedOutState("bootstrap:no_user", {
+        resetGuardState: false,
+        clearAuthSuppression: true,
+      });
       return;
     }
     await applyUserUpdate(user);
   })().finally(() => {
+    if (authStore.bootstrapAbortController === abortController) {
+      authStore.bootstrapAbortController = null;
+    }
     authStore.bootstrapPromise = null;
   });
 
@@ -567,15 +638,13 @@ function ensureAuthListener() {
       });
       if (event === "SIGNED_OUT") {
         emitAuthUiReset("auth_event:signed_out");
-        updateAuthState({
-          ...buildSignedOutState(),
-          rateLimited: false,
-          rateLimitUntil: 0,
-          rateLimitMessage: null,
-          tokenInvalidAt: 0,
-          ...buildAuthUiResetState("auth_event:signed_out"),
-          lastAuthEvent: event,
-          lastError: null,
+        applySignedOutState("auth_event:signed_out", {
+          resetGuardState: true,
+          clearAuthSuppression: true,
+          extraState: {
+            lastAuthEvent: event,
+            lastError: null,
+          },
         });
         void cleanupRealtimeChannels();
         return;
@@ -746,13 +815,9 @@ export function AuthProvider({
       }
       await cleanupRealtimeChannels();
       clearVerifiedUserCache();
-      updateAuthState({
-        ...buildSignedOutState(),
-        rateLimited: false,
-        rateLimitUntil: 0,
-        rateLimitMessage: null,
-        tokenInvalidAt: 0,
-        ...buildAuthUiResetState("token_invalid"),
+      applySignedOutState("token_invalid", {
+        resetGuardState: true,
+        clearAuthSuppression: true,
       });
       acknowledgeAuthTokenInvalid(authState.tokenInvalidAt);
 
@@ -783,9 +848,16 @@ export function AuthProvider({
   const logout = useCallback(async (options = {}) => {
     const { redirectTo, reason = "logout" } = options;
     const role = authStore.state.role;
+    const inferredRole =
+      role ||
+      (typeof window !== "undefined" && window.location.pathname.startsWith("/business")
+        ? "business"
+        : "customer");
     const resolvedRedirect =
       redirectTo ||
-      (role === "business" ? "/business" : PATHS.public.root);
+      (inferredRole === "business"
+        ? PATHS.auth.businessLogin
+        : PATHS.auth.customerLogin);
     const shouldRedirect = typeof window !== "undefined";
     let redirectPending = shouldRedirect;
 
@@ -793,14 +865,13 @@ export function AuthProvider({
     emitAuthUiReset("logout:pre");
     authStore.loggingOut = true;
     setAuthChangeSuppressed(true);
-    updateAuthState({
-      ...buildSignedOutState(),
-      rateLimited: false,
-      rateLimitUntil: 0,
-      rateLimitMessage: null,
-      tokenInvalidAt: 0,
-      lastAuthEvent: "SIGNED_OUT",
-      lastError: null,
+    applySignedOutState("logout:pre", {
+      resetGuardState: true,
+      resetAuthUi: false,
+      extraState: {
+        lastAuthEvent: "SIGNED_OUT",
+        lastError: null,
+      },
     });
 
     logAuthDiag("logout", {
@@ -1018,7 +1089,9 @@ export function AuthProvider({
     if (pathname.startsWith("/business-auth")) return;
 
     const target =
-      pathname.startsWith("/business") ? "/business" : PATHS.public.root;
+      pathname.startsWith("/business")
+        ? PATHS.auth.businessLogin
+        : PATHS.auth.customerLogin;
     if (pathname === target || pathname === `${target}/`) return;
 
     logAuthDiag("route_guard:client_redirect", {

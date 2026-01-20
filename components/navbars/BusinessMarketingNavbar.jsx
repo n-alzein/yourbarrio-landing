@@ -77,12 +77,12 @@ export default function BusinessMarketingNavbar() {
             {/* LEFT SIDE */}
             <div className="flex items-center gap-x-10">
               <Link href="/business" className="select-none">
-                <span className="relative block h-10 w-10 md:h-11 md:w-11">
+                <span className="relative block h-10 w-10 md:h-14 md:w-14">
                   <Image
                     src="/logo.png"
                     alt="YourBarrio Logo"
                     fill
-                    sizes="44px"
+                    sizes="56px"
                     priority
                     className="object-contain"
                   />

@@ -239,7 +239,17 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           </svg>
         </button>
         <Link href={logoHref} aria-label="Go to home" className="touch-manipulation">
-          <span className="relative block h-10 w-10">
+          <span className="relative block h-10 w-10 md:hidden">
+            <Image
+              src="/business-placeholder2.png"
+              alt="YourBarrio"
+              fill
+              sizes="40px"
+              priority
+              className="object-contain"
+            />
+          </span>
+          <span className="relative hidden h-10 w-10 md:block">
             <Image
               src="/logo.png"
               alt="YourBarrio"
@@ -255,7 +265,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           <div className="md:hidden flex-1" data-nav-guard="1">
             <form
               onSubmit={handleSubmitSearch}
-              className="mr-3 flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+              className="relative flex w-[calc(100%-3rem)] items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
             >
               <Search className="h-4 w-4 text-white/70" />
               <input
@@ -263,13 +273,13 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                 name="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 bg-transparent text-sm placeholder:text-white/60 focus:outline-none"
+                className="flex-1 bg-transparent pr-12 text-sm placeholder:text-white/60 focus:outline-none"
                 placeholder="Search for anything nearby"
                 type="search"
               />
               <button
                 type="submit"
-                className="px-3 py-1 rounded-lg bg-white text-xs font-semibold text-black"
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-white text-xs font-semibold text-black"
               >
                 Go
               </button>

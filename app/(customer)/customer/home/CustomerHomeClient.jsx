@@ -205,8 +205,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     ? initialListingsProp
     : initialListingsFromStorage;
   const [mapBusinesses, setMapBusinesses] = useState(initialYb);
-  const [mapControls, setMapControls] = useState(null);
-  const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [hybridItems, setHybridItems] = useState([]);
   const [hybridItemsLoading, setHybridItemsLoading] = useState(false);
   const [hybridItemsError, setHybridItemsError] = useState(null);
@@ -502,14 +500,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     });
   }, [mapBusinesses, search, ybBusinesses, categoryFilter]);
 
-  const handleSelectBusiness = (biz) => {
-    setSelectedBusiness((prev) => {
-      const next = prev?.id === biz?.id ? null : biz;
-      if (next) mapControls?.focusBusiness?.(biz);
-      return next;
-    });
-  };
-
   const scrollGallery = (dir) => {
     const el = galleryRef.current;
     if (!el) return;
@@ -773,12 +763,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     }
   }, [ybBusinesses]);
 
-  // After both map controls and businesses are ready, refresh markers once
-  useEffect(() => {
-    if (!mapOpen) {
-      setMapControls(null);
-    }
-  }, [mapOpen]);
 
   useEffect(() => {
     if (hasInitialListings) return undefined;
@@ -902,13 +886,8 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
             (item) =>
               (item.category || "").trim().toLowerCase() === categoryFilterNormalized
           );
-    if (selectedBusiness?.source === "supabase_users" && selectedBusiness?.id) {
-      baseListings = baseListings.filter(
-        (item) => item.business_id === selectedBusiness.id
-      );
-    }
     return sortListingsByAvailability(baseListings);
-  }, [allListings, categoryFilter, selectedBusiness]);
+  }, [allListings, categoryFilter]);
 
   const safeColumns = Math.max(1, gridColumns);
   const listingRows = useMemo(() => {
@@ -1177,14 +1156,18 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   };
 
   const renderNearbySection = (compact = false) => (
-    <div className="grid grid-cols-1 gap-4 mt-0 pointer-events-auto">
+    <div
+      className={`grid grid-cols-1 gap-2 mt-0 pointer-events-auto ${
+        compact ? "" : "relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen"
+      }`}
+    >
       <div
         className={`border border-white/10 ${
           compact ? "bg-black/80 shadow-lg" : "bg-white/5 backdrop-blur-xl shadow-xl"
         } pointer-events-auto`}
       >
         {!compact ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-3 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-5 sm:px-6 md:px-8 lg:px-12 pt-2 pb-1">
             <div className={`text-sm uppercase tracking-[0.18em] ${textTone.subtle}`}>
               Nearby businesses
             </div>
@@ -1222,7 +1205,9 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         ) : null}
         <div
           ref={compact ? undefined : galleryRef}
-          className={`flex flex-nowrap overflow-x-auto snap-x snap-mandatory ${compact ? "" : "border-t border-white/10"}`}
+          className={`flex flex-nowrap overflow-x-auto snap-x snap-mandatory ${
+            compact ? "" : "border-t border-white/10 px-5 sm:px-6 md:px-8 lg:px-12"
+          }`}
           onPointerDown={handleTilePointerDown}
           onPointerMove={handleTilePointerMove}
           onPointerUp={handleTilePointerUp}
@@ -1230,12 +1215,12 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           onClickCapture={handleTileClickCapture}
         >
           {filteredBusinesses.map((biz) => (
-            <button
-              type="button"
+            <Link
               key={biz.id || biz.name}
-              className={`${compact ? "h-[88px]" : "h-[260px]"} snap-start text-left border-r border-white/10 bg-white/5 hover:bg-white/10 transition shadow-sm rounded-none last:border-r-0 flex flex-col overflow-hidden ${
-                selectedBusiness?.id === biz.id ? "bg-white/10" : ""
-              }`}
+              href={biz?.id ? `/customer/b/${biz.id}` : "#"}
+              prefetch={false}
+              data-safe-nav="1"
+              className={`${compact ? "h-[88px]" : "h-[220px]"} snap-start text-left border-r border-white/10 bg-white/5 hover:bg-white/10 transition shadow-sm rounded-none last:border-r-0 flex flex-col overflow-hidden`}
               style={{
                 width: compact ? "200px" : "260px",
                 minWidth: compact ? "200px" : "260px",
@@ -1244,15 +1229,14 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               }}
               onClick={(event) => {
                 diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
-                if (event.defaultPrevented) return;
-                handleSelectBusiness(biz);
+                if (!biz?.id) event.preventDefault();
               }}
               data-clickdiag={clickDiagEnabled ? "tile" : undefined}
               data-clickdiag-tile-id={clickDiagEnabled ? biz.id || biz.name : undefined}
               data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
               onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
             >
-              <div className={`${compact ? "h-full" : "h-28"} w-full ${compact ? "" : "border-b border-white/10"} bg-white/5 flex items-center ${compact ? "gap-2 px-2" : "justify-center"} flex-shrink-0`}>
+              <div className={`${compact ? "h-full" : "h-24"} w-full ${compact ? "" : "border-b border-white/10"} bg-white/5 flex items-center ${compact ? "gap-2 px-2" : "justify-center"} flex-shrink-0`}>
                 {businessPhotoFor(biz) ? (
                   <div className={`${compact ? "h-14 w-14 shrink-0" : "h-full w-full"}`}>
                     <SafeImage
@@ -1300,7 +1284,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                   </div>
                 ) : null}
               </div>
-            </button>
+            </Link>
           ))}
           {!filteredBusinesses.length ? (
             <div className={`text-sm ${textTone.soft}`}>
@@ -1430,7 +1414,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
 
   return (
     <section
-      className={`relative w-full min-h-screen ${textTone.base} pb-4 pt-0 md:pt-0 -mt-4 md:-mt-12`}
+      className={`relative w-full min-h-screen ${textTone.base} pb-4 pt-0 md:pt-0 -mt-28 md:-mt-20`}
       data-clickdiag={clickDiagEnabled ? "home" : undefined}
     >
 
@@ -1741,8 +1725,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         mapEnabled={mapEnabled}
         mapBusinesses={mapBusinesses}
         onBusinessesChange={setMapBusinesses}
-        onControlsReady={setMapControls}
-        selectedBusiness={selectedBusiness}
         clickDiagEnabled={clickDiagEnabled}
       />
     </section>

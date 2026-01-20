@@ -510,7 +510,7 @@ function BusinessNavbarInner({ pathname }) {
       className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock"
       data-business-navbar="1"
     >
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
+      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20 md:h-32">
         {/* MOBILE MENU BUTTON */}
         <button
           onClick={() => {
@@ -532,12 +532,12 @@ function BusinessNavbarInner({ pathname }) {
           {/* Logo */}
           <div className="relative flex items-center">
             <Link href={user ? "/business/dashboard" : "/business"}>
-              <span className="relative block h-10 w-10">
+              <span className="relative block h-10 w-10 md:h-32 md:w-32">
                 <Image
                   src="/logo.png"
                   alt="YourBarrio"
                   fill
-                  sizes="40px"
+                  sizes="128px"
                   priority
                   className="object-contain"
                 />
@@ -545,8 +545,7 @@ function BusinessNavbarInner({ pathname }) {
             </Link>
 
             <span
-              className="absolute text-xs font-semibold text-white/80 whitespace-nowrap"
-              style={{ left: "75px", bottom: "36px" }}
+              className="absolute text-xs font-semibold text-white/80 whitespace-nowrap left-[75px] bottom-[36px] md:left-[150px] md:bottom-[96px]"
             >
               for Business
             </span>

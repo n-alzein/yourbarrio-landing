@@ -183,7 +183,7 @@ export default function MobileSidebarDrawer({
             <div className="flex items-center gap-3">
               <span className="relative block h-7 w-7">
                 <Image
-                  src="/logo.png"
+                  src="/business-placeholder2.png"
                   alt="YourBarrio"
                   fill
                   sizes="28px"
@@ -191,7 +191,7 @@ export default function MobileSidebarDrawer({
                 />
               </span>
               <div>
-                <div id={titleId} className="text-sm font-semibold">
+                <div id={titleId} className="text-sm font-semibold text-white">
                   {title}
                 </div>
                 <div className="text-[11px] text-white/60">YourBarrio</div>
