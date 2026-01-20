@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useModal } from "./ModalProvider";
+import { PATHS } from "@/lib/auth/paths";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 export default function CustomerLoginModal({ onClose }) {
   const {
@@ -18,6 +21,8 @@ export default function CustomerLoginModal({ onClose }) {
     role,
   } = useAuth();
   const { openModal } = useModal();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
 
   const [email, setEmail] = useState("");
@@ -26,6 +31,40 @@ export default function CustomerLoginModal({ onClose }) {
   const [loading, setLoading] = useState(false);
   const attemptIdRef = useRef(0);
   const timeoutRef = useRef(null);
+  const refreshControllerRef = useRef(null);
+
+  const getReturnUrl = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    const params =
+      searchParams ?? new URLSearchParams(window.location.search || "");
+    const keys = ["returnUrl", "next", "callbackUrl"];
+    for (const key of keys) {
+      const value = params.get(key);
+      if (!value) continue;
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      try {
+        const parsed = new URL(trimmed, window.location.origin);
+        if (parsed.origin !== window.location.origin) continue;
+        const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        if (!path.startsWith("/")) continue;
+        return path;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }, [searchParams]);
+
+  const resolveLoginTarget = useCallback(
+    (roleOverride) => {
+      if (roleOverride === "business") {
+        return PATHS.business.dashboard;
+      }
+      return getReturnUrl() ?? PATHS.customer.home;
+    },
+    [getReturnUrl]
+  );
 
   useEffect(() => {
     if (!attemptIdRef.current) return;
@@ -36,11 +75,23 @@ export default function CustomerLoginModal({ onClose }) {
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !user?.id) return;
-    const dest =
-      role === "business" ? "/business/dashboard" : "/customer/home";
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (refreshControllerRef.current) {
+      refreshControllerRef.current.abort();
+      refreshControllerRef.current = null;
+    }
+    if (attemptIdRef.current) {
+      endAuthAttempt(attemptIdRef.current, "session");
+      attemptIdRef.current = 0;
+    }
+    setLoading(false);
+    const target = resolveLoginTarget(role);
     onClose?.();
-    window.location.replace(dest);
-  }, [authStatus, onClose, role, user?.id]);
+    router.replace(target);
+  }, [authStatus, endAuthAttempt, onClose, resolveLoginTarget, role, router, user?.id]);
 
   useEffect(() => {
     return () => {
@@ -48,11 +99,16 @@ export default function CustomerLoginModal({ onClose }) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      if (refreshControllerRef.current) {
+        refreshControllerRef.current.abort();
+        refreshControllerRef.current = null;
+      }
     };
   }, []);
 
   async function handleLogin(event) {
     event.preventDefault();
+    if (loading || loadingUser) return;
     setError("");
     const client = supabase ?? getBrowserSupabaseClient();
 
@@ -135,10 +191,7 @@ export default function CustomerLoginModal({ onClose }) {
         return;
       }
 
-      const dest =
-        profile?.role === "business"
-          ? "/business/dashboard"
-          : "/customer/home";
+      const dest = resolveLoginTarget(profile?.role);
 
       onClose?.();
 
@@ -151,7 +204,13 @@ export default function CustomerLoginModal({ onClose }) {
           console.log("[customer-login] refreshing cookies with tokens");
         }
 
-        const res = await fetch("/api/auth/refresh", {
+        if (refreshControllerRef.current) {
+          refreshControllerRef.current.abort();
+        }
+        const refreshController = new AbortController();
+        refreshControllerRef.current = refreshController;
+
+        const res = await fetchWithTimeout("/api/auth/refresh", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -159,9 +218,14 @@ export default function CustomerLoginModal({ onClose }) {
             access_token: session?.access_token,
             refresh_token: session?.refresh_token,
           }),
+          timeoutMs: 15000,
+          signal: refreshController.signal,
         });
 
-        if (isStale()) return;
+        if (isStale()) {
+          refreshControllerRef.current = null;
+          return;
+        }
         const refreshed = res.headers.get("x-auth-refresh-user") === "1";
         if (debugAuth) {
           console.log(
@@ -171,12 +235,15 @@ export default function CustomerLoginModal({ onClose }) {
         }
 
         if (!refreshed) {
+          refreshControllerRef.current = null;
           setError(
             "Login succeeded but session could not be persisted in Safari. Please try again."
           );
           return;
         }
+        refreshControllerRef.current = null;
       } catch (err) {
+        refreshControllerRef.current = null;
         console.error("Auth refresh call failed", err);
         setError(
           "Login succeeded but session could not be persisted in Safari. Please try again."
@@ -184,7 +251,7 @@ export default function CustomerLoginModal({ onClose }) {
         return;
       }
 
-      window.location.replace(dest);
+      router.replace(dest);
     } catch (err) {
       if (isStale()) return;
       console.error("Customer login failed", err);

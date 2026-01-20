@@ -14,6 +14,7 @@ export default function useBodyScrollLock(locked) {
 
     lockRef.current = {
       scrollY,
+      href: window.location.href,
       bodyStyles: {
         position: body.style.position,
         top: body.style.top,
@@ -40,6 +41,10 @@ export default function useBodyScrollLock(locked) {
     return () => {
       const lock = lockRef.current;
       if (!lock) return;
+      const hasNavigated =
+        typeof window !== "undefined" &&
+        lock.href &&
+        window.location.href !== lock.href;
       body.style.position = lock.bodyStyles.position;
       body.style.top = lock.bodyStyles.top;
       body.style.left = lock.bodyStyles.left;
@@ -48,7 +53,9 @@ export default function useBodyScrollLock(locked) {
       body.style.overflow = lock.bodyStyles.overflow;
       body.style.paddingRight = lock.bodyStyles.paddingRight;
       documentElement.style.overflow = lock.htmlOverflow;
-      window.scrollTo(0, lock.scrollY);
+      if (!hasNavigated) {
+        window.scrollTo(0, lock.scrollY);
+      }
       lockRef.current = null;
     };
   }, [locked]);
