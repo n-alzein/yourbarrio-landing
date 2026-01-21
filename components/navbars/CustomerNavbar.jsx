@@ -14,6 +14,7 @@ import {
   MapPin,
   MessageSquare,
   PackageSearch,
+  ShoppingCart,
   Search,
   Settings,
   Sparkles,
@@ -34,6 +35,7 @@ import {
   normalizeInventory,
   sortListingsByAvailability,
 } from "@/lib/inventory";
+import { useCart } from "@/components/cart/CartProvider";
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
 
@@ -100,6 +102,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { openModal } = useModal();
+  const { itemCount } = useCart();
   const authDiagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
@@ -620,6 +623,18 @@ function CustomerNavbarInner({ pathname, searchParams }) {
       showBadge: true,
     },
     {
+      href: "/account/orders",
+      title: "My Orders",
+      description: "Track active requests",
+      icon: ShoppingCart,
+    },
+    {
+      href: "/account/purchase-history",
+      title: "Purchase History",
+      description: "Review fulfilled orders",
+      icon: Bookmark,
+    },
+    {
       href: "/customer/saved",
       title: "Saved items",
       description: "Instant access to your favorites",
@@ -937,9 +952,40 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => handleNavigate("/cart", "cart")}
+          className="relative hidden md:inline-flex text-white/90 hover:text-white transition"
+          aria-label="View cart"
+          data-nav-guard="1"
+        >
+          <ShoppingCart className="h-6 w-6" />
+          {itemCount > 0 ? (
+            <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+              {itemCount}
+            </span>
+          ) : null}
+        </button>
+
+        <div className="flex items-center gap-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => handleNavigate("/cart", "cart")}
+            className="relative text-white/90 hover:text-white transition"
+            aria-label="View cart"
+            data-nav-guard="1"
+          >
+            <ShoppingCart className="h-6 w-6" />
+            {itemCount > 0 ? (
+              <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                {itemCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
+
         {/* RIGHT — AUTH STATE */}
         <div className="hidden md:flex items-center gap-8">
-
           {!hasAuth && (
             <>
               <button
@@ -1211,6 +1257,16 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 </div>
               </div>
               <NavItem
+                href="/cart"
+                badgeCount={itemCount}
+                active={isActive("/cart")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Cart
+              </NavItem>
+              <NavItem
                 href="/customer/home"
                 active={isActive("/customer/home")}
                 badgeReady={badgeReady}
@@ -1226,6 +1282,22 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 onNavigate={handleNavigate}
               >
                 Messages
+              </NavItem>
+              <NavItem
+                href="/account/orders"
+                active={isActive("/account/orders")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
+                My Orders
+              </NavItem>
+              <NavItem
+                href="/account/purchase-history"
+                active={isActive("/account/purchase-history")}
+                badgeReady={badgeReady}
+                onNavigate={handleNavigate}
+              >
+                Purchase History
               </NavItem>
               <NavItem
                 href="/customer/saved"

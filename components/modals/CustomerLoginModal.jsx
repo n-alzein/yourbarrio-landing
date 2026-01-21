@@ -6,8 +6,8 @@ import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useModal } from "./ModalProvider";
-import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { resolvePostLoginTarget } from "@/lib/auth/redirects";
 
 export default function CustomerLoginModal({ onClose }) {
   const {
@@ -33,7 +33,7 @@ export default function CustomerLoginModal({ onClose }) {
   const timeoutRef = useRef(null);
   const refreshControllerRef = useRef(null);
 
-  const getReturnUrl = useCallback(() => {
+  const getNextParam = useCallback(() => {
     if (typeof window === "undefined") return null;
     const params =
       searchParams ?? new URLSearchParams(window.location.search || "");
@@ -44,11 +44,7 @@ export default function CustomerLoginModal({ onClose }) {
       const trimmed = value.trim();
       if (!trimmed) continue;
       try {
-        const parsed = new URL(trimmed, window.location.origin);
-        if (parsed.origin !== window.location.origin) continue;
-        const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-        if (!path.startsWith("/")) continue;
-        return path;
+        return trimmed;
       } catch {
         continue;
       }
@@ -58,12 +54,12 @@ export default function CustomerLoginModal({ onClose }) {
 
   const resolveLoginTarget = useCallback(
     (roleOverride) => {
-      if (roleOverride === "business") {
-        return PATHS.business.dashboard;
-      }
-      return getReturnUrl() ?? PATHS.customer.home;
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : null;
+      const next = getNextParam();
+      return resolvePostLoginTarget({ role: roleOverride, next, origin });
     },
-    [getReturnUrl]
+    [getNextParam]
   );
 
   useEffect(() => {
@@ -91,6 +87,7 @@ export default function CustomerLoginModal({ onClose }) {
     const target = resolveLoginTarget(role);
     onClose?.();
     router.replace(target);
+    router.refresh();
   }, [authStatus, endAuthAttempt, onClose, resolveLoginTarget, role, router, user?.id]);
 
   useEffect(() => {
@@ -252,6 +249,7 @@ export default function CustomerLoginModal({ onClose }) {
       }
 
       router.replace(dest);
+      router.refresh();
     } catch (err) {
       if (isStale()) return;
       console.error("Customer login failed", err);
@@ -285,7 +283,15 @@ export default function CustomerLoginModal({ onClose }) {
       const { error: oauthError } = await client.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/api/auth/callback`,
+          redirectTo: (() => {
+            const origin = window.location.origin;
+            const callback = new URL("/api/auth/callback", origin);
+            const next = getNextParam();
+            if (next) {
+              callback.searchParams.set("next", next);
+            }
+            return callback.toString();
+          })(),
         },
       });
 

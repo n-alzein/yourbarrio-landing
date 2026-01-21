@@ -7,6 +7,7 @@ import {
   ChevronDown,
   LogOut,
   MessageSquare,
+  ShoppingCart,
   Settings,
 } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
@@ -15,6 +16,7 @@ import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useModal } from "@/components/modals/ModalProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
+import { useCart } from "@/components/cart/CartProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -41,6 +43,7 @@ export default function HeaderAccountWidget({
     lastAuthEvent,
     providerInstanceId,
   } = useAuth();
+  const { itemCount } = useCart();
   const { openModal } = useModal();
   const authDiagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
@@ -289,6 +292,18 @@ export default function HeaderAccountWidget({
       description: "Chat with local businesses",
       icon: MessageSquare,
       showBadge: true,
+    },
+    {
+      href: "/account/orders",
+      title: "My Orders",
+      description: "Track active requests",
+      icon: ShoppingCart,
+    },
+    {
+      href: "/account/purchase-history",
+      title: "Purchase History",
+      description: "Review fulfilled orders",
+      icon: Bookmark,
     },
     {
       href: "/customer/saved",
@@ -558,6 +573,22 @@ export default function HeaderAccountWidget({
             {isCustomer ? (
               <>
                 <Link
+                  href="/cart"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white flex items-center justify-between"
+                  data-safe-nav="1"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4" />
+                    Cart
+                  </span>
+                  {itemCount > 0 ? (
+                    <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-semibold text-black">
+                      {itemCount}
+                    </span>
+                  ) : null}
+                </Link>
+                <Link
                   href="/customer/messages"
                   onClick={() => onCloseMobileMenu?.()}
                   className="text-left text-white/70 hover:text-white flex items-center justify-between"
@@ -569,6 +600,22 @@ export default function HeaderAccountWidget({
                       {unreadCount}
                     </span>
                   ) : null}
+                </Link>
+                <Link
+                  href="/account/orders"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white"
+                  data-safe-nav="1"
+                >
+                  My Orders
+                </Link>
+                <Link
+                  href="/account/purchase-history"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white"
+                  data-safe-nav="1"
+                >
+                  Purchase History
                 </Link>
                 <Link
                   href="/customer/saved"

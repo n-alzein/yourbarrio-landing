@@ -3,12 +3,14 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   Building2,
+  Bell,
   LayoutDashboard,
   LogOut,
+  PackageSearch,
   MessageSquare,
   Settings,
   Store,
@@ -66,6 +68,7 @@ function NavItem({
 }
 
 function BusinessNavbarInner({ pathname }) {
+  const router = useRouter();
   const {
     user,
     profile,
@@ -87,8 +90,13 @@ function BusinessNavbarInner({ pathname }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const mobileDrawerId = useId();
   const dropdownRef = useRef(null);
+  const notificationsRef = useRef(null);
   const displayName =
     profile?.business_name ||
     profile?.full_name ||
@@ -115,6 +123,24 @@ function BusinessNavbarInner({ pathname }) {
       document.removeEventListener("touchstart", handleClick);
     };
   }, [profileMenuOpen]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const handleClick = (event) => {
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(event.target)
+      ) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("touchstart", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("touchstart", handleClick);
+    };
+  }, [notificationsOpen]);
 
   /* Load avatar */
   useEffect(() => {
@@ -167,6 +193,7 @@ function BusinessNavbarInner({ pathname }) {
     const handleReset = () => {
       setProfileMenuOpen(false);
       setMobileMenuOpen(false);
+      setNotificationsOpen(false);
     };
     window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
     return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
@@ -193,6 +220,12 @@ function BusinessNavbarInner({ pathname }) {
       title: "Open dashboard",
       description: "Monitor performance & leads",
       icon: LayoutDashboard,
+    },
+    {
+      href: "/business/orders",
+      title: "Orders",
+      description: "Manage order requests",
+      icon: PackageSearch,
     },
     {
       href: "/business/profile",
@@ -265,6 +298,85 @@ function BusinessNavbarInner({ pathname }) {
       Boolean(user?.id),
     buildChannel: buildUnreadChannel,
     diagLabel: "business-unread",
+  });
+
+  const loadNotificationCount = useCallback(async () => {
+    if (!supabase || !user?.id || role !== "business") return;
+    const { count } = await supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_user_id", user.id)
+      .is("read_at", null);
+    setNotificationUnreadCount(count || 0);
+  }, [supabase, user?.id, role]);
+
+  const loadNotifications = useCallback(async () => {
+    if (!supabase || !user?.id || role !== "business") return;
+    setNotificationsLoading(true);
+    try {
+      const { data } = await supabase
+        .from("notifications")
+        .select("id,title,body,created_at,read_at,order_id")
+        .eq("recipient_user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      setNotifications(data || []);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [supabase, user?.id, role]);
+
+  const markNotificationRead = useCallback(
+    async (notificationId) => {
+      if (!supabase || !user?.id) return;
+      await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", notificationId)
+        .eq("recipient_user_id", user.id);
+      loadNotificationCount();
+      loadNotifications();
+    },
+    [supabase, user?.id, loadNotificationCount, loadNotifications]
+  );
+
+  useEffect(() => {
+    if (!badgeReady || role !== "business") return;
+    queueMicrotask(() => {
+      loadNotificationCount();
+      loadNotifications();
+    });
+  }, [badgeReady, role, loadNotificationCount, loadNotifications]);
+
+  const buildNotificationsChannel = useCallback(
+    (activeClient) =>
+      activeClient
+        .channel(`business-notifications-${user?.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `recipient_user_id=eq.${user?.id}`,
+          },
+          () => {
+            loadNotificationCount();
+            loadNotifications();
+          }
+        ),
+    [user?.id, loadNotificationCount, loadNotifications]
+  );
+
+  useRealtimeChannel({
+    supabase,
+    enabled:
+      badgeReady &&
+      authStatus === "authenticated" &&
+      role === "business" &&
+      Boolean(user?.id),
+    buildChannel: buildNotificationsChannel,
+    diagLabel: "business-notifications",
   });
 
   const disableReasons = useMemo(() => {
@@ -601,107 +713,205 @@ function BusinessNavbarInner({ pathname }) {
 
           {/* Logged IN — only dropdown */}
           {isBusinessAuthed && (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setProfileMenuOpen((open) => !open)}
-                className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
-              >
-                <SafeImage
-                  src={avatar}
-                  alt="Avatar"
-                  className="h-10 w-10 rounded-2xl object-cover border border-white/20"
-                  width={40}
-                  height={40}
-                  sizes="40px"
-                  useNextImage
-                  priority
-                />
-                <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[140px] truncate">
-                  {displayName}
-                </span>
-                <ChevronDown className="h-4 w-4 text-white/70" />
-              </button>
+            <div className="flex items-center gap-4">
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen((open) => !open)}
+                  className="relative rounded-2xl bg-white/5 px-3 py-2 border border-white/10 hover:border-white/30 transition text-white/90"
+                  aria-label="Open notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                  {notificationUnreadCount > 0 ? (
+                    <span className="absolute -top-1.5 -right-1.5 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                      {notificationUnreadCount}
+                    </span>
+                  ) : null}
+                </button>
 
-              {profileMenuOpen && (
-                <div className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl">
-                  <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
-                    <div className="flex items-center gap-3 px-4 py-4">
-                      <SafeImage
-                        src={avatar}
-                        alt="Profile avatar"
-                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
-                        width={48}
-                        height={48}
-                        sizes="48px"
-                        useNextImage
-                      />
-                      <div>
-                        <p className="text-sm font-semibold text-white">{displayName}</p>
-                        {email && (
-                          <p className="text-xs text-white/60">{email}</p>
+                {notificationsOpen ? (
+                  <div className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl">
+                    <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
+                      <div className="px-4 py-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Notifications</p>
+                          <p className="text-xs text-white/60">Order updates & alerts</p>
+                        </div>
+                        {notificationUnreadCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const ids = notifications
+                                .filter((item) => !item.read_at)
+                                .map((item) => item.id);
+                              if (!supabase || !user?.id || ids.length === 0) return;
+                              await supabase
+                                .from("notifications")
+                                .update({ read_at: new Date().toISOString() })
+                                .in("id", ids)
+                                .eq("recipient_user_id", user.id);
+                              loadNotificationCount();
+                              loadNotifications();
+                            }}
+                            className="text-[11px] text-white/70 hover:text-white"
+                          >
+                            Mark all read
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <div className="px-2 pb-2 space-y-2">
+                        {notificationsLoading ? (
+                          <div className="rounded-2xl px-4 py-4 text-xs text-white/70">
+                            Loading notifications...
+                          </div>
+                        ) : notifications.length === 0 ? (
+                          <div className="rounded-2xl px-4 py-4 text-xs text-white/70">
+                            No notifications yet.
+                          </div>
+                        ) : (
+                          notifications.map((notification) => (
+                            <button
+                              key={notification.id}
+                              type="button"
+                              onClick={async () => {
+                                if (!notification.read_at) {
+                                  await markNotificationRead(notification.id);
+                                }
+                                setNotificationsOpen(false);
+                                router.push("/business/orders");
+                              }}
+                              className={`w-full text-left rounded-2xl px-4 py-3 transition border ${
+                                notification.read_at
+                                  ? "border-white/10 bg-white/5"
+                                  : "border-white/20 bg-white/10"
+                              }`}
+                            >
+                              <p className="text-sm font-semibold text-white/90">
+                                {notification.title}
+                              </p>
+                              {notification.body ? (
+                                <p className="text-xs text-white/60 mt-1">
+                                  {notification.body}
+                                </p>
+                              ) : null}
+                              <p className="text-[11px] text-white/50 mt-2">
+                                {new Date(notification.created_at).toLocaleString("en-US", {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </button>
+                          ))
                         )}
                       </div>
                     </div>
+                  </div>
+                ) : null}
+              </div>
 
-                    <div className="px-2 pb-1 pt-2 space-y-1">
-                      {quickActions.map(
-                        ({ href, title, description, icon: Icon, showBadge }) => (
-                          <Link
-                            key={href}
-                            href={href}
-                            onClick={closeMenus}
-                            className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
-                          >
-                            <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
-                              <Icon className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-white/90">
-                                  {title}
-                                </p>
-                                {showBadge && badgeReady && unreadCount > 0 ? (
-                                  <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                    {unreadCount}
-                                  </span>
-                                ) : null}
-                              </div>
-                              <p className="text-xs text-white/60">{description}</p>
-                            </div>
-                          </Link>
-                        )
-                      )}
-                    </div>
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setProfileMenuOpen((open) => !open)}
+                  className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
+                >
+                  <SafeImage
+                    src={avatar}
+                    alt="Avatar"
+                    className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                    width={40}
+                    height={40}
+                    sizes="40px"
+                    useNextImage
+                    priority
+                  />
+                  <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[140px] truncate">
+                    {displayName}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-white/70" />
+                </button>
 
-                    <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                      <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
-                        <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
-                          Theme
-                        </span>
-                        <ThemeToggle
-                          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+                {profileMenuOpen && (
+                  <div className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl">
+                    <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
+                      <div className="flex items-center gap-3 px-4 py-4">
+                        <SafeImage
+                          src={avatar}
+                          alt="Profile avatar"
+                          className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                          width={48}
+                          height={48}
+                          sizes="48px"
+                          useNextImage
                         />
+                        <div>
+                          <p className="text-sm font-semibold text-white">{displayName}</p>
+                          {email && (
+                            <p className="text-xs text-white/60">{email}</p>
+                          )}
+                        </div>
                       </div>
-                      <Link
-                        href="/business/settings"
-                        onClick={closeMenus}
-                        className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Settings className="h-4 w-4" />
-                          Account settings
-                        </span>
-                      </Link>
-                      <LogoutButton
-                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
-                        onSuccess={closeMenus}
-                      >
-                        <LogOut className="h-4 w-4" /> Logout
-                      </LogoutButton>
+
+                      <div className="px-2 pb-1 pt-2 space-y-1">
+                        {quickActions.map(
+                          ({ href, title, description, icon: Icon, showBadge }) => (
+                            <Link
+                              key={href}
+                              href={href}
+                              onClick={closeMenus}
+                              className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
+                            >
+                              <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
+                                <Icon className="h-5 w-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold text-white/90">
+                                    {title}
+                                  </p>
+                                  {showBadge && badgeReady && unreadCount > 0 ? (
+                                    <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                      {unreadCount}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="text-xs text-white/60">{description}</p>
+                              </div>
+                            </Link>
+                          )
+                        )}
+                      </div>
+
+                      <div className="mt-2 border-t border-white/10 px-4 pt-3">
+                        <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
+                          <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
+                            Theme
+                          </span>
+                          <ThemeToggle
+                            buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
+                          />
+                        </div>
+                        <Link
+                          href="/business/settings"
+                          onClick={closeMenus}
+                          className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Settings className="h-4 w-4" />
+                            Account settings
+                          </span>
+                        </Link>
+                        <LogoutButton
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
+                          onSuccess={closeMenus}
+                        >
+                          <LogOut className="h-4 w-4" /> Logout
+                        </LogoutButton>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -791,6 +1001,13 @@ function BusinessNavbarInner({ pathname }) {
               badgeCount={unreadCount}
             >
               Messages
+            </NavItem>
+            <NavItem
+              href="/business/orders"
+              isActive={isActive}
+              closeMenus={closeMenus}
+            >
+              Orders
             </NavItem>
           </>
         )}

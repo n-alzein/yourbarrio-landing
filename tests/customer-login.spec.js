@@ -15,6 +15,7 @@ test.describe("Customer login", () => {
     await page.locator("form").getByRole("button", { name: /log in/i }).click();
 
     await expect(page).toHaveURL(/\/customer\/settings/);
+    await expect(page.getByRole("button", { name: /sign in/i })).toHaveCount(0);
   });
 
   test("clears loading state on invalid credentials", async ({ page }) => {

@@ -5,6 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 import { getCookieBaseOptions } from "@/lib/authCookies";
 import { PATHS } from "@/lib/auth/paths";
 import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { resolvePostLoginTarget } from "@/lib/auth/redirects";
 
 export async function GET(request) {
   const requestUrl = new URL(request.url);
@@ -63,9 +64,14 @@ export async function GET(request) {
       .maybeSingle();
 
     const role = profile?.role || user?.app_metadata?.role || null;
-
-    const target =
-      role === "business" ? PATHS.business.dashboard : PATHS.customer.home;
+    const nextParam = ["next", "returnUrl", "callbackUrl"]
+      .map((key) => requestUrl.searchParams.get(key))
+      .find(Boolean);
+    const target = resolvePostLoginTarget({
+      role,
+      next: nextParam,
+      origin: requestUrl.origin,
+    });
     response.headers.set("location", new URL(target, request.url).toString());
     return response;
   } catch (err) {

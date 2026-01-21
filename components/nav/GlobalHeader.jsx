@@ -10,6 +10,7 @@ import {
   MapPin,
   PackageSearch,
   Search,
+  ShoppingCart,
   Store,
 } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
@@ -21,6 +22,7 @@ import {
   sortListingsByAvailability,
 } from "@/lib/inventory";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
+import { useCart } from "@/components/cart/CartProvider";
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
 
@@ -39,6 +41,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const { itemCount } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileDrawerId = useId();
 
@@ -454,6 +457,22 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
         )}
 
         <div className="hidden md:flex items-center gap-8">
+          {surface === "customer" ? (
+            <button
+              type="button"
+              onClick={() => router.push("/cart")}
+              className="relative text-white/90 hover:text-white transition"
+              aria-label="View cart"
+              data-nav-guard="1"
+            >
+              <ShoppingCart className="h-6 w-6" />
+              {itemCount > 0 ? (
+                <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                  {itemCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
           <HeaderAccountWidget surface={surface} variant="desktop" />
         </div>
 

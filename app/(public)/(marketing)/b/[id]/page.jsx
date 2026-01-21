@@ -287,7 +287,11 @@ function UnavailableState() {
   );
 }
 
-export default async function PublicBusinessProfilePage({ params, searchParams }) {
+export default async function PublicBusinessProfilePage({
+  params,
+  searchParams,
+  shell = "public",
+}) {
   const resolvedParams = await Promise.resolve(params);
   const resolvedSearch = await Promise.resolve(searchParams);
   const businessId = resolvedParams?.id;
@@ -334,8 +338,13 @@ export default async function PublicBusinessProfilePage({ params, searchParams }
 
   const ratingSummary = buildRatingSummary(reviewRatings || []);
 
+  const wrapperClassName =
+    shell === "customer"
+      ? "min-h-screen text-white -mt-28 md:-mt-20"
+      : "min-h-screen text-white -mt-20";
+
   return (
-    <div className="min-h-screen text-white -mt-20">
+    <div className={wrapperClassName}>
       <ProfileViewTracker businessId={businessId} />
       <PublicBusinessHero
         profile={profile}

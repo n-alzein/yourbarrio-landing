@@ -1,0 +1,305 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCart } from "@/components/cart/CartProvider";
+
+const formatMoney = (value) => {
+  const amount = Number(value || 0);
+  return amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const TIME_OPTIONS = [
+  { value: "asap", label: "ASAP" },
+  { value: "morning", label: "Morning (9am-12pm)" },
+  { value: "afternoon", label: "Afternoon (12pm-4pm)" },
+  { value: "evening", label: "Evening (4pm-8pm)" },
+];
+
+export default function CheckoutPage() {
+  const router = useRouter();
+  const { cart, vendor, items, loading, refreshCart } = useCart();
+  const [form, setForm] = useState({
+    contact_name: "",
+    contact_phone: "",
+    contact_email: "",
+    delivery_address1: "",
+    delivery_address2: "",
+    delivery_city: "",
+    delivery_state: "",
+    delivery_postal_code: "",
+    delivery_instructions: "",
+    delivery_time: "asap",
+    pickup_time: "asap",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0), 0),
+    [items]
+  );
+  const fees = 0;
+  const total = subtotal + fees;
+
+  const fulfillmentType = cart?.fulfillment_type || "pickup";
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!cart) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cart_id: cart.id,
+          fulfillment_type: fulfillmentType,
+          ...form,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to submit order");
+      }
+
+      await refreshCart();
+      router.push(`/orders/${payload.order_number}`);
+    } catch (err) {
+      setError(err?.message || "Failed to submit order");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+        <div className="max-w-5xl mx-auto h-64 rounded-3xl animate-pulse" style={{ background: "var(--surface)" }} />
+      </div>
+    );
+  }
+
+  if (!cart || items.length === 0) {
+    return (
+      <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+        <div className="max-w-4xl mx-auto rounded-3xl p-8 text-center" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <h1 className="text-2xl font-semibold">Your cart is empty</h1>
+          <p className="mt-3 text-sm opacity-80">Add items before checking out.</p>
+          <Link
+            href="/customer/home"
+            className="mt-6 inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold"
+            style={{ background: "var(--text)", color: "var(--background)" }}
+          >
+            Browse listings
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] opacity-70">Checkout</p>
+          <h1 className="text-3xl font-semibold">Submit your order request</h1>
+          {vendor ? (
+            <p className="mt-2 text-sm opacity-80">Vendor: {vendor.business_name || vendor.full_name || "Local vendor"}</p>
+          ) : null}
+        </div>
+
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5 rounded-3xl p-6"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">Contact</h2>
+              <div className="grid md:grid-cols-2 gap-3">
+                <input
+                  name="contact_name"
+                  value={form.contact_name}
+                  onChange={handleChange}
+                  placeholder="Full name"
+                  required
+                  className="rounded-xl px-3 py-2 text-sm"
+                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                />
+                <input
+                  name="contact_phone"
+                  value={form.contact_phone}
+                  onChange={handleChange}
+                  placeholder="Phone number"
+                  required
+                  className="rounded-xl px-3 py-2 text-sm"
+                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                />
+                <input
+                  name="contact_email"
+                  value={form.contact_email}
+                  onChange={handleChange}
+                  placeholder="Email"
+                  type="email"
+                  className="rounded-xl px-3 py-2 text-sm md:col-span-2"
+                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                />
+              </div>
+            </div>
+
+            {fulfillmentType === "delivery" ? (
+              <div className="space-y-3">
+                <h2 className="text-lg font-semibold">Delivery details</h2>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <input
+                    name="delivery_address1"
+                    value={form.delivery_address1}
+                    onChange={handleChange}
+                    placeholder="Street address"
+                    required
+                    className="rounded-xl px-3 py-2 text-sm md:col-span-2"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  />
+                  <input
+                    name="delivery_address2"
+                    value={form.delivery_address2}
+                    onChange={handleChange}
+                    placeholder="Apt, suite, etc."
+                    className="rounded-xl px-3 py-2 text-sm md:col-span-2"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  />
+                  <input
+                    name="delivery_city"
+                    value={form.delivery_city}
+                    onChange={handleChange}
+                    placeholder="City"
+                    className="rounded-xl px-3 py-2 text-sm"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  />
+                  <input
+                    name="delivery_state"
+                    value={form.delivery_state}
+                    onChange={handleChange}
+                    placeholder="State"
+                    className="rounded-xl px-3 py-2 text-sm"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  />
+                  <input
+                    name="delivery_postal_code"
+                    value={form.delivery_postal_code}
+                    onChange={handleChange}
+                    placeholder="Postal code"
+                    className="rounded-xl px-3 py-2 text-sm"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  />
+                  <select
+                    name="delivery_time"
+                    value={form.delivery_time}
+                    onChange={handleChange}
+                    className="rounded-xl px-3 py-2 text-sm"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  >
+                    {TIME_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    name="delivery_instructions"
+                    value={form.delivery_instructions}
+                    onChange={handleChange}
+                    placeholder="Delivery instructions"
+                    rows={3}
+                    className="rounded-xl px-3 py-2 text-sm md:col-span-2"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <h2 className="text-lg font-semibold">Pickup details</h2>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <select
+                    name="pickup_time"
+                    value={form.pickup_time}
+                    onChange={handleChange}
+                    className="rounded-xl px-3 py-2 text-sm"
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  >
+                    {TIME_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl p-4 text-sm" style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}>
+              <p className="font-semibold">Review &amp; confirm</p>
+              <ul className="mt-2 space-y-1 text-xs opacity-80">
+                <li>Payment collected at pickup/delivery.</li>
+                <li>Totals may be estimates until the business confirms.</li>
+              </ul>
+            </div>
+
+            {error ? <p className="text-sm text-rose-200">{error}</p> : null}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-full px-5 py-3 text-sm font-semibold"
+              style={{ background: "var(--text)", color: "var(--background)", opacity: submitting ? 0.7 : 1 }}
+            >
+              {submitting ? "Submitting..." : "Submit order request"}
+            </button>
+          </form>
+
+          <div className="space-y-4">
+            <div className="rounded-3xl p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <p className="text-sm font-semibold">Order summary</p>
+              <div className="mt-4 space-y-2 text-sm">
+                {items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between">
+                    <span className="opacity-80">{item.title} x{item.quantity}</span>
+                    <span>${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="opacity-80">Subtotal</span>
+                  <span>${formatMoney(subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="opacity-80">Fees</span>
+                  <span>${formatMoney(fees)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                  <span className="text-sm font-semibold">Total</span>
+                  <span className="text-sm font-semibold">${formatMoney(total)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

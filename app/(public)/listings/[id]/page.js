@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -20,12 +20,14 @@ import { getOrCreateConversation } from "@/lib/messages";
 import { useTheme } from "@/components/ThemeProvider";
 import { getAvailabilityBadgeStyle, normalizeInventory } from "@/lib/inventory";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { useCart } from "@/components/cart/CartProvider";
 
 export default function ListingDetails({ params }) {
   const { supabase, user, role } = useAuth();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const { addItem } = useCart();
   const routeParams = useParams();
   const resolvedParams =
     params && typeof params.then === "function" ? use(params) : params;
@@ -43,6 +45,8 @@ export default function ListingDetails({ params }) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [heroSrc, setHeroSrc] = useState("/business-placeholder.png");
+  const [cartToast, setCartToast] = useState(null);
+  const toastTimerRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -231,13 +235,57 @@ export default function ListingDetails({ params }) {
     }
   }, [listing?.price]);
 
-  const handleOrder = (mode) => {
+  useEffect(() => {
+    if (!cartToast) return undefined;
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => {
+      setCartToast(null);
+    }, 6000);
+    return () => clearTimeout(toastTimerRef.current);
+  }, [cartToast]);
+
+  const handleOrder = async (mode) => {
+    if (!listing?.id) return;
     setOrderingMode(mode);
-    setStatusMessage(
-      mode === "delivery"
-        ? "Delivery checkout is coming soon. We’ll confirm address and payment before submitting to the business."
-        : "Pickup reservation is coming soon. We’ll confirm time and location with the business."
-    );
+    setStatusMessage("");
+
+    const attemptAdd = async (options = {}) =>
+      addItem({
+        listingId: listing.id,
+        quantity,
+        fulfillmentType: mode,
+        lockFulfillment: true,
+        ...options,
+      });
+
+    let result = await attemptAdd();
+
+    if (result?.conflict?.code === "vendor_mismatch") {
+      const proceed = window.confirm(
+        "Your cart has items from another vendor. Clear the cart and add this item?"
+      );
+      if (!proceed) {
+        setStatusMessage("Your cart still has items from another vendor.");
+        return;
+      }
+      result = await attemptAdd({ clearExisting: true });
+    }
+
+    if (result?.error) {
+      setStatusMessage(result.error);
+      return;
+    }
+
+    setStatusMessage("Added to cart.");
+    setCartToast({
+      message: "Added to cart.",
+      actions: [
+        { label: "View cart", onClick: () => router.push("/cart") },
+        { label: "Checkout", onClick: () => router.push("/checkout") },
+      ],
+    });
   };
 
   if (loading) {
@@ -295,11 +343,12 @@ export default function ListingDetails({ params }) {
   const isOutOfStock = inventory.availability === "out";
 
   return (
-    <div
-      className="min-h-screen px-4 md:px-8 lg:px-12 py-4 md:pt-3"
-      style={{ background: "var(--background)", color: "var(--text)" }}
-    >
-      <div className="max-w-6xl mx-auto space-y-6">
+    <>
+      <div
+        className="min-h-screen px-4 md:px-8 lg:px-12 py-4 md:pt-3"
+        style={{ background: "var(--background)", color: "var(--text)" }}
+      >
+        <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3 opacity-80 mt-2 mb-2">
           <Link
             href="/customer/home"
@@ -616,6 +665,33 @@ export default function ListingDetails({ params }) {
         </div>
       </div>
     </div>
+    {cartToast ? (
+      <div className="fixed bottom-6 right-6 z-50">
+        <div
+          className="rounded-2xl border px-4 py-3 shadow-xl"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <p className="text-sm font-semibold">{cartToast.message}</p>
+          <div className="mt-3 flex items-center gap-2">
+            {cartToast.actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => {
+                  action.onClick();
+                  setCartToast(null);
+                }}
+                className="rounded-full border px-3 py-1.5 text-xs font-semibold"
+                style={{ borderColor: "var(--border)" }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 

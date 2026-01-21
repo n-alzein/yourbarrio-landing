@@ -714,6 +714,18 @@ export function AuthProvider({
   }, [authState.role]);
 
   useEffect(() => {
+    if (isNestedProvider) return;
+    if (typeof window === "undefined") return;
+    const event = authState.lastAuthEvent;
+    if (!event) return;
+    if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED"].includes(event)) {
+      return;
+    }
+    logAuthDiag("router:refresh", { event });
+    router.refresh();
+  }, [authState.lastAuthEvent, isNestedProvider, router]);
+
+  useEffect(() => {
     mountedRef.current = true;
     authStore.providerCount += 1;
     authStore.providerInstanceId = providerInstanceIdRef.current;

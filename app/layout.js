@@ -11,6 +11,7 @@ import DebugToolsClient from "@/components/debug/DebugToolsClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
 import { AuthProvider } from "@/components/AuthProvider";
 import ScrollToTop from "@/components/ScrollToTop";
+import { CartProvider } from "@/components/cart/CartProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,11 +61,13 @@ export default function RootLayout({ children }) {
           </div>
 
           <AuthProvider>
-            <ModalMount>
-              {/* CONTENT */}
-              <main className="flex-1 w-full min-h-screen">{children}</main>
-              <Footer />
-            </ModalMount>
+            <CartProvider>
+              <ModalMount>
+                {/* CONTENT */}
+                <main className="flex-1 w-full min-h-screen">{children}</main>
+                <Footer />
+              </ModalMount>
+            </CartProvider>
           </AuthProvider>
         </ThemeProvider>
         {/* DEBUG_CLICK_DIAG / NAV_TRACE */}
