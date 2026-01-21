@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ColumnDef,
   SortingState,
@@ -23,6 +24,7 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 const TopProductsTable = ({ products }: TopProductsTableProps) => {
+  const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([
     { id: "revenue", desc: true },
   ]);
