@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { formatOrderDateTime } from "@/lib/orders";
 
 /** @typedef {import("@/lib/types/orders").Order} Order */
@@ -26,7 +25,7 @@ const statusCopy = {
 
 /** @param {{ order: Order, vendor: VendorSummary }} props */
 export default function OrderReceiptClient({ order, vendor }) {
-  const items = useMemo(() => order?.order_items || [], [order?.order_items]);
+  const items = order?.order_items || [];
   const statusLabel = statusCopy[order?.status] || "Processing";
 
   return (
