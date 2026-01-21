@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 const DEFAULT_NAV_SELECTOR = 'a[href], [data-safe-nav]';
 const INTERACTIVE_SELECTOR = 'input, textarea, select, button, [contenteditable="true"]';
@@ -57,6 +57,20 @@ export default function useTapGuard({
     lastTouchTs: 0,
     recentlyScrolledUntil: 0,
   });
+
+  const shouldSuppressTap = useCallback((event) => {
+    const now = Date.now();
+    if (now - gestureRef.current.lastTouchTs > touchWindowMs) return false;
+    const isTouchEvent =
+      event?.type === "touchend" ||
+      event?.type === "touchmove" ||
+      event?.type === "touchstart" ||
+      event?.pointerType === "touch";
+    if (!isTouchEvent) return false;
+    const isMoved = gestureRef.current.moved;
+    const isRecentlyScrolled = now < gestureRef.current.recentlyScrolledUntil;
+    return isMoved || isRecentlyScrolled;
+  }, [touchWindowMs]);
 
   useEffect(() => {
     if (!enabled || typeof document === "undefined") return undefined;
@@ -196,4 +210,6 @@ export default function useTapGuard({
       window.removeEventListener("scroll", handleScroll, { passive: true });
     };
   }, [enabled, movePx, navSelector, scrollWindowMs, touchWindowMs]);
+
+  return { shouldSuppressTap };
 }

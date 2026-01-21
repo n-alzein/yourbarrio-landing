@@ -13,7 +13,7 @@ export default function GuaranteedNavCapture() {
   const pendingTimerRef = useRef(null);
   const prevPathRef = useRef(pathname);
 
-  useTapGuard({
+  const { shouldSuppressTap } = useTapGuard({
     enabled: pathname?.startsWith("/customer/home"),
     movePx: 10,
     scrollWindowMs: 320,
@@ -71,6 +71,14 @@ export default function GuaranteedNavCapture() {
     const handle = (event) => {
       try {
         if (!event?.isTrusted) return;
+        if (shouldSuppressTap?.(event)) {
+          if (clickDiagEnabled) {
+            console.log("[GUARDED_NAV] suppress scroll tap", {
+              type: event.type,
+            });
+          }
+          return;
+        }
         if (event.target?.closest?.('[data-nav-guard="1"]')) return;
         const button = typeof event.button === "number" ? event.button : 0;
         if (button !== 0) return;
@@ -199,7 +207,7 @@ export default function GuaranteedNavCapture() {
       document.removeEventListener("touchend", handle, { capture: true, passive: false });
       document.removeEventListener("click", handle, { capture: true, passive: false });
     };
-  }, [pathname, router, clickDiagEnabled]);
+  }, [pathname, router, clickDiagEnabled, shouldSuppressTap]);
 
   return null;
 }
