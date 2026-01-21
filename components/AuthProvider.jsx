@@ -899,7 +899,7 @@ export function AuthProvider({
       const resolvedRedirect =
         redirectTo ||
         (inferredRole === "business"
-          ? PATHS.public.businessLanding
+          ? PATHS.auth.businessLogin
           : PATHS.auth.customerLogin);
       const shouldRedirect = typeof window !== "undefined";
 
@@ -964,6 +964,15 @@ export function AuthProvider({
         if (shouldRedirect) {
           router.replace(resolvedRedirect);
           router.refresh();
+          if (typeof window !== "undefined") {
+            const currentPath = `${window.location.pathname}${window.location.search}`;
+            setTimeout(() => {
+              const nextPath = `${window.location.pathname}${window.location.search}`;
+              if (nextPath === currentPath) {
+                window.location.assign(resolvedRedirect);
+              }
+            }, 350);
+          }
         }
       }
     },

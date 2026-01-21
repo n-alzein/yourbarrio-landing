@@ -90,7 +90,7 @@ export default function SettingsPage() {
     await supabase.from("users").delete().eq("id", user.id);
     await supabase.auth.admin.deleteUser(user.id);
 
-    logout();
+    await logout();
   }
 
   /* -----------------------------------------------------------

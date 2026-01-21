@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
+import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
 import { requireRole } from "@/lib/auth/server";
+import { PATHS } from "@/lib/auth/paths";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -22,23 +24,25 @@ export default async function CustomerLayout({ children }) {
   return (
     <>
       <AuthSeed user={user} profile={profile} role="customer" />
-      <Suspense fallback={null}>
-        <GlobalHeader surface="customer" />
-      </Suspense>
-      <InactivityLogout />
-      <CustomerRouteShell>
-        <Suspense
-          fallback={
-            <div className="min-h-screen px-6 md:px-10 pt-24 text-white">
-              <div className="max-w-5xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-8">
-                Loading your account...
-              </div>
-            </div>
-          }
-        >
-          {children}
+      <AuthRedirectGuard redirectTo={PATHS.auth.customerLogin}>
+        <Suspense fallback={null}>
+          <GlobalHeader surface="customer" />
         </Suspense>
-      </CustomerRouteShell>
+        <InactivityLogout />
+        <CustomerRouteShell>
+          <Suspense
+            fallback={
+              <div className="min-h-screen px-6 md:px-10 pt-24 text-white">
+                <div className="max-w-5xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-8">
+                  Loading your account...
+                </div>
+              </div>
+            }
+          >
+            {children}
+          </Suspense>
+        </CustomerRouteShell>
+      </AuthRedirectGuard>
     </>
   );
 }
