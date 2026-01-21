@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { Globe, MapPin, Phone, Share2, Star } from "lucide-react";
 import BusinessPreviewToolbar from "@/components/publicBusinessProfile/BusinessPreviewToolbar";
 import { useTheme } from "@/components/ThemeProvider";
@@ -109,11 +109,14 @@ export default function PublicBusinessHero({
             <div className="mx-auto max-w-6xl px-6 md:px-10">
               <div className="flex items-center justify-between gap-4 py-2">
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full border border-white/20 bg-white/10 overflow-hidden">
-                    <SafeImage
+                  <div className="h-9 w-9 rounded-full border border-white/20 bg-white/10 overflow-hidden relative">
+                    <FastImage
                       src={profile?.profile_photo_url || "/business-placeholder.png"}
                       alt={`${name} logo`}
                       className="h-full w-full object-cover"
+                      fill
+                      sizes="36px"
+                      decoding="async"
                     />
                   </div>
                   <div>
@@ -153,10 +156,15 @@ export default function PublicBusinessHero({
           <BusinessPreviewToolbar className="pointer-events-auto" />
         </div>
         {profile?.cover_photo_url ? (
-          <SafeImage
+          <FastImage
             src={profile.cover_photo_url}
             alt={`${name} cover`}
             className="h-full w-full object-cover relative z-0"
+            fallbackSrc="/business-placeholder.png"
+            fill
+            sizes="100vw"
+            priority
+            decoding="async"
           />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900/70 to-black z-0" />
@@ -172,10 +180,15 @@ export default function PublicBusinessHero({
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl border border-white/20 bg-white/10 p-2 shadow-xl">
-                  <SafeImage
+                  <FastImage
                     src={profile?.profile_photo_url || "/business-placeholder.png"}
                     alt={`${name} logo`}
                     className="h-full w-full rounded-xl object-cover"
+                    width={96}
+                    height={96}
+                    sizes="(max-width: 768px) 96px, 112px"
+                    priority
+                    decoding="async"
                   />
                 </div>
                 <div className="space-y-3">

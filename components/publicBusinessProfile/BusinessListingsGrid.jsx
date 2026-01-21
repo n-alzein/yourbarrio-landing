@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { ArrowUpRight } from "lucide-react";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
@@ -39,13 +39,13 @@ export default function BusinessListingsGrid({ listings, className = "" }) {
                 className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition shadow-lg"
               >
                 <div className="relative h-48 w-full overflow-hidden bg-white/5 border-b border-white/10">
-                  <SafeImage
+                  <FastImage
                     src={cover || "/business-placeholder.png"}
                     alt={item.title || "Listing"}
                     className="object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
                     fill
                     sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                    useNextImage
+                    decoding="async"
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-4">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 export default function BusinessGalleryGrid({ photos, className = "" }) {
@@ -59,12 +59,15 @@ export default function BusinessGalleryGrid({ photos, className = "" }) {
               key={photo.id || index}
               type="button"
               onClick={() => setActiveIndex(index)}
-              className="group relative flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-lg"
+              className="group relative h-44 w-64 flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-lg"
             >
-              <SafeImage
+              <FastImage
                 src={photo.photo_url || "/business-placeholder.png"}
                 alt={photo.caption || "Gallery photo"}
-                className="h-44 w-auto max-w-none object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+                className="object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+                fill
+                sizes="256px"
+                decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition" />
             </button>
@@ -89,11 +92,15 @@ export default function BusinessGalleryGrid({ photos, className = "" }) {
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black">
-              <SafeImage
+            <div className="relative h-[60vh] overflow-hidden rounded-3xl border border-white/10 bg-black">
+              <FastImage
                 src={activePhoto.photo_url || "/business-placeholder.png"}
                 alt={activePhoto.caption || "Gallery photo"}
-                className="h-[60vh] w-full object-contain bg-black"
+                className="object-contain bg-black"
+                fill
+                sizes="100vw"
+                priority
+                decoding="async"
               />
             </div>
             {activePhoto.caption ? (

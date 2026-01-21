@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { Pencil, Loader2, Star } from "lucide-react";
 
 export default function BusinessProfileHeader({
@@ -41,13 +41,15 @@ export default function BusinessProfileHeader({
             />
           ) : null}
           {profile?.cover_photo_url ? (
-            <SafeImage
+            <FastImage
               src={profile.cover_photo_url}
               alt={`${name} cover`}
               className="object-cover"
+              fallbackSrc="/business-placeholder.png"
               fill
               sizes="(max-width: 768px) 100vw, 80vw"
-              useNextImage
+              priority
+              decoding="async"
             />
           ) : null}
           {editMode ? (
@@ -84,14 +86,15 @@ export default function BusinessProfileHeader({
         <div className={`flex flex-col gap-4 px-6 pb-6 pt-6 md:px-8 md:pb-8 md:pt-6 md:flex-row md:items-end md:justify-between border-t ${tone.headerBorder}`}>
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="relative h-24 w-24 rounded-xl border border-white/20 bg-white/10 p-1 shadow-lg">
-              <SafeImage
+              <FastImage
                 src={profile?.profile_photo_url || "/business-placeholder.png"}
                 alt={`${name} logo`}
                 className="rounded-lg object-cover"
                 width={96}
                 height={96}
                 sizes="96px"
-                useNextImage
+                priority
+                decoding="async"
               />
               {editMode ? (
                 <label

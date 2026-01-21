@@ -19,7 +19,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   getAvailabilityBadgeStyle,
@@ -1124,14 +1124,15 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
       >
         <div className="relative h-56 w-full overflow-hidden bg-white/5 border-b border-white/10 flex items-center justify-center">
           {cover ? (
-            <SafeImage
+            <FastImage
               src={cover}
-              alt={item.title}
+              alt={item.title || "Listing"}
               className="h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.02]"
               style={{ objectFit: "contain", objectPosition: "center" }}
               fallbackSrc="/business-placeholder.png"
-              loading={listIndex < 8 ? "eager" : "lazy"}
-              fetchPriority={listIndex < 8 ? "high" : "auto"}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 16vw"
+              priority={listIndex < 4}
               decoding="async"
             />
           ) : (
@@ -1215,7 +1216,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           onPointerCancel={handleTilePointerCancel}
           onClickCapture={handleTileClickCapture}
         >
-          {filteredBusinesses.map((biz) => (
+          {filteredBusinesses.map((biz, bizIndex) => (
             <Link
               key={biz.id || biz.name}
               href={biz?.id ? `/customer/b/${biz.id}` : "#"}
@@ -1239,12 +1240,16 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
             >
               <div className={`${compact ? "h-full" : "h-24"} w-full ${compact ? "" : "border-b border-white/10"} bg-white/5 flex items-center ${compact ? "gap-2 px-2" : "justify-center"} flex-shrink-0`}>
                 {businessPhotoFor(biz) ? (
-                  <div className={`${compact ? "h-14 w-14 shrink-0" : "h-full w-full"}`}>
-                    <SafeImage
+                  <div className={`${compact ? "h-14 w-14 shrink-0" : "h-full w-full"} relative`}>
+                    <FastImage
                       src={businessPhotoFor(biz)}
                       alt={biz.name || "Business"}
                       className="block h-full w-full object-contain"
                       fallbackSrc="/business-placeholder.png"
+                      fill
+                      sizes={compact ? "56px" : "260px"}
+                      priority={!compact && bizIndex < 3}
+                      decoding="async"
                     />
                   </div>
                 ) : (
@@ -1494,11 +1499,16 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                         onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || idx)}
                       >
                         {coverFor(item.photo_url) ? (
-                          <SafeImage
+                          <FastImage
                             src={coverFor(item.photo_url)}
-                            alt={item.title}
+                            alt={item.title || "Listing"}
                             className="h-20 w-20 object-cover rounded-lg border border-white/10"
                             fallbackSrc="/business-placeholder.png"
+                            width={80}
+                            height={80}
+                            sizes="80px"
+                            priority={idx < 2}
+                            decoding="async"
                           />
                         ) : (
                           <div className={`h-20 w-20 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] ${textTone.subtle}`}>
@@ -1643,14 +1653,16 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                       >
                         <div className="relative h-56 w-full overflow-hidden bg-white/5 border-b border-white/10 flex items-center justify-center">
                           {cover ? (
-                            <SafeImage
+                            <FastImage
                               src={cover}
-                              alt={item.title}
+                              alt={item.title || "Listing"}
                               className="h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.02]"
                               style={{ objectFit: "contain", objectPosition: "center" }}
                               fallbackSrc="/business-placeholder.png"
-                              loading={idx < 8 ? "eager" : "lazy"}
-                              fetchPriority={idx < 8 ? "high" : "auto"}
+                              fill
+                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 16vw"
+                              priority={idx < 4}
+                              decoding="async"
                             />
                           ) : (
                             <div className={`h-full w-full flex items-center justify-center text-[11px] ${textTone.subtle}`}>

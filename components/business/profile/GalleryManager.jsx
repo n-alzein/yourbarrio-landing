@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { uploadPublicImage } from "@/lib/storageUpload";
 
 export default function GalleryManager({
@@ -145,12 +145,15 @@ export default function GalleryManager({
           {photos.map((photo) => (
             <div
               key={photo.id}
-              className={`group relative overflow-hidden rounded-xl border ${tone.cardBorder} ${tone.cardSoft}`}
+              className={`group relative h-36 overflow-hidden rounded-xl border ${tone.cardBorder} ${tone.cardSoft}`}
             >
-              <SafeImage
+              <FastImage
                 src={photo.photo_url}
                 alt={photo.caption || "Business photo"}
-                className="h-36 w-full object-cover"
+                className="object-cover"
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                decoding="async"
               />
               <button
                 type="button"

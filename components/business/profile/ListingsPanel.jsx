@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
 export default function ListingsPanel({ listings, tone }) {
@@ -31,11 +31,14 @@ export default function ListingsPanel({ listings, tone }) {
             const photo = primaryPhotoUrl(listing.photo_url);
             return (
               <div key={listing.id} className={`rounded-xl border ${tone.cardBorder} ${tone.cardSoft} overflow-hidden`}>
-                <div className="h-36 bg-slate-900/40">
-                  <SafeImage
+                <div className="h-36 bg-slate-900/40 relative">
+                  <FastImage
                     src={photo || "/listing-placeholder.png"}
-                    alt={listing.title}
+                    alt={listing.title || "Listing"}
                     className="h-full w-full object-cover"
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    decoding="async"
                   />
                 </div>
                 <div className="p-4 space-y-1">

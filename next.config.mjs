@@ -6,6 +6,7 @@ const nextConfig = {
   reactCompiler: process.env.NODE_ENV === "development" &&
     process.env.NEXT_PUBLIC_REACT_COMPILER !== "false",
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -28,6 +29,26 @@ const nextConfig = {
         hostname: "nbzqnjanqkzuwyxnkjtr.supabase.co",
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: "/business-placeholder.png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
+        source: "/customer-placeholder.png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
+        source: "/listing-placeholder.png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
+        source: "/logo.png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+    ];
   },
 };
 

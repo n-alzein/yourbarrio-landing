@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import SafeImage from "@/components/SafeImage";
+import FastImage from "@/components/FastImage";
 import { useRouter } from "next/navigation";
 import {
   getAuthProviderLabel,
@@ -224,7 +224,7 @@ export default function SettingsPage() {
 
             {/* AVATAR */}
             <div className="flex flex-col items-center mb-8">
-              <SafeImage
+              <FastImage
                 src={
                   (form?.profile_photo_url ||
                     profile?.profile_photo_url ||
@@ -234,6 +234,8 @@ export default function SettingsPage() {
                 width={140}
                 height={140}
                 className="h-[140px] w-[140px] rounded-3xl border border-white/20 object-cover mb-3"
+                sizes="140px"
+                priority
               />
 
               {editMode && (

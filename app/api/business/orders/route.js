@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { safeGetUser } from "@/lib/auth/safeGetUser";
 
 const STATUS_TABS = {
@@ -21,6 +22,47 @@ const STATUS_LABELS = {
 
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
+}
+
+async function getOrCreateConversationId(client, customerId, businessId) {
+  if (!client || !customerId || !businessId) return null;
+
+  const { data, error } = await client.rpc("get_or_create_conversation", {
+    customer_id: customerId,
+    business_id: businessId,
+  });
+
+  if (!error && data) return data;
+
+  const message = (error?.message || "").toLowerCase();
+  const missingRpc =
+    error?.code === "PGRST202" ||
+    message.includes("could not find the function") ||
+    message.includes("function public.get_or_create_conversation");
+
+  if (!missingRpc) throw error;
+
+  const { data: existing, error: existingError } = await client
+    .from("conversations")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id;
+
+  const { data: upserted, error: upsertError } = await client
+    .from("conversations")
+    .upsert(
+      { customer_id: customerId, business_id: businessId },
+      { onConflict: "customer_id,business_id" }
+    )
+    .select("id")
+    .single();
+
+  if (upsertError) throw upsertError;
+  return upserted?.id || null;
 }
 
 async function getProfile(supabase, userId) {
@@ -101,6 +143,7 @@ export async function GET(request) {
 
 export async function PATCH(request) {
   const supabase = await createSupabaseServerClient();
+  const serviceClient = getSupabaseServerClient();
   const { user, error: userError } = await safeGetUser(supabase);
 
   if (userError || !user) {
@@ -169,7 +212,8 @@ export async function PATCH(request) {
 
   if (data?.user_id) {
     const statusLabel = STATUS_LABELS[data.status] || data.status;
-    const { error: notificationError } = await supabase
+    const notificationClient = serviceClient ?? supabase;
+    const { error: notificationError } = await notificationClient
       .from("notifications")
       .insert({
         recipient_user_id: data.user_id,
@@ -182,6 +226,30 @@ export async function PATCH(request) {
     if (notificationError) {
       return jsonError(
         notificationError.message || "Failed to send notification",
+        500
+      );
+    }
+
+    const conversationId = await getOrCreateConversationId(
+      notificationClient,
+      data.user_id,
+      profile.id
+    );
+    if (!conversationId) {
+      return jsonError("Failed to start conversation", 500);
+    }
+
+    const { error: messageError } = await notificationClient
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: profile.id,
+        recipient_id: data.user_id,
+        body: `Order ${data.order_number} update: Your order status is now ${statusLabel}.`,
+      });
+    if (messageError) {
+      return jsonError(
+        messageError.message || "Failed to send message",
         500
       );
     }

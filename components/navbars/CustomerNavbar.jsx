@@ -1036,16 +1036,23 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 data-clickdiag={clickDiagEnabled ? "navbar-user" : undefined}
                 className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
               >
-                <SafeImage
-                  src={avatar}
-                  alt="Profile avatar"
-                  className="h-10 w-10 rounded-2xl object-cover border border-white/20"
-                  width={40}
-                  height={40}
-                  sizes="40px"
-                  useNextImage
-                  priority
-                />
+                <div className="relative">
+                  <SafeImage
+                    src={avatar}
+                    alt="Profile avatar"
+                    className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                    width={40}
+                    height={40}
+                    sizes="40px"
+                    useNextImage
+                    priority
+                  />
+                  {badgeReady && unreadCount > 0 ? (
+                    <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  ) : null}
+                </div>
                 <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
                   {displayName}
                 </span>

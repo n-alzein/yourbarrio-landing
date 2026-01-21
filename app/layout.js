@@ -9,6 +9,7 @@ import OverlayGuard from "@/components/OverlayGuard";
 import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
+import WebVitalsReporter from "@/components/WebVitalsReporter";
 import { AuthProvider } from "@/components/AuthProvider";
 import ScrollToTop from "@/components/ScrollToTop";
 import { CartProvider } from "@/components/cart/CartProvider";
@@ -32,8 +33,27 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const imageHosts = (() => {
+    const hosts = new Set();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (supabaseUrl) {
+      try {
+        hosts.add(new URL(supabaseUrl).origin);
+      } catch {}
+    }
+    return Array.from(hosts);
+  })();
+
   return (
     <html lang="en" className="theme-light" data-scroll-behavior="smooth">
+      <head>
+        {imageHosts.map((host) => (
+          <link key={`preconnect-${host}`} rel="preconnect" href={host} />
+        ))}
+        {imageHosts.map((host) => (
+          <link key={`dns-${host}`} rel="dns-prefetch" href={host} />
+        ))}
+      </head>
       <body
         className={[
           "relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col pt-20",
@@ -42,6 +62,7 @@ export default function RootLayout({ children }) {
         ].join(" ")}
       >
         <CrashLoggerClient />
+        <WebVitalsReporter />
         <ScrollToTop />
         <DevOnlyNavRecorderLoader />
         <ThemeProvider>
