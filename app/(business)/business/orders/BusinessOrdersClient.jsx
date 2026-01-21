@@ -145,13 +145,16 @@ export default function BusinessOrdersClient() {
         throw new Error(payload?.error || "Failed to update order");
       }
       setOrders((prev) =>
-        prev.map((order) =>
-          order.id === orderId ? { ...order, ...payload.order } : order
-        )
+        Array.isArray(prev)
+          ? prev.map((order) =>
+              order.id === orderId ? { ...order, ...payload.order } : order
+            )
+          : []
       );
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder((prev) => ({ ...prev, ...payload.order }));
-      }
+      setSelectedOrder((prev) => {
+        if (!prev || prev.id !== orderId) return prev;
+        return { ...prev, ...payload.order };
+      });
     } catch (err) {
       setError(err?.message || "Failed to update order");
     } finally {
@@ -556,8 +559,11 @@ export default function BusinessOrdersClient() {
           aria-labelledby="order-detail-title"
         >
           <div
-            className="w-full max-w-3xl rounded-3xl p-6 max-h-[85vh] overflow-y-auto"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            className="order-detail-surface w-full max-w-3xl rounded-3xl p-6 max-h-[85vh] overflow-y-auto"
+            style={{
+              background: "var(--order-detail-bg)",
+              border: "1px solid var(--border)",
+            }}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2 w-full max-w-[35%] flex-none">

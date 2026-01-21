@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getLowStockThreshold } from "@/lib/inventory";
 
 const STATUS_TABS = {
   new: ["requested"],
@@ -22,6 +23,73 @@ const STATUS_LABELS = {
 
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
+}
+
+function aggregateOrderItems(items) {
+  const totals = new Map();
+  if (!Array.isArray(items)) return totals;
+  items.forEach((item) => {
+    if (!item?.listing_id) return;
+    const quantity = Number(item.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+    totals.set(item.listing_id, (totals.get(item.listing_id) || 0) + quantity);
+  });
+  return totals;
+}
+
+function resolveNextInventoryStatus(currentStatus, nextQuantity, thresholdValue) {
+  if (currentStatus === "always_available" || currentStatus === "seasonal") {
+    return currentStatus;
+  }
+  if (nextQuantity <= 0) return "out_of_stock";
+  const threshold = getLowStockThreshold({ low_stock_threshold: thresholdValue });
+  if (nextQuantity <= threshold) return "low_stock";
+  return "in_stock";
+}
+
+async function decrementInventoryForOrder({
+  client,
+  businessId,
+  timestamp,
+  items,
+}) {
+  const totals = aggregateOrderItems(items);
+  if (totals.size === 0) return;
+
+  const listingIds = Array.from(totals.keys());
+  const { data: listings, error } = await client
+    .from("listings")
+    .select("id, inventory_quantity, inventory_status, low_stock_threshold")
+    .in("id", listingIds)
+    .eq("business_id", businessId);
+
+  if (error) throw error;
+
+  for (const listing of listings || []) {
+    const currentQuantity = Number(listing.inventory_quantity);
+    if (!Number.isFinite(currentQuantity)) continue;
+    const orderedQuantity = totals.get(listing.id) || 0;
+    if (orderedQuantity <= 0) continue;
+
+    const nextQuantity = Math.max(0, currentQuantity - orderedQuantity);
+    const nextStatus = resolveNextInventoryStatus(
+      listing.inventory_status,
+      nextQuantity,
+      listing.low_stock_threshold
+    );
+
+    const { error: updateError } = await client
+      .from("listings")
+      .update({
+        inventory_quantity: nextQuantity,
+        inventory_status: nextStatus,
+        inventory_last_updated_at: timestamp,
+      })
+      .eq("id", listing.id)
+      .eq("business_id", businessId);
+
+    if (updateError) throw updateError;
+  }
 }
 
 async function getOrCreateConversationId(client, customerId, businessId) {
@@ -175,6 +243,21 @@ export async function PATCH(request) {
     return jsonError("Missing order_id or status", 400);
   }
 
+  const { data: existingOrder, error: existingOrderError } = await supabase
+    .from("orders")
+    .select("id, status, vendor_id, confirmed_at, fulfilled_at, cancelled_at")
+    .eq("id", orderId)
+    .eq("vendor_id", profile.id)
+    .maybeSingle();
+
+  if (existingOrderError) {
+    return jsonError(existingOrderError.message || "Failed to load order", 500);
+  }
+
+  if (!existingOrder) {
+    return jsonError("Order not found", 404);
+  }
+
   const allowed = [
     "confirmed",
     "ready",
@@ -185,6 +268,23 @@ export async function PATCH(request) {
 
   if (!allowed.includes(nextStatus)) {
     return jsonError("Invalid status", 400);
+  }
+
+  const shouldAdjustInventory =
+    nextStatus === "confirmed" && existingOrder.status !== "confirmed";
+  let orderItems = [];
+
+  if (shouldAdjustInventory) {
+    const { data: items, error: itemsError } = await supabase
+      .from("order_items")
+      .select("listing_id, quantity")
+      .eq("order_id", orderId);
+
+    if (itemsError) {
+      return jsonError(itemsError.message || "Failed to load order items", 500);
+    }
+
+    orderItems = items || [];
   }
 
   const timestamp = new Date().toISOString();
@@ -208,6 +308,35 @@ export async function PATCH(request) {
 
   if (error) {
     return jsonError(error.message || "Failed to update order", 500);
+  }
+
+  if (shouldAdjustInventory) {
+    const inventoryClient = serviceClient ?? supabase;
+    try {
+      await decrementInventoryForOrder({
+        client: inventoryClient,
+        businessId: profile.id,
+        timestamp,
+        items: orderItems,
+      });
+    } catch (inventoryError) {
+      await supabase
+        .from("orders")
+        .update({
+          status: existingOrder.status,
+          confirmed_at: existingOrder.confirmed_at,
+          fulfilled_at: existingOrder.fulfilled_at,
+          cancelled_at: existingOrder.cancelled_at,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId)
+        .eq("vendor_id", profile.id);
+
+      return jsonError(
+        inventoryError?.message || "Failed to update inventory",
+        500
+      );
+    }
   }
 
   if (data?.user_id) {

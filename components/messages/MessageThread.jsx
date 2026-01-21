@@ -43,21 +43,23 @@ export default function MessageThread({ messages = [], currentUserId }) {
             key={`${group.sender_id}-${idx}`}
             className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
           >
-            <div className={`max-w-[80%] space-y-2 ${isSelf ? "items-end" : "items-start"}`}>
-              {group.items.map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                    isSelf
-                      ? "text-slate-900"
-                      : "text-slate-900"
-                  }`}
-                  style={{ backgroundColor: isSelf ? "#dccbff" : "#e5e7eb" }}
-                >
-                  {message.body}
-                </div>
-              ))}
-              <span className="text-[11px] text-white/50">
+            <div className={`max-w-[80%] flex flex-col ${isSelf ? "items-end" : "items-start"}`}>
+              <div className="flex flex-col gap-2">
+                {group.items.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                      isSelf
+                        ? "text-slate-900"
+                        : "text-slate-900"
+                    }`}
+                    style={{ backgroundColor: isSelf ? "#dccbff" : "#e5e7eb" }}
+                  >
+                    {message.body}
+                  </div>
+                ))}
+              </div>
+              <span className="mt-1 text-[11px] text-white/50">
                 {formatMessageTime(group.items[group.items.length - 1]?.created_at)}
               </span>
             </div>

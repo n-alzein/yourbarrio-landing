@@ -82,7 +82,7 @@ export async function POST(request) {
     return jsonError("Cart is empty", 400);
   }
 
-  const fulfillmentType = activeCart.fulfillment_type || body?.fulfillment_type || null;
+  const fulfillmentType = body?.fulfillment_type ?? activeCart.fulfillment_type ?? null;
   if (!fulfillmentType) {
     return jsonError("Missing fulfillment type", 400);
   }

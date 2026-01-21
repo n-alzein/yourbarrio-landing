@@ -38,7 +38,6 @@ export default function ListingDetails({ params }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [orderingMode, setOrderingMode] = useState("delivery");
   const [statusMessage, setStatusMessage] = useState("");
   const [messageStatus, setMessageStatus] = useState("");
   const [messageLoading, setMessageLoading] = useState(false);
@@ -246,17 +245,14 @@ export default function ListingDetails({ params }) {
     return () => clearTimeout(toastTimerRef.current);
   }, [cartToast]);
 
-  const handleOrder = async (mode) => {
+  const handleAddToCart = async () => {
     if (!listing?.id) return;
-    setOrderingMode(mode);
     setStatusMessage("");
 
     const attemptAdd = async (options = {}) =>
       addItem({
         listingId: listing.id,
         quantity,
-        fulfillmentType: mode,
-        lockFulfillment: true,
         ...options,
       });
 
@@ -280,7 +276,7 @@ export default function ListingDetails({ params }) {
 
     setStatusMessage("Added to cart.");
     setCartToast({
-      message: "Added to cart.",
+      message: "Added to cart",
       actions: [
         { label: "View cart", onClick: () => router.push("/cart") },
         { label: "Checkout", onClick: () => router.push("/checkout") },
@@ -598,34 +594,15 @@ export default function ListingDetails({ params }) {
                   ))}
                 </select>
 
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOrder("delivery")}
-                    disabled={isOutOfStock}
-                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                      orderingMode === "delivery"
-                        ? "border text-[color:var(--text)] ring-2 ring-indigo-500/30"
-                        : "border text-[color:var(--text)]"
-                    }`}
-                    style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-                  >
-                    Request delivery
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOrder("pickup")}
-                    disabled={isOutOfStock}
-                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                      orderingMode === "pickup"
-                        ? "border text-[color:var(--text)] ring-2 ring-indigo-500/30"
-                        : "border text-[color:var(--text)]"
-                    }`}
-                    style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-                  >
-                    Request pickup
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={isOutOfStock}
+                  className="mt-2 w-full rounded-xl px-3 py-3 text-sm font-semibold transition border"
+                  style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                >
+                  Add to cart
+                </button>
 
                 {isOutOfStock ? (
                   <div
@@ -643,8 +620,7 @@ export default function ListingDetails({ params }) {
                   </div>
                 ) : (
                   <div className="mt-2 text-xs opacity-80">
-                    We’ll confirm address or pickup time in the next step. Charges apply after
-                    business confirms.
+                    Choose delivery or pickup at checkout. Charges apply after business confirms.
                   </div>
                 )}
               </div>

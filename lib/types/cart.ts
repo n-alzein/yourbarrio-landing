@@ -20,7 +20,6 @@ export type Cart = {
   vendor_id: string;
   status: CartStatus;
   fulfillment_type: FulfillmentType | null;
-  fulfillment_locked: boolean;
   created_at?: string | null;
   updated_at?: string | null;
   cart_items?: CartItem[];

@@ -65,9 +65,7 @@ export async function POST(request) {
 
   const listingId = body?.listing_id;
   const quantity = Number(body?.quantity || 1);
-  const fulfillmentType = body?.fulfillment_type || null;
   const clearExisting = Boolean(body?.clear_existing);
-  const lockFulfillment = Boolean(body?.lock_fulfillment);
 
   if (!listingId) {
     return jsonError("Missing listing_id", 400);
@@ -121,8 +119,7 @@ export async function POST(request) {
         user_id: user.id,
         vendor_id: listing.business_id,
         status: "active",
-        fulfillment_type: fulfillmentType,
-        fulfillment_locked: lockFulfillment,
+        fulfillment_type: null,
       })
       .select("*")
       .single();
@@ -132,43 +129,6 @@ export async function POST(request) {
     }
 
     activeCart = newCart;
-  }
-
-  if (fulfillmentType && activeCart.fulfillment_type !== fulfillmentType) {
-    if (activeCart.fulfillment_locked) {
-      return jsonError("Fulfillment type is locked", 409, {
-        code: "fulfillment_locked",
-      });
-    }
-
-    const { data: updatedCart, error: updateError } = await supabase
-      .from("carts")
-      .update({
-        fulfillment_type: fulfillmentType,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", activeCart.id)
-      .select("*")
-      .single();
-
-    if (updateError) {
-      return jsonError(updateError.message || "Failed to update cart", 500);
-    }
-    activeCart = updatedCart;
-  }
-
-  if (lockFulfillment && !activeCart.fulfillment_locked) {
-    const { data: updatedCart, error: lockError } = await supabase
-      .from("carts")
-      .update({ fulfillment_locked: true, updated_at: new Date().toISOString() })
-      .eq("id", activeCart.id)
-      .select("*")
-      .single();
-
-    if (lockError) {
-      return jsonError(lockError.message || "Failed to lock fulfillment", 500);
-    }
-    activeCart = updatedCart;
   }
 
   const { data: existingItem, error: existingError } = await supabase
@@ -240,7 +200,8 @@ export async function PATCH(request) {
 
   const itemId = body?.item_id || null;
   const quantity = body?.quantity != null ? Number(body.quantity) : null;
-  const fulfillmentType = body?.fulfillment_type || null;
+  const hasFulfillmentType = Object.prototype.hasOwnProperty.call(body, "fulfillment_type");
+  const fulfillmentType = hasFulfillmentType ? body?.fulfillment_type ?? null : null;
 
   let activePayload;
   try {
@@ -254,11 +215,7 @@ export async function PATCH(request) {
     return jsonError("Cart not found", 404);
   }
 
-  if (fulfillmentType && fulfillmentType !== activeCart.fulfillment_type) {
-    if (activeCart.fulfillment_locked) {
-      return jsonError("Fulfillment type is locked", 409, { code: "fulfillment_locked" });
-    }
-
+  if (hasFulfillmentType && fulfillmentType !== activeCart.fulfillment_type) {
     const { error: updateError } = await supabase
       .from("carts")
       .update({

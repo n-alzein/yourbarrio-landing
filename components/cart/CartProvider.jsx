@@ -84,7 +84,7 @@ export function CartProvider({ children }) {
   }, [refreshCart]);
 
   const addItem = useCallback(
-    async ({ listingId, quantity = 1, fulfillmentType, clearExisting, lockFulfillment }) => {
+    async ({ listingId, quantity = 1, clearExisting }) => {
       if (!user?.id) {
         return { error: "Please log in to add items." };
       }
@@ -97,9 +97,7 @@ export function CartProvider({ children }) {
         body: JSON.stringify({
           listing_id: listingId,
           quantity,
-          fulfillment_type: fulfillmentType,
           clear_existing: clearExisting,
-          lock_fulfillment: lockFulfillment,
         }),
       });
 

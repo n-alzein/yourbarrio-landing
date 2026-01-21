@@ -93,15 +93,11 @@ export default function CartPage() {
             <div className="rounded-3xl p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">Fulfillment</p>
-                {cart.fulfillment_locked ? (
-                  <span className="text-xs opacity-70">Locked by request</span>
-                ) : null}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => handleFulfillmentChange("delivery")}
-                  disabled={cart.fulfillment_locked}
                   className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
                     cart.fulfillment_type === "delivery" ? "ring-2 ring-indigo-500/40" : ""
                   }`}
@@ -114,7 +110,6 @@ export default function CartPage() {
                 <button
                   type="button"
                   onClick={() => handleFulfillmentChange("pickup")}
-                  disabled={cart.fulfillment_locked}
                   className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
                     cart.fulfillment_type === "pickup" ? "ring-2 ring-indigo-500/40" : ""
                   }`}

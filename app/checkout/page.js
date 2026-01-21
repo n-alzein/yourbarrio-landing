@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
 
@@ -22,7 +22,7 @@ const TIME_OPTIONS = [
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, vendor, items, loading, refreshCart } = useCart();
+  const { cart, vendor, items, loading, refreshCart, setFulfillmentType } = useCart();
   const [form, setForm] = useState({
     contact_name: "",
     contact_phone: "",
@@ -38,6 +38,7 @@ export default function CheckoutPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [fulfillmentType, setFulfillmentTypeState] = useState("");
 
   const subtotal = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0), 0),
@@ -46,7 +47,20 @@ export default function CheckoutPage() {
   const fees = 0;
   const total = subtotal + fees;
 
-  const fulfillmentType = cart?.fulfillment_type || "pickup";
+  useEffect(() => {
+    if (cart?.fulfillment_type && !fulfillmentType) {
+      setFulfillmentTypeState(cart.fulfillment_type);
+    }
+  }, [cart?.fulfillment_type, fulfillmentType]);
+
+  const handleFulfillmentSelect = async (nextType) => {
+    setError(null);
+    setFulfillmentTypeState(nextType);
+    const result = await setFulfillmentType(nextType);
+    if (result?.error) {
+      setError(result.error);
+    }
+  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -56,6 +70,10 @@ export default function CheckoutPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!cart) return;
+    if (!fulfillmentType) {
+      setError("Select delivery or pickup to continue.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -161,6 +179,35 @@ export default function CheckoutPage() {
               </div>
             </div>
 
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">Fulfillment</h2>
+              <div className="grid md:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleFulfillmentSelect("delivery")}
+                  className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                    fulfillmentType === "delivery" ? "ring-2 ring-indigo-500/40" : ""
+                  }`}
+                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                >
+                  Delivery
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFulfillmentSelect("pickup")}
+                  className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                    fulfillmentType === "pickup" ? "ring-2 ring-indigo-500/40" : ""
+                  }`}
+                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                >
+                  Pickup
+                </button>
+              </div>
+              {!fulfillmentType ? (
+                <p className="text-xs opacity-70">Choose delivery or pickup to continue.</p>
+              ) : null}
+            </div>
+
             {fulfillmentType === "delivery" ? (
               <div className="space-y-3">
                 <h2 className="text-lg font-semibold">Delivery details</h2>
@@ -230,9 +277,14 @@ export default function CheckoutPage() {
                   />
                 </div>
               </div>
-            ) : (
+            ) : fulfillmentType === "pickup" ? (
               <div className="space-y-3">
                 <h2 className="text-lg font-semibold">Pickup details</h2>
+                {vendor?.address || vendor?.city ? (
+                  <p className="text-sm opacity-80">
+                    {vendor?.address ? `${vendor.address}${vendor?.city ? `, ${vendor.city}` : ""}` : vendor?.city}
+                  </p>
+                ) : null}
                 <div className="grid md:grid-cols-2 gap-3">
                   <select
                     name="pickup_time"
@@ -249,7 +301,7 @@ export default function CheckoutPage() {
                   </select>
                 </div>
               </div>
-            )}
+            ) : null}
 
             <div className="rounded-2xl p-4 text-sm" style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}>
               <p className="font-semibold">Review &amp; confirm</p>
@@ -267,7 +319,7 @@ export default function CheckoutPage() {
               className="w-full rounded-full px-5 py-3 text-sm font-semibold"
               style={{ background: "var(--text)", color: "var(--background)", opacity: submitting ? 0.7 : 1 }}
             >
-              {submitting ? "Submitting..." : "Submit order request"}
+              {submitting ? "Submitting..." : "Place order request"}
             </button>
           </form>
 
