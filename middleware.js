@@ -1,6 +1,6 @@
 // middleware.js
 import { NextResponse } from "next/server";
-import { getCookieName } from "@/lib/supabaseClient";
+import { getCookieName } from "./lib/supabaseClient";
 
 export function middleware(request) {
   const diagEnabled =

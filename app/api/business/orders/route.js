@@ -9,6 +9,16 @@ const STATUS_TABS = {
   cancelled: ["cancelled"],
 };
 
+const STATUS_LABELS = {
+  requested: "Requested",
+  confirmed: "Confirmed",
+  ready: "Ready for pickup",
+  out_for_delivery: "Out for delivery",
+  fulfilled: "Fulfilled",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
 }
@@ -148,11 +158,33 @@ export async function PATCH(request) {
     .from("orders")
     .update(updates)
     .eq("id", orderId)
-    .select("id,status,updated_at,confirmed_at,fulfilled_at,cancelled_at")
+    .select(
+      "id,order_number,user_id,status,updated_at,confirmed_at,fulfilled_at,cancelled_at"
+    )
     .maybeSingle();
 
   if (error) {
     return jsonError(error.message || "Failed to update order", 500);
+  }
+
+  if (data?.user_id) {
+    const statusLabel = STATUS_LABELS[data.status] || data.status;
+    const { error: notificationError } = await supabase
+      .from("notifications")
+      .insert({
+        recipient_user_id: data.user_id,
+        vendor_id: profile.id,
+        order_id: data.id,
+        type: "order_status",
+        title: `Order ${data.order_number} update`,
+        body: `Your order status is now ${statusLabel}.`,
+      });
+    if (notificationError) {
+      return jsonError(
+        notificationError.message || "Failed to send notification",
+        500
+      );
+    }
   }
 
   return NextResponse.json({ order: data }, { status: 200 });

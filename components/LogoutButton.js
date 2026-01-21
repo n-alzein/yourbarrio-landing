@@ -16,22 +16,19 @@ export default function LogoutButton({
   async function handleClick() {
     if (isSubmitting) return;
     setIsSubmitting(true);
-    const reset = () => setIsSubmitting(false);
-
     try {
-      void logout(); // fire-and-forget, redirects immediately
+      await logout();
       onSuccess?.();
     } catch (err) {
       console.error("Logout failed", err);
-      reset();
-      return;
+    } finally {
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+      }
+      resetTimerRef.current = setTimeout(() => {
+        setIsSubmitting(false);
+      }, 500);
     }
-
-    Promise.resolve().then(reset);
-    if (resetTimerRef.current) {
-      clearTimeout(resetTimerRef.current);
-    }
-    resetTimerRef.current = setTimeout(reset, 500);
   }
 
   if (mobile) {

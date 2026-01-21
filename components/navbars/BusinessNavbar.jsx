@@ -737,27 +737,44 @@ function BusinessNavbarInner({ pathname }) {
                           <p className="text-sm font-semibold text-white">Notifications</p>
                           <p className="text-xs text-white/60">Order updates & alerts</p>
                         </div>
-                        {notificationUnreadCount > 0 ? (
+                        <div className="flex items-center gap-3">
+                          {notificationUnreadCount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const ids = notifications
+                                  .filter((item) => !item.read_at)
+                                  .map((item) => item.id);
+                                if (!supabase || !user?.id || ids.length === 0) return;
+                                await supabase
+                                  .from("notifications")
+                                  .update({ read_at: new Date().toISOString() })
+                                  .in("id", ids)
+                                  .eq("recipient_user_id", user.id);
+                                loadNotificationCount();
+                                loadNotifications();
+                              }}
+                              className="text-[11px] text-white/70 hover:text-white"
+                            >
+                              Mark all read
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={async () => {
-                              const ids = notifications
-                                .filter((item) => !item.read_at)
-                                .map((item) => item.id);
-                              if (!supabase || !user?.id || ids.length === 0) return;
+                              if (!supabase || !user?.id || notifications.length === 0) return;
                               await supabase
                                 .from("notifications")
                                 .update({ read_at: new Date().toISOString() })
-                                .in("id", ids)
                                 .eq("recipient_user_id", user.id);
-                              loadNotificationCount();
-                              loadNotifications();
+                              setNotifications([]);
+                              setNotificationUnreadCount(0);
                             }}
                             className="text-[11px] text-white/70 hover:text-white"
                           >
-                            Mark all read
+                            Clear
                           </button>
-                        ) : null}
+                        </div>
                       </div>
 
                       <div className="px-2 pb-2 space-y-2">

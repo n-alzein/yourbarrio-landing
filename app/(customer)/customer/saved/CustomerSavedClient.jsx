@@ -24,7 +24,8 @@ export default function CustomerSavedClient({
   const { user, supabase, loadingUser, authStatus } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
-  const resolvedUserId = user?.id || initialUserId || null;
+  const resolvedUserId =
+    authStatus === "unauthenticated" ? null : user?.id || initialUserId || null;
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const buildCacheKey = (id) => (id ? `yb_saved_${id}` : null);
   const hasServerSaved = Array.isArray(initialSaved);
@@ -237,8 +238,12 @@ export default function CustomerSavedClient({
               : null,
           });
         }
-        if (sessionError) throw sessionError;
+        if (sessionError) {
+          if (authStatus !== "authenticated") return [];
+          throw sessionError;
+        }
         if (!sessionData?.session?.user?.id) {
+          if (authStatus !== "authenticated") return [];
           throw new Error("missing_session");
         }
         if (authDiagEnabled) {

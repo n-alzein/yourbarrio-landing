@@ -35,14 +35,15 @@ export default async function PurchaseHistoryPage({ searchParams }) {
   const visibleRows = hasMore ? rows.slice(0, limit) : rows;
 
   return (
-    <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+    <div className="min-h-screen px-4 md:px-8 lg:px-12 pt-1 pb-12" style={{ background: "var(--background)", color: "var(--text)" }}>
       <div className="max-w-5xl mx-auto space-y-6">
-        <div>
+        <div className="space-y-2">
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Orders</p>
           <h1 className="text-3xl font-semibold">Purchase History</h1>
+          <div className="h-4" />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-4">
           <Link
             href="/account/orders"
             className="rounded-full border px-4 py-2 text-sm font-semibold"
@@ -102,7 +103,7 @@ export default async function PurchaseHistoryPage({ searchParams }) {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-sm">
-                    <span className="rounded-full border px-3 py-1 text-xs bg-emerald-500/20 text-emerald-200 border-emerald-500/40">
+                    <span className="rounded-full border px-3 py-1 text-xs bg-emerald-500/20 text-emerald-800 border-emerald-500/40">
                       Fulfilled
                     </span>
                     <span className="text-sm font-semibold">${formatMoney(order.total)}</span>

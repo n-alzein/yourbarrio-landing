@@ -61,6 +61,16 @@ const resolveRole = (profile, user, fallbackRole) => {
   return profile?.role ?? fallbackRole ?? user?.app_metadata?.role ?? null;
 };
 
+const isProtectedPath = (pathname) => {
+  if (!pathname) return false;
+  if (pathname.startsWith("/business/")) return true;
+  if (pathname.startsWith("/customer")) return true;
+  if (pathname.startsWith("/account")) return true;
+  if (pathname.startsWith("/checkout")) return true;
+  if (pathname.startsWith("/orders")) return true;
+  return false;
+};
+
 const buildSignedOutState = () => ({
   authStatus: "unauthenticated",
   user: null,
@@ -726,6 +736,20 @@ export function AuthProvider({
   }, [authState.lastAuthEvent, isNestedProvider, router]);
 
   useEffect(() => {
+    if (isNestedProvider) return;
+    if (authState.lastAuthEvent !== "SIGNED_OUT") return;
+    if (!pathname) return;
+    if (!isProtectedPath(pathname)) return;
+    const target = pathname.startsWith("/business")
+      ? PATHS.auth.businessLogin
+      : PATHS.auth.customerLogin;
+    if (pathname === target || pathname === `${target}/`) return;
+    logAuthDiag("route_guard:signed_out_redirect", { from: pathname, to: target });
+    router.replace(target);
+    router.refresh();
+  }, [authState.lastAuthEvent, isNestedProvider, pathname, router]);
+
+  useEffect(() => {
     mountedRef.current = true;
     authStore.providerCount += 1;
     authStore.providerInstanceId = providerInstanceIdRef.current;
@@ -862,89 +886,89 @@ export function AuthProvider({
     seedAuthState(payload);
   }, []);
 
-  const logout = useCallback(async (options = {}) => {
-    const { redirectTo, reason = "logout" } = options;
-    const role = authStore.state.role;
-    const inferredRole =
-      role ||
-      (typeof window !== "undefined" && window.location.pathname.startsWith("/business")
-        ? "business"
-        : "customer");
-    const resolvedRedirect =
-      redirectTo ||
-      (inferredRole === "business"
-        ? PATHS.auth.businessLogin
-        : PATHS.auth.customerLogin);
-    const shouldRedirect = typeof window !== "undefined";
-    let redirectPending = shouldRedirect;
+  const logout = useCallback(
+    async (options = {}) => {
+      const { redirectTo, reason = "logout" } = options;
+      const role = authStore.state.role;
+      const inferredRole =
+        role ||
+        (typeof window !== "undefined" &&
+        window.location.pathname.startsWith("/business")
+          ? "business"
+          : "customer");
+      const resolvedRedirect =
+        redirectTo ||
+        (inferredRole === "business"
+          ? PATHS.auth.businessLogin
+          : PATHS.auth.customerLogin);
+      const shouldRedirect = typeof window !== "undefined";
 
-    resetAuthUiState("logout:pre");
-    emitAuthUiReset("logout:pre");
-    authStore.loggingOut = true;
-    setAuthChangeSuppressed(true);
-    applySignedOutState("logout:pre", {
-      resetGuardState: true,
-      resetAuthUi: false,
-      extraState: {
-        lastAuthEvent: "SIGNED_OUT",
-        lastError: null,
-      },
-    });
+      resetAuthUiState("logout:pre");
+      emitAuthUiReset("logout:pre");
+      authStore.loggingOut = true;
+      setAuthChangeSuppressed(true);
+      applySignedOutState("logout:pre", {
+        resetGuardState: true,
+        resetAuthUi: false,
+        extraState: {
+          lastAuthEvent: "SIGNED_OUT",
+          lastError: null,
+        },
+      });
 
-    logAuthDiag("logout", {
-      hasUser: Boolean(authStore.state.user),
-      authStatus: authStore.state.authStatus,
-      authBusy: authStore.state.authBusy,
-      reason,
-      role,
-      redirectTo: resolvedRedirect,
-    });
+      logAuthDiag("logout", {
+        hasUser: Boolean(authStore.state.user),
+        authStatus: authStore.state.authStatus,
+        authBusy: authStore.state.authBusy,
+        reason,
+        role,
+        redirectTo: resolvedRedirect,
+      });
 
-    try {
       try {
-        await cleanupRealtimeChannels();
-      } catch (err) {
-        logAuthDiag("logout:realtime:error", {
-          message: err?.message || String(err),
-        });
-      }
-      clearVerifiedUserCache();
-      clearSupabaseAuthStorage();
-      clearSupabaseCookiesClient();
-      if (authStore.supabase?.auth?.signOut) {
         try {
-          await authStore.supabase.auth.signOut({ scope: "global" });
-          await authStore.supabase.auth.signOut({ scope: "local" });
+          await cleanupRealtimeChannels();
         } catch (err) {
-          logAuthDiag("logout:supabase:error", {
+          logAuthDiag("logout:realtime:error", {
             message: err?.message || String(err),
           });
         }
-      }
+        clearVerifiedUserCache();
+        clearSupabaseAuthStorage();
+        clearSupabaseCookiesClient();
+        if (authStore.supabase?.auth?.signOut) {
+          try {
+            await authStore.supabase.auth.signOut({ scope: "local" });
+          } catch (err) {
+            logAuthDiag("logout:supabase:error", {
+              message: err?.message || String(err),
+            });
+          }
+        }
 
-      if (shouldRedirect) {
-        try {
-          await fetch("/api/logout", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-          });
-        } catch (err) {
-          logAuthDiag("logout:server:error", {
-            message: err?.message || String(err),
-          });
+        if (shouldRedirect) {
+          try {
+            await fetch("/api/auth/signout", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+            });
+          } catch (err) {
+            logAuthDiag("logout:server:error", {
+              message: err?.message || String(err),
+            });
+          }
+        }
+      } finally {
+        resetAuthUiState("logout:finally");
+        if (shouldRedirect) {
+          router.replace(resolvedRedirect);
+          router.refresh();
         }
       }
-    } finally {
-      resetAuthUiState("logout:finally");
-      if (redirectPending) {
-        redirectPending = false;
-        window.location.replace(
-          `/api/auth/logout?redirect=${encodeURIComponent(resolvedRedirect)}`
-        );
-      }
-    }
-  }, []);
+    },
+    [router]
+  );
 
   const value = useMemo(
     () => ({
@@ -1107,8 +1131,9 @@ export function AuthProvider({
     if (!pathname) return;
     if (pathname.startsWith("/business-auth")) return;
 
-    const target =
-      pathname.startsWith("/business")
+    const target = pathname.startsWith("/business/")
+      ? PATHS.auth.businessLogin
+      : pathname.startsWith("/business")
         ? PATHS.public.businessLanding
         : PATHS.auth.customerLogin;
     if (pathname === target || pathname === `${target}/`) return;

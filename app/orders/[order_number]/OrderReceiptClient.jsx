@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { formatOrderDateTime } from "@/lib/orders";
 
 /** @typedef {import("@/lib/types/orders").Order} Order */
 /** @typedef {import("@/lib/types/cart").VendorSummary} VendorSummary */
@@ -35,13 +36,16 @@ export default function OrderReceiptClient({ order, vendor }) {
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Order confirmation</p>
           <h1 className="text-3xl font-semibold">Order {order?.order_number}</h1>
           <p className="text-sm opacity-80">Status: {statusLabel}</p>
+          <p className="text-xs opacity-70 mb-3">
+            Purchased {formatOrderDateTime(order?.created_at)}
+          </p>
         </div>
 
         <div className="rounded-3xl p-6 space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Receipt</p>
-              <p className="text-xs opacity-70">Payment collected at pickup/delivery</p>
+              <p className="text-xs opacity-70 mb-6">Payment collected at pickup/delivery</p>
             </div>
             <button
               type="button"
@@ -63,29 +67,40 @@ export default function OrderReceiptClient({ order, vendor }) {
               <p className="text-xs uppercase tracking-[0.2em] opacity-60">Fulfillment</p>
               <p className="font-semibold">{order?.fulfillment_type === "delivery" ? "Delivery" : "Pickup"}</p>
               {order?.fulfillment_type === "delivery" ? (
-                <p className="text-xs opacity-70">
+                <p className="text-xs opacity-70 mb-3">
                   {order.delivery_address1}
                   {order.delivery_address2 ? `, ${order.delivery_address2}` : ""}
                 </p>
               ) : (
-                <p className="text-xs opacity-70">Pickup time: {order.pickup_time || "ASAP"}</p>
+                <p className="text-xs opacity-70 mb-3">
+                  Pickup time: {order.pickup_time || "ASAP"}
+                </p>
               )}
             </div>
           </div>
 
           <div className="border-t pt-4 space-y-3" style={{ borderColor: "var(--border)" }}>
-            <p className="text-sm font-semibold">Items</p>
+            <div className="text-xs uppercase tracking-[0.2em] opacity-60 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 leading-none">
+              <span className="relative -top-0.5">Item</span>
+              <span className="text-right">Qty</span>
+              <span className="text-right">Total</span>
+            </div>
             <div className="space-y-2 text-sm">
               {items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between">
-                  <span className="opacity-80">{item.title} x{item.quantity}</span>
-                  <span>${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}</span>
+                <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
+                  <span className="opacity-80 max-w-[360px] md:max-w-[440px] break-words">
+                    {item.title}
+                  </span>
+                  <span className="text-right">{item.quantity}</span>
+                  <span className="text-right">
+                    ${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="border-t pt-4 space-y-2 text-sm" style={{ borderColor: "var(--border)" }}>
+          <div className="border-t mt-4 pt-4 space-y-2 text-sm" style={{ borderColor: "var(--border)" }}>
             <div className="flex items-center justify-between">
               <span className="opacity-80">Subtotal</span>
               <span>${formatMoney(order?.subtotal)}</span>
