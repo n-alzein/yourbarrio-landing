@@ -35,7 +35,7 @@ function CustomerHomeMapPanel({
       enableCategoryFilter: false,
       enableSearch: false,
       placesMode: "manual",
-      disableGooglePlaces: true,
+      disableGooglePlaces: false,
       prefilledBusinesses: mapBusinesses,
       onBusinessesChange,
       onControlsReady,

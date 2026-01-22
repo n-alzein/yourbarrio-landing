@@ -64,9 +64,7 @@ const REQUEST_KEY_PRECISION = 4;
 const REQUEST_DEDUP_MS = 4000;
 const PLACES_DISABLED =
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
-  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
-  (process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_DISABLE_PLACES !== "false");
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1";
 const PLACES_MIN_INTERVAL_MS =
   Number.parseInt(process.env.NEXT_PUBLIC_PLACES_MIN_INTERVAL_MS || "", 10) ||
   15000;
@@ -84,8 +82,7 @@ export default function GoogleMapClient({
   showBusinessErrors = true,
   enableCategoryFilter = false,
   enableSearch = false,
-  placesMode = "auto", // "auto" (default) or "manual" to require explicit enable
-  disableGooglePlaces = false, // hard kill-switch to never call Google
+  disableGooglePlaces = false, // hard kill-switch to never call Places lookup
   preferUserCenter = false, // if true, keep map near user/fallback even when prefilled data is far
   prefilledBusinesses = null, // optional array of businesses to render without fetching
   onBusinessesChange,
@@ -128,19 +125,33 @@ export default function GoogleMapClient({
   const geocodeBudgetRef = useRef(MAX_GEOCODES_PER_SESSION);
   const lastFetchKeyRef = useRef(null);
   const lastFetchAtRef = useRef(0);
-  const placesSessionTokenRef = useRef(null);
-  const placesEnabledRef = useRef(!disableGooglePlaces && placesMode !== "manual");
-  const [placesEnabledState, setPlacesEnabledState] = useState(
-    placesEnabledRef.current
-  );
+  const placesEnabledRef = useRef(!disableGooglePlaces);
   const persistedCenterRef = useRef(null);
   const prefilledBusinessesRef = useRef(prefilledBusinesses || []);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
-    prefilledBusinessesRef.current = Array.isArray(prefilledBusinesses)
-      ? prefilledBusinesses
-      : [];
+    if (!Array.isArray(prefilledBusinesses)) {
+      prefilledBusinessesRef.current = [];
+      return;
+    }
+    const normalizeNumber = (value) => {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    prefilledBusinessesRef.current = prefilledBusinesses.map((biz) => {
+      if (!biz) return biz;
+      if (biz.coords && Number.isFinite(biz.coords.lat) && Number.isFinite(biz.coords.lng)) {
+        return biz;
+      }
+      const lat = normalizeNumber(biz.lat ?? biz.latitude);
+      const lng = normalizeNumber(biz.lng ?? biz.longitude);
+      if (typeof lat === "number" && typeof lng === "number") {
+        return { ...biz, coords: { lat, lng } };
+      }
+      return biz;
+    });
   }, [prefilledBusinesses]);
 
   useEffect(() => () => {
@@ -201,19 +212,12 @@ export default function GoogleMapClient({
     return found?.coords || null;
   };
 
-  const ensurePlacesSessionToken = () => {
-    if (placesSessionTokenRef.current) return placesSessionTokenRef.current;
-    const token =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    placesSessionTokenRef.current = token;
-    return token;
-  };
-
-  const resetPlacesSessionToken = () => {
-    placesSessionTokenRef.current = null;
-  };
+  const normalizeCategoryKey = (value) =>
+    (value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
 
   const enforceCenter = (center) => {
     if (
@@ -566,21 +570,9 @@ export default function GoogleMapClient({
     });
   };
 
-  const fetchPlacesNew = async ({ lat, lng, radiusMeters, includedTypes }) => {
+  const fetchPlacesNew = async ({ lat, lng, radiusMeters, query }) => {
     if (PLACES_DISABLED || disableGooglePlaces || !placesEnabledRef.current) return [];
     const radius = radiusMeters ?? Math.max(100, radiusKm * 1000);
-    const retailTypes =
-      includedTypes && includedTypes.length
-        ? includedTypes
-        : Array.from(ALLOWED_RETAIL_TYPES).filter(
-            (t) =>
-              t !== "grocery_or_supermarket" &&
-              t !== "cosmetics_store" &&
-              t !== "drugstore" &&
-              t !== "gift_shop" &&
-              t !== "butcher_shop" &&
-              t !== "market"
-          );
     const res = await fetch("/api/places", {
       method: "POST",
       headers: {
@@ -591,9 +583,8 @@ export default function GoogleMapClient({
         lat,
         lng,
         radiusMeters: radius,
-        includedTypes: retailTypes,
         maxResultCount: Math.max(1, Math.min(PLACES_MAX_RESULTS, 20)),
-        sessionToken: ensurePlacesSessionToken(),
+        query,
       }),
     });
     if (!res.ok) {
@@ -765,27 +756,40 @@ export default function GoogleMapClient({
 
       let places = [];
       try {
+        const nearbyQuery =
+          includedTypesOverride && includedTypesOverride.length
+            ? includedTypesOverride[0].replace(/_/g, " ")
+            : undefined;
         places = await fetchPlacesNew({
           lat: safeCenter.lat,
           lng: safeCenter.lng,
           radiusMeters,
-          includedTypes: includedTypesOverride,
+          query: nearbyQuery,
         });
       } catch (errNew) {
         console.error("Places (new) fetch failed", errNew);
         if (showBusinessErrors) {
-          setError(
-            PLACES_DISABLED
-              ? "Google Places calls are disabled in testing mode."
-              : "Google Places request was denied. Check API key referrer restrictions and ensure Places API (New) is enabled."
-          );
+          setError("Nearby search is unavailable right now.");
         }
         places = [];
       }
 
+      const includedTypeSet =
+        includedTypesOverride && includedTypesOverride.length
+          ? new Set(includedTypesOverride)
+          : null;
+      const filteredPlaces = includedTypeSet
+        ? (places || []).filter((place) => {
+            const types = Array.isArray(place?.types) ? place.types : [];
+            const normalizedLabel = normalizeCategoryKey(place?.categoryLabel);
+            if (normalizedLabel && includedTypeSet.has(normalizedLabel)) return true;
+            return types.some((type) => includedTypeSet.has(type));
+          })
+        : places || [];
+
       const bounds = map?.getBounds ? map.getBounds() : null;
       const businessesWithCoords = [];
-      for (const place of places || []) {
+      for (const place of filteredPlaces || []) {
         const loc = place.location || place.geometry?.location || null;
         if (!loc) continue;
         const pts = {
@@ -795,24 +799,19 @@ export default function GoogleMapClient({
         if (bounds && !bounds.contains([pts.lng, pts.lat])) {
           continue;
         }
-        const typeList = place.types || [];
-        const primaryType = typeList.find((t) => t && ALLOWED_RETAIL_TYPES.has(t));
-        if (!primaryType) continue;
-        const categoryKey = primaryType || "store";
-        const categoryLabel = formatCategory(categoryKey);
-        const photoName = place.photos?.[0]?.name;
-        const photoUrl = photoName
-          ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=640&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}`
-          : null;
+        const typeList = Array.isArray(place.types) ? place.types : [];
+        const primaryType =
+          typeList.find((t) => t && ALLOWED_RETAIL_TYPES.has(t)) || typeList[0];
+        const categoryLabel = place.categoryLabel || formatCategory(primaryType || "Local");
         businessesWithCoords.push({
           id: place.place_id || place.id,
           name: place.name || place.displayName?.text || "Unnamed",
           address: place.vicinity || place.formatted_address || place.formattedAddress || "",
           coords: pts,
           categoryLabel,
-          source: "google_places_new",
+          source: place.source || "mapbox",
           zoom: zoomLevel || map?.getZoom?.(),
-          imageUrl: photoUrl,
+          imageUrl: place.imageUrl || null,
         });
       }
 
@@ -977,15 +976,12 @@ export default function GoogleMapClient({
     detachMarker(searchMarkerRef.current);
     try {
       if (PLACES_DISABLED || disableGooglePlaces) {
-        setSearchError("Search is disabled while Places API is paused.");
+        setSearchError("Search is disabled right now.");
         setSearchLoading(false);
         return;
       }
-      if (!placesEnabledRef.current && placesMode === "manual") {
-        activatePlaces();
-      }
       if (!placesEnabledRef.current) {
-        setSearchError("Enable Google Places to search the map.");
+        setSearchError("Nearby search is disabled.");
         setSearchLoading(false);
         return;
       }
@@ -1008,7 +1004,6 @@ export default function GoogleMapClient({
             radiusMeters,
           },
           maxResultCount: 5,
-          sessionToken: ensurePlacesSessionToken(),
         }),
       });
       if (!res.ok) {
@@ -1057,7 +1052,6 @@ export default function GoogleMapClient({
         setActiveCategory(label);
       }
       setSearchMessage(place.displayName?.text || "Moved to result");
-      resetPlacesSessionToken();
     } catch (err) {
       console.error(err);
       setSearchError(err.message || "Search failed");
@@ -1074,10 +1068,8 @@ export default function GoogleMapClient({
   const activatePlaces = () => {
     if (PLACES_DISABLED || disableGooglePlaces) return;
     placesEnabledRef.current = true;
-    setPlacesEnabledState(true);
     lastFetchKeyRef.current = null;
     lastFetchAtRef.current = 0;
-    resetPlacesSessionToken();
   };
 
   const enablePlaces = async () => {
@@ -1098,10 +1090,8 @@ export default function GoogleMapClient({
 
   const disablePlaces = async () => {
     placesEnabledRef.current = false;
-    setPlacesEnabledState(false);
     lastFetchKeyRef.current = null;
     lastFetchAtRef.current = 0;
-    resetPlacesSessionToken();
     const map = mapInstanceRef.current;
     if (!map || !loadAndPlaceMarkersRef.current) return;
     const center = map.getCenter();
@@ -1481,11 +1471,6 @@ export default function GoogleMapClient({
     >
       <div className={cardClassName}>
         {title ? <div className="mb-3 font-medium">{title}</div> : null}
-        {placesMode === "manual" && !disableGooglePlaces ? (
-          <div className="mb-2 text-[11px] text-white/70">
-            Google Places {placesEnabledState ? "enabled for this session" : "paused until you opt in"}.
-          </div>
-        ) : null}
         {enableSearch ? (
           <form onSubmit={handleSearch} className="mb-3 flex flex-col gap-2">
             <div className="flex gap-2">

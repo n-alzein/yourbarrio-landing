@@ -169,6 +169,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [mapOpen, setMapOpen] = useState(false);
+  const [userCity, setUserCity] = useState("");
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
   const homeBisect = {
@@ -233,6 +234,24 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const authReady = !loadingUser || !!user;
   const galleryRef = useRef(null);
   const gridContainerRef = useRef(null);
+  const normalizeCity = (value) => (value || "").trim().toLowerCase();
+  const mapBusinessesForCity = useMemo(() => {
+    const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
+    const normalizedUserCity = normalizeCity(userCity);
+    const withCoords = (source || []).filter((biz) => {
+      if (!biz) return false;
+      const lat = biz.coords?.lat ?? biz.lat ?? biz.latitude;
+      const lng = biz.coords?.lng ?? biz.lng ?? biz.longitude;
+      const parsedLat = typeof lat === "number" ? lat : parseFloat(lat);
+      const parsedLng = typeof lng === "number" ? lng : parseFloat(lng);
+      return Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
+    });
+    if (!normalizedUserCity) return withCoords;
+    const filtered = withCoords.filter(
+      (biz) => normalizeCity(biz?.city) === normalizedUserCity
+    );
+    return filtered.length ? filtered : withCoords;
+  }, [mapBusinesses, ybBusinesses, userCity]);
   const [gridColumns, setGridColumns] = useState(() => {
     if (typeof window === "undefined") return 4;
     const width = window.innerWidth;
@@ -296,6 +315,37 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
+
+  useEffect(() => {
+    if (!mapAvailable) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        if (cancelled) return;
+        const lat = pos?.coords?.latitude;
+        const lng = pos?.coords?.longitude;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        try {
+          const res = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
+          if (!res.ok) return;
+          const payload = await res.json();
+          if (!cancelled && payload?.city) {
+            setUserCity(payload.city);
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      },
+      () => {
+        /* ignore */
+      },
+      { enableHighAccuracy: true, maximumAge: 1000 * 60 * 10 }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [mapAvailable]);
 
   useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
@@ -670,6 +720,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                 category: row.category || "Local business",
                 categoryLabel: row.category || "Local business",
                 address,
+                city: row.city || "",
                 description: row.description || row.bio || "",
                 website: row.website || "",
                 imageUrl: row.profile_photo_url || row.photo_url || "",
@@ -759,10 +810,13 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
 
   // Keep map businesses in sync with fetched YB businesses (for list display)
   useEffect(() => {
-    if (ybBusinesses.length) {
-      setMapBusinesses(ybBusinesses);
-    }
-  }, [ybBusinesses]);
+    if (!ybBusinesses.length) return;
+    const normalizedUserCity = normalizeCity(userCity);
+    const filtered = normalizedUserCity
+      ? ybBusinesses.filter((biz) => normalizeCity(biz?.city) === normalizedUserCity)
+      : ybBusinesses;
+    setMapBusinesses(filtered.length ? filtered : ybBusinesses);
+  }, [ybBusinesses, userCity]);
 
 
   useEffect(() => {
@@ -1744,8 +1798,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         open={mapOpen}
         onClose={() => setMapOpen(false)}
         mapEnabled={mapEnabled}
-        mapBusinesses={mapBusinesses}
-        onBusinessesChange={setMapBusinesses}
+        mapBusinesses={mapBusinessesForCity}
         clickDiagEnabled={clickDiagEnabled}
       />
     </section>

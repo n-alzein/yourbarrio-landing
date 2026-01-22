@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Home,
   LogOut,
+  MapPin,
   MessageSquare,
   ShoppingCart,
   Settings,
@@ -54,6 +55,7 @@ export default function HeaderAccountWidget({
   const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [locationValue, setLocationValue] = useState("Your city");
   const dropdownRef = useRef(null);
   const lastUnreadUserIdRef = useRef(null);
   const refreshTimerRef = useRef(null);
@@ -150,6 +152,14 @@ export default function HeaderAccountWidget({
     if (!isMessagesRoute) return;
     setUnreadCount(0);
   }, [isMessagesRoute]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cached = window.localStorage.getItem("yb-city");
+    if (cached) {
+      setLocationValue(cached);
+    }
+  }, []);
 
   const buildUnreadChannel = useCallback(
     (scopedClient) =>
@@ -519,31 +529,7 @@ export default function HeaderAccountWidget({
     <MobileSidebarDrawer
       open={mobileMenuOpen}
       onClose={() => onCloseMobileMenu?.()}
-      title={
-        hasAuth ? (
-          <div className="flex items-center gap-3">
-            <span>My account</span>
-            {isCustomer ? (
-              <Link
-                href="/cart"
-                onClick={() => onCloseMobileMenu?.()}
-                className="relative inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 p-1.5 text-white/80 transition hover:text-white"
-                aria-label="View cart"
-                data-safe-nav="1"
-              >
-                <ShoppingCart className="h-4 w-4" />
-                {itemCount > 0 ? (
-                  <span className="absolute -top-2 -right-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
-                    {itemCount}
-                  </span>
-                ) : null}
-              </Link>
-            ) : null}
-          </div>
-        ) : (
-          "Welcome"
-        )
-      }
+      title={hasAuth ? "My account" : "Welcome"}
       id={mobileDrawerId}
     >
       <div
@@ -605,6 +591,32 @@ export default function HeaderAccountWidget({
                 {email ? <p className="text-xs text-white/60 truncate">{email}</p> : null}
               </div>
             </div>
+
+            {isCustomer ? (
+              <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                  <MapPin className="h-4 w-4 text-white/80" />
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/50">Location</p>
+                    <p className="text-sm font-semibold text-white truncate">{locationValue}</p>
+                  </div>
+                </div>
+                <Link
+                  href="/cart"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/90 transition hover:text-white"
+                  aria-label="View cart"
+                  data-safe-nav="1"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  {itemCount > 0 ? (
+                    <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                      {itemCount}
+                    </span>
+                  ) : null}
+                </Link>
+              </div>
+            ) : null}
 
             {isBusiness ? (
               <Link

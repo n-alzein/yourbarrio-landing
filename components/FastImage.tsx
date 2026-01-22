@@ -147,12 +147,8 @@ function FastImageInner({
     if (typeof onLoad === "function") {
       onLoad(event);
     }
-  };
-
-  const handleLoadingComplete = (img: HTMLImageElement) => {
-    setIsLoaded(true);
     if (typeof onLoadingComplete === "function") {
-      onLoadingComplete(img);
+      onLoadingComplete(event.currentTarget);
     }
   };
 
@@ -173,7 +169,6 @@ function FastImageInner({
       data-placeholder={currentSrc === fallbackSrc ? "true" : undefined}
       onError={handleError}
       onLoad={handleLoad}
-      onLoadingComplete={handleLoadingComplete}
       unoptimized={unoptimized}
       className={
         placeholder === "skeleton"

@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 
-const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-const PLACES_MODE =
-  process.env.NEXT_PUBLIC_PLACES_MODE || process.env.PLACES_MODE || "prod";
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const PLACES_DISABLED =
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
@@ -40,9 +38,8 @@ export default function BusinessOnboardingPage() {
   const [form, dispatch] = useReducer(formReducer, initialForm);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [mapsError, setMapsError] = useState("");
-  const addressInputRef = useRef(null);
-  const pickedLocationRef = useRef(null); // stores { lat, lng } from Places
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const pickedLocationRef = useRef(null); // stores { lat, lng } from address lookup
 
   function updateField(field, value) {
     dispatch({ field, value });
@@ -59,93 +56,60 @@ export default function BusinessOnboardingPage() {
     return parts.join("");
   }
 
-  // Lazily load Google Maps Places and wire autocomplete to the address field
   useEffect(() => {
-    if (!MAPS_API_KEY || PLACES_DISABLED || PLACES_MODE === "dev") {
-      setMapsError("Address autocomplete is disabled in this environment.");
+    if (!MAPBOX_TOKEN || PLACES_DISABLED) {
+      setAddressSuggestions([]);
       return;
     }
 
-    let destroyed = false;
-    let autocomplete;
+    const query = form.address.trim();
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
 
-    const loadMaps = () => {
-      // Reuse existing loader promise if present
-      if (!window.__ybMapsLoader) {
-        window.__ybMapsLoader = new Promise((resolve, reject) => {
-          // Avoid duplicate script tags
-          const existing = Array.from(document.scripts || []).find((s) =>
-            s.src?.includes("maps.googleapis.com/maps/api/js")
-          );
-          if (existing && existing.src.includes("key=")) {
-            existing.addEventListener("load", () => resolve(window.google));
-            existing.addEventListener("error", reject);
-            return;
-          }
-          if (existing && !existing.src.includes("key=")) {
-            existing.remove();
-          }
-
-          const params = new URLSearchParams({
-            key: MAPS_API_KEY,
-            libraries: "places",
-          });
-
-          const script = document.createElement("script");
-          script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
-          script.async = true;
-          script.defer = true;
-          script.onload = () => resolve(window.google);
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      }
-
-      return window.__ybMapsLoader;
-    };
-
-    loadMaps()
-      .then((google) => {
-        if (destroyed || !addressInputRef.current || !google?.maps?.places) return;
-
-        autocomplete = new google.maps.places.Autocomplete(
-          addressInputRef.current,
-          {
-            types: ["address"],
-            fields: ["formatted_address", "geometry"],
-          }
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      try {
+        const url = new URL(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+            query
+          )}.json`
         );
+        url.searchParams.set("access_token", MAPBOX_TOKEN);
+        url.searchParams.set("types", "address");
+        url.searchParams.set("limit", "5");
+        url.searchParams.set("autocomplete", "true");
 
-        autocomplete.addListener("place_changed", () => {
-          const place = autocomplete.getPlace();
-          const formatted = place?.formatted_address;
-          const loc = place?.geometry?.location;
-
-          if (formatted) {
-            updateField("address", formatted);
-          }
-
-          if (loc) {
-            pickedLocationRef.current = {
-              lat: typeof loc.lat === "function" ? loc.lat() : loc.lat,
-              lng: typeof loc.lng === "function" ? loc.lng() : loc.lng,
+        const res = await fetch(url.toString());
+        if (!res.ok) return;
+        const payload = await res.json();
+        const nextSuggestions = (payload.features || [])
+          .map((feature) => {
+            const center = Array.isArray(feature.center) ? feature.center : [];
+            const [lng, lat] = center;
+            if (typeof lat !== "number" || typeof lng !== "number") return null;
+            return {
+              label: feature.place_name || feature.text,
+              coords: { lat, lng },
             };
-          } else {
-            pickedLocationRef.current = null;
-          }
-        });
-      })
-      .catch((err) => {
-        console.warn("Failed to load Google Maps", err);
-        if (!destroyed) {
-          setMapsError("Address autocomplete failed to load.");
+          })
+          .filter(Boolean);
+        if (!cancelled) {
+          setAddressSuggestions(nextSuggestions);
         }
-      });
+      } catch (err) {
+        if (!cancelled) {
+          setAddressSuggestions([]);
+        }
+      }
+    }, 350);
 
     return () => {
-      destroyed = true;
+      cancelled = true;
+      clearTimeout(handle);
     };
-  }, []);
+  }, [form.address]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -262,9 +226,21 @@ export default function BusinessOnboardingPage() {
             label="Address"
             value={form.address}
             placeholder="Street, City, ZIP"
-            onChange={(v) => updateField("address", v)}
+            listId="address-suggestions"
+            onChange={(v) => {
+              updateField("address", v);
+              const match = addressSuggestions.find((item) => item.label === v);
+              pickedLocationRef.current = match ? match.coords : null;
+            }}
             required
           />
+          {addressSuggestions.length ? (
+            <datalist id="address-suggestions">
+              {addressSuggestions.map((item) => (
+                <option key={item.label} value={item.label} />
+              ))}
+            </datalist>
+          ) : null}
 
           <FormField
             label="Phone Number"
@@ -312,6 +288,7 @@ function FormField({
   onChange,
   type = "text",
   required = false,
+  listId,
 }) {
   return (
     <div>
@@ -321,6 +298,7 @@ function FormField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        list={listId}
         required={required}
         className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/30
           text-white placeholder-white/40 focus:ring-2 focus:ring-purple-500 

@@ -14,9 +14,7 @@ const PLACES_MODE =
 
 const PLACES_DISABLED =
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
-  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
-  (process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_DISABLE_PLACES !== "false");
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1";
 
 const responseCache = new Map();
 
@@ -39,33 +37,44 @@ const MOCK_PLACES = [
   },
 ];
 
-const FIELD_MASK =
-  "places.id,places.displayName.text,places.formattedAddress,places.location,places.types,places.photos";
+const normalizeCategoryType = (value) =>
+  (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-const normalizePlace = (place) => {
-  if (!place) return null;
-  const location =
-    place.location ||
-    (place.geometry?.location
-      ? {
-          latitude:
-            typeof place.geometry.location.lat === "function"
-              ? place.geometry.location.lat()
-              : place.geometry.location.lat,
-          longitude:
-            typeof place.geometry.location.lng === "function"
-              ? place.geometry.location.lng()
-              : place.geometry.location.lng,
-        }
-      : null);
+const titleCase = (value) =>
+  (value || "")
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const normalizeFeature = (feature) => {
+  if (!feature) return null;
+  const center = Array.isArray(feature.center) ? feature.center : [];
+  const [lng, lat] = center;
+  const rawCategories = feature.properties?.category || "";
+  const categoryParts = rawCategories
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const types = categoryParts.map(normalizeCategoryType).filter(Boolean);
+  const categoryLabel = categoryParts.length ? titleCase(categoryParts[0]) : undefined;
 
   return {
-    id: place.id || place.place_id,
-    displayName: place.displayName || (place.name ? { text: place.name } : undefined),
-    formattedAddress: place.formattedAddress || place.formatted_address || place.vicinity || "",
-    location,
-    types: place.types || [],
-    photos: place.photos || [],
+    id: feature.id,
+    displayName: feature.text ? { text: feature.text } : undefined,
+    formattedAddress: feature.place_name || "",
+    location:
+      typeof lat === "number" && typeof lng === "number"
+        ? { latitude: lat, longitude: lng }
+        : null,
+    types,
+    categoryLabel,
+    source: "mapbox",
+    photos: [],
   };
 };
 
@@ -118,93 +127,96 @@ const getClientIp = (request) => {
   );
 };
 
-const getPlacesApiKey = () =>
-  process.env.GOOGLE_PLACES_API_KEY ||
-  process.env.GOOGLE_MAPS_API_KEY ||
-  process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const getMapboxToken = () =>
+  process.env.MAPBOX_GEOCODING_TOKEN ||
+  process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
-async function callPlaces(endpoint, body, sessionToken) {
-  const apiKey = getPlacesApiKey();
-  if (!apiKey) {
-    throw new Error("Places API key missing");
+const toBBox = (lat, lng, radiusMeters) => {
+  const safeRadius = Math.max(100, Math.min(radiusMeters || 1000, 50_000));
+  const latDelta = safeRadius / 111320;
+  const lngDelta =
+    safeRadius / (111320 * Math.cos((lat * Math.PI) / 180) || 1);
+  const minLat = lat - latDelta;
+  const maxLat = lat + latDelta;
+  const minLng = lng - lngDelta;
+  const maxLng = lng + lngDelta;
+  return [minLng, minLat, maxLng, maxLat].join(",");
+};
+
+async function callMapboxGeocoding(endpoint, params = {}) {
+  const token = getMapboxToken();
+  if (!token) {
+    throw new Error("Mapbox geocoding token missing");
   }
-
-  const res = await fetch(`https://places.googleapis.com/v1/${endpoint}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": FIELD_MASK,
-      ...(sessionToken ? { "X-Goog-Session-Token": sessionToken } : {}),
-    },
-    body: JSON.stringify(body),
+  const url = new URL(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${endpoint}.json`
+  );
+  url.searchParams.set("access_token", token);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
   });
-
+  const res = await fetch(url.toString());
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`${endpoint} failed: ${res.status} ${txt}`);
+    throw new Error(`mapbox geocoding failed: ${res.status} ${txt}`);
   }
-
   return res.json();
 }
 
-async function handleNearby({ lat, lng, radiusMeters, includedTypes, maxResultCount, sessionToken }) {
+async function handleNearby({ lat, lng, radiusMeters, maxResultCount, query }) {
   if (typeof lat !== "number" || typeof lng !== "number") {
     return { error: "lat/lng required" };
   }
 
-  const body = {
-    includedTypes: Array.isArray(includedTypes) && includedTypes.length ? includedTypes : undefined,
-    maxResultCount: Math.max(1, Math.min(maxResultCount || 10, 20)),
-    locationRestriction: {
-      circle: {
-        center: { latitude: lat, longitude: lng },
-        radius: Math.max(100, Math.min(radiusMeters || 1000, 50_000)),
-      },
-    },
-  };
-
-  const data = await callPlaces("places:searchNearby", body, sessionToken);
-  const places = Array.isArray(data?.places)
-    ? data.places.map(normalizePlace).filter(Boolean)
+  const limit = Math.max(1, Math.min(maxResultCount || 10, 20));
+  const searchQuery = query && String(query).trim().length ? String(query).trim() : "store";
+  const data = await callMapboxGeocoding(searchQuery, {
+    types: "poi",
+    limit,
+    proximity: `${lng},${lat}`,
+    bbox: toBBox(lat, lng, radiusMeters),
+  });
+  const places = Array.isArray(data?.features)
+    ? data.features.map(normalizeFeature).filter(Boolean)
     : [];
 
-  return { places, source: "google" };
+  return { places, source: "mapbox" };
 }
 
-async function handleTextSearch({
-  textQuery,
-  locationBias,
-  maxResultCount,
-  sessionToken,
-}) {
+async function handleTextSearch({ textQuery, locationBias, maxResultCount }) {
   if (!textQuery) {
     return { places: [] };
   }
 
-  const body = {
-    textQuery,
-    maxResultCount: Math.max(1, Math.min(maxResultCount || 5, 20)),
-    locationBias:
-      locationBias && typeof locationBias?.lat === "number" && typeof locationBias?.lng === "number"
-        ? {
-            circle: {
-              center: {
-                latitude: locationBias.lat,
-                longitude: locationBias.lng,
-              },
-              radius: Math.max(100, Math.min(locationBias.radiusMeters || 1000, 50_000)),
-            },
-          }
-        : undefined,
+  const limit = Math.max(1, Math.min(maxResultCount || 5, 20));
+  const params = {
+    types: "poi",
+    limit,
+    autocomplete: "true",
   };
+  if (
+    locationBias &&
+    typeof locationBias?.lat === "number" &&
+    typeof locationBias?.lng === "number"
+  ) {
+    params.proximity = `${locationBias.lng},${locationBias.lat}`;
+    if (locationBias.radiusMeters) {
+      params.bbox = toBBox(
+        locationBias.lat,
+        locationBias.lng,
+        locationBias.radiusMeters
+      );
+    }
+  }
 
-  const data = await callPlaces("places:searchText", body, sessionToken);
-  const places = Array.isArray(data?.places)
-    ? data.places.map(normalizePlace).filter(Boolean)
+  const data = await callMapboxGeocoding(encodeURIComponent(textQuery), params);
+  const places = Array.isArray(data?.features)
+    ? data.features.map(normalizeFeature).filter(Boolean)
     : [];
 
-  return { places, source: "google" };
+  return { places, source: "mapbox" };
 }
 
 export async function POST(request) {
@@ -238,8 +250,6 @@ export async function POST(request) {
     return NextResponse.json({ ...cached, cache: true });
   }
 
-  const sessionToken = typeof body?.sessionToken === "string" ? body.sessionToken : undefined;
-
   try {
     const payload =
       mode === "text"
@@ -247,15 +257,13 @@ export async function POST(request) {
             textQuery: body?.textQuery,
             locationBias: body?.locationBias,
             maxResultCount: body?.maxResultCount,
-            sessionToken,
           })
         : await handleNearby({
             lat: body?.lat,
             lng: body?.lng,
             radiusMeters: body?.radiusMeters,
-            includedTypes: body?.includedTypes,
             maxResultCount: body?.maxResultCount,
-            sessionToken,
+            query: body?.query,
           });
 
     if (payload?.error) {

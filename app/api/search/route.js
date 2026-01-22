@@ -131,48 +131,55 @@ async function searchBusinesses(supabase, term, category) {
 
 const PLACES_DISABLED =
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
-  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
-  (process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_DISABLE_PLACES !== "false");
+  process.env.NEXT_PUBLIC_DISABLE_PLACES === "1";
 
-async function searchGooglePlaces(term) {
+const normalizeCategoryType = (value) =>
+  (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+async function searchMapboxPlaces(term) {
   if (PLACES_DISABLED) return [];
-  const apiKey =
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return [];
+  const token =
+    process.env.MAPBOX_GEOCODING_TOKEN ||
+    process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return [];
 
   try {
-    const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask":
-          "places.id,places.displayName.text,places.formattedAddress,places.location,places.types",
-      },
-      body: JSON.stringify({
-        textQuery: term,
-        maxResultCount: 5,
-      }),
-    });
+    const url = new URL(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(term)}.json`
+    );
+    url.searchParams.set("access_token", token);
+    url.searchParams.set("types", "poi");
+    url.searchParams.set("limit", "5");
+    url.searchParams.set("autocomplete", "true");
 
+    const res = await fetch(url.toString());
     if (!res.ok) {
       const body = await res.text();
-      console.warn("Google Places search failed", res.status, body);
+      console.warn("Mapbox places search failed", res.status, body);
       return [];
     }
 
     const payload = await res.json();
-    return (payload.places || []).map((place) => ({
-      id: place.id,
-      name: place.displayName?.text || "Place",
-      address: place.formattedAddress || "",
-      types: place.types || [],
-      source: "google_places",
-    }));
+    return (payload.features || []).map((feature) => {
+      const rawCategories = feature.properties?.category || "";
+      const types = rawCategories
+        .split(",")
+        .map(normalizeCategoryType)
+        .filter(Boolean);
+      return {
+        id: feature.id,
+        name: feature.text || "Place",
+        address: feature.place_name || "",
+        types,
+        source: "mapbox_places",
+      };
+    });
   } catch (err) {
-    console.warn("Google Places search error", err);
+    console.warn("Mapbox places search error", err);
     return [];
   }
 }
@@ -218,7 +225,7 @@ export async function GET(request) {
   const [items, businesses, places] = await Promise.all([
     supabase ? searchListings(supabase, query, category) : [],
     supabase ? searchBusinesses(supabase, query, category) : [],
-    searchGooglePlaces(query),
+    searchMapboxPlaces(query),
   ]);
 
   const payload = {

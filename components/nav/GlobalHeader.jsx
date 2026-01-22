@@ -47,6 +47,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
   const [searchTerm, setSearchTerm] = useState(() => getInitialSearchTerm(searchParams));
   const [selectedCategory, setSelectedCategory] = useState(() => getInitialCategory(searchParams));
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationValue, setLocationValue] = useState("Your city");
+  const [locationInput, setLocationInput] = useState("");
   const [searchResults, setSearchResults] = useState({
     items: [],
     businesses: [],
@@ -57,6 +60,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
+  const locationRef = useRef(null);
   const searchRequestIdRef = useRef(0);
   const lastQueryRef = useRef("");
 
@@ -214,6 +218,64 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   }, [suggestionsOpen]);
 
   useEffect(() => {
+    if (!locationOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (!locationRef.current?.contains(event.target)) {
+        setLocationOpen(false);
+      }
+    };
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setLocationOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [locationOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cached = window.localStorage.getItem("yb-city");
+    if (cached) {
+      setLocationValue(cached);
+      return;
+    }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const res = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const city = (data?.city || "").trim();
+          if (city) {
+            window.localStorage.setItem("yb-city", city);
+            setLocationValue(city);
+          }
+        } catch {
+          // best effort
+        }
+      },
+      () => {
+        // ignore geolocation errors
+      },
+      { timeout: 8000 }
+    );
+  }, []);
+
+  useEffect(() => {
+    if (locationOpen && !locationInput && locationValue !== "Your city") {
+      setLocationInput(locationValue);
+    }
+  }, [locationOpen, locationInput, locationValue]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleReset = () => {
       setMobileMenuOpen(false);
@@ -263,6 +325,58 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
             />
           </span>
         </Link>
+
+        <div className="relative hidden md:flex items-center" ref={locationRef}>
+          <button
+            type="button"
+            onClick={() => setLocationOpen((open) => !open)}
+            className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-left text-white/90 shadow-lg shadow-purple-950/20 transition hover:bg-white/15"
+            aria-haspopup="dialog"
+            aria-expanded={locationOpen}
+          >
+            <MapPin className="h-4 w-4 text-white/80" />
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">{locationValue}</div>
+            </div>
+            <ChevronDown className="h-4 w-4 text-white/70" />
+          </button>
+
+          {locationOpen ? (
+            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl border border-white/10 bg-[#0b0618]/95 p-4 text-white shadow-xl shadow-purple-950/30 backdrop-blur-2xl">
+              <div className="text-xs uppercase tracking-[0.22em] text-white/60">Set location</div>
+              <div className="mt-2 text-sm text-white/80">Enter a city or ZIP code.</div>
+              <div className="mt-4 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={locationInput}
+                  onChange={(event) => setLocationInput(event.target.value)}
+                  placeholder="e.g. Austin, 78701"
+                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = locationInput.trim();
+                    const value = next || "Your city";
+                    setLocationValue(value);
+                    if (typeof window !== "undefined") {
+                      if (value === "Your city") {
+                        window.localStorage.removeItem("yb-city");
+                      } else {
+                        window.localStorage.setItem("yb-city", value);
+                      }
+                    }
+                    setLocationInput("");
+                    setLocationOpen(false);
+                  }}
+                  className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-white/90 transition"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         {showSearch ? (
           <div className="md:hidden flex-1" data-nav-guard="1">

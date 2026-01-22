@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { X } from "lucide-react";
+import { createPortal } from "react-dom";
 
 const CustomerMap = dynamic(() => import("./CustomerMap"), {
   ssr: false,
@@ -23,12 +24,21 @@ export default function MapModal({
   selectedBusiness,
   clickDiagEnabled,
 }) {
+  const [portalTarget, setPortalTarget] = useState(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setPortalTarget(document.body);
+  }, []);
+
   useEffect(() => {
     if (!open) return undefined;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.setAttribute("data-map-modal-open", "1");
     return () => {
       document.body.style.overflow = previous;
+      document.documentElement.removeAttribute("data-map-modal-open");
     };
   }, [open]);
 
@@ -45,16 +55,24 @@ export default function MapModal({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[5200]">
+  const modal = (
+    <div
+      className="fixed inset-0 z-[5200] pointer-events-auto"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 h-full w-full px-4 py-5 sm:px-6 sm:py-6 md:px-10 md:py-8">
+      <div
+        className="relative z-10 h-full w-full px-4 py-5 sm:px-6 sm:py-6 md:px-10 md:py-8 pointer-events-auto"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
         <div className="mx-auto h-full w-full max-w-6xl">
-          <div className="h-full rounded-3xl border border-white/10 bg-[#0d041c]/95 backdrop-blur-2xl shadow-2xl shadow-purple-950/40 flex flex-col">
+          <div className="h-full rounded-3xl border border-white/10 bg-[#0d041c]/95 backdrop-blur-2xl shadow-2xl shadow-purple-950/40 flex flex-col pointer-events-auto">
             <div className="flex items-center justify-between px-4 py-3 sm:px-6 border-b border-white/10">
               <div>
                 <p className="text-xs uppercase tracking-[0.22em] text-white/60">Map view</p>
@@ -69,7 +87,7 @@ export default function MapModal({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="flex-1 p-3 sm:p-4">
+            <div className="flex-1 p-3 sm:p-4 pointer-events-auto">
               <CustomerMap
                 mapEnabled={mapEnabled}
                 mapBusinesses={mapBusinesses}
@@ -84,4 +102,6 @@ export default function MapModal({
       </div>
     </div>
   );
+
+  return portalTarget ? createPortal(modal, portalTarget) : modal;
 }

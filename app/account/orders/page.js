@@ -36,7 +36,7 @@ export default async function AccountOrdersPage({ searchParams }) {
 
   return (
     <div
-      className="min-h-screen px-4 md:px-8 lg:px-12 pt-1 pb-12"
+      className="min-h-screen px-4 md:px-8 lg:px-12 pt-0 pb-12"
       style={{ background: "var(--background)", color: "var(--text)" }}
     >
       <div className="max-w-5xl mx-auto space-y-8">
