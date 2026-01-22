@@ -270,21 +270,13 @@ export default function BusinessReviewsPanel({
         body: body.trim() || null,
       };
 
-      const insertPromise = client
+      const { data, error } = await client
         .from("business_reviews")
         .insert(payload)
         .select(
           "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
         )
         .maybeSingle();
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Request timed out.")), 12000);
-      });
-
-      const { data, error } = await Promise.race([
-        insertPromise,
-        timeoutPromise,
-      ]);
 
       if (error) {
         throw error;

@@ -8,6 +8,7 @@ import {
   getAuthProviderLabel,
   getPrimaryAuthProvider,
 } from "@/lib/getAuthProvider";
+import { PATHS } from "@/lib/auth/paths";
 
 export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
@@ -48,7 +49,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (loadingUser) return;
     if (!user) {
-      router.replace("/");
+      router.replace(PATHS.public.businessLanding);
     }
   }, [loadingUser, router, user]);
 

@@ -23,6 +23,20 @@ export default function CustomerMessagesPage() {
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
+  const applyLocalRead = useCallback((rows = []) => {
+    if (typeof window === "undefined") return rows;
+    const lastOpenedId = window.sessionStorage.getItem(
+      "yb-last-opened-conversation"
+    );
+    if (!lastOpenedId) return rows;
+    const nextRows = rows.map((row) =>
+      row?.id === lastOpenedId
+        ? { ...row, customer_unread_count: 0 }
+        : row
+    );
+    window.sessionStorage.removeItem("yb-last-opened-conversation");
+    return nextRows;
+  }, []);
 
   useEffect(() => {
     setHydrated(true);
@@ -79,7 +93,7 @@ export default function CustomerMessagesPage() {
       if (!result.ok) {
         throw result.error || new Error("Failed to load conversations");
       }
-      setConversations(result.result || []);
+      setConversations(applyLocalRead(result.result || []));
       hasLoadedRef.current = true;
     } catch (err) {
       console.error("Failed to load conversations", err);

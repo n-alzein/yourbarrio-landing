@@ -899,7 +899,7 @@ export function AuthProvider({
       const resolvedRedirect =
         redirectTo ||
         (inferredRole === "business"
-          ? PATHS.auth.businessLogin
+          ? PATHS.public.businessLanding
           : PATHS.auth.customerLogin);
       const shouldRedirect = typeof window !== "undefined";
 

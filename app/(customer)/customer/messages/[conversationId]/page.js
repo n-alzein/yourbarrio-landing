@@ -137,6 +137,12 @@ export default function CustomerConversationPage() {
   }, [authStatus, hydrated, loadingUser, conversationKey, loadThread]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!conversationKey) return;
+    window.sessionStorage.setItem("yb-last-opened-conversation", conversationKey);
+  }, [conversationKey]);
+
+  useEffect(() => {
     if (!hydrated || !userId || !conversationKey) return;
     if (authStatus !== "authenticated") return;
     markConversationRead({ supabase, conversationId: conversationKey }).catch(

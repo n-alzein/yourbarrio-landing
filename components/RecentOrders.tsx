@@ -41,7 +41,8 @@ const RecentOrders = ({ orders }: RecentOrdersProps) => {
         </Link>
       </div>
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="dashboard-table dashboard-table--no-hover-dark w-full text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             <tr>
               <th className="px-4 py-3 text-left">Order</th>
@@ -97,6 +98,7 @@ const RecentOrders = ({ orders }: RecentOrdersProps) => {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

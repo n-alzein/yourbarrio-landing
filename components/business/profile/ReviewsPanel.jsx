@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
 
 function formatReviewer(id) {
@@ -18,6 +18,7 @@ export default function ReviewsPanel({
   supabase,
 }) {
   const [loadingMore, setLoadingMore] = useState(false);
+  const [customerNames, setCustomerNames] = useState({});
   const [replyReviewId, setReplyReviewId] = useState(null);
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState("");
@@ -27,6 +28,38 @@ export default function ReviewsPanel({
   const averageRating = ratingSummary?.average || 0;
 
   const canLoadMore = reviews.length < reviewCount;
+
+  useEffect(() => {
+    let active = true;
+    if (!supabase) return () => {};
+
+    const ids = Array.from(
+      new Set(reviews.map((item) => item.customer_id).filter(Boolean))
+    );
+    const missing = ids.filter((id) => !customerNames[id]);
+    if (!missing.length) return () => {};
+
+    const loadNames = async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id,full_name,business_name")
+        .in("id", missing);
+
+      if (!active || error || !data?.length) return;
+      setCustomerNames((prev) => {
+        const next = { ...prev };
+        data.forEach((row) => {
+          next[row.id] = row.full_name || row.business_name || "Customer";
+        });
+        return next;
+      });
+    };
+
+    loadNames();
+    return () => {
+      active = false;
+    };
+  }, [reviews, customerNames, supabase]);
 
   const handleLoadMore = async () => {
     if (!supabase || loadingMore) return;
@@ -186,11 +219,17 @@ export default function ReviewsPanel({
               <div className="flex items-center justify-between">
                 <div>
                   <p className={`text-sm font-semibold ${tone.textStrong}`}>
-                    {review.title || formatReviewer(review.customer_id)}
+                    {customerNames[review.customer_id] ||
+                      formatReviewer(review.customer_id)}
                   </p>
                   <p className={`text-xs ${tone.textMuted}`}>
                     {new Date(review.created_at).toLocaleDateString()}
                   </p>
+                  {review.title ? (
+                    <p className={`mt-1 text-xs ${tone.textMuted}`}>
+                      {review.title}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-1 text-amber-400">
                   {Array.from({ length: 5 }).map((_, idx) => (

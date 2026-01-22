@@ -300,6 +300,10 @@ button {
   color: rgba(15, 23, 42, 0.85) !important;
 }
 
+.theme-dark .dashboard-table--no-hover-dark tr:hover {
+  background-color: transparent !important;
+}
+
 .theme-dark .dashboard-tooltip,
 .theme-dark .dashboard-tooltip * {
   color: #0f172a !important;

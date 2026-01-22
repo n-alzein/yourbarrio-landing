@@ -129,6 +129,8 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const isMessagesRoute = pathname?.startsWith("/customer/messages");
+  const visibleUnreadCount = isMessagesRoute ? 0 : unreadCount;
   const badgeReady = !loadingUser;
   const mobileDrawerId = useId();
   const dropdownRef = useRef(null);
@@ -778,6 +780,11 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     });
   }, [badgeReady, loadUnreadCount]);
 
+  useEffect(() => {
+    if (!isMessagesRoute) return;
+    setUnreadCount(0);
+  }, [isMessagesRoute]);
+
   const buildUnreadChannel = useCallback(
     (activeClient) =>
       activeClient
@@ -1168,9 +1175,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     useNextImage
                     priority
                   />
-                  {badgeReady && unreadCount > 0 ? (
+                  {badgeReady && visibleUnreadCount > 0 ? (
                     <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
-                      {unreadCount > 99 ? "99+" : unreadCount}
+                      {visibleUnreadCount > 99 ? "99+" : visibleUnreadCount}
                     </span>
                   ) : null}
                 </div>
@@ -1235,9 +1242,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-semibold text-white/90">{title}</p>
-                              {showBadge && badgeReady && unreadCount > 0 ? (
+                              {showBadge && badgeReady && visibleUnreadCount > 0 ? (
                                 <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                  {unreadCount}
+                                  {visibleUnreadCount}
                                 </span>
                               ) : null}
                             </div>
@@ -1427,7 +1434,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               </NavItem>
               <NavItem
                 href="/customer/messages"
-                badgeCount={unreadCount}
+                badgeCount={visibleUnreadCount}
                 active={isActive("/customer/messages")}
                 badgeReady={badgeReady}
                 onNavigate={handleNavigate}
