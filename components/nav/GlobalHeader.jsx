@@ -277,14 +277,15 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1 bg-transparent pr-12 text-sm placeholder:text-white/60 focus:outline-none"
-                placeholder="Search for anything nearby"
+                placeholder="Search YourBarrio"
                 type="search"
               />
               <button
                 type="submit"
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-white text-xs font-semibold text-black"
+                aria-label="Search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-white p-1.5 text-black"
               >
-                Go
+                <Search className="h-4 w-4" />
               </button>
             </form>
           </div>

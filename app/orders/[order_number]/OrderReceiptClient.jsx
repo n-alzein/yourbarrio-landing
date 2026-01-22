@@ -79,18 +79,22 @@ export default function OrderReceiptClient({ order, vendor }) {
           </div>
 
           <div className="border-t pt-4 space-y-3" style={{ borderColor: "var(--border)" }}>
-            <div className="text-xs uppercase tracking-[0.2em] opacity-60 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 leading-none">
+            <div className="text-xs uppercase tracking-[0.2em] opacity-60 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 leading-none">
               <span className="relative -top-0.5">Item</span>
               <span className="text-right">Qty</span>
+              <span className="text-right">Unit</span>
               <span className="text-right">Total</span>
             </div>
             <div className="space-y-2 text-sm">
               {items.map((item) => (
-                <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
+                <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3">
                   <span className="opacity-80 max-w-[360px] md:max-w-[440px] break-words">
                     {item.title}
                   </span>
                   <span className="text-right">{item.quantity}</span>
+                  <span className="text-right">
+                    ${formatMoney(item.unit_price)}
+                  </span>
                   <span className="text-right">
                     ${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}
                   </span>

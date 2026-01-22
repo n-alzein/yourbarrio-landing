@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
   ChevronDown,
+  Home,
   LogOut,
   MessageSquare,
   ShoppingCart,
@@ -45,6 +47,7 @@ export default function HeaderAccountWidget({
   } = useAuth();
   const { itemCount } = useCart();
   const { openModal } = useModal();
+  const pathname = usePathname();
   const authDiagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
@@ -90,6 +93,8 @@ export default function HeaderAccountWidget({
   }, [authBusy, hasAuth, lastAuthEvent, loading]);
   const disableCtas = disableReasons.length > 0;
   const showRateLimit = rateLimited && hasAuth;
+  const isMessagesRoute = pathname?.startsWith("/customer/messages");
+  const visibleUnreadCount = isMessagesRoute ? 0 : unreadCount;
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const loadUnreadCount = useCallback(async () => {
@@ -140,6 +145,11 @@ export default function HeaderAccountWidget({
       }
     };
   }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
+
+  useEffect(() => {
+    if (!isMessagesRoute) return;
+    setUnreadCount(0);
+  }, [isMessagesRoute]);
 
   const buildUnreadChannel = useCallback(
     (scopedClient) =>
@@ -287,6 +297,12 @@ export default function HeaderAccountWidget({
 
   const quickActions = [
     {
+      href: "/customer/home",
+      title: "YB Home",
+      description: "Back to customer home",
+      icon: Home,
+    },
+    {
       href: "/customer/messages",
       title: "Messages",
       description: "Chat with local businesses",
@@ -370,16 +386,23 @@ export default function HeaderAccountWidget({
             className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
             data-nav-guard="1"
           >
-            <SafeImage
-              src={avatar}
-              alt="Profile avatar"
-              className="h-10 w-10 rounded-2xl object-cover border border-white/20"
-              width={40}
-              height={40}
-              sizes="40px"
-              useNextImage
-              priority
-            />
+            <span className="relative">
+              <SafeImage
+                src={avatar}
+                alt="Profile avatar"
+                className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                width={40}
+                height={40}
+                sizes="40px"
+                useNextImage
+                priority
+              />
+              {visibleUnreadCount > 0 ? (
+                <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
+                  {visibleUnreadCount > 99 ? "99+" : visibleUnreadCount}
+                </span>
+              ) : null}
+            </span>
             <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[120px] truncate">
               {displayName}
             </span>
@@ -424,9 +447,9 @@ export default function HeaderAccountWidget({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-semibold text-white/90">{title}</p>
-                              {showBadge && unreadCount > 0 ? (
+                              {showBadge && visibleUnreadCount > 0 ? (
                                 <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                  {unreadCount}
+                                  {visibleUnreadCount}
                                 </span>
                               ) : null}
                             </div>
@@ -496,7 +519,31 @@ export default function HeaderAccountWidget({
     <MobileSidebarDrawer
       open={mobileMenuOpen}
       onClose={() => onCloseMobileMenu?.()}
-      title={hasAuth ? "My account" : "Welcome"}
+      title={
+        hasAuth ? (
+          <div className="flex items-center gap-3">
+            <span>My account</span>
+            {isCustomer ? (
+              <Link
+                href="/cart"
+                onClick={() => onCloseMobileMenu?.()}
+                className="relative inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 p-1.5 text-white/80 transition hover:text-white"
+                aria-label="View cart"
+                data-safe-nav="1"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                {itemCount > 0 ? (
+                  <span className="absolute -top-2 -right-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                    {itemCount}
+                  </span>
+                ) : null}
+              </Link>
+            ) : null}
+          </div>
+        ) : (
+          "Welcome"
+        )
+      }
       id={mobileDrawerId}
     >
       <div
@@ -573,20 +620,12 @@ export default function HeaderAccountWidget({
             {isCustomer ? (
               <>
                 <Link
-                  href="/cart"
+                  href="/customer/home"
                   onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white flex items-center justify-between"
+                  className="text-left text-white/70 hover:text-white"
                   data-safe-nav="1"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    Cart
-                  </span>
-                  {itemCount > 0 ? (
-                    <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-semibold text-black">
-                      {itemCount}
-                    </span>
-                  ) : null}
+                  YB Home
                 </Link>
                 <Link
                   href="/customer/messages"
@@ -594,10 +633,13 @@ export default function HeaderAccountWidget({
                   className="text-left text-white/70 hover:text-white flex items-center justify-between"
                   data-safe-nav="1"
                 >
-                  <span>Messages</span>
-                  {unreadCount > 0 ? (
+                  <span className="inline-flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Messages
+                  </span>
+                  {visibleUnreadCount > 0 ? (
                     <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {unreadCount}
+                      {visibleUnreadCount}
                     </span>
                   ) : null}
                 </Link>

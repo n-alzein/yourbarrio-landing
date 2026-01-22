@@ -637,19 +637,23 @@ export default function BusinessOrdersClient() {
               style={{ borderColor: "var(--border)" }}
             >
               <p className="text-sm font-semibold">Items</p>
-              <div className="mt-2 text-xs uppercase tracking-[0.2em] opacity-60 grid grid-cols-[1fr_auto_auto] gap-4">
+              <div className="mt-2 text-xs uppercase tracking-[0.2em] opacity-60 grid grid-cols-[1fr_80px_110px_130px] gap-6">
                 <span>Item</span>
                 <span className="text-right">Qty</span>
+                <span className="text-right">Unit</span>
                 <span className="text-right">Total</span>
               </div>
               <div className="mt-2 space-y-2 text-sm">
                 {(selectedOrder.order_items || []).map((item) => (
                   <div
                     key={item.id}
-                    className="grid grid-cols-[1fr_auto_auto] items-center gap-4"
+                    className="grid grid-cols-[1fr_80px_110px_130px] items-center gap-6"
                   >
                     <span className="opacity-80">{item.title}</span>
                     <span className="text-right">{item.quantity}</span>
+                    <span className="text-right">
+                      ${formatMoney(item.unit_price)}
+                    </span>
                     <span className="text-right">
                       $
                       {formatMoney(

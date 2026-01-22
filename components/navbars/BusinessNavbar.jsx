@@ -608,28 +608,48 @@ function BusinessNavbarInner({ pathname }) {
       data-business-navbar="1"
     >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
-        {/* MOBILE MENU BUTTON */}
-        <button
-          onClick={() => {
-            setProfileMenuOpen(false);
-            setMobileMenuOpen((open) => !open);
-          }}
-          className="md:hidden text-white mr-3"
-          aria-label="Open menu"
-          aria-expanded={mobileMenuOpen}
-          aria-controls={mobileDrawerId}
-        >
-          <svg className="h-7 w-7" fill="none" stroke="currentColor">
-            <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        {/* MOBILE LEFT GROUP */}
+        <div className="flex items-center gap-3 md:hidden">
+          <button
+            onClick={() => {
+              setProfileMenuOpen(false);
+              setMobileMenuOpen((open) => !open);
+            }}
+            className="text-white"
+            aria-label="Open menu"
+            aria-expanded={mobileMenuOpen}
+            aria-controls={mobileDrawerId}
+          >
+            <svg className="h-7 w-7" fill="none" stroke="currentColor">
+              <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          <Link href={user ? "/business/dashboard" : "/business"}>
+            <span className="relative block h-32 w-32">
+              <Image
+                src="/logo.png"
+                alt="YourBarrio"
+                fill
+                sizes="128px"
+                priority
+                className="object-contain"
+              />
+            </span>
+          </Link>
+
+        </div>
+
+        <div className="md:hidden text-[11px] font-semibold tracking-[0.2em] text-white/70 whitespace-nowrap">
+          BUSINESS ACCOUNT
+        </div>
 
         {/* LEFT SIDE */}
-        <div className="flex items-center gap-10">
+        <div className="hidden md:flex items-center gap-10">
           {/* Logo */}
           <div className="relative flex items-center">
             <Link href={user ? "/business/dashboard" : "/business"}>
-              <span className="relative block h-10 w-10 md:h-32 md:w-32">
+              <span className="relative block h-32 w-32">
                 <Image
                   src="/logo.png"
                   alt="YourBarrio"
@@ -641,11 +661,6 @@ function BusinessNavbarInner({ pathname }) {
               </span>
             </Link>
 
-            <span
-              className="absolute text-xs font-semibold text-white/80 whitespace-nowrap left-[75px] bottom-[4px] md:left-[150px] md:bottom-[36px]"
-            >
-              for Business
-            </span>
           </div>
 
           {/* LEFT NAV LINKS */}
@@ -679,6 +694,9 @@ function BusinessNavbarInner({ pathname }) {
 
         {/* RIGHT SIDE */}
         <div className="hidden md:flex items-center gap-8">
+          <span className="text-[11px] font-semibold tracking-[0.3em] text-white/70 whitespace-nowrap">
+            BUSINESS ACCOUNT
+          </span>
 
           {/* Logged OUT */}
           {!isBusinessAuthed && (

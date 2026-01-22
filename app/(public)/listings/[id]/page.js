@@ -14,7 +14,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import SafeImage from "@/components/SafeImage";
 import { getOrCreateConversation } from "@/lib/messages";
 import { useTheme } from "@/components/ThemeProvider";
@@ -29,6 +29,7 @@ export default function ListingDetails({ params }) {
   const isLight = hydrated ? theme === "light" : true;
   const { addItem } = useCart();
   const routeParams = useParams();
+  const pathname = usePathname();
   const resolvedParams =
     params && typeof params.then === "function" ? use(params) : params;
   const id = routeParams?.id || resolvedParams?.id;
@@ -337,11 +338,16 @@ export default function ListingDetails({ params }) {
   const inventory = normalizeInventory(listing);
   const badgeStyle = getAvailabilityBadgeStyle(inventory.availability, isLight);
   const isOutOfStock = inventory.availability === "out";
+  const isCustomerListingRoute = pathname?.startsWith("/customer/listings");
 
   return (
     <>
       <div
-        className="min-h-screen px-4 md:px-8 lg:px-12 py-4 md:pt-3"
+        className={`min-h-screen px-4 md:px-8 lg:px-12 ${
+          isCustomerListingRoute
+            ? "pt-0 pb-4 md:pt-0 -mt-24 md:-mt-16"
+            : "py-4 md:pt-3"
+        }`}
         style={{ background: "var(--background)", color: "var(--text)" }}
       >
         <div className="max-w-6xl mx-auto space-y-6">

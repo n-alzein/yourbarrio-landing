@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { createPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
 import BusinessAnnouncementsPreview from "@/components/publicBusinessProfile/BusinessAnnouncementsPreview";
@@ -28,6 +30,13 @@ const PROFILE_FIELDS = [
 ].join(",");
 
 const OPTIONAL_PUBLISH_FIELDS = ["is_published", "is_verified", "is_active"];
+const PROFILE_FIELDS_WITH_OPTIONAL = [
+  PROFILE_FIELDS,
+  OPTIONAL_PUBLISH_FIELDS.join(","),
+].join(",");
+const PUBLIC_CACHE_SECONDS = 300;
+const PERF_ENV_FLAG = "YB_PROFILE_PERF";
+const MISSING_COLUMN_RE = /column "([^"]+)" does not exist/i;
 
 function buildRatingSummary(rows) {
   const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -56,6 +65,12 @@ function pickPublishFlag(profile) {
   return null;
 }
 
+function isMissingColumnError(error) {
+  if (!error) return false;
+  if (error?.code === "42703") return true;
+  return MISSING_COLUMN_RE.test(error?.message || "");
+}
+
 async function safeQuery(promise, fallback, label) {
   try {
     const result = await promise;
@@ -65,42 +80,46 @@ async function safeQuery(promise, fallback, label) {
       if (!quietCodes.has(code)) {
         console.error(`[public business] ${label} query failed`, result.error);
       }
-      return { data: fallback, count: 0 };
+      return { data: fallback, count: 0, error: result.error };
     }
-    return { data: result.data ?? fallback, count: result.count ?? 0 };
+    return {
+      data: result.data ?? fallback,
+      count: result.count ?? 0,
+      error: null,
+    };
   } catch (err) {
     console.error(`[public business] ${label} query failed`, err);
-    return { data: fallback, count: 0 };
+    return { data: fallback, count: 0, error: err };
   }
 }
 
 async function fetchPublicProfile(supabase, id) {
-  const base = await supabase
+  const withOptional = await supabase
     .from("users")
-    .select(PROFILE_FIELDS)
+    .select(PROFILE_FIELDS_WITH_OPTIONAL)
     .eq("id", id)
     .eq("role", "business")
     .maybeSingle();
 
-  if (base.error) {
-    console.error("[public business] profile query failed", base.error);
+  if (withOptional.error) {
+    if (isMissingColumnError(withOptional.error)) {
+      const base = await supabase
+        .from("users")
+        .select(PROFILE_FIELDS)
+        .eq("id", id)
+        .eq("role", "business")
+        .maybeSingle();
+      if (base.error) {
+        console.error("[public business] profile query failed", base.error);
+        return null;
+      }
+      return base.data;
+    }
+    console.error("[public business] profile query failed", withOptional.error);
     return null;
   }
 
-  const profile = base.data;
-  if (!profile) return null;
-
-  const optional = await supabase
-    .from("users")
-    .select(OPTIONAL_PUBLISH_FIELDS.join(","))
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!optional.error && optional.data) {
-    return { ...profile, ...optional.data };
-  }
-
-  return profile;
+  return withOptional.data;
 }
 
 function buildListingsQuery(supabase, businessId, limit, filters) {
@@ -209,12 +228,89 @@ function descriptionSnippet(value) {
   return `${trimmed.slice(0, 157)}...`;
 }
 
+const getPublicProfileCached = unstable_cache(
+  async (businessId) => {
+    const supabase = createPublicSupabaseServerClient();
+    return fetchPublicProfile(supabase, businessId);
+  },
+  ["public-business-profile"],
+  { revalidate: PUBLIC_CACHE_SECONDS }
+);
+
+const getPublicListingsCached = unstable_cache(
+  async (businessId, limit) => {
+    const supabase = createPublicSupabaseServerClient();
+    return fetchListingsWithFallback(supabase, businessId, limit);
+  },
+  ["public-business-listings"],
+  { revalidate: PUBLIC_CACHE_SECONDS }
+);
+
+const getPublicGalleryCached = unstable_cache(
+  async (businessId) => {
+    const supabase = createPublicSupabaseServerClient();
+    return fetchGallery(supabase, businessId);
+  },
+  ["public-business-gallery"],
+  { revalidate: PUBLIC_CACHE_SECONDS }
+);
+
+const getPublicAnnouncementsCached = unstable_cache(
+  async (businessId) => {
+    const supabase = createPublicSupabaseServerClient();
+    return fetchAnnouncements(supabase, businessId);
+  },
+  ["public-business-announcements"],
+  { revalidate: PUBLIC_CACHE_SECONDS }
+);
+
+const getPublicReviewsCached = unstable_cache(
+  async (businessId) => {
+    const supabase = createPublicSupabaseServerClient();
+    return fetchReviews(supabase, businessId);
+  },
+  ["public-business-reviews"],
+  { revalidate: PUBLIC_CACHE_SECONDS }
+);
+
+const getPublicReviewRatingsCached = unstable_cache(
+  async (businessId) => {
+    const supabase = createPublicSupabaseServerClient();
+    return fetchReviewRatings(supabase, businessId);
+  },
+  ["public-business-review-ratings"],
+  { revalidate: PUBLIC_CACHE_SECONDS }
+);
+
+function createPerfLogger({ enabled, label, businessId }) {
+  const startedAt = performance.now();
+  const spans = [];
+
+  return {
+    async time(name, fn) {
+      const start = performance.now();
+      const result = await fn();
+      spans.push({ name, ms: performance.now() - start });
+      return result;
+    },
+    end(extra = {}) {
+      if (!enabled) return;
+      const totalMs = performance.now() - startedAt;
+      console.log(`[perf] ${label}`, {
+        businessId,
+        totalMs: Math.round(totalMs),
+        spans,
+        ...extra,
+      });
+    },
+  };
+}
+
 
 export async function generateMetadata({ params }) {
   const resolvedParams = await Promise.resolve(params);
   const businessId = resolvedParams?.id;
-  const supabase = await createSupabaseServerClient();
-  const profile = businessId ? await fetchPublicProfile(supabase, businessId) : null;
+  const profile = businessId ? await getPublicProfileCached(businessId) : null;
   if (!profile) {
     return {
       title: "Business profile unavailable",
@@ -228,11 +324,7 @@ export async function generateMetadata({ params }) {
   if (publishFlag) {
     isEligible = publishFlag.value;
   } else {
-    const listingPreview = await fetchListingsWithFallback(
-      supabase,
-      businessId,
-      1
-    );
+    const listingPreview = await getPublicListingsCached(businessId, 1);
     isEligible = listingPreview.length > 0;
   }
 
@@ -297,15 +389,30 @@ export default async function PublicBusinessProfilePage({
   const businessId = resolvedParams?.id;
   if (!businessId) return <UnavailableState />;
   const isPreview = resolvedSearch?.preview === "1";
+  const perfEnabled =
+    resolvedSearch?.perf === "1" || process.env[PERF_ENV_FLAG] === "1";
+  const perf = createPerfLogger({
+    enabled: perfEnabled,
+    label: "public-business-profile",
+    businessId,
+  });
 
   if (isPreview) {
     return <PublicBusinessPreviewClient businessId={businessId} trackView={false} />;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const profile = await fetchPublicProfile(supabase, businessId);
+  const useAuthenticatedClient = shell === "customer";
+  const supabase = useAuthenticatedClient
+    ? await createSupabaseServerClient()
+    : null;
+  const profile = await perf.time("profile", () =>
+    useAuthenticatedClient
+      ? fetchPublicProfile(supabase, businessId)
+      : getPublicProfileCached(businessId)
+  );
 
   if (!profile) {
+    perf.end({ outcome: "missing-profile" });
     return <UnavailableState />;
   }
 
@@ -315,33 +422,65 @@ export default async function PublicBusinessProfilePage({
   if (publishFlag) {
     isEligible = publishFlag.value;
   } else {
-    const listingPreview = await fetchListingsWithFallback(
-      supabase,
-      businessId,
-      1
+    const listingPreview = await perf.time("listings-preview", () =>
+      useAuthenticatedClient
+        ? fetchListingsWithFallback(supabase, businessId, 1)
+        : getPublicListingsCached(businessId, 1)
     );
     isEligible = listingPreview.length > 0;
   }
 
   if (!isEligible) {
+    perf.end({ outcome: "unpublished" });
     return <UnavailableState />;
   }
 
   const [gallery, announcements, listings, reviews, reviewRatings] =
     await Promise.all([
-      fetchGallery(supabase, businessId),
-      fetchAnnouncements(supabase, businessId),
-      fetchListingsWithFallback(supabase, businessId, 24),
-      fetchReviews(supabase, businessId),
-      fetchReviewRatings(supabase, businessId),
+      perf.time("gallery", () =>
+        useAuthenticatedClient
+          ? fetchGallery(supabase, businessId)
+          : getPublicGalleryCached(businessId)
+      ),
+      perf.time("announcements", () =>
+        useAuthenticatedClient
+          ? fetchAnnouncements(supabase, businessId)
+          : getPublicAnnouncementsCached(businessId)
+      ),
+      perf.time("listings", () =>
+        useAuthenticatedClient
+          ? fetchListingsWithFallback(supabase, businessId, 24)
+          : getPublicListingsCached(businessId, 24)
+      ),
+      perf.time("reviews", () =>
+        useAuthenticatedClient
+          ? fetchReviews(supabase, businessId)
+          : getPublicReviewsCached(businessId)
+      ),
+      perf.time("review-ratings", () =>
+        useAuthenticatedClient
+          ? fetchReviewRatings(supabase, businessId)
+          : getPublicReviewRatingsCached(businessId)
+      ),
     ]);
 
   const ratingSummary = buildRatingSummary(reviewRatings || []);
+  perf.end({ outcome: "ok" });
 
+  const isCustomerShell = shell === "customer";
   const wrapperClassName =
-    shell === "customer"
+    isCustomerShell
       ? "min-h-screen text-white -mt-28 md:-mt-20"
       : "min-h-screen text-white -mt-20";
+  const contentShellPadding = isCustomerShell
+    ? "mx-auto max-w-6xl px-0 sm:px-6 md:px-10 pb-16 space-y-8"
+    : "mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8";
+  const sectionShellClassName = isCustomerShell
+    ? "rounded-none border-0 sm:border sm:border-white/10"
+    : "rounded-none";
+  const reviewsShellClassName = isCustomerShell
+    ? "rounded-none border-0 sm:rounded-b-3xl sm:rounded-t-none sm:border sm:border-white/10"
+    : "rounded-b-3xl rounded-t-none";
 
   return (
     <div className={wrapperClassName}>
@@ -350,23 +489,24 @@ export default async function PublicBusinessProfilePage({
         profile={profile}
         ratingSummary={ratingSummary}
         publicPath={`/b/${businessId}`}
+        shell={shell}
       />
 
-      <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8">
-        <BusinessAbout profile={profile} className="rounded-none" />
+      <div className={contentShellPadding}>
+        <BusinessAbout profile={profile} className={sectionShellClassName} />
         <BusinessAnnouncementsPreview
           announcements={announcements}
-          className="rounded-none"
+          className={sectionShellClassName}
         />
-        <BusinessGalleryGrid photos={gallery} className="rounded-none" />
-        <BusinessListingsGrid listings={listings} className="rounded-none" />
+        <BusinessGalleryGrid photos={gallery} className={sectionShellClassName} />
+        <BusinessListingsGrid listings={listings} className={sectionShellClassName} />
         <ViewerContextEnhancer>
           <BusinessReviewsPanel
             businessId={businessId}
             initialReviews={reviews}
             ratingSummary={ratingSummary}
             reviewCount={ratingSummary?.count || reviews?.length || 0}
-            className="rounded-b-3xl rounded-t-none"
+            className={reviewsShellClassName}
           />
         </ViewerContextEnhancer>
       </div>

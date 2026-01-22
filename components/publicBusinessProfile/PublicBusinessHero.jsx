@@ -28,11 +28,13 @@ export default function PublicBusinessHero({
   profile,
   ratingSummary,
   publicPath,
+  shell = "public",
 }) {
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const [copied, setCopied] = useState(false);
   const [showSticky, setShowSticky] = useState(false);
+  const isCustomerShell = shell === "customer";
 
   const name =
     profile?.business_name || profile?.full_name || "Local business";
@@ -100,13 +102,19 @@ export default function PublicBusinessHero({
     action: isLight ? "text-slate-900" : "text-white/90",
     badge: isLight ? "text-slate-600" : "text-white/65",
   };
+  const heroShellPadding = isCustomerShell
+    ? "mx-auto max-w-6xl px-0 sm:px-6 md:px-10"
+    : "mx-auto max-w-6xl px-6 md:px-10";
+  const heroCardShellClasses = isCustomerShell
+    ? "rounded-none border-0 sm:rounded-t-3xl sm:rounded-b-none sm:border sm:border-white/10"
+    : "rounded-t-3xl rounded-b-none border border-white/10";
 
   return (
     <section className="relative text-white theme-lock">
       {showSticky ? (
         <div className="fixed top-20 inset-x-0 z-40">
           <div className="w-full border-y border-white/10 bg-black/60 backdrop-blur shadow-lg">
-            <div className="mx-auto max-w-6xl px-6 md:px-10">
+            <div className={heroShellPadding}>
               <div className="flex items-center justify-between gap-4 py-2">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-full border border-white/20 bg-white/10 overflow-hidden relative">
@@ -175,8 +183,8 @@ export default function PublicBusinessHero({
       </div>
 
       <div className="relative -mt-16 sm:-mt-20">
-        <div className="mx-auto max-w-6xl px-6 md:px-10">
-          <div className="rounded-t-3xl rounded-b-none border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-10 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]">
+        <div className={heroShellPadding}>
+          <div className={`${heroCardShellClasses} bg-white/5 backdrop-blur-xl p-6 md:p-10 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.7)]`}>
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl border border-white/20 bg-white/10 p-2 shadow-xl">
