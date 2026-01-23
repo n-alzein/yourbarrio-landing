@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
   ChevronDown,
+  Compass,
   Home,
   LogOut,
   MapPin,
@@ -311,6 +312,12 @@ export default function HeaderAccountWidget({
       title: "YB Home",
       description: "Back to customer home",
       icon: Home,
+    },
+    {
+      href: "/customer/nearby",
+      title: "Nearby businesses",
+      description: "Explore what's buzzing near you",
+      icon: Compass,
     },
     {
       href: "/customer/messages",
@@ -638,6 +645,14 @@ export default function HeaderAccountWidget({
                   data-safe-nav="1"
                 >
                   YB Home
+                </Link>
+                <Link
+                  href="/customer/nearby"
+                  onClick={() => onCloseMobileMenu?.()}
+                  className="text-left text-white/70 hover:text-white"
+                  data-safe-nav="1"
+                >
+                  Nearby businesses
                 </Link>
                 <Link
                   href="/customer/messages"

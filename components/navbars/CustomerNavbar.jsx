@@ -681,9 +681,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
       icon: Home,
     },
     {
-      href: "/customer/home",
-      title: "Discover",
-      description: "See what's buzzing near you",
+      href: "/customer/nearby",
+      title: "Nearby businesses",
+      description: "Explore what's buzzing near you",
       icon: Compass,
     },
     {
@@ -1425,12 +1425,12 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 YB Home
               </NavItem>
               <NavItem
-                href="/customer/home"
-                active={isActive("/customer/home")}
+                href="/customer/nearby"
+                active={isActive("/customer/nearby")}
                 badgeReady={badgeReady}
                 onNavigate={handleNavigate}
               >
-                Discover
+                Nearby businesses
               </NavItem>
               <NavItem
                 href="/customer/messages"

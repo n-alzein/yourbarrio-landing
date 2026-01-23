@@ -1,5 +1,6 @@
-import CustomerHomeClient from "./CustomerHomeClient";
 import { headers } from "next/headers";
+import StrapiBannersServer from "@/components/banners/StrapiBannersServer";
+import CustomerHomeClient from "./CustomerHomeClient";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,5 +21,12 @@ export default async function CustomerHomePage() {
   const payload = await response.json().catch(() => ({}));
   const initialListings = Array.isArray(payload?.listings) ? payload.listings : [];
 
-  return <CustomerHomeClient initialListings={initialListings} />;
+  return (
+    <>
+      <div className="mt-0 mb-8 md:mb-10 relative z-10">
+        <StrapiBannersServer />
+      </div>
+      <CustomerHomeClient initialListings={initialListings} />
+    </>
+  );
 }

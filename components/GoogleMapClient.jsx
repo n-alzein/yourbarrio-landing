@@ -547,8 +547,25 @@ export default function GoogleMapClient({
         popup.setDOMContent(newContent);
       };
 
-      wrapper.addEventListener("click", () => {
+      const openBusinessProfile = (event) => {
+        if (biz?.id) {
+          const url = `/b/${biz.id}`;
+          if (event?.metaKey || event?.ctrlKey) {
+            window.open(url, "_blank", "noopener");
+          } else {
+            window.location.assign(url);
+          }
+          return;
+        }
         popup.addTo(map);
+      };
+
+      wrapper.addEventListener("click", openBusinessProfile);
+      wrapper.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openBusinessProfile(event);
+        }
       });
       wrapper.addEventListener("mouseenter", () => {
         popup.addTo(map);

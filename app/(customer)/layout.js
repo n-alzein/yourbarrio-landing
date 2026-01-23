@@ -15,7 +15,7 @@ export const metadata = {
 };
 
 function CustomerRouteShell({ children = null }) {
-  return <div className="pt-28 md:pt-20 min-h-screen">{children}</div>;
+  return <div className="pt-14 md:pt-12 min-h-screen">{children}</div>;
 }
 
 export default async function CustomerLayout({ children }) {

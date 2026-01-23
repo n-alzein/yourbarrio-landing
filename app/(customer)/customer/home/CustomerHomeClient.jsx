@@ -11,10 +11,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import React from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
@@ -29,46 +28,10 @@ import {
 import { installPreventDefaultTracer } from "@/lib/tracePreventDefault";
 import { installHomeNavInstrumentation } from "@/lib/navInstrumentation";
 import { appendCrashLog } from "@/lib/crashlog";
-import MapModal from "@/components/customer/MapModal";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
 import { useGridVirtualRows } from "@/components/home/useGridVirtualRows";
 import { logDataDiag } from "@/lib/dataDiagnostics";
 
-const SAMPLE_BUSINESSES = [
-  {
-    id: "sample-1",
-    name: "Barrio Cafe",
-    category: "Cafe",
-    categoryLabel: "Cafe",
-    address: "123 Sample St, San Francisco",
-    description: "Neighborhood coffee and light bites.",
-    website: "",
-    imageUrl: "",
-    source: "sample",
-    coords: { lat: 37.7749, lng: -122.4194 },
-  },
-  {
-    id: "sample-2",
-    name: "Barrio Market",
-    category: "Market",
-    categoryLabel: "Market",
-    address: "456 Grove Ave, San Francisco",
-    description: "Local grocery staples and fresh produce.",
-    website: "",
-    imageUrl: "",
-    source: "sample",
-    coords: { lat: 37.779, lng: -122.423 },
-  },
-];
-
-const isSameBusinessList = (prev, next) => {
-  if (!Array.isArray(prev) || !Array.isArray(next)) return false;
-  if (prev.length !== next.length) return false;
-  for (let i = 0; i < prev.length; i += 1) {
-    if (prev[i]?.id !== next[i]?.id) return false;
-  }
-  return true;
-};
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 function HomeGuardFallback() {
   const { theme, hydrated } = useTheme();
@@ -168,29 +131,14 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   );
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [mapOpen, setMapOpen] = useState(false);
-  const [userCity, setUserCity] = useState("");
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
   const homeBisect = {
-    map: process.env.NEXT_PUBLIC_HOME_BISECT_MAP !== "0",
     homeAudit: process.env.NEXT_PUBLIC_HOME_BISECT_HOME_AUDIT !== "0",
     pdTracer: process.env.NEXT_PUBLIC_HOME_BISECT_PD_TRACER !== "0",
     safeNav: process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1",
     tileDiag: process.env.NEXT_PUBLIC_HOME_BISECT_TILE_DIAG !== "0",
   };
-  const mapEnabled = homeBisect.map;
-  const mapAvailable = mapEnabled && process.env.NEXT_PUBLIC_DISABLE_MAP !== "1";
-  const initialYb = (() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const cached = sessionStorage.getItem("yb_customer_home_businesses");
-      const parsed = cached ? JSON.parse(cached) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
   const initialListingsFromStorage = (() => {
     if (typeof window === "undefined") return [];
     try {
@@ -205,7 +153,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const resolvedInitialListings = hasInitialListings
     ? initialListingsProp
     : initialListingsFromStorage;
-  const [mapBusinesses, setMapBusinesses] = useState(initialYb);
   const [hybridItems, setHybridItems] = useState([]);
   const [hybridItemsLoading, setHybridItemsLoading] = useState(false);
   const [hybridItemsError, setHybridItemsError] = useState(null);
@@ -216,42 +163,14 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   const [hasLoadedListings, setHasLoadedListings] = useState(
     hasInitialListings || resolvedInitialListings.length > 0
   );
-  const [ybBusinesses, setYbBusinesses] = useState(initialYb);
-  const [ybBusinessesLoading, setYbBusinessesLoading] = useState(
-    initialYb.length === 0
-  );
-  const [hasLoadedYb, setHasLoadedYb] = useState(initialYb.length > 0);
-  const hasLoadedYbRef = useRef(hasLoadedYb);
-  const [ybBusinessesError, setYbBusinessesError] = useState(null);
   const [isVisible, setIsVisible] = useState(() =>
     typeof document === "undefined" ? true : !document.hidden
   );
-  const ybFetchedRef = useRef(false);
   const allListingsFetchedRef = useRef(false);
-  const ybRequestIdRef = useRef(0);
   const allListingsRequestIdRef = useRef(0);
   const hybridRequestIdRef = useRef(0);
   const authReady = !loadingUser || !!user;
-  const galleryRef = useRef(null);
   const gridContainerRef = useRef(null);
-  const normalizeCity = (value) => (value || "").trim().toLowerCase();
-  const mapBusinessesForCity = useMemo(() => {
-    const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
-    const normalizedUserCity = normalizeCity(userCity);
-    const withCoords = (source || []).filter((biz) => {
-      if (!biz) return false;
-      const lat = biz.coords?.lat ?? biz.lat ?? biz.latitude;
-      const lng = biz.coords?.lng ?? biz.lng ?? biz.longitude;
-      const parsedLat = typeof lat === "number" ? lat : parseFloat(lat);
-      const parsedLng = typeof lng === "number" ? lng : parseFloat(lng);
-      return Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
-    });
-    if (!normalizedUserCity) return withCoords;
-    const filtered = withCoords.filter(
-      (biz) => normalizeCity(biz?.city) === normalizedUserCity
-    );
-    return filtered.length ? filtered : withCoords;
-  }, [mapBusinesses, ybBusinesses, userCity]);
   const [gridColumns, setGridColumns] = useState(() => {
     if (typeof window === "undefined") return 4;
     const width = window.innerWidth;
@@ -280,10 +199,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
       }),
     []
   );
-
-  useEffect(() => {
-    hasLoadedYbRef.current = hasLoadedYb;
-  }, [hasLoadedYb]);
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_HOME_GRID_DIAG !== "1") return undefined;
@@ -317,37 +232,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   }, []);
 
   useEffect(() => {
-    if (!mapAvailable) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    let cancelled = false;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        if (cancelled) return;
-        const lat = pos?.coords?.latitude;
-        const lng = pos?.coords?.longitude;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        try {
-          const res = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
-          if (!res.ok) return;
-          const payload = await res.json();
-          if (!cancelled && payload?.city) {
-            setUserCity(payload.city);
-          }
-        } catch (_) {
-          /* ignore */
-        }
-      },
-      () => {
-        /* ignore */
-      },
-      { enableHighAccuracy: true, maximumAge: 1000 * 60 * 10 }
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [mapAvailable]);
-
-  useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
     const cleanup = installPreventDefaultTracer();
     return cleanup;
@@ -359,72 +243,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     return undefined;
   }, [clickDiagEnabled]);
 
-  useEffect(() => {
-    if (!clickDiagEnabled) return undefined;
-    const timer = setTimeout(() => {
-      const shell = document.querySelector(".home-map-shell");
-      if (!shell) return;
-      const viewport = document.querySelector(".home-map-viewport");
-      const nav = document.querySelector("nav.fixed") || document.querySelector("nav");
-      const tiles = document.querySelector('[data-home-tiles="1"]');
-      const overlaps = (a, b) => {
-        if (!a || !b) return false;
-        return !(
-          a.right <= b.left ||
-          a.left >= b.right ||
-          a.bottom <= b.top ||
-          a.top >= b.bottom
-        );
-      };
-      const shellRect = shell.getBoundingClientRect();
-      const viewportRect = viewport?.getBoundingClientRect();
-      const navRect = nav?.getBoundingClientRect();
-      const tilesRect = tiles?.getBoundingClientRect();
-      const styles = [];
-      let node = shell;
-      for (let i = 0; i < 4 && node; i += 1) {
-        const cs = window.getComputedStyle(node);
-        styles.push({
-          tag: node.tagName?.toLowerCase() || "unknown",
-          className: (node.className || "").toString(),
-          position: cs.position,
-          zIndex: cs.zIndex,
-          pointerEvents: cs.pointerEvents,
-          opacity: cs.opacity,
-          transform: cs.transform,
-          filter: cs.filter,
-          isolation: cs.isolation,
-          contain: cs.contain,
-        });
-        node = node.parentElement;
-      }
-
-      console.log("[HOME_MAP_ASSERT]", {
-        shellRect,
-        viewportRect,
-        navRect,
-        tilesRect,
-        styles,
-      });
-
-      if (navRect && shellRect.top < navRect.bottom) {
-        console.warn("[HOME_MAP_ASSERT] map overlaps navbar region", { shellRect, navRect });
-      }
-      if (tilesRect && overlaps(shellRect, tilesRect)) {
-        console.warn("[HOME_MAP_ASSERT] map overlaps tiles container", { shellRect, tilesRect });
-      }
-      if (
-        viewportRect &&
-        (viewportRect.width > shellRect.width + 1 || viewportRect.height > shellRect.height + 1)
-      ) {
-        console.warn("[HOME_MAP_ASSERT] viewport exceeds shell bounds", {
-          shellRect,
-          viewportRect,
-        });
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [clickDiagEnabled]);
 
   useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.homeAudit) return undefined;
@@ -483,13 +301,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     const cleanup = installPreventDefaultTracer();
     return cleanup;
   }, [clickDiagEnabled, homeBisect.pdTracer]);
-  const handleHomeCapture = (event) => {
-    if (!clickDiagEnabled || !homeBisect.tileDiag) return;
-    console.log("[CLICK_DIAG] home grid capture", {
-      target: event.target,
-      currentTarget: event.currentTarget,
-    });
-  };
   const diagTileClick =
     (label, tileId) =>
       (event) => {
@@ -509,52 +320,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         });
       };
   const coverFor = (value) => primaryPhotoUrl(value) || null;
-  const businessPhotoFor = (biz) =>
-    primaryPhotoUrl(
-      biz?.imageUrl ||
-        biz?.profile_photo_url ||
-        biz?.photo_url ||
-        biz?.image_url ||
-        biz?.avatar_url ||
-        biz?.logo_url
-    ) || null;
-  const filteredBusinesses = useMemo(() => {
-    const source = ybBusinesses.length ? ybBusinesses : mapBusinesses;
-    const q = search.trim().toLowerCase();
-    const categoryFilterNormalized = categoryFilter.trim().toLowerCase();
-    if (!q) {
-      if (!categoryFilterNormalized || categoryFilterNormalized === "all") return source;
-      return source.filter((biz) => {
-        const categoryValue =
-          biz.categoryLabel?.toLowerCase() ||
-          biz.category?.toLowerCase() ||
-          "";
-        return categoryValue === categoryFilterNormalized;
-      });
-    }
-    return source.filter((biz) => {
-      const name = biz.name?.toLowerCase() || "";
-      const category =
-        biz.categoryLabel?.toLowerCase() ||
-        biz.category?.toLowerCase() ||
-        "";
-      const desc = biz.description?.toLowerCase() || "";
-      const matchesCategory =
-        !categoryFilterNormalized ||
-        categoryFilterNormalized === "all" ||
-        category === categoryFilterNormalized;
-      return (
-        matchesCategory &&
-        (name.includes(q) || category.includes(q) || desc.includes(q))
-      );
-    });
-  }, [mapBusinesses, search, ybBusinesses, categoryFilter]);
-
-  const scrollGallery = (dir) => {
-    const el = galleryRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * 320, behavior: "smooth" });
-  };
   const DRAG_DISTANCE_PX = 10;
   const DRAG_CANCEL_WINDOW_MS = 300;
   const handleTilePointerDown = useCallback((event) => {
@@ -605,172 +370,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   }, []);
 
   useEffect(() => {
-    if (!isVisible && ybFetchedRef.current) return undefined;
-    let active = true;
-    const loadYb = async () => {
-      const requestId = ++ybRequestIdRef.current;
-      ybFetchedRef.current = true;
-      setYbBusinessesLoading((prev) => (hasLoadedYbRef.current ? prev : true));
-      setYbBusinessesError(null);
-      logDataDiag("request:start", { label: "home:yb-businesses", requestId });
-      const client = supabase ?? getSupabaseBrowserClient();
-      try {
-        let rows = [];
-
-        // Try server-fed public endpoint first (uses service role when available)
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(
-            () => controller.abort(new DOMException("Timeout", "AbortError")),
-            12000
-          );
-          const res = await fetch("/api/public-businesses", { signal: controller.signal });
-          clearTimeout(timeoutId);
-          const payload = await res.json().catch(() => ({}));
-          if (res.ok && Array.isArray(payload?.businesses)) {
-            rows = payload.businesses;
-          }
-        } catch (errApi) {
-          if (errApi?.name === "AbortError") {
-            logCrashEvent({
-              context: "public-businesses",
-              kind: "timeout",
-              message: "/api/public-businesses timed out after 12s",
-            });
-            if (active && requestId === ybRequestIdRef.current) {
-              setYbBusinesses(sampleBusinesses);
-              setHasLoadedYb(true);
-              setYbBusinessesError("Still loading businesses. Please refresh to retry.");
-              setYbBusinessesLoading(false);
-            }
-            return;
-          }
-          console.warn("public-businesses endpoint failed", errApi);
-        }
-
-        // Fallback to direct Supabase query with anon key if endpoint returned nothing
-        if (!rows.length && client) {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(
-            () => controller.abort(new DOMException("Timeout", "AbortError")),
-            12000
-          );
-          try {
-            let query = client
-              .from("users")
-              .select(
-                "id,business_name,full_name,category,city,address,description,website,profile_photo_url,latitude,longitude,lat,lng,role"
-              )
-              .eq("role", "business")
-              .limit(400);
-            if (typeof query.abortSignal === "function") {
-              query = query.abortSignal(controller.signal);
-            }
-            const { data, error } = await query;
-            if (error) {
-              console.warn("Supabase fallback failed", error);
-            } else {
-              rows = data || [];
-            }
-          } catch (err) {
-            if (err?.name === "AbortError") {
-              logCrashEvent({
-                context: "public-businesses",
-                kind: "timeout",
-                message: "Supabase users query timed out after 12s",
-              });
-            } else {
-              console.warn("Supabase fallback threw", err);
-            }
-          } finally {
-            clearTimeout(timeoutId);
-          }
-        }
-
-        if (!active || requestId !== ybRequestIdRef.current) return;
-
-        if (!rows.length) {
-          setYbBusinesses((prev) =>
-            isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
-          );
-          setHasLoadedYb(true);
-          setYbBusinessesError("Showing sample businesses — real data unavailable.");
-        } else {
-          const parseNum = (val) => {
-            if (typeof val === "number" && Number.isFinite(val)) return val;
-            const parsed = parseFloat(val);
-            return Number.isFinite(parsed) ? parsed : null;
-          };
-          const jitterCoord = (index) => {
-            const base = { lat: 33.7701, lng: -118.1937 }; // Long Beach core
-            const step = 0.0025;
-            const offsetLat = ((index % 6) - 3) * step;
-            const offsetLng = (((Math.floor(index / 6) % 6) - 3) * step);
-            return { lat: base.lat + offsetLat, lng: base.lng + offsetLng };
-          };
-          const mapped = rows
-            .map((row, idx) => {
-              const address = row.city ? `${row.address || ""}${row.address ? ", " : ""}${row.city}` : row.address || "";
-              const lat = parseNum(row.latitude ?? row.lat ?? row.location_lat);
-              const lng = parseNum(row.longitude ?? row.lng ?? row.location_lng);
-              const hasCoords = typeof lat === "number" && typeof lng === "number" && lat !== 0 && lng !== 0;
-              return {
-                id: row.id,
-                name: row.business_name || row.name || row.full_name || "Local business",
-                category: row.category || "Local business",
-                categoryLabel: row.category || "Local business",
-                address,
-                city: row.city || "",
-                description: row.description || row.bio || "",
-                website: row.website || "",
-                imageUrl: row.profile_photo_url || row.photo_url || "",
-                source: "supabase_users",
-                coords: hasCoords ? { lat, lng } : null,
-              };
-            })
-            .filter(Boolean);
-          const next = mapped.length ? mapped : SAMPLE_BUSINESSES;
-          setYbBusinesses((prev) => (isSameBusinessList(prev, next) ? prev : next));
-          setHasLoadedYb(true);
-
-          if (typeof window !== "undefined") {
-            try {
-              sessionStorage.setItem(
-                "yb_customer_home_businesses",
-                JSON.stringify(next)
-              );
-            } catch {
-              /* ignore cache errors */
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to load YourBarrio businesses", err);
-        if (!active || requestId !== ybRequestIdRef.current) return;
-        setYbBusinesses((prev) =>
-          isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
-        );
-        setHasLoadedYb(true);
-        setYbBusinessesError("Could not load businesses yet. Showing sample locations.");
-      } finally {
-        if (active && requestId === ybRequestIdRef.current) {
-          setYbBusinessesLoading(false);
-          logDataDiag("request:finish", {
-            label: "home:yb-businesses",
-            requestId,
-          });
-        }
-      }
-    };
-
-    loadYb();
-
-    return () => {
-      active = false;
-    };
-  }, [supabase, logCrashEvent, isVisible]);
-
-  useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
     const urlCategory = (searchParams?.get("category") || "").trim();
     const matchedCategory = BUSINESS_CATEGORIES.find(
@@ -781,20 +380,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   }, [searchParams]);
 
   // Guard against long/hung requests leaving loading on
-  useEffect(() => {
-    if (!ybBusinessesLoading) return;
-    const timer = setTimeout(() => {
-      setYbBusinessesLoading(false);
-      setYbBusinessesError((prev) => prev || "Still loading businesses. Please try again.");
-      logCrashEvent({
-        context: "yb-businesses",
-        kind: "timeout",
-        message: "Businesses load exceeded 12s watchdog",
-      });
-    }, 12000);
-    return () => clearTimeout(timer);
-  }, [ybBusinessesLoading, logCrashEvent]);
-
   useEffect(() => {
     if (!allListingsLoading) return;
     const timer = setTimeout(() => {
@@ -807,17 +392,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     }, 12000);
     return () => clearTimeout(timer);
   }, [allListingsLoading, logCrashEvent]);
-
-  // Keep map businesses in sync with fetched YB businesses (for list display)
-  useEffect(() => {
-    if (!ybBusinesses.length) return;
-    const normalizedUserCity = normalizeCity(userCity);
-    const filtered = normalizedUserCity
-      ? ybBusinesses.filter((biz) => normalizeCity(biz?.city) === normalizedUserCity)
-      : ybBusinesses;
-    setMapBusinesses(filtered.length ? filtered : ybBusinesses);
-  }, [ybBusinesses, userCity]);
-
 
   useEffect(() => {
     if (hasInitialListings) return undefined;
@@ -955,27 +529,12 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   }, [filteredListings, safeColumns]);
 
   const [isMobileSafari, setIsMobileSafari] = useState(false);
-  const [showNearbySticky, setShowNearbySticky] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const stickyBarRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ua = window.navigator?.userAgent || "";
     const isIOS = /iP(hone|od|ad)/.test(ua);
     const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
     setIsMobileSafari(isIOS && isSafari);
-  }, []);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handleScroll = () => {
-      setShowNearbySticky(window.scrollY > 240);
-    };
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const enableVirtualize = VIRTUALIZE && !isMobileSafari;
@@ -1211,152 +770,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     );
   };
 
-  const renderNearbySection = (compact = false) => (
-    <div
-      className={`grid grid-cols-1 gap-2 mt-0 pointer-events-auto ${
-        compact ? "" : "relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen"
-      }`}
-    >
-      <div
-        className={`border border-white/10 ${
-          compact ? "bg-black/80 shadow-lg" : "bg-white/5 backdrop-blur-xl shadow-xl"
-        } pointer-events-auto`}
-      >
-        {!compact ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-5 sm:px-6 md:px-8 lg:px-12 pt-2 pb-1">
-            <div className={`text-sm uppercase tracking-[0.18em] ${textTone.subtle}`}>
-              Nearby businesses
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={`inline-flex items-center gap-2 text-xs ${textTone.soft} bg-white/5 border border-white/10 px-3 py-1 backdrop-blur`}>
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {filteredBusinesses.length} matches live
-              </div>
-              <button
-                type="button"
-                onClick={() => setMapOpen(true)}
-                disabled={!mapAvailable}
-                className={`px-4 py-2 rounded-full border border-white/20 bg-white/10 text-xs font-semibold ${textTone.base} hover:border-white/40 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition pointer-events-auto`}
-              >
-                Map
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollGallery(-1)}
-                className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="h-4 w-4 mx-auto" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollGallery(1)}
-                className={`h-8 w-8 rounded-full border border-white/20 bg-white/5 ${textTone.base} hover:border-white/40`}
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="h-4 w-4 mx-auto" />
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <div
-          ref={compact ? undefined : galleryRef}
-          className={`flex flex-nowrap overflow-x-auto snap-x snap-mandatory ${
-            compact ? "" : "border-t border-white/10 px-5 sm:px-6 md:px-8 lg:px-12"
-          }`}
-          onPointerDown={handleTilePointerDown}
-          onPointerMove={handleTilePointerMove}
-          onPointerUp={handleTilePointerUp}
-          onPointerCancel={handleTilePointerCancel}
-          onClickCapture={handleTileClickCapture}
-        >
-          {filteredBusinesses.map((biz, bizIndex) => (
-            <Link
-              key={biz.id || biz.name}
-              href={biz?.id ? `/customer/b/${biz.id}` : "#"}
-              prefetch={false}
-              data-safe-nav="1"
-              className={`${compact ? "h-[88px]" : "h-[220px]"} snap-start text-left border-r border-white/10 bg-white/5 hover:bg-white/10 transition shadow-sm rounded-none last:border-r-0 flex flex-col overflow-hidden`}
-              style={{
-                width: compact ? "200px" : "260px",
-                minWidth: compact ? "200px" : "260px",
-                maxWidth: compact ? "200px" : "260px",
-                flex: compact ? "0 0 200px" : "0 0 260px",
-              }}
-              onClick={(event) => {
-                diagTileClick("REACT_TILE_BUBBLE", biz.id || biz.name)(event);
-                if (!biz?.id) event.preventDefault();
-              }}
-              data-clickdiag={clickDiagEnabled ? "tile" : undefined}
-              data-clickdiag-tile-id={clickDiagEnabled ? biz.id || biz.name : undefined}
-              data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
-              onClickCapture={diagTileClick("REACT_TILE_CAPTURE", biz.id || biz.name)}
-            >
-              <div className={`${compact ? "h-full" : "h-24"} w-full ${compact ? "" : "border-b border-white/10"} bg-white/5 flex items-center ${compact ? "gap-2 px-2" : "justify-center"} flex-shrink-0`}>
-                {businessPhotoFor(biz) ? (
-                  <div className={`${compact ? "h-14 w-14 shrink-0" : "h-full w-full"} relative`}>
-                    <FastImage
-                      src={businessPhotoFor(biz)}
-                      alt={biz.name || "Business"}
-                      className="block h-full w-full object-contain"
-                      fallbackSrc="/business-placeholder.png"
-                      fill
-                      sizes={compact ? "56px" : "260px"}
-                      priority={!compact && bizIndex < 3}
-                      decoding="async"
-                    />
-                  </div>
-                ) : (
-                  <div className={`text-[11px] ${textTone.subtle}`}>No photo</div>
-                )}
-                {compact ? (
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold line-clamp-1 !text-white">
-                      {biz.name}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div className={`${compact ? "hidden" : "p-3 space-y-2"} flex-1 flex flex-col`}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="text-base font-semibold line-clamp-1">
-                      {biz.name}
-                    </div>
-                    <div className={`text-xs ${textTone.soft}`}>
-                      {biz.categoryLabel || biz.category || "Local spot"}
-                    </div>
-                  </div>
-                  {biz.distance_km ? (
-                    <div className={`text-[11px] ${textTone.soft} bg-white/10 border border-white/10 px-2 py-1`}>
-                      {biz.distance_km.toFixed(1)} km
-                    </div>
-                  ) : null}
-                </div>
-                {biz.address ? (
-                  <div className={`text-xs ${textTone.subtle} line-clamp-1`}>{biz.address}</div>
-                ) : (
-                  <div className={`text-xs ${textTone.subtle}`}>&nbsp;</div>
-                )}
-                {biz.description ? (
-                  <div className={`text-sm ${textTone.tint} leading-snug line-clamp-2`}>
-                    {biz.description}
-                  </div>
-                ) : null}
-              </div>
-            </Link>
-          ))}
-          {!filteredBusinesses.length ? (
-            <div className={`text-sm ${textTone.soft}`}>
-              {ybBusinessesLoading ? "Loading businesses..." : ybBusinessesError || "No matches found."}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-
-
   useEffect(() => {
     let isActive = true;
     const requestId = ++hybridRequestIdRef.current;
@@ -1474,7 +887,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
 
   return (
     <section
-      className={`relative w-full min-h-screen ${textTone.base} pb-4 pt-0 md:pt-0 -mt-28 md:-mt-20`}
+      className={`relative w-full min-h-screen ${textTone.base} pb-4 pt-0 md:pt-0 mt-0`}
       data-clickdiag={clickDiagEnabled ? "home" : undefined}
     >
 
@@ -1491,7 +904,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         data-home-content="1"
       >
         <div className="w-full max-w-none">
-        <div style={{ minHeight: "320px" }}>
           {authReady ? (
             <>
               {search ? (
@@ -1607,37 +1019,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
                 </div>
               ) : null}
 
-              {showNearbySticky && mounted
-                ? createPortal(
-                    <div
-                      className="fixed top-20 sm:top-20 inset-x-0 z-[4800] pointer-events-auto isolate will-change-transform"
-                      data-sticky-nav-block="1"
-                      style={{
-                        transform: "translateZ(0)",
-                        WebkitBackfaceVisibility: "hidden",
-                        backfaceVisibility: "hidden",
-                      }}
-                    >
-                      <div className="w-full border-y border-white/10 bg-black/85 shadow-lg pointer-events-auto">
-                        <div
-                          ref={stickyBarRef}
-                          className="w-full px-5 sm:px-6 md:px-8 lg:px-12 py-2"
-                        >
-                          {renderNearbySection(true)}
-                        </div>
-                      </div>
-                    </div>,
-                    document.body
-                  )
-                : null}
-
-              <div
-                onClickCapture={handleHomeCapture}
-                data-clickdiag={clickDiagEnabled ? "home-grid" : undefined}
-              >
-                {renderNearbySection(false)}
-              </div>
-
             </>
           ) : (
             <div className="space-y-4">
@@ -1657,25 +1038,20 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
 
         {!search && (
           <div
-            className="space-y-3 mt-8 sm:mt-4 relative z-10"
+            className="relative z-0 mt-4 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-12"
             data-home-tiles="1"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 relative z-10">
-              <div>
-                <p className="text-lg font-semibold">Browse listings</p>
+            {allListingsLoading ? (
+              <div className={`flex items-center gap-2 text-sm ${textTone.soft}`}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading
               </div>
-              {allListingsLoading ? (
-                <div className={`flex items-center gap-2 text-sm ${textTone.soft}`}>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading
-                </div>
-              ) : null}
-            </div>
+            ) : null}
             {filteredListings.length ? (
               !enableVirtualize ? (
                 <div
                   ref={gridContainerRef}
-                  className="grid gap-3 mt-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 yb-tile-scroll-guard-y"
+                  className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 yb-tile-scroll-guard-y"
                   onPointerDown={handleTilePointerDown}
                   onPointerMove={handleTilePointerMove}
                   onPointerUp={handleTilePointerUp}
@@ -1743,7 +1119,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
               ) : (
                 <div
                   ref={gridContainerRef}
-                  className="relative mt-3 yb-tile-scroll-guard-y"
+                  className="relative yb-tile-scroll-guard-y"
                   onPointerDown={handleTilePointerDown}
                   onPointerMove={handleTilePointerMove}
                   onPointerUp={handleTilePointerUp}
@@ -1792,15 +1168,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
             )}
           </div>
         )}
-        </div>
       </div>
-      <MapModal
-        open={mapOpen}
-        onClose={() => setMapOpen(false)}
-        mapEnabled={mapEnabled}
-        mapBusinesses={mapBusinessesForCity}
-        clickDiagEnabled={clickDiagEnabled}
-      />
     </section>
   );
 }
