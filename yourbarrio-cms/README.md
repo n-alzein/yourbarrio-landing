@@ -40,6 +40,15 @@ Strapi gives you many possible deployment options for your project including [St
 yarn strapi deploy
 ```
 
+## 🔐 Strapi Cloud settings
+
+Set required secrets and allowed origins in your Strapi Cloud project environment variables:
+
+- `ENCRYPTION_KEY` to keep admin API tokens viewable after restarts.
+- `CORS_ORIGINS` as a comma-separated list of allowed origins (for example `http://localhost:3000,https://your-domain.com`).
+
+Never commit real secrets and never expose `STRAPI_API_TOKEN` to the browser.
+
 ## 📚 Learn more
 
 - [Resource center](https://strapi.io/resource-center) - Strapi resource center.

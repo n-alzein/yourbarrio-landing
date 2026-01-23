@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import HomePageClient from "@/components/marketing/HomePageClient";
 import { getServerAuth, getProfile } from "@/lib/auth/server";
 import { PATHS } from "@/lib/auth/paths";
+import HomeBanner from "@/components/HomeBanner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,5 +19,10 @@ export default async function HomePage() {
     redirect(PATHS.customer.home);
   }
 
-  return <HomePageClient />;
+  return (
+    <>
+      <HomeBanner />
+      <HomePageClient />
+    </>
+  );
 }
