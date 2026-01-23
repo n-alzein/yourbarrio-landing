@@ -25,14 +25,14 @@
     "styled-components": "^6.0.0"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.0",
     "typescript": "^5"
   },
   "engines": {
-    "node": ">=20 <23",
+    "node": ">=20",
     "npm": ">=6.0.0"
   },
   "strapi": {
