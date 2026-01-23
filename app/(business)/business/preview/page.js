@@ -220,7 +220,7 @@ export default async function BusinessPreviewPage() {
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}
-        publicPath={`/b/${user.id}`}
+        publicPath={`/customer/b/${user.id}`}
       />
 
       <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8">

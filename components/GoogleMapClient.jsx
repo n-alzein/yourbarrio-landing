@@ -549,7 +549,7 @@ export default function GoogleMapClient({
 
       const openBusinessProfile = (event) => {
         if (biz?.id) {
-          const url = `/b/${biz.id}`;
+          const url = `/customer/b/${biz.id}`;
           if (event?.metaKey || event?.ctrlKey) {
             window.open(url, "_blank", "noopener");
           } else {

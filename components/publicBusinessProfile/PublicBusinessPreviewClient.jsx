@@ -333,7 +333,7 @@ export default function PublicBusinessPreviewClient({
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}
-        publicPath={`/b/${businessId}`}
+        publicPath={`/customer/b/${businessId}`}
       />
 
       <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8">

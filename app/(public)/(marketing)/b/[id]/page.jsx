@@ -344,7 +344,7 @@ export async function generateMetadata({ params }) {
     title: `${name} on YourBarrio`,
     description,
     alternates: {
-      canonical: `/b/${businessId || ""}`,
+      canonical: `/customer/b/${businessId || ""}`,
     },
     openGraph: {
       title: `${name} on YourBarrio`,
@@ -488,7 +488,7 @@ export default async function PublicBusinessProfilePage({
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}
-        publicPath={`/b/${businessId}`}
+        publicPath={`/customer/b/${businessId}`}
         shell={shell}
       />
 
