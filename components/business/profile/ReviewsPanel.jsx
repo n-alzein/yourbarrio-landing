@@ -8,6 +8,13 @@ function formatReviewer(id) {
   return `Customer ${id.slice(0, 6)}`;
 }
 
+async function ensureSession(client) {
+  if (!client?.auth?.getSession) return null;
+  const { data, error } = await client.auth.getSession();
+  if (error || !data?.session) return null;
+  return data.session;
+}
+
 export default function ReviewsPanel({
   reviews,
   setReviews,
@@ -104,6 +111,12 @@ export default function ReviewsPanel({
 
     setReplyLoading(true);
     setReplyError("");
+    const session = await ensureSession(supabase);
+    if (!session) {
+      setReplyError("Please sign in again to reply.");
+      setReplyLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("business_reviews")
@@ -135,6 +148,12 @@ export default function ReviewsPanel({
     if (!supabase || replyLoading) return;
     setReplyLoading(true);
     setReplyError("");
+    const session = await ensureSession(supabase);
+    if (!session) {
+      setReplyError("Please sign in again to update this reply.");
+      setReplyLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("business_reviews")

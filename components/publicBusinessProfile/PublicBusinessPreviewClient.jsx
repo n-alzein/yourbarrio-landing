@@ -246,11 +246,12 @@ export default function PublicBusinessPreviewClient({
         .order("created_at", { ascending: false })
         .limit(24);
 
+      const reviewsSelectBase =
+        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at";
+      const reviewsSelectWithUpdated = `${reviewsSelectBase},updated_at`;
       const reviewsQuery = client
         .from("business_reviews")
-        .select(
-          "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-        )
+        .select(reviewsSelectWithUpdated)
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -260,19 +261,27 @@ export default function PublicBusinessPreviewClient({
         .select("rating")
         .eq("business_id", businessId);
 
+      let reviewsResult = await reviewsQuery;
+      if (reviewsResult?.error?.code === "42703") {
+        reviewsResult = await client
+          .from("business_reviews")
+          .select(reviewsSelectBase)
+          .eq("business_id", businessId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+      }
+
       const [
         profileResult,
         announcementsResult,
         galleryResult,
         listingsResult,
-        reviewsResult,
         ratingsResult,
       ] = await Promise.all([
         profileQuery,
         announcementsQuery,
         galleryQuery,
         listingsQuery,
-        reviewsQuery,
         ratingsQuery,
       ]);
 

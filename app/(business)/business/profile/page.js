@@ -5,14 +5,48 @@ async function safeQuery(promise, fallback, label) {
   try {
     const result = await promise;
     if (result.error) {
-      console.error(`[business profile] ${label} query failed`, result.error);
-      return { data: fallback, count: 0 };
+      if (!isMissingColumnError(result.error)) {
+        console.error(`[business profile] ${label} query failed`, result.error);
+      }
+      return { data: fallback, count: 0, error: result.error };
     }
-    return { data: result.data ?? fallback, count: result.count ?? 0 };
+    return { data: result.data ?? fallback, count: result.count ?? 0, error: null };
   } catch (err) {
     console.error(`[business profile] ${label} query failed`, err);
-    return { data: fallback, count: 0 };
+    return { data: fallback, count: 0, error: err };
   }
+}
+
+const REVIEW_SELECT_BASE =
+  "id, business_id, customer_id, rating, title, body, created_at, business_reply, business_reply_at";
+const REVIEW_SELECT_WITH_UPDATED = `${REVIEW_SELECT_BASE}, updated_at`;
+
+function isMissingColumnError(error) {
+  if (!error) return false;
+  if (error?.code === "42703") return true;
+  return /column "([^"]+)" does not exist/i.test(error?.message || "");
+}
+
+async function fetchReviewList(supabase, businessId) {
+  const baseQuery = supabase
+    .from("business_reviews")
+    .select(REVIEW_SELECT_BASE)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .range(0, 5);
+
+  const withUpdatedQuery = supabase
+    .from("business_reviews")
+    .select(REVIEW_SELECT_WITH_UPDATED)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .range(0, 5);
+
+  const withUpdatedResult = await safeQuery(withUpdatedQuery, [], "reviews");
+  if (withUpdatedResult.error && isMissingColumnError(withUpdatedResult.error)) {
+    return safeQuery(baseQuery, [], "reviews");
+  }
+  return withUpdatedResult;
 }
 
 function buildRatingSummary(rows) {
@@ -52,15 +86,6 @@ export default async function BusinessProfileRoute() {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
 
-  const reviewListQuery = supabase
-    .from("business_reviews")
-    .select(
-      "id, business_id, customer_id, rating, title, body, created_at, business_reply, business_reply_at"
-    )
-    .eq("business_id", user.id)
-    .order("created_at", { ascending: false })
-    .range(0, 5);
-
   const reviewRatingQuery = supabase
     .from("business_reviews")
     .select("rating")
@@ -82,7 +107,7 @@ export default async function BusinessProfileRoute() {
     await Promise.all([
       safeQuery(profileQuery, null, "profile"),
       safeQuery(galleryQuery, [], "gallery"),
-      safeQuery(reviewListQuery, [], "reviews"),
+      fetchReviewList(supabase, user.id),
       safeQuery(reviewRatingQuery, [], "review ratings"),
       safeQuery(listingsQuery, [], "listings"),
       safeQuery(announcementsQuery, [], "announcements"),

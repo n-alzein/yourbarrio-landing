@@ -198,7 +198,7 @@ async function fetchGallery(supabase, businessId) {
 }
 
 async function fetchReviews(supabase, businessId) {
-  const query = supabase
+  const baseQuery = supabase
     .from("business_reviews")
     .select(
       "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
@@ -207,7 +207,20 @@ async function fetchReviews(supabase, businessId) {
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const result = await safeQuery(query, [], "reviews");
+  const withUpdatedQuery = supabase
+    .from("business_reviews")
+    .select(
+      "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
+    )
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const result = await safeQuery(withUpdatedQuery, [], "reviews");
+  if (result.error && isMissingColumnError(result.error)) {
+    const fallback = await safeQuery(baseQuery, [], "reviews");
+    return fallback.data || [];
+  }
   return result.data || [];
 }
 

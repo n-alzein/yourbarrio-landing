@@ -12,6 +12,21 @@ function formatReviewer(id) {
   return `Customer ${id.slice(0, 6)}`;
 }
 
+function formatDate(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleDateString();
+  } catch {
+    return "";
+  }
+}
+
+function isMissingColumnError(error) {
+  if (!error) return false;
+  if (error?.code === "42703") return true;
+  return /column "([^"]+)" does not exist/i.test(error?.message || "");
+}
+
 function buildSummaryFromReviews(items = []) {
   const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let count = 0;
@@ -62,6 +77,13 @@ function isSameReviewList(prev = [], next = []) {
     if (prev[i]?.id !== next[i]?.id) return false;
   }
   return true;
+}
+
+async function ensureSession(client) {
+  if (!client?.auth?.getSession) return null;
+  const { data, error } = await client.auth.getSession();
+  if (error || !data?.session) return null;
+  return data.session;
 }
 
 export default function BusinessReviewsPanel({
@@ -130,14 +152,23 @@ export default function BusinessReviewsPanel({
 
     const from = reviews.length;
     const to = from + pageSize - 1;
-    const { data, error } = await client
+    const reviewsSelectBase =
+      "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at";
+    const reviewsSelectWithUpdated = `${reviewsSelectBase},updated_at`;
+    let { data, error } = await client
       .from("business_reviews")
-      .select(
-        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-      )
+      .select(reviewsSelectWithUpdated)
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .range(from, to);
+    if (error && isMissingColumnError(error)) {
+      ({ data, error } = await client
+        .from("business_reviews")
+        .select(reviewsSelectBase)
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false })
+        .range(from, to));
+    }
 
     if (!error && data?.length) {
       setReviews((prev) => [...prev, ...data]);
@@ -168,14 +199,23 @@ export default function BusinessReviewsPanel({
     const loadCustomerReview = async () => {
       const client = supabase ?? getSupabaseBrowserClient();
       if (!client) return;
-      const { data, error } = await client
+      const reviewsSelectBase =
+        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at";
+      const reviewsSelectWithUpdated = `${reviewsSelectBase},updated_at`;
+      let { data, error } = await client
         .from("business_reviews")
-        .select(
-          "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-        )
+        .select(reviewsSelectWithUpdated)
         .eq("business_id", businessId)
         .eq("customer_id", customerId)
         .maybeSingle();
+      if (error && isMissingColumnError(error)) {
+        ({ data, error } = await client
+          .from("business_reviews")
+          .select(reviewsSelectBase)
+          .eq("business_id", businessId)
+          .eq("customer_id", customerId)
+          .maybeSingle());
+      }
 
       if (!active) return;
       if (!error && data) {
@@ -257,6 +297,12 @@ export default function BusinessReviewsPanel({
     const client = supabase ?? getSupabaseBrowserClient();
     if (!client) {
       setSubmitError("We couldn’t connect. Try again.");
+      setSubmitting(false);
+      return;
+    }
+    const session = await ensureSession(client);
+    if (!session) {
+      setSubmitError("Please sign in again to post a review.");
       setSubmitting(false);
       return;
     }
@@ -347,6 +393,12 @@ export default function BusinessReviewsPanel({
       setEditLoading(false);
       return;
     }
+    const session = await ensureSession(client);
+    if (!session) {
+      setEditError("Please sign in again to update your review.");
+      setEditLoading(false);
+      return;
+    }
 
     try {
       const payload = {
@@ -355,14 +407,24 @@ export default function BusinessReviewsPanel({
         body: editBody.trim() || null,
       };
 
-      const { data, error } = await client
+      let { data, error } = await client
         .from("business_reviews")
-        .update(payload)
+        .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("id", reviewId)
         .select(
-          "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+          "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
         )
         .maybeSingle();
+      if (error && isMissingColumnError(error)) {
+        ({ data, error } = await client
+          .from("business_reviews")
+          .update(payload)
+          .eq("id", reviewId)
+          .select(
+            "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
+          )
+          .maybeSingle());
+      }
 
       if (error) throw error;
 
@@ -415,6 +477,12 @@ export default function BusinessReviewsPanel({
     const client = supabase ?? getSupabaseBrowserClient();
     if (!client) {
       setEditError("We couldn’t connect. Try again.");
+      setEditLoading(false);
+      return;
+    }
+    const session = await ensureSession(client);
+    if (!session) {
+      setEditError("Please sign in again to delete your review.");
       setEditLoading(false);
       return;
     }
@@ -642,8 +710,10 @@ export default function BusinessReviewsPanel({
                       formatReviewer(review.customer_id)}
                   </p>
                   <p className="text-xs text-white/60">
-                    {review.created_at
-                      ? new Date(review.created_at).toLocaleDateString()
+                    {review.created_at ? formatDate(review.created_at) : ""}
+                    {review.updated_at &&
+                    review.updated_at !== review.created_at
+                      ? ` · Edited ${formatDate(review.updated_at)}`
                       : ""}
                   </p>
                   {review.title ? (
@@ -734,6 +804,11 @@ export default function BusinessReviewsPanel({
                       <p className="text-xs font-semibold uppercase text-white/60">
                         Reply from business
                       </p>
+                      {review.business_reply_at ? (
+                        <p className="mt-1 text-[11px] text-white/50">
+                          {formatDate(review.business_reply_at)}
+                        </p>
+                      ) : null}
                       <p className="mt-2 text-sm text-white/70 leading-relaxed">
                         {review.business_reply}
                       </p>

@@ -55,12 +55,12 @@ async function safeQuery(promise, fallback, label) {
       if (!quietCodes.has(code)) {
         console.error(`[business preview] ${label} query failed`, result.error);
       }
-      return { data: fallback, count: 0 };
+      return { data: fallback, count: 0, error: result.error };
     }
-    return { data: result.data ?? fallback, count: result.count ?? 0 };
+    return { data: result.data ?? fallback, count: result.count ?? 0, error: null };
   } catch (err) {
     console.error(`[business preview] ${label} query failed`, err);
-    return { data: fallback, count: 0 };
+    return { data: fallback, count: 0, error: err };
   }
 }
 
@@ -156,7 +156,7 @@ async function fetchGallery(supabase, businessId) {
 }
 
 async function fetchReviews(supabase, businessId) {
-  const query = supabase
+  const baseQuery = supabase
     .from("business_reviews")
     .select(
       "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
@@ -165,7 +165,20 @@ async function fetchReviews(supabase, businessId) {
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const result = await safeQuery(query, [], "reviews");
+  const withUpdatedQuery = supabase
+    .from("business_reviews")
+    .select(
+      "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
+    )
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const result = await safeQuery(withUpdatedQuery, [], "reviews");
+  if (result.error?.code === "42703") {
+    const fallback = await safeQuery(baseQuery, [], "reviews");
+    return fallback.data || [];
+  }
   return result.data || [];
 }
 
