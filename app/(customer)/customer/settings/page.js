@@ -8,6 +8,12 @@ import {
   getAuthProviderLabel,
   getPrimaryAuthProvider,
 } from "@/lib/getAuthProvider";
+import {
+  Field,
+  FieldGrid,
+  SettingsSection,
+  inputClassName,
+} from "@/components/settings/SettingsSection";
 
 export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
@@ -20,17 +26,92 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
 
   const buildInitialForm = (userValue) => ({
     full_name: userValue?.full_name || "",
     phone: userValue?.phone || "",
     city: userValue?.city || "",
     address: userValue?.address || "",
+    address_2: userValue?.address_2 || "",
+    state: userValue?.state ? userValue.state.toUpperCase() : "",
+    postal_code: userValue?.postal_code || "",
     profile_photo_url: userValue?.profile_photo_url || "",
   });
 
   const [form, setForm] = useState(() => buildInitialForm(profile));
   const lastUserIdRef = useRef(null);
+
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  };
+
+  const handleFieldChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const normalizeAddressPayload = (values) => {
+    const trimValue = (value) => (value ?? "").trim();
+    const stateValue = trimValue(values.state).toUpperCase();
+    const postalValue = trimValue(values.postal_code);
+    return {
+      address: trimValue(values.address),
+      address_2: trimValue(values.address_2),
+      city: trimValue(values.city),
+      state: stateValue,
+      postal_code: postalValue,
+    };
+  };
+
+  const validateAddressFields = (values) => {
+    const errors = {};
+    const hasStreet = Boolean(values.address);
+    const hasCity = Boolean(values.city);
+    const hasState = Boolean(values.state);
+    const hasPostal = Boolean(values.postal_code);
+
+    if ((hasCity || hasState || hasPostal) && !hasStreet) {
+      errors.address =
+        "Street address is required when city, state, or postal code is filled.";
+    }
+
+    if ((hasState || hasPostal) && !hasCity) {
+      errors.city = "City is required when state or postal code is filled.";
+    }
+
+    if (hasState && !/^[A-Z]{2}$/.test(values.state)) {
+      errors.state = "Use a 2-letter state code (e.g., CA).";
+    }
+
+    if (
+      hasPostal &&
+      !/^[0-9]{5}(-[0-9]{4})?$/.test(values.postal_code)
+    ) {
+      errors.postal_code = "Use ZIP or ZIP+4 (e.g., 94107 or 94107-1234).";
+    }
+
+    return errors;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   /* -----------------------------------------------------------
      LOAD PROFILE INTO FORM
@@ -56,15 +137,28 @@ export default function SettingsPage() {
   ----------------------------------------------------------- */
   async function handleSave() {
     if (!user) return;
+    const normalizedAddress = normalizeAddressPayload(form);
+    const validationErrors = validateAddressFields(normalizedAddress);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      showToast("error", "Fix the highlighted address fields.");
+      return;
+    }
+
     setSaving(true);
+    setFieldErrors({});
 
     const { error } = await supabase
       .from("users")
       .update({
         full_name: form.full_name,
         phone: form.phone,
-        city: form.city,
-        address: form.address,
+        city: normalizedAddress.city || null,
+        address: normalizedAddress.address || null,
+        address_2: normalizedAddress.address_2 || null,
+        state: normalizedAddress.state || null,
+        postal_code: normalizedAddress.postal_code || null,
         profile_photo_url: form.profile_photo_url,
       })
       .eq("id", user.id);
@@ -72,7 +166,13 @@ export default function SettingsPage() {
     setSaving(false);
     setEditMode(false);
 
-    if (!error) refreshProfile();
+    if (!error) {
+      refreshProfile();
+      showToast("success", "Settings updated.");
+      return;
+    }
+
+    showToast("error", error.message || "Failed to save settings.");
   }
 
   /* -----------------------------------------------------------
@@ -195,153 +295,336 @@ export default function SettingsPage() {
      UI START
   ----------------------------------------------------------- */
   return (
-    <div className="min-h-screen pt-0 pb-20 text-white relative">
-
+    <div className="min-h-screen text-white relative">
       {/* BACKGROUND */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-[#05010d]" />
         <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
       </div>
 
-      {/* MAIN CARD */}
-      <div className="max-w-3xl mx-auto px-6">
-        <div className="p-8 bg-white/10 border border-white/20 backdrop-blur-xl rounded-3xl shadow-2xl space-y-12">
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              Settings
+            </h1>
+            <p className="text-sm text-white/60 sm:text-base">
+              Manage your profile, address, and preferences.
+            </p>
+          </div>
+          {!editMode ? (
+            <button
+              onClick={() => {
+                setEditMode(true);
+                setFieldErrors({});
+              }}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              Edit profile
+            </button>
+          ) : null}
+        </div>
 
-          {/* PERSONAL DETAILS */}
-          <section>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-medium">Personal Details</h2>
-
-              {!editMode && (
-                <button
-                  onClick={() => setEditMode(true)}
-                  className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition text-sm"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
-
-            {/* AVATAR */}
-            <div className="flex flex-col items-center mb-8">
-              <FastImage
-                src={
-                  (form?.profile_photo_url ||
+        <div className="space-y-8">
+          <SettingsSection
+            title="Profile"
+            description="Keep your personal details accurate for receipts and support."
+          >
+            <div className="flex flex-col gap-6 md:flex-row md:items-start">
+              <div className="flex flex-col items-center gap-3 md:items-start">
+                <FastImage
+                  src={
+                    form?.profile_photo_url ||
                     profile?.profile_photo_url ||
-                    "/customer-placeholder.png")
-                }
-                alt="Profile Photo"
-                width={140}
-                height={140}
-                className="h-[140px] w-[140px] rounded-3xl border border-white/20 object-cover mb-3"
-                sizes="140px"
-                priority
-              />
-
-              {editMode && (
-                <label className="cursor-pointer text-pink-400 hover:text-pink-300 text-sm">
-                  Change Photo
-                  <input type="file" className="hidden" onChange={handlePhotoUpload} />
-                </label>
-              )}
-            </div>
-
-            {/* FIELDS */}
-            <div className="space-y-4">
-              {[
-                ["full_name", "Full Name"],
-                ["phone", "Phone Number"],
-                ["city", "City"],
-                ["address", "Address"],
-              ].map(([key, label]) => (
-                <div key={key} className="bg-white/5 p-4 rounded-xl border border-white/10">
-                  <p className="text-sm text-white/60 mb-1">{label}</p>
-
-                  {editMode ? (
+                    "/customer-placeholder.png"
+                  }
+                  alt="Profile Photo"
+                  width={132}
+                  height={132}
+                  className="h-[132px] w-[132px] rounded-2xl border border-white/15 object-cover"
+                  sizes="132px"
+                  priority
+                />
+                {editMode ? (
+                  <label className="cursor-pointer text-sm font-medium text-pink-300 hover:text-pink-200">
+                    Change photo
                     <input
-                      type="text"
-                      value={form[key]}
-                      onChange={(e) =>
-                        setForm({ ...form, [key]: e.target.value })
-                      }
-                      className="w-full bg-transparent border border-white/20 rounded-lg px-3 py-2 text-white"
+                      type="file"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
                     />
-                  ) : (
-                    <p className="text-base text-white/90">
-                      {form[key] || "—"}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* SAVE / CANCEL */}
-            {editMode && (
-              <div className="flex gap-4 pt-4">
-                <button
-                  onClick={handleSave}
-                  disabled={!hasChanges || saving}
-                  className={`px-5 py-2 rounded-lg text-sm transition ${
-                    hasChanges
-                      ? "bg-white text-black hover:bg-gray-200"
-                      : "bg-white/20 text-white/40 cursor-not-allowed"
-                  }`}
-                >
-                  {saving ? "Saving..." : "Save"}
-                </button>
-
-                <button
-                  onClick={() => {
-                    setEditMode(false);
-                    setForm({
-                      full_name: profile?.full_name || "",
-                      phone: profile?.phone || "",
-                      city: profile?.city || "",
-                      address: profile?.address || "",
-                      profile_photo_url: profile?.profile_photo_url || "",
-                    });
-                  }}
-                  className="px-5 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-sm"
-                >
-                  Cancel
-                </button>
+                  </label>
+                ) : null}
               </div>
-            )}
-          </section>
 
-          {/* CONNECTED ACCOUNTS */}
-          <section className="mt-10">
-            <h2 className="text-xl font-medium mb-3">Connected Accounts</h2>
+              <div className="flex-1 space-y-5">
+                <FieldGrid className="sm:grid-cols-2">
+                  <Field label="Full name" id="full_name">
+                    {editMode ? (
+                      <input
+                        id="full_name"
+                        type="text"
+                        value={form.full_name}
+                        onChange={(e) =>
+                          handleFieldChange("full_name", e.target.value)
+                        }
+                        className={inputClassName}
+                      />
+                    ) : (
+                      <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                        {form.full_name || "—"}
+                      </div>
+                    )}
+                  </Field>
 
-            <div className="bg-white/5 p-4 rounded-xl border border-white/10 flex items-center justify-between">
+                  <Field label="Phone number" id="phone">
+                    {editMode ? (
+                      <input
+                        id="phone"
+                        type="tel"
+                        value={form.phone}
+                        onChange={(e) =>
+                          handleFieldChange("phone", e.target.value)
+                        }
+                        className={inputClassName}
+                      />
+                    ) : (
+                      <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                        {form.phone || "—"}
+                      </div>
+                    )}
+                  </Field>
+                </FieldGrid>
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Address"
+            description="This helps personalize delivery and nearby recommendations."
+            footer={
+              editMode ? (
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={!hasChanges || saving}
+                    className={`inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold transition ${
+                      hasChanges
+                        ? "bg-white text-black hover:bg-gray-200"
+                        : "cursor-not-allowed bg-white/20 text-white/40"
+                    }`}
+                  >
+                    {saving ? "Saving..." : "Save changes"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditMode(false);
+                      setForm(buildInitialForm(profile));
+                      setFieldErrors({});
+                    }}
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : null
+            }
+          >
+            <FieldGrid className="sm:grid-cols-2">
+              <Field
+                label="Street address"
+                id="address"
+                helper="Required if city, state, or ZIP is set."
+                error={fieldErrors.address}
+              >
+                {editMode ? (
+                  <input
+                    id="address"
+                    type="text"
+                    value={form.address}
+                    onChange={(e) =>
+                      handleFieldChange("address", e.target.value)
+                    }
+                    placeholder="123 Pine St"
+                    className={`${inputClassName} ${
+                      fieldErrors.address
+                        ? "border-rose-400 focus-visible:ring-rose-400/60"
+                        : ""
+                    }`}
+                    aria-invalid={Boolean(fieldErrors.address)}
+                  />
+                ) : (
+                  <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                    {form.address || "—"}
+                  </div>
+                )}
+              </Field>
+
+              <Field
+                label="Apt / Suite / Unit"
+                id="address_2"
+                helper="Optional, but helps couriers find you faster."
+              >
+                {editMode ? (
+                  <input
+                    id="address_2"
+                    type="text"
+                    value={form.address_2}
+                    onChange={(e) =>
+                      handleFieldChange("address_2", e.target.value)
+                    }
+                    placeholder="Apt 4B"
+                    className={inputClassName}
+                  />
+                ) : (
+                  <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                    {form.address_2 || "—"}
+                  </div>
+                )}
+              </Field>
+            </FieldGrid>
+
+            <FieldGrid className="sm:grid-cols-3">
+              <Field
+                label="City"
+                id="city"
+                helper="Required if state or ZIP is set."
+                error={fieldErrors.city}
+              >
+                {editMode ? (
+                  <input
+                    id="city"
+                    type="text"
+                    value={form.city}
+                    onChange={(e) => handleFieldChange("city", e.target.value)}
+                    placeholder="Long Beach"
+                    className={`${inputClassName} ${
+                      fieldErrors.city
+                        ? "border-rose-400 focus-visible:ring-rose-400/60"
+                        : ""
+                    }`}
+                    aria-invalid={Boolean(fieldErrors.city)}
+                  />
+                ) : (
+                  <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                    {form.city || "—"}
+                  </div>
+                )}
+              </Field>
+
+              <Field
+                label="State"
+                id="state"
+                helper="Two-letter code."
+                error={fieldErrors.state}
+              >
+                {editMode ? (
+                  <input
+                    id="state"
+                    type="text"
+                    value={form.state}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        "state",
+                        e.target.value.toUpperCase()
+                      )
+                    }
+                    placeholder="CA"
+                    maxLength={2}
+                    className={`${inputClassName} ${
+                      fieldErrors.state
+                        ? "border-rose-400 focus-visible:ring-rose-400/60"
+                        : ""
+                    }`}
+                    aria-invalid={Boolean(fieldErrors.state)}
+                  />
+                ) : (
+                  <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                    {form.state || "—"}
+                  </div>
+                )}
+              </Field>
+
+              <Field
+                label="Postal code"
+                id="postal_code"
+                helper="ZIP or ZIP+4 format."
+                error={fieldErrors.postal_code}
+              >
+                {editMode ? (
+                  <input
+                    id="postal_code"
+                    type="text"
+                    value={form.postal_code}
+                    onChange={(e) =>
+                      handleFieldChange("postal_code", e.target.value)
+                    }
+                    placeholder="90802"
+                    className={`${inputClassName} ${
+                      fieldErrors.postal_code
+                        ? "border-rose-400 focus-visible:ring-rose-400/60"
+                        : ""
+                    }`}
+                    aria-invalid={Boolean(fieldErrors.postal_code)}
+                  />
+                ) : (
+                  <div className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                    {form.postal_code || "—"}
+                  </div>
+                )}
+              </Field>
+            </FieldGrid>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Security"
+            description="Manage how you access your account."
+          >
+            <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-base text-white/90">{providerName}</p>
-                <p className="text-white/60 text-sm">
+                <p className="text-sm font-semibold text-white">
+                  {providerName}
+                </p>
+                <p className="text-sm text-white/60">
                   Signed in via {providerLabel}
                 </p>
               </div>
-
               <button
                 disabled
-                className="px-4 py-2 rounded-lg bg-white/5 text-white/40 cursor-not-allowed text-sm"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white/40"
               >
                 Manage
               </button>
             </div>
-          </section>
+          </SettingsSection>
 
-          {/* DANGER ZONE */}
-          <section className="pt-6 border-t border-white/10">
+          <SettingsSection
+            title="Account"
+            description="Actions that affect your account status."
+          >
             <button
               onClick={handleDeleteAccount}
-              className="text-red-400 text-sm hover:text-red-300 transition underline"
+              className="inline-flex items-center text-sm font-semibold text-rose-300 hover:text-rose-200"
             >
-              Delete Account Permanently
+              Delete account permanently
             </button>
-          </section>
-
+          </SettingsSection>
         </div>
       </div>
+
+      {toast ? (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div
+            className={`rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ${
+              toast.type === "success"
+                ? "bg-emerald-500 text-white"
+                : "bg-rose-500 text-white"
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
