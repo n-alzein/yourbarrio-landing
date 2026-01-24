@@ -95,7 +95,7 @@ export default async function AccountOrdersPage({ searchParams }) {
             </Link>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="flex flex-col gap-4">
             {visibleRows.map((order) => {
               const vendorName =
                 order?.vendor?.business_name ||
@@ -107,6 +107,10 @@ export default async function AccountOrdersPage({ searchParams }) {
                 order.fulfillment_type === "delivery"
                   ? order.delivery_time
                   : order.pickup_time;
+              const scheduleLabel =
+                schedule && schedule.toLowerCase() === "asap"
+                  ? "ASAP"
+                  : schedule || "ASAP";
               const lastUpdate = order.updated_at || order.created_at;
               return (
                 <div
@@ -132,7 +136,7 @@ export default async function AccountOrdersPage({ searchParams }) {
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid md:grid-cols-3 gap-4 text-sm mt-4">
                     <div className="space-y-1">
                       <p className="text-xs uppercase tracking-[0.2em] opacity-60">
                         Status update
@@ -140,7 +144,7 @@ export default async function AccountOrdersPage({ searchParams }) {
                       <p className="font-semibold">
                         {getOrderStatusDescription(order.status)}
                       </p>
-                      <p className="text-xs opacity-70">
+                      <p className="text-xs opacity-70 mt-2">
                         Updated {formatOrderDateTime(lastUpdate)}
                       </p>
                     </div>
@@ -149,9 +153,7 @@ export default async function AccountOrdersPage({ searchParams }) {
                         Fulfillment
                       </p>
                       <p className="font-semibold">{fulfillmentLabel}</p>
-                      <p className="text-xs opacity-70">
-                        {schedule || "ASAP"}
-                      </p>
+                      <p className="text-xs opacity-70 mt-2">{scheduleLabel}</p>
                     </div>
                     <div className="flex md:justify-end items-center">
                       <Link

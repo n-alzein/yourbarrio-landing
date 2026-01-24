@@ -56,7 +56,7 @@ export default function OrderReceiptClient({ order, vendor }) {
             </button>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 text-sm">
+          <div className="grid md:grid-cols-2 gap-4 text-sm mt-4 md:mt-0">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-[0.2em] opacity-60">Vendor</p>
               <p className="font-semibold">{vendor?.business_name || vendor?.full_name || "Local vendor"}</p>
@@ -78,28 +78,38 @@ export default function OrderReceiptClient({ order, vendor }) {
             </div>
           </div>
 
-          <div className="border-t pt-4 space-y-3" style={{ borderColor: "var(--border)" }}>
-            <div className="text-xs uppercase tracking-[0.2em] opacity-60 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 leading-none">
-              <span className="relative -top-0.5">Item</span>
-              <span className="text-right">Qty</span>
-              <span className="text-right">Unit</span>
-              <span className="text-right">Total</span>
-            </div>
-            <div className="space-y-2 text-sm">
-              {items.map((item) => (
-                <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3">
-                  <span className="opacity-80 max-w-[360px] md:max-w-[440px] break-words">
-                    {item.title}
-                  </span>
-                  <span className="text-right">{item.quantity}</span>
-                  <span className="text-right">
-                    ${formatMoney(item.unit_price)}
-                  </span>
-                  <span className="text-right">
-                    ${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}
-                  </span>
-                </div>
-              ))}
+          <div className="border-t pt-4" style={{ borderColor: "var(--border)" }}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col />
+                  <col style={{ width: "3.5rem" }} />
+                  <col style={{ width: "5.5rem" }} />
+                  <col style={{ width: "5.5rem" }} />
+                </colgroup>
+                <thead className="text-xs uppercase tracking-[0.2em] opacity-60 leading-none">
+                  <tr>
+                    <th className="text-left font-medium pb-2">Item</th>
+                    <th className="text-right font-medium pb-2">Qty</th>
+                    <th className="text-right font-medium pb-2">Unit</th>
+                    <th className="text-right font-medium pb-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id} className="align-top">
+                      <td className="opacity-80 pr-2 py-1 break-words">{item.title}</td>
+                      <td className="text-right py-1">{item.quantity}</td>
+                      <td className="text-right py-1">
+                        ${formatMoney(item.unit_price)}
+                      </td>
+                      <td className="text-right py-1">
+                        ${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 

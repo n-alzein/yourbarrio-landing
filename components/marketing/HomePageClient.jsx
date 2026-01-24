@@ -59,7 +59,7 @@ export default function HomePageClient() {
 
       <main
         className="relative min-h-screen text-white"
-        style={{ paddingTop: "calc(5rem + var(--beta-banner-height, 0px))" }}
+        style={{ paddingTop: "var(--beta-banner-height, 0px)" }}
       >
         <section className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14 pb-16 md:pb-24">
           <div className="max-w-7xl mx-auto">

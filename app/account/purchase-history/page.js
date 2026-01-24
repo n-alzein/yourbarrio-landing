@@ -79,7 +79,7 @@ export default async function PurchaseHistoryPage({ searchParams }) {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-4">
             {visibleRows.map((order) => {
               const vendorName =
                 order?.vendor?.business_name ||

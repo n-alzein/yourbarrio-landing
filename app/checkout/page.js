@@ -14,7 +14,7 @@ const formatMoney = (value) => {
 };
 
 const TIME_OPTIONS = [
-  { value: "asap", label: "ASAP" },
+  { value: "ASAP", label: "ASAP" },
   { value: "morning", label: "Morning (9am-12pm)" },
   { value: "afternoon", label: "Afternoon (12pm-4pm)" },
   { value: "evening", label: "Evening (4pm-8pm)" },
@@ -33,8 +33,8 @@ export default function CheckoutPage() {
     delivery_state: "",
     delivery_postal_code: "",
     delivery_instructions: "",
-    delivery_time: "asap",
-    pickup_time: "asap",
+    delivery_time: "ASAP",
+    pickup_time: "ASAP",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
