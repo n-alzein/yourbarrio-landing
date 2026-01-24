@@ -24,8 +24,12 @@ export default function NewListingPage() {
 
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
 
   const MAX_PHOTOS = 10;
+  const UPLOAD_TIMEOUT_MS = 20000;
+  const PUBLISH_TIMEOUT_MS = 20000;
   const sectionCard =
     "rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-lg backdrop-blur-xl";
   const labelBase = "text-sm font-semibold text-white/80";
@@ -61,6 +65,22 @@ export default function NewListingPage() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const withTimeout = async (promise, timeoutMs, message) => {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(message)),
+        timeoutMs
+      );
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   async function uploadPhotos() {
     if (!photos.length) return [];
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -72,13 +92,15 @@ export default function NewListingPage() {
         .randomUUID?.()
         ?.slice(0, 6) || Math.random().toString(36).slice(2, 8)}-${file.name}`;
 
-      const { data, error } = await client.storage
-        .from("listing-photos")
-        .upload(fileName, file, {
+      const { data, error } = await withTimeout(
+        client.storage.from("listing-photos").upload(fileName, file, {
           cacheControl: "3600",
           upsert: false,
           contentType: file.type || "image/jpeg",
-        });
+        }),
+        UPLOAD_TIMEOUT_MS,
+        "Photo upload timed out. Please try again."
+      );
 
       if (error) {
         console.error("Photo upload failed", error);
@@ -99,34 +121,45 @@ export default function NewListingPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setSubmitError("");
+    setSubmitSuccess("");
 
     const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) {
-      alert("Connection not ready. Please try again.");
+      setSubmitError("Connection not ready. Please try again.");
       return;
     }
 
     if (!photos.length) {
-      alert("Please add at least one photo (up to 10).");
+      setSubmitError("Please add at least one photo (up to 10).");
       return;
     }
 
     setSaving(true);
 
     try {
-      const photo_urls = await uploadPhotos();
+      const photo_urls = await withTimeout(
+        uploadPhotos(),
+        UPLOAD_TIMEOUT_MS * Math.max(1, photos.length),
+        "Photo upload timed out. Please try again."
+      );
 
-      const { data: business, error: bizError } = await client
+      const businessQuery = client
         .from("users")
         .select("city")
         .eq("id", accountId)
         .single();
+      const { data: business, error: bizError } = await withTimeout(
+        businessQuery,
+        PUBLISH_TIMEOUT_MS,
+        "Fetching business details timed out. Please try again."
+      );
 
       if (bizError) {
         throw bizError;
       }
 
-      const { error } = await client.from("listings").insert({
+      const insertQuery = client.from("listings").insert({
         business_id: accountId,
         title: form.title,
         description: form.description,
@@ -147,15 +180,21 @@ export default function NewListingPage() {
         city: business?.city || null,
         photo_url: photo_urls.length ? JSON.stringify(photo_urls) : null,
       });
+      const { error } = await withTimeout(
+        insertQuery,
+        PUBLISH_TIMEOUT_MS,
+        "Publishing timed out. Please try again."
+      );
 
       if (error) {
         throw error;
       }
 
+      setSubmitSuccess("Listing published! Redirecting...");
       router.push("/business/listings");
     } catch (err) {
       console.error("Publish listing failed", err);
-      alert(err.message || "Failed to publish listing. Please try again.");
+      setSubmitError(err.message || "Failed to publish listing. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -438,6 +477,20 @@ export default function NewListingPage() {
             {saving ? "Publishing..." : "Publish listing"}
           </button>
         </div>
+        {(submitError || submitSuccess) && (
+          <div className="pt-3">
+            {submitError && (
+              <p role="alert" className="text-sm text-red-200">
+                {submitError}
+              </p>
+            )}
+            {!submitError && submitSuccess && (
+              <p className="text-sm text-emerald-200">
+                {submitSuccess}
+              </p>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

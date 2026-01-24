@@ -7,6 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { getCookieName } from "@/lib/supabase/browser";
 import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { withTimeout } from "@/lib/withTimeout";
 
 function BusinessLoginInner() {
   const {
@@ -21,6 +22,12 @@ function BusinessLoginInner() {
   const searchParams = useSearchParams();
   const isPopup = searchParams?.get("popup") === "1";
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
+  const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+  const authTimeoutMs = 30000;
+  const profileTimeoutMs = 15000;
+  const refreshTimeoutMs = 15000;
+  const overallTimeoutMs = 45000;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, "");
 
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -55,6 +62,24 @@ function BusinessLoginInner() {
     },
     [authDiagEnabled]
   );
+
+  const logAuthRequest = useCallback(
+    (payload) => {
+      if (!authDiagEnabled && !debugAuth) return;
+      console.log("[AUTH_DEBUG]", payload);
+    },
+    [authDiagEnabled, debugAuth]
+  );
+
+  const isTimeoutError = useCallback((err) => {
+    const name = err?.name || "";
+    const message = String(err?.message || "").toLowerCase();
+    return (
+      name === "TimeoutError" ||
+      name === "AbortError" ||
+      message.includes("timed out")
+    );
+  }, []);
 
   const closeAuthAttempt = useCallback(
     (reason) => {
@@ -217,11 +242,13 @@ function BusinessLoginInner() {
 
       if (mountedRef.current) {
         setLoading(false);
-        setAuthError("Login timed out. Please try again.");
+        setAuthError(
+          `Login request timed out after ${Math.round(overallTimeoutMs / 1000)}s. Please check your connection and try again.`
+        );
       }
       closeAuthAttempt("timeout");
     },
-    [authDiagLog, closeAuthAttempt, redirectToDashboard, supabase]
+    [authDiagLog, closeAuthAttempt, overallTimeoutMs, redirectToDashboard, supabase]
   );
 
   useEffect(() => {
@@ -272,7 +299,7 @@ function BusinessLoginInner() {
     timeoutControllerRef.current = timeoutController;
     timeoutIdRef.current = setTimeout(() => {
       void handleLoginTimeout(attemptId, timeoutController);
-    }, 20000);
+    }, overallTimeoutMs);
 
     pendingRef.current = true;
     if (mountedRef.current) {
@@ -288,10 +315,26 @@ function BusinessLoginInner() {
         console.warn("Could not set signup role", err);
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const signInStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const signInResult = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        authTimeoutMs,
+        `Login request timed out after ${Math.round(authTimeoutMs / 1000)}s`
+      );
+      const signInDurationMs = Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+          signInStart
+      );
+      logAuthRequest({
+        label: "supabase.signInWithPassword",
+        url: supabaseUrl ? `${supabaseUrl}/auth/v1/token` : null,
+        method: "POST",
+        timeoutMs: authTimeoutMs,
+        durationMs: signInDurationMs,
+        status: signInResult?.error?.status ?? null,
+        error: signInResult?.error?.message ?? null,
       });
+      const { data, error } = signInResult;
       authDiagLog("login:signIn:result", {
         attemptId,
         hasSession: Boolean(data?.session),
@@ -314,10 +357,27 @@ function BusinessLoginInner() {
         .select("role")
         .eq("id", user.id)
         .maybeSingle();
-      const profileResult =
+      const profileStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const profileResult = await withTimeout(
         typeof profileQuery.abortSignal === "function"
-          ? await profileQuery.abortSignal(timeoutController.signal)
-          : await profileQuery;
+          ? profileQuery.abortSignal(timeoutController.signal)
+          : profileQuery,
+        profileTimeoutMs,
+        `Profile request timed out after ${Math.round(profileTimeoutMs / 1000)}s`
+      );
+      const profileDurationMs = Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+          profileStart
+      );
+      logAuthRequest({
+        label: "supabase.profile.role",
+        url: supabaseUrl ? `${supabaseUrl}/rest/v1/users` : null,
+        method: "GET",
+        timeoutMs: profileTimeoutMs,
+        durationMs: profileDurationMs,
+        status: profileResult?.error?.status ?? null,
+        error: profileResult?.error?.message ?? null,
+      });
       const { data: profile, error: profileErr } = profileResult;
 
       if (timeoutController.signal.aborted || attemptRef.current !== attemptId) {
@@ -335,6 +395,7 @@ function BusinessLoginInner() {
 
       const session = sessionRef.current;
       if (session?.access_token && session?.refresh_token) {
+        const refreshStart = typeof performance !== "undefined" ? performance.now() : Date.now();
         const response = await fetchWithTimeout("/api/auth/refresh", {
             method: "POST",
             credentials: "include",
@@ -343,9 +404,22 @@ function BusinessLoginInner() {
               access_token: session.access_token,
               refresh_token: session.refresh_token,
             }),
-            timeoutMs: 15000,
+            timeoutMs: refreshTimeoutMs,
             signal: timeoutController.signal,
           });
+        const refreshDurationMs = Math.round(
+          (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+            refreshStart
+        );
+        logAuthRequest({
+          label: "next.auth.refresh",
+          url: "/api/auth/refresh",
+          method: "POST",
+          timeoutMs: refreshTimeoutMs,
+          durationMs: refreshDurationMs,
+          status: response?.status ?? null,
+          error: response?.ok ? null : `HTTP ${response.status}`,
+        });
 
         if (timeoutController.signal.aborted || attemptRef.current !== attemptId) {
           return;
@@ -372,8 +446,9 @@ function BusinessLoginInner() {
       }
       if (!didCompleteRef.current && attemptRef.current === attemptId) {
         console.error("Business login failed", err);
-        const message =
-          err?.message ?? "Login failed. Please refresh and try again.";
+        const message = isTimeoutError(err)
+          ? "Login request timed out. Please check your connection and try again."
+          : err?.message ?? "Login failed. Please refresh and try again.";
         authDiagLog("login:submit:error", { attemptId, message });
         alert(message);
         if (mountedRef.current) {

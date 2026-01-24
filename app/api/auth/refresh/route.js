@@ -6,6 +6,9 @@ import { getCookieBaseOptions } from "@/lib/authCookies";
 import { safeGetUser } from "@/lib/auth/safeGetUser";
 
 export async function POST(request) {
+  const debugAuth = process.env.DEBUG_AUTH === "true";
+  const startedAt = Date.now();
+  const requestUrl = request.url;
   const response = NextResponse.json({ ok: true }, { status: 200 });
   const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
@@ -64,11 +67,33 @@ export async function POST(request) {
 
     response.headers.set("x-auth-refresh-user", user ? "1" : "0");
     response.headers.set("Cache-Control", "no-store");
+    if (debugAuth) {
+      console.log("[AUTH_DEBUG]", {
+        label: "next.auth.refresh",
+        method: request.method,
+        url: requestUrl,
+        timeoutMs: null,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        error: error?.message ?? null,
+      });
+    }
   } catch (err) {
     console.error("Supabase auth refresh failed", err);
     const fallback = NextResponse.json({ ok: false }, { status: 200 });
     fallback.headers.set("x-auth-refresh-user", "0");
     fallback.headers.set("Cache-Control", "no-store");
+    if (debugAuth) {
+      console.log("[AUTH_DEBUG]", {
+        label: "next.auth.refresh",
+        method: request.method,
+        url: requestUrl,
+        timeoutMs: null,
+        status: fallback.status,
+        durationMs: Date.now() - startedAt,
+        error: err?.message ?? String(err),
+      });
+    }
     return fallback;
   }
 

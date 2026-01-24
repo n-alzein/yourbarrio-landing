@@ -7,6 +7,7 @@ import { useAuth } from "../AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useModal } from "./ModalProvider";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { withTimeout } from "@/lib/withTimeout";
 import { resolvePostLoginTarget } from "@/lib/auth/redirects";
 
 export default function CustomerLoginModal({ onClose }) {
@@ -24,14 +25,36 @@ export default function CustomerLoginModal({ onClose }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
+  const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const attemptIdRef = useRef(0);
-  const timeoutRef = useRef(null);
   const refreshControllerRef = useRef(null);
+  const authTimeoutMs = 30000;
+  const profileTimeoutMs = 15000;
+  const refreshTimeoutMs = 15000;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, "");
+
+  const logAuthRequest = useCallback(
+    (payload) => {
+      if (!authDiagEnabled && !debugAuth) return;
+      console.log("[AUTH_DEBUG]", payload);
+    },
+    [authDiagEnabled, debugAuth]
+  );
+
+  const isTimeoutError = useCallback((err) => {
+    const name = err?.name || "";
+    const message = String(err?.message || "").toLowerCase();
+    return (
+      name === "TimeoutError" ||
+      name === "AbortError" ||
+      message.includes("timed out")
+    );
+  }, []);
 
   const getNextParam = useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -71,10 +94,6 @@ export default function CustomerLoginModal({ onClose }) {
 
   useEffect(() => {
     if (authStatus !== "authenticated" || !user?.id) return;
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
     if (refreshControllerRef.current) {
       refreshControllerRef.current.abort();
       refreshControllerRef.current = null;
@@ -92,10 +111,6 @@ export default function CustomerLoginModal({ onClose }) {
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
       if (refreshControllerRef.current) {
         refreshControllerRef.current.abort();
         refreshControllerRef.current = null;
@@ -137,10 +152,6 @@ export default function CustomerLoginModal({ onClose }) {
       if (attemptIdRef.current !== attemptId) return;
       attemptIdRef.current = 0;
       setLoading(false);
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
     };
 
     if (authDiagEnabled) {
@@ -150,19 +161,27 @@ export default function CustomerLoginModal({ onClose }) {
       });
     }
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => {
-      if (attemptIdRef.current !== attemptId) return;
-      setError("Login timed out. Please try again.");
-      finishAttempt("timeout");
-    }, 25000);
-
     try {
-      const { data, error: signInError } = await client.auth.signInWithPassword(
-        { email, password }
+      const signInStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const signInResult = await withTimeout(
+        client.auth.signInWithPassword({ email, password }),
+        authTimeoutMs,
+        `Login request timed out after ${Math.round(authTimeoutMs / 1000)}s`
       );
+      const signInDurationMs = Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+          signInStart
+      );
+      logAuthRequest({
+        label: "supabase.signInWithPassword",
+        url: supabaseUrl ? `${supabaseUrl}/auth/v1/token` : null,
+        method: "POST",
+        timeoutMs: authTimeoutMs,
+        durationMs: signInDurationMs,
+        status: signInResult?.error?.status ?? null,
+        error: signInResult?.error?.message ?? null,
+      });
+      const { data, error: signInError } = signInResult;
 
       if (isStale()) return;
       if (signInError) {
@@ -176,11 +195,26 @@ export default function CustomerLoginModal({ onClose }) {
         return;
       }
 
-      const { data: profile, error: profileError } = await client
-        .from("users")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+      const profileStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const profileResult = await withTimeout(
+        client.from("users").select("role").eq("id", user.id).maybeSingle(),
+        profileTimeoutMs,
+        `Profile request timed out after ${Math.round(profileTimeoutMs / 1000)}s`
+      );
+      const profileDurationMs = Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+          profileStart
+      );
+      logAuthRequest({
+        label: "supabase.profile.role",
+        url: supabaseUrl ? `${supabaseUrl}/rest/v1/users` : null,
+        method: "GET",
+        timeoutMs: profileTimeoutMs,
+        durationMs: profileDurationMs,
+        status: profileResult?.error?.status ?? null,
+        error: profileResult?.error?.message ?? null,
+      });
+      const { data: profile, error: profileError } = profileResult;
 
       if (isStale()) return;
       if (profileError) {
@@ -207,6 +241,7 @@ export default function CustomerLoginModal({ onClose }) {
         const refreshController = new AbortController();
         refreshControllerRef.current = refreshController;
 
+        const refreshStart = typeof performance !== "undefined" ? performance.now() : Date.now();
         const res = await fetchWithTimeout("/api/auth/refresh", {
           method: "POST",
           credentials: "include",
@@ -215,8 +250,21 @@ export default function CustomerLoginModal({ onClose }) {
             access_token: session?.access_token,
             refresh_token: session?.refresh_token,
           }),
-          timeoutMs: 15000,
+          timeoutMs: refreshTimeoutMs,
           signal: refreshController.signal,
+        });
+        const refreshDurationMs = Math.round(
+          (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+            refreshStart
+        );
+        logAuthRequest({
+          label: "next.auth.refresh",
+          url: "/api/auth/refresh",
+          method: "POST",
+          timeoutMs: refreshTimeoutMs,
+          durationMs: refreshDurationMs,
+          status: res?.status ?? null,
+          error: res?.ok ? null : `HTTP ${res.status}`,
         });
 
         if (isStale()) {
@@ -243,7 +291,9 @@ export default function CustomerLoginModal({ onClose }) {
         refreshControllerRef.current = null;
         console.error("Auth refresh call failed", err);
         setError(
-          "Login succeeded but session could not be persisted in Safari. Please try again."
+          isTimeoutError(err)
+            ? "Session persistence timed out. Please check your connection and try again."
+            : "Login succeeded but session could not be persisted. Please try again."
         );
         return;
       }
@@ -253,7 +303,11 @@ export default function CustomerLoginModal({ onClose }) {
     } catch (err) {
       if (isStale()) return;
       console.error("Customer login failed", err);
-      setError("Login failed. Please try again.");
+      setError(
+        isTimeoutError(err)
+          ? "Login request timed out. Please check your connection and try again."
+          : "Login failed. Please try again."
+      );
     } finally {
       finishAttempt("password");
       if (authDiagEnabled) {
