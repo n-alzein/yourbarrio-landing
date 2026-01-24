@@ -410,7 +410,7 @@ export default function CustomerSavedClient({
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-6xl mx-auto space-y-20">
-        <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden relative mt-[-12px] md:mt-[-16px] mb-12 md:mb-16">
+        <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden relative mt-6 md:mt-8 mb-12 md:mb-16">
           <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 via-pink-500/15 to-transparent" />
           <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div className="space-y-2">

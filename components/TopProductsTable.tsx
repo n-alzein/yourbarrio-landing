@@ -87,8 +87,8 @@ const TopProductsTable = ({ products }: TopProductsTableProps) => {
           <h3 className="text-lg font-semibold text-slate-900">Top products</h3>
         </div>
       </div>
-      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-        <table className="dashboard-table dashboard-table--no-hover-dark w-full text-sm">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
+        <table className="dashboard-table dashboard-table--no-hover-dark w-full min-w-[520px] text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>

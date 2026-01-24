@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -30,9 +30,22 @@ export default function ListingDetails({ params }) {
   const { addItem } = useCart();
   const routeParams = useParams();
   const pathname = usePathname();
-  const resolvedParams =
-    params && typeof params.then === "function" ? use(params) : params;
+  const [resolvedParams, setResolvedParams] = useState(params);
   const id = routeParams?.id || resolvedParams?.id;
+
+  useEffect(() => {
+    let active = true;
+    if (params && typeof params.then === "function") {
+      params.then((value) => {
+        if (active) setResolvedParams(value);
+      });
+    } else {
+      setResolvedParams(params);
+    }
+    return () => {
+      active = false;
+    };
+  }, [params]);
 
   const [listing, setListing] = useState(null);
   const [business, setBusiness] = useState(null);
@@ -351,7 +364,11 @@ export default function ListingDetails({ params }) {
         style={{ background: "var(--background)", color: "var(--text)" }}
       >
         <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 opacity-80 mt-2 mb-2">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 opacity-80 mb-2 ${
+            isCustomerListingRoute ? "mt-10 md:mt-12" : "mt-2"
+          }`}
+        >
           <Link
             href="/customer/home"
             className="inline-flex items-center gap-2 text-sm hover:opacity-100"
