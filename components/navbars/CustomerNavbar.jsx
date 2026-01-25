@@ -38,6 +38,8 @@ import {
 } from "@/lib/inventory";
 import { useCart } from "@/components/cart/CartProvider";
 
+const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
 
 const getInitialSearchTerm = (params) =>
@@ -129,7 +131,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const badgeReady = !loadingUser;
+  const badgeReady = !loadingUser || Boolean(user);
   const mobileDrawerId = useId();
   const dropdownRef = useRef(null);
   const dropdownPanelRef = useRef(null);
@@ -762,9 +764,10 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   const categorySelectWidth = Math.max(selectedCategory.length, 3) + 6;
 
+  const canLoadUnread = Boolean(user?.id) && authStatus !== "unauthenticated";
   const loadUnreadCount = useCallback(async () => {
     const userId = user?.id;
-    if (!userId) return;
+    if (!userId || !canLoadUnread) return;
     try {
       const total = await fetchUnreadTotal({
         supabase,
@@ -775,14 +778,14 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     } catch (err) {
       console.warn("Failed to load unread messages", err);
     }
-  }, [supabase, user?.id]);
+  }, [supabase, user?.id, canLoadUnread]);
 
   useEffect(() => {
-    if (!badgeReady) return;
+    if (!badgeReady || !canLoadUnread) return;
     queueMicrotask(() => {
       loadUnreadCount();
     });
-  }, [badgeReady, loadUnreadCount]);
+  }, [badgeReady, canLoadUnread, loadUnreadCount]);
 
   const buildUnreadChannel = useCallback(
     (activeClient) =>
@@ -809,6 +812,15 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     buildChannel: buildUnreadChannel,
     diagLabel: "customer-unread",
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleUnreadRefresh = () => {
+      loadUnreadCount();
+    };
+    window.addEventListener(UNREAD_REFRESH_EVENT, handleUnreadRefresh);
+    return () => window.removeEventListener(UNREAD_REFRESH_EVENT, handleUnreadRefresh);
+  }, [loadUnreadCount]);
 
   /* ---------------------------------------------------
      NAVBAR UI

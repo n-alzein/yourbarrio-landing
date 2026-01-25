@@ -21,6 +21,20 @@ export default function BusinessMessagesPage() {
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
+  const applyLocalRead = useCallback((rows = []) => {
+    if (typeof window === "undefined") return rows;
+    const lastOpenedId = window.sessionStorage.getItem(
+      "yb-last-opened-conversation"
+    );
+    if (!lastOpenedId) return rows;
+    const nextRows = rows.map((row) =>
+      row?.id === lastOpenedId
+        ? { ...row, business_unread_count: 0 }
+        : row
+    );
+    window.sessionStorage.removeItem("yb-last-opened-conversation");
+    return nextRows;
+  }, []);
 
   useEffect(() => {
     setHydrated(true);
@@ -66,7 +80,7 @@ export default function BusinessMessagesPage() {
         ? payload.conversations
         : [];
       if (requestId !== requestIdRef.current) return;
-      setConversations(data);
+      setConversations(applyLocalRead(data));
       setHasLoaded(true);
       hasLoadedRef.current = true;
     } catch (err) {
@@ -80,7 +94,7 @@ export default function BusinessMessagesPage() {
         setLoading(false);
       }
     }
-  }, [authStatus, userId]);
+  }, [applyLocalRead, authStatus, userId]);
 
   useEffect(() => {
     // Wait until auth is fully loaded and we have a userId
@@ -168,12 +182,14 @@ export default function BusinessMessagesPage() {
             </div>
           ) : null}
 
-          <InboxList
-            conversations={conversations}
-            role="business"
-            basePath="/business/messages"
-            loading={loading}
-          />
+          <div className="mt-4 md:mt-6">
+            <InboxList
+              conversations={conversations}
+              role="business"
+              basePath="/business/messages"
+              loading={loading}
+            />
+          </div>
         </div>
       </div>
     </section>

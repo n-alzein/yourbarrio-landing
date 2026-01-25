@@ -38,7 +38,7 @@ export default function InboxList({
   }
 
   return (
-    <div className="rounded-[28px] border border-white/10 bg-white/5 p-2 md:p-3">
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-1.5 md:p-2">
       <div className="space-y-2">
         {conversations.map((conversation) => {
           const otherProfile =
@@ -52,7 +52,7 @@ export default function InboxList({
             <Link
               key={conversation.id}
               href={`${basePath}/${conversation.id}`}
-              className="group block rounded-[24px] border border-transparent bg-white/0 px-4 py-4 transition hover:border-white/10 hover:bg-white/10 md:px-5 md:py-5"
+              className="group block rounded-[24px] border border-transparent bg-white/0 px-4 py-3 transition hover:border-white/10 hover:bg-white/10 md:px-5 md:py-4"
             >
               <div className="flex items-center gap-4">
                 <img

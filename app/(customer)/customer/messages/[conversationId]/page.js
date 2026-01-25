@@ -22,6 +22,8 @@ import { memoizeRequest } from "@/lib/requestMemo";
 import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
 
+const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+
 export default function CustomerConversationPage() {
   const params = useParams();
   const conversationId = params?.conversationId;
@@ -43,6 +45,7 @@ export default function CustomerConversationPage() {
   const requestIdRef = useRef(0);
   const inflightRef = useRef(null);
   const loadOlderRequestIdRef = useRef(0);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     setHydrated(true);
@@ -144,15 +147,36 @@ export default function CustomerConversationPage() {
     window.sessionStorage.setItem("yb-last-opened-conversation", conversationKey);
   }, [conversationKey]);
 
+  const notifyUnreadRefresh = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent(UNREAD_REFRESH_EVENT, {
+        detail: { role: "customer", conversationId: conversationKey },
+      })
+    );
+  }, [conversationKey]);
+
   useEffect(() => {
     if (!hydrated || !userId || !conversationKey) return;
     if (authStatus !== "authenticated") return;
     const client = getSupabaseBrowserClient();
-    markConversationRead({ supabase: client, conversationId: conversationKey }).catch(
-      (err) => {
-      console.warn("Failed to mark conversation read", err);
+    markConversationRead({ supabase: client, conversationId: conversationKey })
+      .then(() => {
+        notifyUnreadRefresh();
+      })
+      .catch((err) => {
+        console.warn("Failed to mark conversation read", err);
+      });
+  }, [authStatus, hydrated, userId, conversationKey, notifyUnreadRefresh]);
+
+  useEffect(() => {
+    if (!scrollRef.current || loadingMore) return;
+    const handle = requestAnimationFrame(() => {
+      if (!scrollRef.current) return;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     });
-  }, [authStatus, hydrated, userId, conversationKey]);
+    return () => cancelAnimationFrame(handle);
+  }, [messages.length, loadingMore]);
 
   const buildThreadChannel = useCallback(
     (activeClient) =>
@@ -177,11 +201,15 @@ export default function CustomerConversationPage() {
               markConversationRead({
                 supabase: activeClient,
                 conversationId: conversationKey,
-              }).catch(() => {});
+              })
+                .then(() => {
+                  notifyUnreadRefresh();
+                })
+                .catch(() => {});
             }
           }
         ),
-    [conversationKey, userId]
+    [conversationKey, userId, notifyUnreadRefresh]
   );
 
   useRealtimeChannel({
@@ -285,7 +313,7 @@ export default function CustomerConversationPage() {
       </div>
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-4">
           <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur">
             <div className="space-y-4">
               <Link
@@ -324,8 +352,8 @@ export default function CustomerConversationPage() {
               Loading conversation...
             </div>
           ) : (
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 space-y-4">
-              <div className="flex h-[50vh] flex-col">
+            <div className="mt-4 rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 space-y-4">
+              <div className="flex h-[44vh] flex-col">
                 {hasMore ? (
                   <button
                     type="button"
@@ -336,7 +364,7 @@ export default function CustomerConversationPage() {
                     {loadingMore ? "Loading..." : "Load older messages"}
                   </button>
                 ) : null}
-                <div className="mt-4 flex-1 overflow-y-auto pr-2">
+                <div className="mt-4 flex-1 overflow-y-auto pr-2" ref={scrollRef}>
                   <MessageThread messages={messages} currentUserId={userId} />
                 </div>
               </div>
@@ -345,7 +373,7 @@ export default function CustomerConversationPage() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 mt-8 w-full px-5 sm:px-6 md:px-8 lg:px-12">
+      <div className="sticky bottom-0 mt-4 w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-5xl mx-auto">
           {sendError ? (
             <div className="mb-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-100">

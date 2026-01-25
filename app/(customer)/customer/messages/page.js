@@ -195,12 +195,14 @@ export default function CustomerMessagesPage() {
             </div>
           ) : null}
 
-          <InboxList
-            conversations={conversations}
-            role="customer"
-            basePath="/customer/messages"
-            loading={loading}
-          />
+          <div className="mt-4 md:mt-6">
+            <InboxList
+              conversations={conversations}
+              role="customer"
+              basePath="/customer/messages"
+              loading={loading}
+            />
+          </div>
         </div>
       </div>
     </section>

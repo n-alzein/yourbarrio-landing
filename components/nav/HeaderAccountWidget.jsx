@@ -25,6 +25,8 @@ import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 
+const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+
 export default function HeaderAccountWidget({
   surface = "public",
   variant = "desktop",
@@ -56,7 +58,7 @@ export default function HeaderAccountWidget({
   const [unreadCount, setUnreadCount] = useState(0);
   const [locationValue, setLocationValue] = useState("Your city");
   const dropdownRef = useRef(null);
-  const lastUnreadUserIdRef = useRef(null);
+  const lastUnreadKeyRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const unreadRequestIdRef = useRef(0);
 
@@ -86,9 +88,15 @@ export default function HeaderAccountWidget({
   const showRateLimit = rateLimited && hasAuth;
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
+  const canLoadUnread =
+    Boolean(unreadUserId) &&
+    isCustomer &&
+    (authStatus === "authenticated" || (authStatus === "loading" && hasAuth));
   const loadUnreadCount = useCallback(async () => {
     const activeClient = supabase ?? getSupabaseBrowserClient();
-    if (!activeClient || !unreadUserId || !isCustomer) return;
+    if (!activeClient || !canLoadUnread) {
+      return;
+    }
     const requestId = ++unreadRequestIdRef.current;
     try {
       const total = await fetchUnreadTotal({
@@ -101,7 +109,7 @@ export default function HeaderAccountWidget({
     } catch {
       // best effort
     }
-  }, [supabase, unreadUserId, isCustomer]);
+  }, [supabase, canLoadUnread]);
 
   const scheduleUnreadRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -113,9 +121,12 @@ export default function HeaderAccountWidget({
   }, [loadUnreadCount]);
 
   useEffect(() => {
-    if (!hasAuth || !isCustomer || !unreadUserId) return undefined;
-    if (lastUnreadUserIdRef.current === unreadUserId) return undefined;
-    lastUnreadUserIdRef.current = unreadUserId;
+    if (!hasAuth || !isCustomer || !unreadUserId || authStatus === "unauthenticated") {
+      return undefined;
+    }
+    const key = `${unreadUserId}:${authStatus}`;
+    if (lastUnreadKeyRef.current === key) return undefined;
+    lastUnreadKeyRef.current = key;
     scheduleUnreadRefresh();
 
     const handleVisibility = () => {
@@ -133,7 +144,7 @@ export default function HeaderAccountWidget({
         clearTimeout(refreshTimerRef.current);
       }
     };
-  }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
+  }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId, authStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -186,6 +197,15 @@ export default function HeaderAccountWidget({
       document.removeEventListener("touchstart", handleClick);
     };
   }, [profileMenuOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleUnreadRefresh = () => {
+      loadUnreadCount();
+    };
+    window.addEventListener(UNREAD_REFRESH_EVENT, handleUnreadRefresh);
+    return () => window.removeEventListener(UNREAD_REFRESH_EVENT, handleUnreadRefresh);
+  }, [loadUnreadCount]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -337,6 +357,8 @@ export default function HeaderAccountWidget({
         </div>
       );
     }
+    if (loading && !hasAuth) return desktopSkeleton;
+
     if (!hasAuth) {
       return (
         <>
@@ -367,8 +389,6 @@ export default function HeaderAccountWidget({
         </>
       );
     }
-
-    if (loading) return desktopSkeleton;
 
     return (
       <div className="flex items-center gap-3">

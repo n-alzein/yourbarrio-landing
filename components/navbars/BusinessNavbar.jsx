@@ -26,6 +26,8 @@ import SafeImage from "@/components/SafeImage";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
+const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+
 function NavItem({
   href,
   children,
@@ -248,9 +250,11 @@ function BusinessNavbarInner({ pathname }) {
     },
   ];
 
+  const canLoadUnread =
+    Boolean(user?.id) && role === "business" && authStatus !== "unauthenticated";
   const loadUnreadCount = useCallback(async () => {
     const userId = user?.id;
-    if (!userId || role !== "business") return;
+    if (!userId || !canLoadUnread) return;
     try {
       const total = await fetchUnreadTotal({
         supabase,
@@ -261,14 +265,14 @@ function BusinessNavbarInner({ pathname }) {
     } catch (err) {
       console.warn("Failed to load unread messages", err);
     }
-  }, [supabase, user?.id, role]);
+  }, [supabase, user?.id, canLoadUnread]);
 
   useEffect(() => {
-    if (!badgeReady) return;
+    if (!badgeReady || !canLoadUnread) return;
     queueMicrotask(() => {
       loadUnreadCount();
     });
-  }, [badgeReady, loadUnreadCount]);
+  }, [badgeReady, canLoadUnread, loadUnreadCount]);
 
   const buildUnreadChannel = useCallback(
     (activeClient) =>
@@ -299,6 +303,15 @@ function BusinessNavbarInner({ pathname }) {
     buildChannel: buildUnreadChannel,
     diagLabel: "business-unread",
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleUnreadRefresh = () => {
+      loadUnreadCount();
+    };
+    window.addEventListener(UNREAD_REFRESH_EVENT, handleUnreadRefresh);
+    return () => window.removeEventListener(UNREAD_REFRESH_EVENT, handleUnreadRefresh);
+  }, [loadUnreadCount]);
 
   const loadNotificationCount = useCallback(async () => {
     if (!supabase || !user?.id || role !== "business") return;
@@ -783,7 +796,7 @@ function BusinessNavbarInner({ pathname }) {
                               if (!supabase || !user?.id || notifications.length === 0) return;
                               await supabase
                                 .from("notifications")
-                                .update({ read_at: new Date().toISOString() })
+                                .delete()
                                 .eq("recipient_user_id", user.id);
                               setNotifications([]);
                               setNotificationUnreadCount(0);
