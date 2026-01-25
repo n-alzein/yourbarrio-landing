@@ -206,7 +206,7 @@ export default function PrivacyPage() {
             {[
               "We keep request receipts and send confirmations.",
               "We retain minimal logs for security and compliance.",
-              "You can contact privacy@yourbarrio.com for custom requests.",
+              "You can contact support@yourbarrio.com for custom requests.",
             ].map((note) => (
               <div
                 key={note}
@@ -231,7 +231,7 @@ export default function PrivacyPage() {
         </div>
         <h3 className="mt-4 text-2xl md:text-3xl font-bold">Questions or requests?</h3>
         <p className="mt-3 text-white/80">
-          Email <a className="underline underline-offset-4" href="mailto:privacy@yourbarrio.com">privacy@yourbarrio.com</a>.
+          Email <a className="underline underline-offset-4" href="mailto:support@yourbarrio.com">support@yourbarrio.com</a>.
           We clarify any clause, fulfill data requests, and share updates as our
           product evolves.
         </p>

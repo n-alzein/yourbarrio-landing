@@ -165,7 +165,9 @@ export default function CheckoutPage() {
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Checkout</p>
           <h1 className="text-3xl font-semibold">Submit your order request</h1>
           {vendor ? (
-            <p className="mt-2 text-sm opacity-80">Vendor: {vendor.business_name || vendor.full_name || "Local vendor"}</p>
+            <p className="mt-2 mb-4 text-sm opacity-80">
+              Vendor: {vendor.business_name || vendor.full_name || "Local vendor"}
+            </p>
           ) : null}
         </div>
 
@@ -175,8 +177,8 @@ export default function CheckoutPage() {
             className="space-y-5 rounded-3xl p-6"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-3 mb-10">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 className="text-lg font-semibold">Contact</h2>
                 <button
                   type="button"
@@ -223,8 +225,8 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">Fulfillment</h2>
+            <div className="space-y-3 mt-6 mb-8">
+              <h2 className="text-lg font-semibold mb-4">Fulfillment</h2>
               <div className="grid md:grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -253,8 +255,8 @@ export default function CheckoutPage() {
             </div>
 
             {fulfillmentType === "delivery" ? (
-              <div className="space-y-3">
-                <h2 className="text-lg font-semibold">Delivery details</h2>
+              <div className="space-y-3 mt-6 mb-8">
+                <h2 className="text-lg font-semibold mb-4">Delivery details</h2>
                 <div className="grid md:grid-cols-2 gap-3">
                   <input
                     name="delivery_address1"
@@ -322,14 +324,14 @@ export default function CheckoutPage() {
                 </div>
               </div>
             ) : fulfillmentType === "pickup" ? (
-              <div className="space-y-3">
+              <div className="space-y-3 mt-6 mb-8">
                 <h2 className="text-lg font-semibold">Pickup details</h2>
                 {vendor?.address || vendor?.city ? (
                   <p className="text-sm opacity-80">
                     {vendor?.address ? `${vendor.address}${vendor?.city ? `, ${vendor.city}` : ""}` : vendor?.city}
                   </p>
                 ) : null}
-                <div className="grid md:grid-cols-2 gap-3">
+                <div className="grid md:grid-cols-2 gap-3 mt-3">
                   <select
                     name="pickup_time"
                     value={form.pickup_time}
@@ -347,7 +349,10 @@ export default function CheckoutPage() {
               </div>
             ) : null}
 
-            <div className="rounded-2xl p-4 text-sm" style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}>
+            <div
+              className="rounded-2xl p-4 text-sm my-6"
+              style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+            >
               <p className="font-semibold">Review &amp; confirm</p>
               <ul className="mt-2 space-y-1 text-xs opacity-80">
                 <li>Payment collected at pickup/delivery.</li>

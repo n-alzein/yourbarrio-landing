@@ -62,14 +62,24 @@ export default function OrderReceiptClient({ order, vendor }) {
               <p className="font-semibold">{vendor?.business_name || vendor?.full_name || "Local vendor"}</p>
               {vendor?.city ? <p className="text-xs opacity-70">{vendor.city}</p> : null}
             </div>
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] opacity-60">Fulfillment</p>
-              <p className="font-semibold">{order?.fulfillment_type === "delivery" ? "Delivery" : "Pickup"}</p>
+            <div className="space-y-0">
+              <p className="text-xs uppercase tracking-[0.2em] opacity-60 mb-1">Fulfillment</p>
               {order?.fulfillment_type === "delivery" ? (
-                <p className="text-xs opacity-70 mb-3">
-                  {order.delivery_address1}
-                  {order.delivery_address2 ? `, ${order.delivery_address2}` : ""}
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-tight">Delivery</p>
+                    <p className="text-xs opacity-70 leading-tight">
+                      {order.delivery_address1}
+                      {order.delivery_address2 ? `, ${order.delivery_address2}` : ""}
+                    </p>
+                  </div>
+                  {order?.delivery_instructions ? (
+                    <div className="text-right">
+                      <p className="uppercase tracking-[0.2em] text-[0.6rem] opacity-60">Delivery instructions</p>
+                      <p className="mt-2 text-xs opacity-70">{order.delivery_instructions}</p>
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <p className="text-xs opacity-70 mb-3">
                   Pickup time: {order.pickup_time || "ASAP"}

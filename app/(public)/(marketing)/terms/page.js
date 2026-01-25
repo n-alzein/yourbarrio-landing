@@ -210,7 +210,7 @@ export default function TermsPage() {
         </div>
         <h3 className="mt-4 text-2xl md:text-3xl font-bold">Need clarity or a custom agreement?</h3>
         <p className="mt-3 text-white/80">
-          Email <a className="underline underline-offset-4" href="mailto:legal@yourbarrio.com">legal@yourbarrio.com</a> for
+          Email <a className="underline underline-offset-4" href="mailto:support@yourbarrio.com">support@yourbarrio.com</a> for
           questions, partnership terms, or notice of potential issues. We respond
           quickly and post updates when these terms change.
         </p>
