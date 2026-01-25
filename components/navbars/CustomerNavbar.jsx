@@ -129,8 +129,6 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   const [searchError, setSearchError] = useState(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const isMessagesRoute = pathname?.startsWith("/customer/messages");
-  const visibleUnreadCount = isMessagesRoute ? 0 : unreadCount;
   const badgeReady = !loadingUser;
   const mobileDrawerId = useId();
   const dropdownRef = useRef(null);
@@ -786,13 +784,6 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     });
   }, [badgeReady, loadUnreadCount]);
 
-  useEffect(() => {
-    if (!isMessagesRoute) return;
-    queueMicrotask(() => {
-      setUnreadCount(0);
-    });
-  }, [isMessagesRoute]);
-
   const buildUnreadChannel = useCallback(
     (activeClient) =>
       activeClient
@@ -1183,9 +1174,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     useNextImage
                     priority
                   />
-                  {badgeReady && visibleUnreadCount > 0 ? (
+                  {badgeReady && unreadCount > 0 ? (
                     <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
-                      {visibleUnreadCount > 99 ? "99+" : visibleUnreadCount}
+                      {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   ) : null}
                 </div>
@@ -1250,9 +1241,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-semibold text-white/90">{title}</p>
-                              {showBadge && badgeReady && visibleUnreadCount > 0 ? (
+                              {showBadge && badgeReady && unreadCount > 0 ? (
                                 <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                  {visibleUnreadCount}
+                                  {unreadCount}
                                 </span>
                               ) : null}
                             </div>
@@ -1442,7 +1433,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               </NavItem>
               <NavItem
                 href="/customer/messages"
-                badgeCount={visibleUnreadCount}
+                badgeCount={unreadCount}
                 active={isActive("/customer/messages")}
                 badgeReady={badgeReady}
                 onNavigate={handleNavigate}

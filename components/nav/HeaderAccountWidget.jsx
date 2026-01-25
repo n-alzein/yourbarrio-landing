@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
@@ -49,7 +48,6 @@ export default function HeaderAccountWidget({
   } = useAuth();
   const { itemCount } = useCart();
   const { openModal } = useModal();
-  const pathname = usePathname();
   const authDiagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
@@ -84,20 +82,8 @@ export default function HeaderAccountWidget({
 
   const email = accountProfile?.email || accountUser?.email || null;
   const hasAuth = Boolean(accountUser);
-  const disableReasons = useMemo(() => {
-    const reasons = [];
-    if (authBusy && lastAuthEvent !== "SIGNED_OUT") {
-      reasons.push("authBusy");
-    }
-    if (loading && !hasAuth && lastAuthEvent !== "SIGNED_OUT") {
-      reasons.push("authStatus=loading");
-    }
-    return reasons;
-  }, [authBusy, hasAuth, lastAuthEvent, loading]);
-  const disableCtas = disableReasons.length > 0;
+  const disableCtas = authBusy || loading;
   const showRateLimit = rateLimited && hasAuth;
-  const isMessagesRoute = pathname?.startsWith("/customer/messages");
-  const visibleUnreadCount = isMessagesRoute ? 0 : unreadCount;
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const loadUnreadCount = useCallback(async () => {
@@ -148,13 +134,6 @@ export default function HeaderAccountWidget({
       }
     };
   }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId]);
-
-  useEffect(() => {
-    if (!isMessagesRoute) return;
-    queueMicrotask(() => {
-      setUnreadCount(0);
-    });
-  }, [isMessagesRoute]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -227,7 +206,7 @@ export default function HeaderAccountWidget({
       authAction,
       authAttemptId,
       lastAuthEvent,
-      disableReasons,
+      disableCtas,
     });
   });
 
@@ -291,7 +270,7 @@ export default function HeaderAccountWidget({
       authAction,
       authAttemptId,
       lastAuthEvent,
-      disableReasons,
+      disableCtas,
       diagDisableReasons,
       loginStyle: login ? logStyleChain(login, "signin") : null,
       signupStyle: signup ? logStyleChain(signup, "signup") : null,
@@ -418,9 +397,9 @@ export default function HeaderAccountWidget({
                 useNextImage
                 priority
               />
-              {visibleUnreadCount > 0 ? (
+              {unreadCount > 0 ? (
                 <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
-                  {visibleUnreadCount > 99 ? "99+" : visibleUnreadCount}
+                  {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               ) : null}
             </span>
@@ -468,9 +447,9 @@ export default function HeaderAccountWidget({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-semibold text-white/90">{title}</p>
-                              {showBadge && visibleUnreadCount > 0 ? (
+                              {showBadge && unreadCount > 0 ? (
                                 <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                  {visibleUnreadCount}
+                                  {unreadCount}
                                 </span>
                               ) : null}
                             </div>
@@ -668,9 +647,9 @@ export default function HeaderAccountWidget({
                     <MessageSquare className="h-4 w-4" />
                     Messages
                   </span>
-                  {visibleUnreadCount > 0 ? (
+                  {unreadCount > 0 ? (
                     <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {visibleUnreadCount}
+                      {unreadCount}
                     </span>
                   ) : null}
                 </Link>

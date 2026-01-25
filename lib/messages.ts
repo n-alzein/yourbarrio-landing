@@ -1,5 +1,6 @@
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { logMutation, requireSession } from "@/lib/auth/requireSession";
 
 export const MESSAGE_PAGE_SIZE = 50;
 export const CONVERSATION_PAGE_SIZE = 40;
@@ -171,52 +172,87 @@ export async function fetchMessages({
 export async function sendMessage({
   supabase,
   conversationId,
-  senderId,
   recipientId,
   body,
+  session,
 }: {
   supabase?: any;
   conversationId: string;
-  senderId: string;
   recipientId: string;
   body: string;
+  session?: any;
 }) {
   const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
-  const { data, error } = await client
-    .from("messages")
-    .insert({
-      conversation_id: conversationId,
-      sender_id: senderId,
-      recipient_id: recipientId,
-      body,
-    })
-    .select("id, conversation_id, sender_id, recipient_id, body, created_at, read_at")
-    .single();
+  const activeSession =
+    session ?? (await requireSession(client, { label: "sendMessage" }));
+  const sessionUserId = activeSession?.user?.id ?? null;
 
-  if (error) throw error;
-  return data || null;
+  logMutation("sendMessage", {
+    stage: "start",
+    conversationId,
+    senderId: sessionUserId,
+    recipientId,
+    hasAccessToken: Boolean(activeSession?.access_token),
+  });
+
+  try {
+    const { data, error } = await client
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: sessionUserId,
+        recipient_id: recipientId,
+        body,
+      })
+      .select("id, conversation_id, sender_id, recipient_id, body, created_at, read_at")
+      .single();
+
+    if (error) {
+      logMutation("sendMessage", { stage: "error", error: error?.message || error });
+      throw error;
+    }
+    logMutation("sendMessage", { stage: "success", messageId: data.id });
+    return data;
+  } catch (err) {
+    logMutation("sendMessage", { stage: "exception", error: err?.message || String(err) });
+    throw err;
+  }
 }
 
 export async function getOrCreateConversation({
   supabase,
-  customerId,
   businessId,
+  session,
 }: {
   supabase?: any;
-  customerId: string;
   businessId: string;
+  session?: any;
 }) {
   const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
+  const activeSession =
+    session ?? (await requireSession(client, { label: "getOrCreateConversation" }));
+  const resolvedCustomerId = activeSession?.user?.id ?? null;
+
+  logMutation("getOrCreateConversation", {
+    stage: "start",
+    customerId: resolvedCustomerId,
+    businessId,
+    hasAccessToken: Boolean(activeSession?.access_token),
+  });
+
   const { data, error } = await client.rpc("get_or_create_conversation", {
-    customer_id: customerId,
+    customer_id: resolvedCustomerId,
     business_id: businessId,
   });
 
-  if (!error) return data || null;
+  if (!error) {
+    logMutation("getOrCreateConversation", { stage: "success", conversationId: data });
+    return data || null;
+  }
 
   const message = (error?.message || "").toLowerCase();
   const missingRpc =
@@ -224,28 +260,56 @@ export async function getOrCreateConversation({
     message.includes("could not find the function") ||
     message.includes("function public.get_or_create_conversation");
 
-  if (!missingRpc) throw error;
+  if (!missingRpc) {
+    logMutation("getOrCreateConversation", {
+      stage: "error",
+      error: error?.message || error,
+    });
+    throw error;
+  }
 
   const { data: existing, error: existingError } = await client
     .from("conversations")
     .select("id")
-    .eq("customer_id", customerId)
+    .eq("customer_id", resolvedCustomerId)
     .eq("business_id", businessId)
     .maybeSingle();
 
-  if (existingError) throw existingError;
-  if (existing?.id) return existing.id;
+  if (existingError) {
+    logMutation("getOrCreateConversation", {
+      stage: "fallback_error",
+      error: existingError?.message || existingError,
+    });
+    throw existingError;
+  }
+  if (existing?.id) {
+    logMutation("getOrCreateConversation", {
+      stage: "fallback_existing",
+      conversationId: existing.id,
+    });
+    return existing.id;
+  }
 
   const { data: upserted, error: upsertError } = await client
     .from("conversations")
     .upsert(
-      { customer_id: customerId, business_id: businessId },
+      { customer_id: resolvedCustomerId, business_id: businessId },
       { onConflict: "customer_id,business_id" }
     )
     .select("id")
     .single();
 
-  if (upsertError) throw upsertError;
+  if (upsertError) {
+    logMutation("getOrCreateConversation", {
+      stage: "fallback_error",
+      error: upsertError?.message || upsertError,
+    });
+    throw upsertError;
+  }
+  logMutation("getOrCreateConversation", {
+    stage: "fallback_success",
+    conversationId: upserted?.id || null,
+  });
   return upserted?.id || null;
 }
 
@@ -259,11 +323,24 @@ export async function markConversationRead({
   const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
+  const activeSession = await requireSession(client, {
+    label: "markConversationRead",
+  });
+  logMutation("markConversationRead", {
+    stage: "start",
+    conversationId,
+    sessionUserId: activeSession?.user?.id ?? null,
+  });
+
   const { error } = await client.rpc("mark_conversation_read", {
     conversation_id: conversationId,
   });
 
-  if (error) throw error;
+  if (error) {
+    logMutation("markConversationRead", { stage: "error", error: error?.message || error });
+    throw error;
+  }
+  logMutation("markConversationRead", { stage: "success" });
   return true;
 }
 

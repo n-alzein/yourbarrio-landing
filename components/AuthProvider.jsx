@@ -20,9 +20,6 @@ import {
 } from "@/lib/supabase/browser";
 import {
   clearVerifiedUserCache,
-  getVerifiedUser,
-  subscribeAuthChanges,
-  setAuthChangeSuppressed,
 } from "@/lib/auth/verifiedUserClient";
 import { PATHS } from "@/lib/auth/paths";
 import AuthStateDebug from "@/components/debug/AuthStateDebug";
@@ -31,6 +28,7 @@ import { stopRealtime } from "@/lib/realtimeManager";
 const AuthContext = createContext({
   supabase: null,
   authStatus: "loading",
+  session: null,
   status: "loading",
   user: null,
   profile: null,
@@ -73,6 +71,7 @@ const isProtectedPath = (pathname) => {
 
 const buildSignedOutState = () => ({
   authStatus: "unauthenticated",
+  session: null,
   user: null,
   profile: null,
   role: null,
@@ -98,6 +97,7 @@ const withGuardState = (base) => ({
 const authStore = {
   state: {
     authStatus: "loading",
+    session: null,
     user: null,
     profile: null,
     role: null,
@@ -302,7 +302,6 @@ function applySignedOutState(reason = "signed_out", options = {}) {
 
   if (clearAuthSuppression) {
     authStore.loggingOut = false;
-    setAuthChangeSuppressed(false);
   }
 
   const signedOutBase = resetGuardState
@@ -559,41 +558,32 @@ async function bootstrapAuth() {
     }
 
     if (authStore.supabase?.auth?.getSession) {
-      const guard = getAuthGuardState();
-      if (guard.refreshDisabledMsRemaining > 0 || guard.cooldownMsRemaining > 0) {
-        logAuthDiag("auth:bootstrap:skip", {
-          reason:
-            guard.refreshDisabledMsRemaining > 0
-              ? "refresh_disabled"
-              : "rate_limited",
-          refreshDisabledMsRemaining: guard.refreshDisabledMsRemaining,
-          cooldownMsRemaining: guard.cooldownMsRemaining,
-        });
-      } else {
-        sessionChecked = true;
-        try {
-          const { data, error } = await authStore.supabase.auth.getSession();
-          if (error) {
-            sessionError = error;
-            setAuthError(error);
-          }
-          user = data?.session?.user ?? null;
-          logAuthDiag("auth:getSession:result", {
-            ok: !error,
-            hasUser: Boolean(user),
-            sessionUserId: user?.id ?? null,
-            error: error?.message ?? null,
-          });
-        } catch (err) {
-          sessionError = err;
-          setAuthError(err);
-          logAuthDiag("auth:getSession:result", {
-            ok: false,
-            hasUser: false,
-            sessionUserId: null,
-            error: err?.message ?? String(err),
-          });
+      sessionChecked = true;
+      try {
+        const { data, error } = await authStore.supabase.auth.getSession();
+        if (error) {
+          sessionError = error;
+          setAuthError(error);
         }
+        const session = data?.session ?? null;
+        updateAuthState({ session });
+        user = session?.user ?? null;
+        logAuthDiag("auth:getSession:result", {
+          ok: !error,
+          hasUser: Boolean(user),
+          sessionUserId: user?.id ?? null,
+          error: error?.message ?? null,
+        });
+      } catch (err) {
+        sessionError = err;
+        setAuthError(err);
+        updateAuthState({ session: null });
+        logAuthDiag("auth:getSession:result", {
+          ok: false,
+          hasUser: false,
+          sessionUserId: null,
+          error: err?.message ?? String(err),
+        });
       }
     }
 
@@ -610,8 +600,6 @@ async function bootstrapAuth() {
         });
         return;
       }
-    } else if (!user) {
-      user = await getVerifiedUser();
     }
 
     if (signal.aborted) {
@@ -639,16 +627,21 @@ async function bootstrapAuth() {
 
 function ensureAuthListener() {
   if (authStore.authUnsubscribe) return;
-  authStore.authUnsubscribe = subscribeAuthChanges(({ user, event }) => {
-    if (authStore.loggingOut) return;
-    if (event) {
+  if (!authStore.supabase?.auth?.onAuthStateChange) return;
+
+  const { data } = authStore.supabase.auth.onAuthStateChange(
+    async (event, session) => {
+      const user = session?.user ?? null;
+      updateAuthState({ session });
       logAuthDiag("auth:event", {
         event,
         hasUser: Boolean(user),
         sessionUserId: user?.id ?? null,
       });
-      if (event === "SIGNED_OUT") {
+
+      if (event === "SIGNED_OUT" || event === "USER_DELETED") {
         emitAuthUiReset("auth_event:signed_out");
+        clearVerifiedUserCache();
         applySignedOutState("auth_event:signed_out", {
           resetGuardState: true,
           clearAuthSuppression: true,
@@ -660,10 +653,23 @@ function ensureAuthListener() {
         void cleanupRealtimeChannels();
         return;
       }
+
       updateAuthState({ lastAuthEvent: event });
+      if (!user) {
+        applySignedOutState("auth_event:no_user", {
+          resetGuardState: false,
+          clearAuthSuppression: true,
+        });
+        return;
+      }
+      authStore.loggingOut = false;
+      void applyUserUpdate(user);
     }
-    void applyUserUpdate(user);
-  });
+  );
+
+  authStore.authUnsubscribe = () => {
+    data?.subscription?.unsubscribe();
+  };
 }
 
 function releaseAuthListener() {
@@ -906,7 +912,6 @@ export function AuthProvider({
       resetAuthUiState("logout:pre");
       emitAuthUiReset("logout:pre");
       authStore.loggingOut = true;
-      setAuthChangeSuppressed(true);
       applySignedOutState("logout:pre", {
         resetGuardState: true,
         resetAuthUi: false,
@@ -983,6 +988,7 @@ export function AuthProvider({
     () => ({
       supabase: authStore.supabase ?? supabase,
       authStatus: authState.authStatus,
+      session: authState.session,
       status:
         authState.authStatus === "authenticated"
           ? "signed_in"
@@ -1016,6 +1022,7 @@ export function AuthProvider({
     }),
     [
       authState.authStatus,
+      authState.session,
       authState.error,
       authState.profile,
       authState.rateLimitMessage,
@@ -1129,7 +1136,6 @@ export function AuthProvider({
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
     if (authStore.loggingOut) {
       authStore.loggingOut = false;
-      setAuthChangeSuppressed(false);
     }
   }, [authState.authStatus, authState.user, isNestedProvider]);
 

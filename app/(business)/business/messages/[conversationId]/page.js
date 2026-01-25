@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import {
   getAvatarUrl,
@@ -37,6 +38,7 @@ export default function BusinessConversationPage() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
   const [messagesError, setMessagesError] = useState(null);
+  const [sendError, setSendError] = useState(null);
   const threadLoadedRef = useRef(false);
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
@@ -173,14 +175,14 @@ export default function BusinessConversationPage() {
   useEffect(() => {
     if (!hydrated || !userId || !conversationKey) return;
     if (authStatus !== "authenticated") return;
-    const client = getSupabaseBrowserClient() ?? supabase;
+    const client = getSupabaseBrowserClient();
     markConversationRead({
       supabase: client,
       conversationId: conversationKey,
     }).catch((err) => {
       console.warn("Failed to mark conversation read", err);
     });
-  }, [authStatus, hydrated, userId, conversationKey, supabase]);
+  }, [authStatus, hydrated, userId, conversationKey]);
 
   const buildThreadChannel = useCallback(
     (activeClient) =>
@@ -260,27 +262,39 @@ export default function BusinessConversationPage() {
 
   const handleSend = useCallback(
     async (body) => {
-      if (!conversation || !userId) return;
-      const recipientId =
-        conversation.customer_id === userId
-          ? conversation.business_id
-          : conversation.customer_id;
-      const client = getSupabaseBrowserClient() ?? supabase;
-      const sent = await sendMessage({
-        supabase: client,
-        conversationId: conversation.id,
-        senderId: userId,
-        recipientId,
-        body,
-      });
-      if (sent?.id) {
-        setMessages((prev) => {
-          if (prev.some((item) => item.id === sent.id)) return prev;
-          return [...prev, sent];
+      if (!conversation) {
+        setSendError("Conversation unavailable.");
+        return;
+      }
+      setSendError(null);
+      try {
+        const { client, session, userId } = await getAuthedContext("sendMessage");
+        const recipientId =
+          conversation.customer_id === userId
+            ? conversation.business_id
+            : conversation.customer_id;
+        if (!recipientId || recipientId === userId) {
+          throw new Error("Message recipient unavailable");
+        }
+        const sent = await sendMessage({
+          supabase: client,
+          conversationId: conversation.id,
+          recipientId,
+          body,
+          session,
         });
+        if (sent?.id) {
+          setMessages((prev) => {
+            if (prev.some((item) => item.id === sent.id)) return prev;
+            return [...prev, sent];
+          });
+        }
+      } catch (err) {
+        console.error("Message send failed", err);
+        setSendError(err?.message || "Message failed to send.");
       }
     },
-    [conversation, supabase, userId]
+    [conversation]
   );
 
   const otherProfile = useMemo(() => {
@@ -357,17 +371,21 @@ export default function BusinessConversationPage() {
                   </button>
                 </div>
               ) : null}
-              {hasMore ? (
-                <button
-                  type="button"
-                  onClick={loadOlder}
-                  disabled={loadingMore}
-                  className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:text-white"
-                >
-                  {loadingMore ? "Loading..." : "Load older messages"}
-                </button>
-              ) : null}
-              <MessageThread messages={messages} currentUserId={userId} />
+              <div className="flex h-[50vh] flex-col">
+                {hasMore ? (
+                  <button
+                    type="button"
+                    onClick={loadOlder}
+                    disabled={loadingMore}
+                    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:text-white"
+                  >
+                    {loadingMore ? "Loading..." : "Load older messages"}
+                  </button>
+                ) : null}
+                <div className="mt-4 flex-1 overflow-y-auto pr-2">
+                  <MessageThread messages={messages} currentUserId={userId} />
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -375,6 +393,11 @@ export default function BusinessConversationPage() {
 
       <div className="sticky bottom-0 mt-8 w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-5xl mx-auto">
+          {sendError ? (
+            <div className="mb-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-100">
+              {sendError}
+            </div>
+          ) : null}
           <MessageComposer onSend={handleSend} disabled={loading || !conversation} />
         </div>
       </div>

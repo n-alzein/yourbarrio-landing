@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { logMutation } from "@/lib/auth/requireSession";
+import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useAuth } from "@/components/AuthProvider";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useViewerContext } from "@/components/public/ViewerContextEnhancer";
@@ -77,13 +79,6 @@ function isSameReviewList(prev = [], next = []) {
     if (prev[i]?.id !== next[i]?.id) return false;
   }
   return true;
-}
-
-async function ensureSession(client) {
-  if (!client?.auth?.getSession) return null;
-  const { data, error } = await client.auth.getSession();
-  if (error || !data?.session) return null;
-  return data.session;
 }
 
 export default function BusinessReviewsPanel({
@@ -294,27 +289,33 @@ export default function BusinessReviewsPanel({
     setSubmitError("");
     setSubmitSuccess("");
 
-    const client = supabase ?? getSupabaseBrowserClient();
-    if (!client) {
-      setSubmitError("We couldn’t connect. Try again.");
-      setSubmitting(false);
-      return;
-    }
-    const session = await ensureSession(client);
-    if (!session) {
+    let context;
+    try {
+      context = await getAuthedContext("createReview");
+    } catch (err) {
       setSubmitError("Please sign in again to post a review.");
       setSubmitting(false);
       return;
     }
+    const { client, session, userId } = context;
 
     try {
+      const nextTitle = title.trim();
+      const nextBody = body.trim();
       const payload = {
         business_id: businessId,
-        customer_id: customerId,
+        customer_id: userId,
         rating,
-        title: title.trim() || null,
-        body: body.trim() || null,
+        title: nextTitle || "",
+        body: nextBody || "",
       };
+
+      logMutation("createReview", {
+        stage: "start",
+        businessId,
+        sessionUserId: userId,
+        hasAccessToken: Boolean(session?.access_token),
+      });
 
       const { data, error } = await client
         .from("business_reviews")
@@ -322,10 +323,16 @@ export default function BusinessReviewsPanel({
         .select(
           "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
         )
-        .maybeSingle();
+        .single();
 
       if (error) {
+        logMutation("createReview", { stage: "error", error: error?.message || error });
         throw error;
+      }
+      if (!data) {
+        const emptyError = new Error("Review submission failed");
+        logMutation("createReview", { stage: "empty_result", error: emptyError.message });
+        throw emptyError;
       }
 
       if (data) {
@@ -353,9 +360,11 @@ export default function BusinessReviewsPanel({
       setTitle("");
       setBody("");
       setSubmitSuccess("Thanks for sharing your review!");
+      logMutation("createReview", { stage: "success", reviewId: data.id });
     } catch (err) {
       console.error("Failed to submit review", err);
       setSubmitError(err?.message || "Could not submit review yet.");
+      logMutation("createReview", { stage: "exception", error: err?.message || String(err) });
     } finally {
       setSubmitting(false);
     }
@@ -387,46 +396,62 @@ export default function BusinessReviewsPanel({
     setEditLoading(true);
     setEditError("");
 
-    const client = supabase ?? getSupabaseBrowserClient();
-    if (!client) {
-      setEditError("We couldn’t connect. Try again.");
-      setEditLoading(false);
-      return;
-    }
-    const session = await ensureSession(client);
-    if (!session) {
+    let context;
+    try {
+      context = await getAuthedContext("updateReview");
+    } catch (err) {
       setEditError("Please sign in again to update your review.");
       setEditLoading(false);
       return;
     }
+    const { client, session, userId } = context;
 
     try {
+      const nextTitle = editTitle.trim();
+      const nextBody = editBody.trim();
       const payload = {
         rating: editRating,
-        title: editTitle.trim() || null,
-        body: editBody.trim() || null,
+        title: nextTitle || "",
+        body: nextBody || "",
       };
+
+      logMutation("updateReview", {
+        stage: "start",
+        reviewId,
+        sessionUserId: userId,
+        hasAccessToken: Boolean(session?.access_token),
+      });
 
       let { data, error } = await client
         .from("business_reviews")
         .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("id", reviewId)
+        .eq("customer_id", userId)
         .select(
           "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
         )
-        .maybeSingle();
+        .single();
       if (error && isMissingColumnError(error)) {
         ({ data, error } = await client
           .from("business_reviews")
           .update(payload)
           .eq("id", reviewId)
+          .eq("customer_id", userId)
           .select(
             "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
           )
-          .maybeSingle());
+          .single());
       }
 
-      if (error) throw error;
+      if (error) {
+        logMutation("updateReview", { stage: "error", error: error?.message || error });
+        throw error;
+      }
+      if (!data) {
+        const emptyError = new Error("Review update failed");
+        logMutation("updateReview", { stage: "empty_result", error: emptyError.message });
+        throw emptyError;
+      }
 
       if (data) {
         setReviews((prev) => prev.map((item) => (item.id === reviewId ? data : item)));
@@ -456,9 +481,11 @@ export default function BusinessReviewsPanel({
       }
 
       cancelEditing();
+      logMutation("updateReview", { stage: "success", reviewId });
     } catch (err) {
       console.error("Failed to update review", err);
       setEditError(err?.message || "Could not update review yet.");
+      logMutation("updateReview", { stage: "exception", error: err?.message || String(err) });
     } finally {
       setEditLoading(false);
     }
@@ -474,27 +501,41 @@ export default function BusinessReviewsPanel({
     setEditLoading(true);
     setEditError("");
 
-    const client = supabase ?? getSupabaseBrowserClient();
-    if (!client) {
-      setEditError("We couldn’t connect. Try again.");
-      setEditLoading(false);
-      return;
-    }
-    const session = await ensureSession(client);
-    if (!session) {
+    let context;
+    try {
+      context = await getAuthedContext("deleteReview");
+    } catch (err) {
       setEditError("Please sign in again to delete your review.");
       setEditLoading(false);
       return;
     }
+    const { client, session, userId } = context;
 
     try {
       const target = reviews.find((item) => item.id === reviewId);
-      const { error } = await client
+      logMutation("deleteReview", {
+        stage: "start",
+        reviewId,
+        sessionUserId: userId,
+        hasAccessToken: Boolean(session?.access_token),
+      });
+
+      const { data, error } = await client
         .from("business_reviews")
         .delete()
-        .eq("id", reviewId);
+        .eq("id", reviewId)
+        .eq("customer_id", userId)
+        .select("id");
 
-      if (error) throw error;
+      if (error) {
+        logMutation("deleteReview", { stage: "error", error: error?.message || error });
+        throw error;
+      }
+      if (!data || data.length === 0) {
+        const emptyError = new Error("Review delete failed");
+        logMutation("deleteReview", { stage: "empty_result", error: emptyError.message });
+        throw emptyError;
+      }
 
       setReviews((prev) => prev.filter((item) => item.id !== reviewId));
       setSummary((prev) => {
@@ -519,9 +560,11 @@ export default function BusinessReviewsPanel({
       if (editingReviewId === reviewId) {
         cancelEditing();
       }
+      logMutation("deleteReview", { stage: "success", reviewId });
     } catch (err) {
       console.error("Failed to delete review", err);
       setEditError(err?.message || "Could not delete review yet.");
+      logMutation("deleteReview", { stage: "exception", error: err?.message || String(err) });
     } finally {
       setEditLoading(false);
     }
@@ -626,7 +669,7 @@ export default function BusinessReviewsPanel({
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="Write your review"
+            placeholder="Write your review (optional)"
             className="w-full min-h-[120px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
             maxLength={800}
           />
@@ -767,7 +810,7 @@ export default function BusinessReviewsPanel({
                   <textarea
                     value={editBody}
                     onChange={(event) => setEditBody(event.target.value)}
-                    placeholder="Write your review"
+                    placeholder="Write your review (optional)"
                     className="w-full min-h-[120px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
                     maxLength={800}
                   />

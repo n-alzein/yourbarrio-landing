@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import SafeImage from "@/components/SafeImage";
 import { getOrCreateConversation } from "@/lib/messages";
@@ -166,44 +167,36 @@ export default function ListingDetails({ params }) {
   }, [supabase, user?.id, id]);
 
   const handleToggleSave = async () => {
-    if (!supabase || !id || !user?.id) {
-      setStatusMessage("Log in to save this item.");
-      return;
-    }
+    if (!id) return;
     setSaveLoading(true);
     setStatusMessage("");
     try {
+      const { client, userId } = await getAuthedContext("toggleSaveListing");
       if (isSaved) {
-        await supabase
+        await client
           .from("saved_listings")
           .delete()
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("listing_id", id);
         setIsSaved(false);
         setStatusMessage("Removed from saved.");
       } else {
-        await supabase
+        await client
           .from("saved_listings")
-          .insert({ user_id: user.id, listing_id: id });
+          .insert({ user_id: userId, listing_id: id });
         setIsSaved(true);
         setStatusMessage("Saved to your list.");
       }
     } catch (err) {
       console.error("Save toggle failed", err);
-      setStatusMessage("Could not update saved state.");
+      setStatusMessage(err?.message || "Could not update saved state.");
     } finally {
       setSaveLoading(false);
     }
   };
 
   const handleMessageBusiness = async () => {
-    const customerId = user?.id;
     const businessId = business?.id;
-
-    if (!customerId) {
-      setMessageStatus("Log in to message this business.");
-      return;
-    }
 
     if (!businessId) {
       setMessageStatus("Business info unavailable.");
@@ -214,10 +207,13 @@ export default function ListingDetails({ params }) {
     setMessageStatus("");
 
     try {
+      const { client, userId, session } = await getAuthedContext(
+        "getOrCreateConversation"
+      );
       const conversationId = await getOrCreateConversation({
-        supabase,
-        customerId,
+        supabase: client,
         businessId,
+        session,
       });
       if (conversationId) {
         router.push(`/customer/messages/${conversationId}`);
