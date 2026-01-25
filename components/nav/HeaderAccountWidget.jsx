@@ -151,14 +151,18 @@ export default function HeaderAccountWidget({
 
   useEffect(() => {
     if (!isMessagesRoute) return;
-    setUnreadCount(0);
+    queueMicrotask(() => {
+      setUnreadCount(0);
+    });
   }, [isMessagesRoute]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const cached = window.localStorage.getItem("yb-city");
     if (cached) {
-      setLocationValue(cached);
+      queueMicrotask(() => {
+        setLocationValue(cached);
+      });
     }
   }, []);
 

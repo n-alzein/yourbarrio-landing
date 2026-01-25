@@ -51,7 +51,7 @@ function CustomerMap({
       onBusinessesChange,
       onControlsReady: handleControlsReady,
     }),
-    [mapBusinesses, onBusinessesChange, handleControlsReady]
+    [enableSearch, mapBusinesses, onBusinessesChange, handleControlsReady]
   );
 
   if (!mapEnabled || !GoogleMapClient) {

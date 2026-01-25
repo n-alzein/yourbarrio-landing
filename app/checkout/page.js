@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
+import { useAuth } from "@/components/AuthProvider";
 
 const formatMoney = (value) => {
   const amount = Number(value || 0);
@@ -22,6 +23,7 @@ const TIME_OPTIONS = [
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { user, profile } = useAuth();
   const { cart, vendor, items, loading, refreshCart, setFulfillmentType } = useCart();
   const [form, setForm] = useState({
     contact_name: "",
@@ -65,6 +67,33 @@ export default function CheckoutPage() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const hasProfileInfo = Boolean(
+    user?.email ||
+      profile?.email ||
+      profile?.full_name ||
+      profile?.phone ||
+      profile?.address ||
+      profile?.address_2 ||
+      profile?.city ||
+      profile?.state ||
+      profile?.postal_code
+  );
+
+  const handlePrefillFromProfile = () => {
+    if (!hasProfileInfo) return;
+    setForm((prev) => ({
+      ...prev,
+      contact_name: profile?.full_name?.trim() || prev.contact_name,
+      contact_phone: profile?.phone?.trim() || prev.contact_phone,
+      contact_email: profile?.email?.trim() || user?.email?.trim() || prev.contact_email,
+      delivery_address1: profile?.address?.trim() || prev.delivery_address1,
+      delivery_address2: profile?.address_2?.trim() || prev.delivery_address2,
+      delivery_city: profile?.city?.trim() || prev.delivery_city,
+      delivery_state: profile?.state?.toUpperCase?.() || prev.delivery_state,
+      delivery_postal_code: profile?.postal_code?.trim() || prev.delivery_postal_code,
+    }));
   };
 
   const handleSubmit = async (event) => {
@@ -147,7 +176,22 @@ export default function CheckoutPage() {
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold">Contact</h2>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold">Contact</h2>
+                <button
+                  type="button"
+                  onClick={handlePrefillFromProfile}
+                  disabled={!hasProfileInfo}
+                  className="rounded-full px-4 py-1.5 text-xs font-semibold transition"
+                  style={{
+                    background: hasProfileInfo ? "var(--overlay)" : "transparent",
+                    border: "1px solid var(--border)",
+                    opacity: hasProfileInfo ? 1 : 0.5,
+                  }}
+                >
+                  Add my info
+                </button>
+              </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <input
                   name="contact_name"

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -217,7 +217,7 @@ export async function GET(request) {
 
   let supabase = null;
   try {
-    supabase = await createSupabaseServerClient();
+    supabase = await getSupabaseServerClient();
   } catch (err) {
     console.error("Failed to init Supabase client", err);
   }

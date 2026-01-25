@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { createPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
+import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
 import BusinessAnnouncementsPreview from "@/components/publicBusinessProfile/BusinessAnnouncementsPreview";
@@ -243,7 +243,7 @@ function descriptionSnippet(value) {
 
 const getPublicProfileCached = unstable_cache(
   async (businessId) => {
-    const supabase = createPublicSupabaseServerClient();
+    const supabase = getPublicSupabaseServerClient();
     return fetchPublicProfile(supabase, businessId);
   },
   ["public-business-profile"],
@@ -252,7 +252,7 @@ const getPublicProfileCached = unstable_cache(
 
 const getPublicListingsCached = unstable_cache(
   async (businessId, limit) => {
-    const supabase = createPublicSupabaseServerClient();
+    const supabase = getPublicSupabaseServerClient();
     return fetchListingsWithFallback(supabase, businessId, limit);
   },
   ["public-business-listings"],
@@ -261,7 +261,7 @@ const getPublicListingsCached = unstable_cache(
 
 const getPublicGalleryCached = unstable_cache(
   async (businessId) => {
-    const supabase = createPublicSupabaseServerClient();
+    const supabase = getPublicSupabaseServerClient();
     return fetchGallery(supabase, businessId);
   },
   ["public-business-gallery"],
@@ -270,7 +270,7 @@ const getPublicGalleryCached = unstable_cache(
 
 const getPublicAnnouncementsCached = unstable_cache(
   async (businessId) => {
-    const supabase = createPublicSupabaseServerClient();
+    const supabase = getPublicSupabaseServerClient();
     return fetchAnnouncements(supabase, businessId);
   },
   ["public-business-announcements"],
@@ -279,7 +279,7 @@ const getPublicAnnouncementsCached = unstable_cache(
 
 const getPublicReviewsCached = unstable_cache(
   async (businessId) => {
-    const supabase = createPublicSupabaseServerClient();
+    const supabase = getPublicSupabaseServerClient();
     return fetchReviews(supabase, businessId);
   },
   ["public-business-reviews"],
@@ -288,7 +288,7 @@ const getPublicReviewsCached = unstable_cache(
 
 const getPublicReviewRatingsCached = unstable_cache(
   async (businessId) => {
-    const supabase = createPublicSupabaseServerClient();
+    const supabase = getPublicSupabaseServerClient();
     return fetchReviewRatings(supabase, businessId);
   },
   ["public-business-review-ratings"],
@@ -416,7 +416,7 @@ export default async function PublicBusinessProfilePage({
 
   const useAuthenticatedClient = shell === "customer";
   const supabase = useAuthenticatedClient
-    ? await createSupabaseServerClient()
+    ? await getSupabaseServerClient()
     : null;
   const profile = await perf.time("profile", () =>
     useAuthenticatedClient

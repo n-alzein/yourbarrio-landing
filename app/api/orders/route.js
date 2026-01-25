@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
@@ -32,8 +31,8 @@ async function getActiveCart(supabase, userId, cartId) {
 }
 
 export async function POST(request) {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);

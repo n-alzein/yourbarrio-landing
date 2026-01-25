@@ -1,59 +1,36 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { cookies, headers } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { getCookieName } from "@/lib/supabase/browser";
 import {
   clearSupabaseCookies,
-  getCookieBaseOptions,
   logSupabaseCookieDiagnostics,
 } from "@/lib/authCookies";
+import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
 
-export async function POST() {
+export async function POST(request) {
   const cookieName = getCookieName();
   const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
   try {
-    const cookieStore = await cookies();
-    const host = (await headers()).get("host");
-    const cookieBaseOptions = getCookieBaseOptions({ host, isProd });
-
     const res = NextResponse.json({ success: true });
     const log = (message, ...args) => {
       if (debug) console.log(`[api/logout] ${message}`, ...args);
     };
     logSupabaseCookieDiagnostics({
-      req: { cookies: cookieStore, headers: { get: () => null } },
+      req: request,
       debug,
       log,
     });
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookieOptions: cookieName ? { name: cookieName } : undefined,
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              res.cookies.set(name, value, {
-                ...options,
-                ...cookieBaseOptions,
-              });
-            });
-          },
-        },
-      }
-    );
+    const supabase = createSupabaseRouteHandlerClient(request, res, {
+      cookieName,
+    });
 
     await supabase.auth.signOut();
 
-    clearSupabaseCookies(res, { cookies: cookieStore }, { isProd, debug, log });
+    clearSupabaseCookies(res, request, { isProd, debug, log });
     if (cookieName) {
       res.cookies.set(cookieName, "", {
         path: "/",

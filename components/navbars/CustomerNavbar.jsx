@@ -315,7 +315,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     if (typeof window === "undefined") return;
     const cached = window.localStorage.getItem("yb-city");
     if (cached) {
-      setLocationValue(cached);
+      queueMicrotask(() => {
+        setLocationValue(cached);
+      });
       return;
     }
     if (!navigator.geolocation) return;
@@ -330,7 +332,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           const city = (data?.city || "").trim();
           if (city) {
             window.localStorage.setItem("yb-city", city);
-            setLocationValue(city);
+            queueMicrotask(() => {
+              setLocationValue(city);
+            });
           }
         } catch {
           // best effort
@@ -345,7 +349,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   useEffect(() => {
     if (locationOpen && !locationInput && locationValue !== "Your city") {
-      setLocationInput(locationValue);
+      queueMicrotask(() => {
+        setLocationInput(locationValue);
+      });
     }
   }, [locationOpen, locationInput, locationValue]);
 
@@ -782,7 +788,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   useEffect(() => {
     if (!isMessagesRoute) return;
-    setUnreadCount(0);
+    queueMicrotask(() => {
+      setUnreadCount(0);
+    });
   }, [isMessagesRoute]);
 
   const buildUnreadChannel = useCallback(

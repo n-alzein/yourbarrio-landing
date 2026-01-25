@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 
 export async function POST(request) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   let payload = null;
 
   try {
@@ -17,7 +16,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Missing businessId" }, { status: 400 });
   }
 
-  const { user } = await safeGetUser(supabase);
+  const { user } = await getUserCached(supabase);
 
   if (user?.id && user.id === businessId) {
     return NextResponse.json({ ok: true }, { status: 200 });

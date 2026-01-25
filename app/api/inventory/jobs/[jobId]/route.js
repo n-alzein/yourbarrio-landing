@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { perfLog, perfTimer } from "@/lib/perf";
 
 const allowedFields = new Set([
@@ -42,8 +41,8 @@ function resolveJobId(params, request) {
 }
 
 export async function GET(request, { params }) {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -80,8 +79,8 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

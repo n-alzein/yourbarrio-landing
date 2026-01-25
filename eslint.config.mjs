@@ -15,6 +15,17 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated and build artifacts:
+    "dist/**",
+    "coverage/**",
+    "node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/out/**",
+    "**/coverage/**",
+    "**/node_modules/**",
+    "yourbarrio-cms/dist/**",
   ]),
 ]);
 

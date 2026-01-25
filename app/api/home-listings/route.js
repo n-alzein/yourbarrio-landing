@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
 
 async function runHomeListingsQuery(client, { limit, city, category }) {
   let query = client
@@ -38,8 +38,8 @@ export async function GET(request) {
 
   const cookieStore = await cookies();
   const sessionPresent = cookieStore.getAll().length > 0;
-  const sessionClient = await createSupabaseServerClient();
-  const serviceClient = getSupabaseServerClient();
+  const sessionClient = await getSupabaseServerClient();
+  const serviceClient = getSupabaseServiceClient();
 
   const errors = [];
   let listings = [];

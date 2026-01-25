@@ -241,7 +241,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
     if (typeof window === "undefined") return;
     const cached = window.localStorage.getItem("yb-city");
     if (cached) {
-      setLocationValue(cached);
+      queueMicrotask(() => {
+        setLocationValue(cached);
+      });
       return;
     }
     if (!navigator.geolocation) return;
@@ -256,7 +258,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           const city = (data?.city || "").trim();
           if (city) {
             window.localStorage.setItem("yb-city", city);
-            setLocationValue(city);
+            queueMicrotask(() => {
+              setLocationValue(city);
+            });
           }
         } catch {
           // best effort
@@ -271,7 +275,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
   useEffect(() => {
     if (locationOpen && !locationInput && locationValue !== "Your city") {
-      setLocationInput(locationValue);
+      queueMicrotask(() => {
+        setLocationInput(locationValue);
+      });
     }
   }, [locationOpen, locationInput, locationValue]);
 

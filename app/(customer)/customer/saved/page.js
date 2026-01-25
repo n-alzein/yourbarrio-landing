@@ -1,6 +1,5 @@
 import CustomerSavedClient from "./CustomerSavedClient";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,8 +7,8 @@ export const fetchCache = "force-no-store";
 // User-specific saved listings must render per-request to avoid cross-user caching.
 
 async function getSavedListings() {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return { user: null, saved: [], error: userError?.message || null };

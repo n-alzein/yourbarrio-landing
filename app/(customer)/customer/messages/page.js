@@ -105,7 +105,7 @@ export default function CustomerMessagesPage() {
         setLoading(false);
       }
     }
-  }, [authStatus, userId]);
+  }, [applyLocalRead, authStatus, userId]);
 
   useEffect(() => {
     return () => {

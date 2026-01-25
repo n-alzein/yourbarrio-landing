@@ -1,22 +1,20 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { getCookieBaseOptions } from "@/lib/authCookies";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import {
+  createSupabaseRouteHandlerClient,
+  getUserCached,
+  isRefreshTokenAlreadyUsedError,
+} from "@/lib/supabaseServer";
+import { clearSupabaseCookies } from "@/lib/authCookies";
 
 export async function POST(request) {
   const debugAuth = process.env.DEBUG_AUTH === "true";
   const startedAt = Date.now();
   const requestUrl = request.url;
   const response = NextResponse.json({ ok: true }, { status: 200 });
-  const isProd = process.env.NODE_ENV === "production";
   const debug = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   let body = {};
-  const cookieBaseOptions = getCookieBaseOptions({
-    host: request.headers.get("host"),
-    isProd,
-  });
 
   try {
     body = await request.json();
@@ -27,25 +25,7 @@ export async function POST(request) {
   const accessToken = body?.access_token;
   const refreshToken = body?.refresh_token;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, {
-              ...options,
-              ...cookieBaseOptions,
-            });
-          });
-        },
-      },
-    }
-  );
+  const supabase = createSupabaseRouteHandlerClient(request, response);
 
   try {
     if (accessToken && refreshToken) {
@@ -53,13 +33,41 @@ export async function POST(request) {
         console.log("[auth/refresh] setSession with provided tokens");
       }
 
-      await supabase.auth.setSession({
+      const { error: setSessionError } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
+      if (setSessionError && isRefreshTokenAlreadyUsedError(setSessionError)) {
+        const reset = NextResponse.json(
+          { ok: false, error: "session_out_of_sync" },
+          { status: 401 }
+        );
+        clearSupabaseCookies(reset, request, {
+          isProd: process.env.NODE_ENV === "production",
+        });
+        console.warn("[AUTH_DIAG] refresh_token_already_used", {
+          pathname: new URL(request.url).pathname,
+          message: setSessionError?.message,
+        });
+        return reset;
+      }
     }
 
-    const { user, error } = await safeGetUser(supabase);
+    const { user, error } = await getUserCached(supabase);
+    if (error && isRefreshTokenAlreadyUsedError(error)) {
+      const reset = NextResponse.json(
+        { ok: false, error: "session_out_of_sync" },
+        { status: 401 }
+      );
+      clearSupabaseCookies(reset, request, {
+        isProd: process.env.NODE_ENV === "production",
+      });
+      console.warn("[AUTH_DIAG] refresh_token_already_used", {
+        pathname: new URL(request.url).pathname,
+        message: error?.message,
+      });
+      return reset;
+    }
 
     if (debug) {
       console.log("[auth/refresh] user after refresh", Boolean(user), error);

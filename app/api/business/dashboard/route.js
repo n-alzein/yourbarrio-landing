@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 
 const SALES_STATUSES = ["fulfilled", "completed"];
 
@@ -75,8 +74,8 @@ const mapOrderTab = (status) => {
 };
 
 export async function GET(request) {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,5 +1,5 @@
 import { getUser } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
 
 
 export async function GET(request, { params }) {
@@ -13,7 +13,7 @@ export async function GET(request, { params }) {
     }
     return new Response("Unauthorized", { status: 401 });
   }
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
 
   const { data } = await supabase
     .from("users")
@@ -37,7 +37,7 @@ export async function PUT(request, { params }) {
   }
 
   const updates = await request.json();
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
 
 
   const { data, error } = await supabase
@@ -53,7 +53,7 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const user = await getUser(request);
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
 
   if (!user) {
     if (process.env.NEXT_PUBLIC_AUTH_DIAG === "1") {

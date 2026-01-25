@@ -1,14 +1,15 @@
 // middleware.js
 import { NextResponse } from "next/server";
-import { getCookieName } from "./lib/supabaseClient";
+import { clearSupabaseCookies, getSbCookieNamesFromRequest } from "@/lib/authCookies";
+import { updateSession } from "@/lib/supabase/middleware";
 
-export function middleware(request) {
+export async function middleware(request) {
   const diagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
   const pathname = request.nextUrl.pathname;
+  const isApiRoute = pathname.startsWith("/api/");
   if (
-    pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
     pathname.startsWith("/images/") ||
@@ -24,15 +25,9 @@ export function middleware(request) {
   if (isPublicBusinessRoute) {
     return NextResponse.next();
   }
-  const cookieName = getCookieName();
-  const cookieNames = request.cookies.getAll().map((cookie) => cookie.name);
-  const hasAuthCookie = cookieName
-    ? cookieNames.some(
-        (name) => name === cookieName || name.startsWith(`${cookieName}.`)
-      )
-    : false;
+  const hasAuthCookie = getSbCookieNamesFromRequest(request).length > 0;
 
-  if (!hasAuthCookie) {
+  if (!isApiRoute && !hasAuthCookie) {
     const redirectUrl = new URL("/?redirected=1", request.url);
     if (diagEnabled) {
       console.warn("[AUTH_DIAG] route_guard:redirect", {
@@ -44,7 +39,32 @@ export function middleware(request) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  const response = NextResponse.next();
+  if (pathname.startsWith("/api/auth/") || pathname === "/api/logout") {
+    return NextResponse.next();
+  }
+
+  const response = await updateSession(request);
+  const refreshError = response.headers.get("x-supabase-refresh-error");
+  if (refreshError === "refresh_token_already_used") {
+    if (isApiRoute) {
+      const apiResponse = NextResponse.json(
+        { error: "session_refresh_failed" },
+        { status: 401 }
+      );
+      clearSupabaseCookies(apiResponse, request, {
+        isProd: process.env.NODE_ENV === "production",
+      });
+      return apiResponse;
+    }
+
+    const redirectUrl = new URL("/?redirected=1", request.url);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    clearSupabaseCookies(redirectResponse, request, {
+      isProd: process.env.NODE_ENV === "production",
+    });
+    return redirectResponse;
+  }
+
   if (diagEnabled) {
     const hasRsc =
       request.headers.get("RSC") === "1" ||
@@ -61,5 +81,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/customer/:path*", "/business/:path*"],
+  matcher: ["/api/:path*", "/customer/:path*", "/business/:path*"],
 };

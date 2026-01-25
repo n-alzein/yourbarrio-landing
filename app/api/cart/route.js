@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { safeGetUser } from "@/lib/auth/safeGetUser";
+import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
 async function getActiveCart(supabase, userId) {
@@ -30,8 +29,8 @@ function jsonError(message, status = 400, extra = {}) {
 }
 
 export async function GET() {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);
@@ -49,8 +48,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);
@@ -184,8 +183,8 @@ export async function POST(request) {
 }
 
 export async function PATCH(request) {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);
@@ -267,8 +266,8 @@ export async function PATCH(request) {
 }
 
 export async function DELETE() {
-  const supabase = await createSupabaseServerClient();
-  const { user, error: userError } = await safeGetUser(supabase);
+  const supabase = await getSupabaseServerClient();
+  const { user, error: userError } = await getUserCached(supabase);
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);

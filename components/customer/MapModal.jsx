@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -24,12 +24,7 @@ export default function MapModal({
   selectedBusiness,
   clickDiagEnabled,
 }) {
-  const [portalTarget, setPortalTarget] = useState(null);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    setPortalTarget(document.body);
-  }, []);
+  const portalTarget = typeof document === "undefined" ? null : document.body;
 
   useEffect(() => {
     if (!open) return undefined;
