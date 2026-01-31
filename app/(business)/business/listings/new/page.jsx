@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
-import { resolveCategoryIdByName } from "@/lib/categories";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export default function NewListingPage() {
@@ -17,12 +15,15 @@ export default function NewListingPage() {
     title: "",
     description: "",
     price: "",
-    category: "",
+    categoryId: "",
     inventoryQuantity: "",
     inventoryStatus: "in_stock",
     lowStockThreshold: "",
   });
 
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState("");
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -51,6 +52,49 @@ export default function NewListingPage() {
     },
     [photoPreviews]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCategories() {
+      setCategoriesLoading(true);
+      setCategoriesError("");
+
+      try {
+        const client = getSupabaseBrowserClient() ?? supabase;
+        if (!client) {
+          throw new Error("Connection not ready. Please try again.");
+        }
+
+        const { data, error } = await client
+          .from("business_categories")
+          .select("id,name,slug")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
+
+        if (error) throw error;
+
+        if (isMounted) {
+          setCategories(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error("Failed to load categories", err);
+        if (isMounted) {
+          setCategoriesError(
+            err.message || "Unable to load categories. Please refresh."
+          );
+        }
+      } finally {
+        if (isMounted) setCategoriesLoading(false);
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
 
   const handleAddPhotos = (files) => {
     const incoming = Array.from(files || []);
@@ -136,6 +180,11 @@ export default function NewListingPage() {
       return;
     }
 
+    if (!form.categoryId) {
+      setSubmitError("Please select a category.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -160,14 +209,16 @@ export default function NewListingPage() {
         throw bizError;
       }
 
-      const categoryId = await resolveCategoryIdByName(client, form.category);
+      const selectedCategory = categories.find(
+        (category) => category.id === form.categoryId
+      );
       const insertQuery = client.from("listings").insert({
         business_id: accountId,
         title: form.title,
         description: form.description,
         price: form.price,
-        category: form.category,
-        category_id: categoryId,
+        category: selectedCategory?.name || null,
+        category_id: form.categoryId,
         inventory_status: form.inventoryStatus,
         inventory_quantity:
           form.inventoryStatus === "out_of_stock"
@@ -341,19 +392,25 @@ export default function NewListingPage() {
                 <select
                   id="listing-category"
                   className={selectBase}
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  value={form.categoryId}
+                  onChange={(e) =>
+                    setForm({ ...form, categoryId: e.target.value })
+                  }
                   required
+                  disabled={categoriesLoading}
                 >
                   <option value="" className="text-black">
-                    Select category
+                    {categoriesLoading ? "Loading categories..." : "Select category"}
                   </option>
-                  {BUSINESS_CATEGORIES.map((cat) => (
-                    <option key={cat.slug} value={cat.name} className="text-black">
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id} className="text-black">
                       {cat.name}
                     </option>
                   ))}
                 </select>
+                {categoriesError && (
+                  <p className="text-xs text-red-200 mt-2">{categoriesError}</p>
+                )}
               </div>
 
               <div>
