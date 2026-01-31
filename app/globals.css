@@ -618,6 +618,19 @@ html, body {
   overflow: hidden;
   border-radius: 1rem;
 }
+
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea,
+  select,
+  [contenteditable="true"],
+  [contenteditable=""] {
+    font-size: 16px;
+  }
+}
 .home-map-shell .gm-style,
 .home-map-shell .gm-style * {
   max-width: 100%;

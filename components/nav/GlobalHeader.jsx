@@ -358,7 +358,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                   value={locationInput}
                   onChange={(event) => setLocationInput(event.target.value)}
                   placeholder="e.g. Austin, 78701"
-                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
                 <button
                   type="button"
@@ -397,7 +397,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                 name="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 bg-transparent pr-12 text-sm placeholder:text-white/60 focus:outline-none"
+                className="flex-1 bg-transparent pr-12 text-base md:text-sm placeholder:text-white/60 focus:outline-none"
                 placeholder="Search YourBarrio"
                 type="search"
               />
@@ -429,7 +429,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                       value={selectedCategory}
                       onChange={handleCategoryChange}
                       style={{ width: `${categorySelectWidth}ch` }}
-                      className="appearance-none bg-transparent pr-7 text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
+                      className="appearance-none bg-transparent pr-7 text-base md:text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
                     >
                       {SEARCH_CATEGORIES.map((category) => (
                         <option key={category} value={category} className="text-black">

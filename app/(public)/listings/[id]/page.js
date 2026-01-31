@@ -607,7 +607,7 @@ export default function ListingDetails({ params }) {
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
                   disabled={isOutOfStock}
-                  className="w-full rounded-xl px-3 py-2 text-sm font-semibold"
+                  className="w-full rounded-xl px-3 py-2 text-base md:text-sm font-semibold"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
                   {Array.from({ length: 5 }).map((_, idx) => (

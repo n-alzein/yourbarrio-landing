@@ -24,6 +24,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className="theme-light" data-scroll-behavior="smooth">
       <head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1"
+        />
         {imageHosts.map((host) => (
           <link key={`preconnect-${host}`} rel="preconnect" href={host} />
         ))}

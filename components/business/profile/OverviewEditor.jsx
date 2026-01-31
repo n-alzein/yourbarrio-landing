@@ -367,7 +367,7 @@ export default function OverviewEditor({
     }
   };
 
-  const inputClass = `w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-4 ${tone.input}`;
+  const inputClass = `w-full rounded-xl border px-4 py-2 text-base md:text-sm focus:outline-none focus:ring-4 ${tone.input}`;
   const labelClass = `text-xs font-semibold uppercase tracking-[0.18em] ${tone.textSoft}`;
 
   return (
@@ -524,7 +524,7 @@ export default function OverviewEditor({
                             <select
                               value={dayHours.open}
                               onChange={handleHourChange(key, "open")}
-                              className={`flex-1 min-w-[100px] rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${tone.input}`}
+                              className={`flex-1 min-w-[100px] rounded-lg border px-2 py-1.5 text-base md:text-sm focus:outline-none focus:ring-2 ${tone.input}`}
                             >
                               <option value="">Opens</option>
                               {TIME_OPTIONS.map((opt) => (
@@ -537,7 +537,7 @@ export default function OverviewEditor({
                             <select
                               value={dayHours.close}
                               onChange={handleHourChange(key, "close")}
-                              className={`flex-1 min-w-[100px] rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${tone.input}`}
+                              className={`flex-1 min-w-[100px] rounded-lg border px-2 py-1.5 text-base md:text-sm focus:outline-none focus:ring-2 ${tone.input}`}
                             >
                               <option value="">Closes</option>
                               {TIME_OPTIONS.map((opt) => (

@@ -264,7 +264,7 @@ export default function CheckoutPage() {
                     onChange={handleChange}
                     placeholder="Street address"
                     required
-                    className="rounded-xl px-3 py-2 text-sm md:col-span-2"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm md:col-span-2"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   />
                   <input
@@ -272,7 +272,7 @@ export default function CheckoutPage() {
                     value={form.delivery_address2}
                     onChange={handleChange}
                     placeholder="Apt, suite, etc."
-                    className="rounded-xl px-3 py-2 text-sm md:col-span-2"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm md:col-span-2"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   />
                   <input
@@ -280,7 +280,7 @@ export default function CheckoutPage() {
                     value={form.delivery_city}
                     onChange={handleChange}
                     placeholder="City"
-                    className="rounded-xl px-3 py-2 text-sm"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   />
                   <input
@@ -288,7 +288,7 @@ export default function CheckoutPage() {
                     value={form.delivery_state}
                     onChange={handleChange}
                     placeholder="State"
-                    className="rounded-xl px-3 py-2 text-sm"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   />
                   <input
@@ -296,14 +296,14 @@ export default function CheckoutPage() {
                     value={form.delivery_postal_code}
                     onChange={handleChange}
                     placeholder="Postal code"
-                    className="rounded-xl px-3 py-2 text-sm"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   />
                   <select
                     name="delivery_time"
                     value={form.delivery_time}
                     onChange={handleChange}
-                    className="rounded-xl px-3 py-2 text-sm"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   >
                     {TIME_OPTIONS.map((option) => (
@@ -336,7 +336,7 @@ export default function CheckoutPage() {
                     name="pickup_time"
                     value={form.pickup_time}
                     onChange={handleChange}
-                    className="rounded-xl px-3 py-2 text-sm"
+                    className="rounded-xl px-3 py-2 text-base md:text-sm"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   >
                     {TIME_OPTIONS.map((option) => (

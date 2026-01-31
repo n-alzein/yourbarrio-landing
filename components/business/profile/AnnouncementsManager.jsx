@@ -230,7 +230,7 @@ export default function AnnouncementsManager({
               type="text"
               value={form.title}
               onChange={handleChange("title")}
-              className={`w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-4 ${tone.input}`}
+              className={`w-full rounded-xl border px-4 py-2 text-base md:text-sm focus:outline-none focus:ring-4 ${tone.input}`}
             />
           </div>
           <div>
@@ -241,7 +241,7 @@ export default function AnnouncementsManager({
               value={form.body}
               onChange={handleChange("body")}
               rows={4}
-              className={`w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-4 ${tone.input}`}
+              className={`w-full rounded-xl border px-4 py-2 text-base md:text-sm focus:outline-none focus:ring-4 ${tone.input}`}
             />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -253,7 +253,7 @@ export default function AnnouncementsManager({
                 type="datetime-local"
                 value={form.starts_at}
                 onChange={handleChange("starts_at")}
-                className={`w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-4 ${tone.input}`}
+                className={`w-full rounded-xl border px-4 py-2 text-base md:text-sm focus:outline-none focus:ring-4 ${tone.input}`}
               />
             </div>
             <div>
@@ -264,7 +264,7 @@ export default function AnnouncementsManager({
                 type="datetime-local"
                 value={form.ends_at}
                 onChange={handleChange("ends_at")}
-                className={`w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-4 ${tone.input}`}
+                className={`w-full rounded-xl border px-4 py-2 text-base md:text-sm focus:outline-none focus:ring-4 ${tone.input}`}
               />
             </div>
           </div>

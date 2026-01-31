@@ -32,7 +32,7 @@ export default function MessageComposer({ onSend, disabled }) {
         onChange={(event) => setValue(event.target.value)}
         placeholder="Write a message..."
         rows={2}
-        className="flex-1 resize-none rounded-2xl bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/50 focus:outline-none"
+        className="flex-1 resize-none rounded-2xl bg-white/10 px-4 py-3 text-base md:text-sm text-white placeholder:text-white/50 focus:outline-none"
       />
       <button
         type="submit"

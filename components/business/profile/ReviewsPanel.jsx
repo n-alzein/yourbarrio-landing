@@ -276,7 +276,7 @@ export default function ReviewsPanel({
                     value={replyBody}
                     onChange={(event) => setReplyBody(event.target.value)}
                     placeholder="Write a reply..."
-                    className={`w-full min-h-[110px] rounded-lg border ${tone.cardBorder} ${tone.cardSoft} px-3 py-2 text-sm ${tone.textStrong} placeholder:text-slate-400 dark:placeholder:text-white/40`}
+                    className={`w-full min-h-[110px] rounded-lg border ${tone.cardBorder} ${tone.cardSoft} px-3 py-2 text-base md:text-sm ${tone.textStrong} placeholder:text-slate-400 dark:placeholder:text-white/40`}
                     maxLength={800}
                   />
                   {replyError ? (

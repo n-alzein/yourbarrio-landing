@@ -663,14 +663,14 @@ export default function BusinessReviewsPanel({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Title (optional)"
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
             maxLength={80}
           />
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Write your review (optional)"
-            className="w-full min-h-[120px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+            className="w-full min-h-[120px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
             maxLength={800}
           />
           {submitError ? (
@@ -804,14 +804,14 @@ export default function BusinessReviewsPanel({
                     value={editTitle}
                     onChange={(event) => setEditTitle(event.target.value)}
                     placeholder="Title (optional)"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
                     maxLength={80}
                   />
                   <textarea
                     value={editBody}
                     onChange={(event) => setEditBody(event.target.value)}
                     placeholder="Write your review (optional)"
-                    className="w-full min-h-[120px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+                    className="w-full min-h-[120px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
                     maxLength={800}
                   />
                   {editError ? (
