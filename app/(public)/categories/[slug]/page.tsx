@@ -12,7 +12,7 @@ type SupabaseListing = {
   title?: string | null;
   price?: number | string | null;
   category?: string | null;
-  category_info?: { name?: string | null; slug?: string | null } | null;
+  category_info?: { name?: string | null; slug?: string | null }[] | null;
   city?: string | null;
   photo_url?: string | null;
   created_at?: string | null;
@@ -102,7 +102,7 @@ export default async function CategoryListingsPage({
     error: listingsError?.message,
   });
   const title =
-    listings[0]?.category_info?.name ||
+    listings[0]?.category_info?.[0]?.name ||
     listings[0]?.category ||
     categoryName;
 
