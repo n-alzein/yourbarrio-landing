@@ -1,45 +1,42 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { CompareMode, DashboardFilters, DateRangeKey } from "@/lib/dashboardTypes";
+import type { DashboardFilters, DateRangeKey } from "@/lib/dashboardTypes";
 
 const DATE_RANGES: { value: DateRangeKey; label: string }[] = [
-  { value: "today", label: "Today" },
   { value: "7d", label: "7d" },
   { value: "30d", label: "30d" },
-  { value: "custom", label: "Custom" },
-];
-
-const COMPARE_OPTIONS: { value: CompareMode; label: string }[] = [
-  { value: "previous", label: "Previous" },
-  { value: "yoy", label: "YoY" },
-  { value: "none", label: "Off" },
 ];
 
 type DateRangeControlsProps = {
   dateRange: DateRangeKey;
-  compareMode: CompareMode;
   filters: DashboardFilters;
   categories: string[];
   businessName?: string;
+  businessAvatarUrl?: string | null;
   lastUpdated: string;
   onDateRangeChange: (value: DateRangeKey) => void;
-  onCompareModeChange: (value: CompareMode) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
 };
 
 const DateRangeControls = ({
   dateRange,
-  compareMode,
   filters,
   categories,
   businessName,
+  businessAvatarUrl,
   lastUpdated,
   onDateRangeChange,
-  onCompareModeChange,
   onFiltersChange,
 }: DateRangeControlsProps) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const displayName = businessName || "YourBarrio";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 
   const activeFilters = useMemo(() => {
     return (
@@ -64,16 +61,29 @@ const DateRangeControls = ({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Overview
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {(businessName || "YourBarrio")} Command Center
-          </h1>
-          <p className="text-sm text-slate-600">
-            Fast scan of revenue, conversion, and inventory signals.
-          </p>
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-xs font-semibold uppercase text-white">
+            {businessAvatarUrl ? (
+              <img
+                src={businessAvatarUrl}
+                alt={`${displayName} avatar`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initials || "BY"
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Overview
+            </p>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              {displayName} Command Center
+            </h1>
+            <p className="text-sm text-slate-600">
+              Fast scan of revenue, conversion, and inventory signals.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div
@@ -92,27 +102,6 @@ const DateRangeControls = ({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
                 aria-pressed={dateRange === option.value}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <div
-            className="flex items-center rounded-full border border-[var(--border)] bg-white/80 p-1"
-            role="group"
-            aria-label="Compare"
-          >
-            {COMPARE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => onCompareModeChange(option.value)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${
-                  compareMode === option.value
-                    ? "bg-slate-900 text-white dashboard-toggle-active"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                aria-pressed={compareMode === option.value}
               >
                 {option.label}
               </button>

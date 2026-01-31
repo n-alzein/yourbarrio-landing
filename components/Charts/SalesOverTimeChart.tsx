@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Area,
-  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -14,7 +14,6 @@ import { chartColorTokens } from "@/lib/dashboardTypes";
 
 type SalesOverTimeChartProps = {
   data: TimeSeriesPoint[];
-  compareEnabled: boolean;
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -41,7 +40,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-const SalesOverTimeChart = ({ data, compareEnabled }: SalesOverTimeChartProps) => {
+const SalesOverTimeChart = ({ data }: SalesOverTimeChartProps) => {
   return (
     <div className="relative h-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
       <div className="flex items-center justify-between">
@@ -54,15 +53,16 @@ const SalesOverTimeChart = ({ data, compareEnabled }: SalesOverTimeChartProps) =
       </div>
       <div className="mt-6 h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+          <BarChart
+            data={data}
+            margin={{ top: 10, right: 16, left: -10, bottom: 0 }}
+            barCategoryGap="28%"
+            barGap={6}
+          >
             <defs>
               <linearGradient id="salesPrimary" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={chartColorTokens.primary} stopOpacity={0.4} />
-                <stop offset="100%" stopColor={chartColorTokens.primary} stopOpacity={0.05} />
-              </linearGradient>
-              <linearGradient id="salesCompare" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={chartColorTokens.compare} stopOpacity={0.35} />
-                <stop offset="100%" stopColor={chartColorTokens.compare} stopOpacity={0.04} />
+                <stop offset="0%" stopColor={chartColorTokens.primary} stopOpacity={0.9} />
+                <stop offset="100%" stopColor={chartColorTokens.primary} stopOpacity={0.35} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="4 4" stroke="var(--dashboard-chart-grid)" vertical={false} />
@@ -78,29 +78,13 @@ const SalesOverTimeChart = ({ data, compareEnabled }: SalesOverTimeChartProps) =
               tick={{ fontSize: 11, fill: "var(--dashboard-chart-axis)" }}
             />
             <Tooltip content={<CustomTooltip />} />
-            {compareEnabled && (
-              <Area
-                type="monotone"
-                dataKey="compareValue"
-                name="Compare"
-                stroke={chartColorTokens.compare}
-                strokeWidth={2}
-                fill="url(#salesCompare)"
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            )}
-            <Area
-              type="monotone"
+            <Bar
               dataKey="value"
               name="Sales"
-              stroke={chartColorTokens.primary}
-              strokeWidth={2.5}
               fill="url(#salesPrimary)"
-              dot={false}
-              activeDot={{ r: 4 }}
+              radius={[6, 6, 0, 0]}
             />
-          </AreaChart>
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>

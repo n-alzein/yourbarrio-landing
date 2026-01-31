@@ -127,7 +127,7 @@ export async function GET(request) {
         .limit(8),
       supabase
         .from("users")
-        .select("business_name, full_name")
+        .select("business_name, full_name, profile_photo_url")
         .eq("id", user.id)
         .maybeSingle(),
     ]);
@@ -400,6 +400,7 @@ export async function GET(request) {
         businessRes.data?.business_name ||
         businessRes.data?.full_name ||
         "YourBarrio",
+      businessAvatarUrl: businessRes.data?.profile_photo_url || null,
     },
     { status: 200 }
   );

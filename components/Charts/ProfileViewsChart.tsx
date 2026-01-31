@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Line,
-  LineChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -14,7 +14,6 @@ import { chartColorTokens } from "@/lib/dashboardTypes";
 
 type ProfileViewsChartProps = {
   data: TimeSeriesPoint[];
-  compareEnabled: boolean;
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -41,7 +40,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-const ProfileViewsChart = ({ data, compareEnabled }: ProfileViewsChartProps) => {
+const ProfileViewsChart = ({ data }: ProfileViewsChartProps) => {
   return (
     <div className="relative h-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
       <div className="flex items-center justify-between">
@@ -54,7 +53,12 @@ const ProfileViewsChart = ({ data, compareEnabled }: ProfileViewsChartProps) => 
       </div>
       <div className="mt-6 h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+          <BarChart
+            data={data}
+            margin={{ top: 10, right: 16, left: -10, bottom: 0 }}
+            barCategoryGap="30%"
+            barGap={6}
+          >
             <CartesianGrid strokeDasharray="4 4" stroke="var(--dashboard-chart-grid)" vertical={false} />
             <XAxis
               dataKey="date"
@@ -68,25 +72,13 @@ const ProfileViewsChart = ({ data, compareEnabled }: ProfileViewsChartProps) => 
               tick={{ fontSize: 11, fill: "var(--dashboard-chart-axis)" }}
             />
             <Tooltip content={<CustomTooltip />} />
-            {compareEnabled && (
-              <Line
-                type="monotone"
-                dataKey="compareValue"
-                name="Compare"
-                stroke={chartColorTokens.compare}
-                strokeWidth={2}
-                dot={false}
-              />
-            )}
-            <Line
-              type="monotone"
+            <Bar
               dataKey="value"
               name="Views"
-              stroke={chartColorTokens.primary}
-              strokeWidth={2.5}
-              dot={false}
+              fill={chartColorTokens.primary}
+              radius={[6, 6, 0, 0]}
             />
-          </LineChart>
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>

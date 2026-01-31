@@ -40,64 +40,75 @@ const RecentOrders = ({ orders }: RecentOrdersProps) => {
           View all
         </Link>
       </div>
-      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="overflow-x-auto">
-        <table className="dashboard-table dashboard-table--no-hover-dark w-full text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-            <tr>
-              <th className="px-4 py-3 text-left">Order</th>
-              <th className="px-4 py-3 text-left">Customer</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3 text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr
-                key={order.id}
-                className={`border-t border-slate-200 ${
-                  order.href ? "cursor-pointer hover:bg-slate-50" : ""
-                }`}
-                onClick={() => {
-                  if (order.href) router.push(order.href);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && order.href) {
-                    router.push(order.href);
-                  }
-                }}
-                tabIndex={order.href ? 0 : -1}
-                role={order.href ? "link" : "row"}
-              >
-                <td className="px-4 py-3 font-semibold text-slate-900">
-                  {order.href ? (
-                    <Link href={order.href} className="hover:text-slate-700">
-                      {order.id}
-                    </Link>
-                  ) : (
-                    order.id
-                  )}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {order.customerName}
-                  <div className="text-xs text-slate-400">{order.items} items</div>
-                </td>
-                <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                  {formatCurrency(order.total)}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <span
-                    className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
-                      statusTone[order.status]
-                    }`}
-                  >
-                    {order.status.replace("_", " ")}
-                  </span>
-                </td>
+      <div className="mt-6 h-72 overflow-hidden rounded-2xl border border-slate-200">
+        <div className="h-full overflow-auto">
+          <table className="dashboard-table dashboard-table--no-hover-dark w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-4 py-3 text-left">Order</th>
+                <th className="px-4 py-3 text-left">Customer</th>
+                <th className="px-4 py-3 text-right">Total</th>
+                <th className="px-4 py-3 text-right">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {orders.length === 0 ? (
+                <tr className="border-t border-slate-200">
+                  <td
+                    colSpan={4}
+                    className="px-4 py-10 text-center text-sm text-slate-500"
+                  >
+                    No data available yet.
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className={`border-t border-slate-200 ${
+                      order.href ? "cursor-pointer hover:bg-slate-50" : ""
+                    }`}
+                    onClick={() => {
+                      if (order.href) router.push(order.href);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && order.href) {
+                        router.push(order.href);
+                      }
+                    }}
+                    tabIndex={order.href ? 0 : -1}
+                    role={order.href ? "link" : "row"}
+                  >
+                    <td className="px-4 py-3 font-semibold text-slate-900">
+                      {order.href ? (
+                        <Link href={order.href} className="hover:text-slate-700">
+                          {order.id}
+                        </Link>
+                      ) : (
+                        order.id
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {order.customerName}
+                      <div className="text-xs text-slate-400">{order.items} items</div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      {formatCurrency(order.total)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span
+                        className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
+                          statusTone[order.status]
+                        }`}
+                      >
+                        {order.status.replace("_", " ")}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

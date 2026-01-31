@@ -6,12 +6,7 @@ import DateRangeControls from "@/components/DateRangeControls";
 import TopProductsTable from "@/components/TopProductsTable";
 import RecentOrders from "@/components/RecentOrders";
 import DashboardEmptyState from "@/components/DashboardEmptyState";
-import type {
-  CompareMode,
-  DashboardData,
-  DashboardFilters,
-  DateRangeKey,
-} from "@/lib/dashboardTypes";
+import type { DashboardData, DashboardFilters, DateRangeKey } from "@/lib/dashboardTypes";
 
 const ChartSkeleton = ({ title }: { title: string }) => (
   <div className="h-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
@@ -87,7 +82,6 @@ const DashboardPage = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
-  const [compareMode, setCompareMode] = useState<CompareMode>("previous");
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -98,7 +92,7 @@ const DashboardPage = () => {
       const query = new URLSearchParams({
         from,
         to,
-        compare: compareMode,
+        compare: "none",
       });
       if (filters.categories.length > 0) {
         query.set("categories", filters.categories.join(","));
@@ -125,22 +119,17 @@ const DashboardPage = () => {
       }
     };
     loadDashboard();
-  }, [dateRange, compareMode, filters, reloadKey]);
-
-  const compareEnabled = compareMode !== "none";
+  }, [dateRange, filters, reloadKey]);
 
   const dashboardContent = useMemo(() => {
     if (!data) return null;
     return (
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         <section className="xl:col-span-6">
-          <SalesOverTimeChart data={data.salesTimeSeries} compareEnabled={compareEnabled} />
+          <SalesOverTimeChart data={data.salesTimeSeries} />
         </section>
         <section className="xl:col-span-6">
-          <ProfileViewsChart
-            data={data.profileViewsTimeSeries}
-            compareEnabled={compareEnabled}
-          />
+          <ProfileViewsChart data={data.profileViewsTimeSeries} />
         </section>
         <section className="xl:col-span-6">
           <TopProductsTable products={data.topProducts} />
@@ -150,7 +139,7 @@ const DashboardPage = () => {
         </section>
       </div>
     );
-  }, [compareEnabled, data]);
+  }, [data]);
 
   return (
     <main
@@ -163,13 +152,12 @@ const DashboardPage = () => {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <DateRangeControls
           dateRange={dateRange}
-          compareMode={compareMode}
           filters={filters}
           categories={categories}
           businessName={data?.businessName}
+          businessAvatarUrl={data?.businessAvatarUrl}
           lastUpdated={data?.lastUpdated ?? "Just now"}
           onDateRangeChange={setDateRange}
-          onCompareModeChange={setCompareMode}
           onFiltersChange={setFilters}
         />
 

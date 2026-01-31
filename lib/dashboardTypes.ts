@@ -92,4 +92,5 @@ export type DashboardData = {
   recentOrders: RecentOrder[];
   categories: string[];
   businessName?: string;
+  businessAvatarUrl?: string | null;
 };

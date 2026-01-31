@@ -126,6 +126,8 @@ const recentOrders: RecentOrder[] = [
 
 export const mockDashboardData: DashboardData = {
   lastUpdated: "2024-10-18 09:42 AM",
+  businessName: "YourBarrio",
+  businessAvatarUrl: "/business-placeholder.png",
   salesTimeSeries: buildTimeSeries(30, 2100, 280, 0.08),
   profileViewsTimeSeries: buildTimeSeries(30, 860, 140, 0.1),
   topProducts,

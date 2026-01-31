@@ -16,13 +16,13 @@ export default function HeroBanner({ banner, imageUrl, priority = false }: HeroB
 
   return (
     <article className="relative overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl shadow-slate-900/30">
-      <div className="relative min-h-[200px] sm:min-h-[260px] lg:min-h-[300px]">
+      <div className="relative h-[200px] sm:h-[260px] lg:h-[340px] xl:h-[380px] 2xl:h-[420px] overflow-hidden">
         {imageUrl ? (
           <Image
             src={imageUrl}
             alt={title}
             fill
-            className="object-cover"
+            className="object-cover lg:object-[50%_20%] xl:object-[50%_25%]"
             sizes="(min-width: 1280px) 1120px, (min-width: 1024px) 920px, 100vw"
             priority={priority}
             quality={82}
@@ -33,7 +33,7 @@ export default function HeroBanner({ banner, imageUrl, priority = false }: HeroB
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent md:bg-gradient-to-r" />
         <div className="relative z-10 flex h-full items-end md:items-center">
           <div className="w-full px-6 py-8 sm:px-8 md:px-10 lg:px-12">
-            <div className="mx-auto flex max-w-xl flex-col items-center text-center md:items-start md:text-left">
+          <div className="mx-auto flex max-w-xl flex-col items-center text-center">
               <span className="text-xs uppercase tracking-[0.35em] text-white/70">
                 Featured
               </span>

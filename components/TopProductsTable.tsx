@@ -77,6 +77,8 @@ const TopProductsTable = ({ products }: TopProductsTableProps) => {
     getSortedRowModel: getSortedRowModel(),
   });
 
+  const rows = table.getRowModel().rows;
+
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
       <div className="flex items-center justify-between">
@@ -87,9 +89,10 @@ const TopProductsTable = ({ products }: TopProductsTableProps) => {
           <h3 className="text-lg font-semibold text-slate-900">Top products</h3>
         </div>
       </div>
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
-        <table className="dashboard-table dashboard-table--no-hover-dark w-full min-w-[520px] text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+      <div className="mt-6 h-72 overflow-hidden rounded-2xl border border-slate-200">
+        <div className="h-full overflow-auto">
+          <table className="dashboard-table dashboard-table--no-hover-dark w-full min-w-[520px] text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -128,28 +131,40 @@ const TopProductsTable = ({ products }: TopProductsTableProps) => {
                 ))}
               </tr>
             ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row) => (
-              <tr
-                key={row.id}
-                className="cursor-pointer border-t border-slate-200 hover:bg-slate-50"
-                onClick={() => router.push("/business/dashboard/products")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") router.push("/business/dashboard/products");
-                }}
-                tabIndex={0}
-                role="row"
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-3 text-slate-600">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr className="border-t border-slate-200">
+                  <td
+                    colSpan={columns.length}
+                    className="px-4 py-10 text-center text-sm text-slate-500"
+                  >
+                    No data available yet.
                   </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="cursor-pointer border-t border-slate-200 hover:bg-slate-50"
+                    onClick={() => router.push("/business/dashboard/products")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") router.push("/business/dashboard/products");
+                    }}
+                    tabIndex={0}
+                    role="row"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-3 text-slate-600">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
