@@ -16,7 +16,7 @@ export default async function CustomerHomePage() {
 
   return (
     <>
-      <div className="mt-0 -mt-14 md:-mt-12 mb-6 md:mb-8 relative z-10">
+      <div className="mt-0 md:-mt-12 mb-6 md:mb-8 relative z-10">
         <StrapiBannersServer />
       </div>
       <CustomerHomeClient

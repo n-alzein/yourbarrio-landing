@@ -25,18 +25,18 @@ export default function CategoryTilesGrid({
 
   if (isLoading) {
     return (
-      <div className="w-full px-0">
+      <div className="w-full px-0 sm:px-4 lg:px-0 max-w-none mx-auto">
         <div className="mb-4 flex items-center justify-between">
           <div className="h-6 w-40 rounded bg-white/10 animate-pulse" />
           <div className="h-4 w-20 rounded bg-white/10 animate-pulse" />
         </div>
-        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
+        <div className="grid gap-4 lg:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-3">
           {FALLBACK_TILES.map((_, idx) => (
             <div
               key={`tile-skeleton-${idx}`}
               className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
             >
-              <div className="aspect-[4/5] bg-white/10 animate-pulse" />
+              <div className="aspect-[4/5] lg:aspect-[16/9] bg-white/10 animate-pulse" />
               <div className="p-3">
                 <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
               </div>
@@ -49,7 +49,7 @@ export default function CategoryTilesGrid({
 
   if (!hasCategories) {
     return (
-      <div className="w-full px-0">
+      <div className="w-full px-0 sm:px-4 lg:px-0 max-w-none mx-auto">
         <div className="text-sm text-white/70 mt-2">
           {error ? "Categories are unavailable right now." : "No categories yet."}
         </div>
@@ -59,10 +59,10 @@ export default function CategoryTilesGrid({
 
   return (
     <>
-      <div className="w-full px-0">
+      <div className="w-full px-0 sm:px-4 lg:px-0 max-w-none mx-auto">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold text-white">
+            <h2 className="text-lg sm:text-xl lg:text-lg font-semibold text-white">
               {title}
             </h2>
             {error ? (
@@ -80,7 +80,7 @@ export default function CategoryTilesGrid({
           ) : null}
         </div>
         <div
-          className="grid gap-4 grid-cols-2 sm:grid-cols-3 yb-tile-scroll-guard-y"
+          className="grid gap-4 lg:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 yb-tile-scroll-guard-y"
           onPointerDown={onTilePointerDown}
           onPointerMove={onTilePointerMove}
           onPointerUp={onTilePointerUp}
@@ -110,7 +110,7 @@ export default function CategoryTilesGrid({
                 }
                 className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 pointer-events-auto touch-manipulation active:scale-[0.99] active:shadow-sm"
               >
-                <div className="relative aspect-[4/5] w-full overflow-hidden bg-white/5">
+                <div className="relative aspect-[4/5] lg:aspect-[16/9] w-full overflow-hidden bg-white/5">
                   {category.tileImageUrl ? (
                     <Image
                       src={category.tileImageUrl}
@@ -128,7 +128,7 @@ export default function CategoryTilesGrid({
                   )}
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-3">
-                    <h3 className="text-sm sm:text-base font-semibold !text-white drop-shadow-sm line-clamp-2">
+                    <h3 className="text-sm sm:text-base lg:text-sm font-semibold !text-white drop-shadow-sm line-clamp-2">
                       {tileTitle}
                     </h3>
                   </div>
