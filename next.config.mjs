@@ -40,6 +40,15 @@ const nextConfig = {
         port: "1337",
         pathname: "/uploads/**",
       },
+      {
+        protocol: "https",
+        hostname: "creative-badge-d8b6fbd0f6.strapiapp.com",
+        pathname: "/uploads/**",
+      },
+      {
+        protocol: "https",
+        hostname: "creative-badge-d8b6fbd0f6.media.strapiapp.com",
+      },
     ],
   },
   async headers() {

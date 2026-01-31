@@ -59,8 +59,19 @@ const resolveRole = (profile, user, fallbackRole) => {
   return profile?.role ?? fallbackRole ?? user?.app_metadata?.role ?? null;
 };
 
+const isPublicBusinessPath = (pathname) => {
+  if (!pathname) return false;
+  return (
+    pathname === "/business" ||
+    pathname === "/business/" ||
+    pathname.startsWith("/business/about") ||
+    pathname.startsWith("/business/login")
+  );
+};
+
 const isProtectedPath = (pathname) => {
   if (!pathname) return false;
+  if (isPublicBusinessPath(pathname)) return false;
   if (pathname.startsWith("/business/")) return true;
   if (pathname.startsWith("/customer")) return true;
   if (pathname.startsWith("/account")) return true;
@@ -700,13 +711,18 @@ export function AuthProvider({
   const parentAuth = useContext(AuthContext);
   const isNestedProviderRef = useRef(Boolean(parentAuth?.providerInstanceId));
   const isNestedProvider = isNestedProviderRef.current;
+  const pathname = usePathname();
   const authDiagEnabledLocal = useMemo(
     () =>
       process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
       process.env.NODE_ENV !== "production",
     []
   );
-  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const allowBootstrap = !pathname?.startsWith("/business-auth");
+  const supabase = useMemo(
+    () => (allowBootstrap ? getSupabaseBrowserClient() : null),
+    [allowBootstrap]
+  );
   const authState = useSyncExternalStore(
     subscribeAuthState,
     getAuthStateSnapshot,
@@ -719,7 +735,6 @@ export function AuthProvider({
     `auth-${Math.random().toString(36).slice(2, 10)}`
   );
   const authUiFailsafeTimerRef = useRef(null);
-  const pathname = usePathname();
   const router = useRouter();
   const lastKnownRoleRef = useRef(null);
 
@@ -777,7 +792,7 @@ export function AuthProvider({
       initialRole,
     });
 
-    if (!isNestedProvider) {
+    if (!isNestedProvider && allowBootstrap) {
       ensureAuthGuardSubscription();
       ensureAuthListener();
 
@@ -800,6 +815,7 @@ export function AuthProvider({
     isNestedProvider,
     supabase,
     authDiagEnabledLocal,
+    allowBootstrap,
   ]);
 
   useEffect(() => {
@@ -1144,6 +1160,7 @@ export function AuthProvider({
     if (typeof window === "undefined") return;
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
     if (!pathname) return;
+    if (!isProtectedPath(pathname)) return;
     if (pathname.startsWith("/business-auth")) return;
 
     const target = pathname.startsWith("/business/")

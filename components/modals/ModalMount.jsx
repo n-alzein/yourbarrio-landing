@@ -1,11 +1,5 @@
-"use client";
-
-import dynamic from "next/dynamic";
-
-const ModalProvider = dynamic(() => import("./ModalProviderClient"), {
-  ssr: false,
-});
+import ModalProviderClient from "./ModalProviderClient";
 
 export default function ModalMount({ children }) {
-  return <ModalProvider>{children}</ModalProvider>;
+  return <ModalProviderClient>{children}</ModalProviderClient>;
 }

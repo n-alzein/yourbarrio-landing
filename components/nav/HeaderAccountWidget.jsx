@@ -109,7 +109,7 @@ export default function HeaderAccountWidget({
     } catch {
       // best effort
     }
-  }, [supabase, canLoadUnread]);
+  }, [supabase, canLoadUnread, unreadUserId]);
 
   const scheduleUnreadRefresh = useCallback(() => {
     if (refreshTimerRef.current) {

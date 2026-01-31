@@ -1,32 +1,28 @@
-import { headers } from "next/headers";
 import StrapiBannersServer from "@/components/banners/StrapiBannersServer";
+import { fetchFeaturedCategories } from "@/lib/strapi";
 import CustomerHomeClient from "./CustomerHomeClient";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 300;
 
 export default async function CustomerHomePage() {
-  const headerList = await headers();
-  const host = headerList.get("x-forwarded-host") || headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") || "https";
-  const baseUrl = host ? `${proto}://${host}` : "";
-  const response = await fetch(`${baseUrl}/api/home-listings?limit=80`, {
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    console.warn("[HOME_LISTINGS_PROD] fetch failed", {
-      status: response.status,
-    });
+  let featuredCategories = [];
+  let featuredCategoriesError = null;
+  try {
+    featuredCategories = await fetchFeaturedCategories();
+  } catch (error) {
+    console.error("Failed to load featured categories:", error);
+    featuredCategoriesError = "We couldn't load categories right now.";
   }
-  const payload = await response.json().catch(() => ({}));
-  const initialListings = Array.isArray(payload?.listings) ? payload.listings : [];
 
   return (
     <>
-      <div className="mt-0 mb-8 md:mb-10 relative z-10">
+      <div className="mt-0 -mt-14 md:-mt-12 mb-6 md:mb-8 relative z-10">
         <StrapiBannersServer />
       </div>
-      <CustomerHomeClient initialListings={initialListings} />
+      <CustomerHomeClient
+        featuredCategories={featuredCategories}
+        featuredCategoriesError={featuredCategoriesError}
+      />
     </>
   );
 }

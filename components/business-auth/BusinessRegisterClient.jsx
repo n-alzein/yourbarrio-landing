@@ -1,16 +1,11 @@
 "use client";
 
-import { Suspense } from "react";
 import { useState, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
-import { useAuth } from "@/components/AuthProvider";
-import { getCookieName } from "@/lib/supabase/browser";
+import { getSupabaseAuthCookieName } from "@/lib/supabase/cookieName";
 import { PATHS } from "@/lib/auth/paths";
 
-function BusinessRegisterInner() {
-  const { supabase } = useAuth();
-  const searchParams = useSearchParams();
-  const isPopup = searchParams?.get("popup") === "1";
+function BusinessRegisterInner({ isPopup }) {
+  const supabaseRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const redirectingRef = useRef(false);
@@ -22,7 +17,7 @@ function BusinessRegisterInner() {
 
   const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
     if (typeof document === "undefined") return false;
-    const cookieName = getCookieName();
+    const cookieName = getSupabaseAuthCookieName();
     if (!cookieName) return false;
 
     const hasAuthCookie = () => {
@@ -82,9 +77,25 @@ function BusinessRegisterInner() {
     finishBusinessAuth();
   }, [finishBusinessAuth, waitForAuthCookie]);
 
+  const getSupabase = useCallback(async () => {
+    if (!supabaseRef.current) {
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+      supabaseRef.current = getSupabaseBrowserClient();
+    }
+    return supabaseRef.current;
+  }, []);
+
   async function handleRegister(e) {
     e.preventDefault();
     setLoading(true);
+    let supabase = null;
+    try {
+      supabase = await getSupabase();
+    } catch {
+      alert("Auth client not ready. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -154,7 +165,14 @@ function BusinessRegisterInner() {
 
   async function handleGoogle() {
     setLoading(true);
-
+    let supabase = null;
+    try {
+      supabase = await getSupabase();
+    } catch {
+      alert("Auth client not ready. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
     const origin =
       typeof window !== "undefined" ? window.location.origin : "";
 
@@ -205,7 +223,9 @@ function BusinessRegisterInner() {
 
         <div className="my-6 flex items-center gap-4">
           <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs text-white/50">or</span>
+          <span className="text-xs" style={{ color: "#94a3b8" }}>
+            or
+          </span>
           <div className="h-px flex-1 bg-white/10" />
         </div>
 
@@ -215,7 +235,8 @@ function BusinessRegisterInner() {
             placeholder="Business name"
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 placeholder:text-slate-400"
+            style={{ color: "#94a3b8" }}
             required
           />
 
@@ -224,7 +245,8 @@ function BusinessRegisterInner() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 placeholder:text-slate-400"
+            style={{ color: "#94a3b8" }}
             required
           />
 
@@ -233,14 +255,15 @@ function BusinessRegisterInner() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white"
+            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 placeholder:text-slate-400"
+            style={{ color: "#94a3b8" }}
             required
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl font-semibold bg-indigo-500 text-white hover:bg-indigo-400 transition"
+            className="yb-auth-cta w-full py-3 rounded-xl font-semibold bg-indigo-500 hover:bg-indigo-400 transition"
           >
             {loading ? "Creating..." : "Create account"}
           </button>
@@ -250,10 +273,6 @@ function BusinessRegisterInner() {
   );
 }
 
-export default function BusinessRegisterClient() {
-  return (
-    <Suspense fallback={<div className="w-full max-w-2xl min-h-[420px]" />}>
-      <BusinessRegisterInner />
-    </Suspense>
-  );
+export default function BusinessRegisterClient({ isPopup = false }) {
+  return <BusinessRegisterInner isPopup={isPopup} />;
 }

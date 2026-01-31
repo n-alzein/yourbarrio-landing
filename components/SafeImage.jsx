@@ -13,6 +13,7 @@ export default function SafeImage({
   useNextImage = false,
   ...rest
 }) {
+  const { fill, ...imgRest } = rest;
   const resolvedFallback = useMemo(
     () => fallbackSrc || "/business-placeholder.png",
     [fallbackSrc]
@@ -43,13 +44,13 @@ export default function SafeImage({
   };
 
   const isPlaceholder = currentSrc === resolvedFallback;
-  const canUseNextImage =
-    useNextImage && (rest.fill || (rest.width && rest.height));
+  const canUseNextImage = useNextImage && (fill || (rest.width && rest.height));
 
   if (canUseNextImage) {
     return (
       <Image
         {...rest}
+        fill={fill}
         src={currentSrc}
         alt={alt}
         data-placeholder={isPlaceholder ? "true" : undefined}
@@ -61,7 +62,7 @@ export default function SafeImage({
 
   return (
     <img
-      {...rest}
+      {...imgRest}
       src={currentSrc}
       alt={alt}
       data-placeholder={isPlaceholder ? "true" : undefined}

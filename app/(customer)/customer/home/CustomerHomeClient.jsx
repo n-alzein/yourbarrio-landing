@@ -9,7 +9,6 @@
   Protocol: build prod, toggle one flag to 0 (or SAFE_NAV to 1), rebuild, and observe whether anchor clicks still get defaultPrevented. If a flag fixes it, the associated module is the culprit.
 */
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import { useSearchParams } from "next/navigation";
@@ -28,9 +27,10 @@ import {
 import { installPreventDefaultTracer } from "@/lib/tracePreventDefault";
 import { installHomeNavInstrumentation } from "@/lib/navInstrumentation";
 import { appendCrashLog } from "@/lib/crashlog";
-import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
-import { useGridVirtualRows } from "@/components/home/useGridVirtualRows";
+import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
+import { resolveCategoryIdByName } from "@/lib/categories";
 import { logDataDiag } from "@/lib/dataDiagnostics";
+import CategoryTilesGrid from "@/components/customer/CategoryTilesGrid";
 
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 function HomeGuardFallback() {
@@ -111,12 +111,11 @@ class CustomerHomeErrorBoundary extends React.Component {
   }
 }
 
-function CustomerHomePageInner({ initialListings: initialListingsProp }) {
+function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) {
   const searchParams = useSearchParams();
   const { user, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
-  const VIRTUALIZE = process.env.NEXT_PUBLIC_HOME_VIRTUALIZE === "1";
   const textTone = useMemo(
     () => ({
       base: isLight ? "text-slate-900" : "text-white",
@@ -139,50 +138,16 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     safeNav: process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1",
     tileDiag: process.env.NEXT_PUBLIC_HOME_BISECT_TILE_DIAG !== "0",
   };
-  const initialListingsFromStorage = (() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const cached = sessionStorage.getItem("yb_customer_home_listings");
-      const parsed = cached ? JSON.parse(cached) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
-  const hasInitialListings = Array.isArray(initialListingsProp);
-  const resolvedInitialListings = hasInitialListings
-    ? initialListingsProp
-    : initialListingsFromStorage;
+  const featuredCategoryList = useMemo(
+    () => (Array.isArray(featuredCategories) ? featuredCategories : []),
+    [featuredCategories]
+  );
+  const featuredCategoriesLoading = featuredCategories == null;
   const [hybridItems, setHybridItems] = useState([]);
   const [hybridItemsLoading, setHybridItemsLoading] = useState(false);
   const [hybridItemsError, setHybridItemsError] = useState(null);
-  const [allListings, setAllListings] = useState(resolvedInitialListings);
-  const [allListingsLoading, setAllListingsLoading] = useState(
-    !hasInitialListings && resolvedInitialListings.length === 0
-  );
-  const [hasLoadedListings, setHasLoadedListings] = useState(
-    hasInitialListings || resolvedInitialListings.length > 0
-  );
-  const [isVisible, setIsVisible] = useState(() =>
-    typeof document === "undefined" ? true : !document.hidden
-  );
-  const allListingsFetchedRef = useRef(false);
-  const allListingsRequestIdRef = useRef(0);
   const hybridRequestIdRef = useRef(0);
   const authReady = !loadingUser || !!user;
-  const gridContainerRef = useRef(null);
-  const [gridColumns, setGridColumns] = useState(() => {
-    if (typeof window === "undefined") return 4;
-    const width = window.innerWidth;
-    if (width >= 1280) return 6;
-    if (width >= 1024) return 5;
-    if (width >= 768) return 4;
-    if (width >= 640) return 3;
-    return 2;
-  });
-  const [rowHeight, setRowHeight] = useState(360);
-  const [rowGap, setRowGap] = useState(12);
-  const [supportsContentVisibility, setSupportsContentVisibility] = useState(false);
   const tileDragState = useRef({
     pointerId: null,
     pointerType: null,
@@ -191,6 +156,9 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     dragging: false,
     lastDragAt: 0,
   });
+  const [, setIsVisible] = useState(() =>
+    typeof document === "undefined" ? true : !document.hidden
+  );
   const logCrashEvent = useCallback(
     (payload) =>
       appendCrashLog({
@@ -200,29 +168,6 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
     []
   );
 
-  useEffect(() => {
-    if (process.env.NEXT_PUBLIC_HOME_GRID_DIAG !== "1") return undefined;
-    // DEV-ONLY: track unexpected remounts while scrolling.
-    console.log("[HOME_GRID_DIAG] grid mounted");
-    return () => {
-      console.log("[HOME_GRID_DIAG] grid unmounted");
-    };
-  }, []);
-
-  useEffect(() => {
-    const diagEnabled =
-      process.env.NEXT_PUBLIC_HOME_GRID_DIAG === "1" ||
-      process.env.NODE_ENV !== "production";
-    if (!diagEnabled) return;
-    console.log("[HOME_GRID_DIAG] initial listings", {
-      type: typeof initialListingsProp,
-      isArray: Array.isArray(initialListingsProp),
-      length: initialListingsProp?.length ?? null,
-    });
-    console.log("[HOME_GRID_DIAG] state listings", {
-      length: allListings.length,
-    });
-  }, [initialListingsProp, allListings.length]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -372,403 +317,19 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
     const urlCategory = (searchParams?.get("category") || "").trim();
+    const normalizedUrl = normalizeCategoryName(urlCategory).toLowerCase();
     const matchedCategory = BUSINESS_CATEGORIES.find(
-      (category) => category.toLowerCase() === urlCategory.toLowerCase()
+      (category) =>
+        normalizeCategoryName(category.name).toLowerCase() === normalizedUrl
     );
     setSearch(urlQuery);
-    setCategoryFilter(matchedCategory || "All");
+    setCategoryFilter(matchedCategory?.name || "All");
   }, [searchParams]);
-
-  // Guard against long/hung requests leaving loading on
-  useEffect(() => {
-    if (!allListingsLoading) return;
-    const timer = setTimeout(() => {
-      setAllListingsLoading(false);
-      logCrashEvent({
-        context: "all-listings",
-        kind: "timeout",
-        message: "All listings load exceeded 12s watchdog",
-      });
-    }, 12000);
-    return () => clearTimeout(timer);
-  }, [allListingsLoading, logCrashEvent]);
-
-  useEffect(() => {
-    if (hasInitialListings) return undefined;
-    if (!isVisible && allListingsFetchedRef.current) return undefined;
-    let active = true;
-    const loadAll = async () => {
-      const requestId = ++allListingsRequestIdRef.current;
-      allListingsFetchedRef.current = true;
-      const client = supabase ?? getSupabaseBrowserClient();
-      if (!client) {
-        setAllListingsLoading(false);
-        return;
-      }
-      setAllListingsLoading((prev) => (hasLoadedListings ? prev : true));
-      logDataDiag("request:start", { label: "home:listings", requestId });
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(
-          () => controller.abort(new DOMException("Timeout", "AbortError")),
-          12000
-        );
-        let query = client
-          .from("listings")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(80);
-        if (typeof query.abortSignal === "function") {
-          query = query.abortSignal(controller.signal);
-        }
-        const { data, error } = await query;
-        clearTimeout(timeoutId);
-        if (!active || requestId !== allListingsRequestIdRef.current) return;
-        if (error) {
-          console.error("Load all listings failed", error);
-          if (process.env.NEXT_PUBLIC_HOME_GRID_DIAG === "1") {
-            console.log("[HOME_GRID_DIAG] setAllListings(empty) due to error");
-          }
-          setAllListings([]);
-        } else {
-          const next = data || [];
-          if (process.env.NEXT_PUBLIC_HOME_GRID_DIAG === "1") {
-            console.log("[HOME_GRID_DIAG] setAllListings", { length: next.length });
-          }
-          setAllListings(next);
-          setHasLoadedListings(true);
-          if (typeof window !== "undefined") {
-            try {
-              sessionStorage.setItem(
-                "yb_customer_home_listings",
-                JSON.stringify(next)
-              );
-            } catch {
-              /* ignore cache errors */
-            }
-          }
-        }
-      } catch (err) {
-        if (active && requestId === allListingsRequestIdRef.current) {
-          if (err?.name === "AbortError") {
-            logCrashEvent({
-              context: "all-listings",
-              kind: "timeout",
-              message: "Listings query timed out after 12s",
-            });
-          } else {
-            console.error("Load all listings threw", err);
-          }
-          if (process.env.NEXT_PUBLIC_HOME_GRID_DIAG === "1") {
-            console.log("[HOME_GRID_DIAG] setAllListings(empty) due to exception");
-          }
-          setAllListings([]);
-        }
-      } finally {
-        if (active && requestId === allListingsRequestIdRef.current) {
-          setAllListingsLoading(false);
-          logDataDiag("request:finish", {
-            label: "home:listings",
-            requestId,
-          });
-        }
-      }
-    };
-    loadAll();
-    return () => {
-      active = false;
-    };
-  }, [supabase, hasLoadedListings, logCrashEvent, isVisible, hasInitialListings]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    setSupportsContentVisibility(
-      typeof CSS !== "undefined" &&
-        typeof CSS.supports === "function" &&
-        CSS.supports("content-visibility: auto")
-    );
-    const updateColumns = () => {
-      const width = window.innerWidth;
-      const next =
-        width >= 1280
-          ? 6
-          : width >= 1024
-            ? 5
-            : width >= 768
-              ? 4
-              : width >= 640
-                ? 3
-                : 2;
-      setGridColumns(Math.max(1, next));
-    };
-    updateColumns();
-    window.addEventListener("resize", updateColumns);
-    return () => window.removeEventListener("resize", updateColumns);
-  }, []);
-
-  const filteredListings = useMemo(() => {
-    const categoryFilterNormalized = categoryFilter.trim().toLowerCase();
-    let baseListings =
-      !categoryFilterNormalized || categoryFilterNormalized === "all"
-        ? allListings || []
-        : (allListings || []).filter(
-            (item) =>
-              (item.category || "").trim().toLowerCase() === categoryFilterNormalized
-          );
-    return sortListingsByAvailability(baseListings);
-  }, [allListings, categoryFilter]);
-
-  const safeColumns = Math.max(1, gridColumns);
-  const listingRows = useMemo(() => {
-    if (!filteredListings.length) return [];
-    const rows = [];
-    for (let i = 0; i < filteredListings.length; i += safeColumns) {
-      rows.push(filteredListings.slice(i, i + safeColumns));
-    }
-    return rows;
-  }, [filteredListings, safeColumns]);
-
-  const [isMobileSafari, setIsMobileSafari] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const ua = window.navigator?.userAgent || "";
-    const isIOS = /iP(hone|od|ad)/.test(ua);
-    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-    setIsMobileSafari(isIOS && isSafari);
-  }, []);
-
-  const enableVirtualize = VIRTUALIZE && !isMobileSafari;
-
-  const {
-    virtualRows,
-    totalHeight,
-    startIndex,
-    endIndex,
-    rowStride,
-    scrollTop,
-    viewportHeight,
-    containerHeight,
-  } = useGridVirtualRows({
-    rowCount: listingRows.length,
-    rowHeight: Math.max(rowHeight, 1),
-    rowGap,
-    overscan: 4,
-    containerRef: gridContainerRef,
-  });
-
-  const firstRowRef = useCallback((node) => {
-    if (!node || typeof window === "undefined") return;
-    const nextHeight = node.offsetHeight;
-    if (nextHeight && Math.abs(nextHeight - rowHeight) > 1) {
-      setRowHeight(nextHeight);
-    }
-    const styles = window.getComputedStyle(node);
-    const nextGap = parseFloat(styles.rowGap || styles.gap || "0");
-    if (Number.isFinite(nextGap) && Math.abs(nextGap - rowGap) > 0.5) {
-      setRowGap(nextGap);
-    }
-  }, [rowHeight, rowGap]);
 
   const sortedHybridItems = useMemo(
     () => sortListingsByAvailability(hybridItems),
     [hybridItems]
   );
-
-  const gridDiagEnabled = process.env.NEXT_PUBLIC_HOME_GRID_DIAG === "1";
-  const allowGridDiag =
-    gridDiagEnabled || process.env.NODE_ENV !== "production";
-  const browseListingsLoggedRef = useRef(false);
-
-  useEffect(() => {
-    if (!allowGridDiag) return;
-    console.log("[HOME_GRID_DIAG] metrics", {
-      listings: filteredListings.length,
-      rows: listingRows.length,
-      columns: safeColumns,
-      rowHeight,
-      rowGap,
-      rowStride,
-      containerHeight,
-      scrollTop,
-      viewportHeight,
-      startIndex,
-      endIndex,
-      totalHeight,
-      virtualRows: virtualRows.length,
-    });
-  }, [
-    allowGridDiag,
-    filteredListings.length,
-    listingRows.length,
-    safeColumns,
-    rowHeight,
-    rowGap,
-    rowStride,
-    containerHeight,
-    scrollTop,
-    viewportHeight,
-    startIndex,
-    endIndex,
-    totalHeight,
-    virtualRows.length,
-  ]);
-
-  useEffect(() => {
-    if (!allowGridDiag) return;
-    if (browseListingsLoggedRef.current) return;
-    if (!search) {
-      console.log("[HOME_GRID_DIAG] BrowseListings render reached");
-      browseListingsLoggedRef.current = true;
-    }
-  }, [allowGridDiag, search]);
-
-  useEffect(() => {
-    if (!allowGridDiag || search) return;
-    const runProbe = () => {
-      const gridEl = gridContainerRef.current;
-      if (!gridEl) return;
-      const rect = gridEl.getBoundingClientRect();
-      const tiles = gridEl.querySelectorAll('[data-listing-tile="1"]');
-      const firstTile = tiles[0];
-      const tileRect = firstTile?.getBoundingClientRect?.() || null;
-      const tileStyles = firstTile
-        ? window.getComputedStyle(firstTile)
-        : null;
-      const suspicious = [];
-      let node = gridEl;
-      for (let i = 0; i < 10 && node; i += 1) {
-        const cs = window.getComputedStyle(node);
-        const overflow = `${cs.overflow}/${cs.overflowX}/${cs.overflowY}`;
-        const height = cs.height;
-        const maxHeight = cs.maxHeight;
-        const display = cs.display;
-        const opacity = cs.opacity;
-        const visibility = cs.visibility;
-        const transform = cs.transform;
-        const position = cs.position;
-        const zIndex = cs.zIndex;
-        const isSuspicious =
-          overflow.includes("hidden") ||
-          height === "0px" ||
-          maxHeight === "0px" ||
-          display === "none" ||
-          opacity === "0" ||
-          visibility === "hidden" ||
-          transform !== "none";
-        if (isSuspicious) {
-          suspicious.push({
-            node: node.tagName?.toLowerCase(),
-            className: node.className,
-            overflow,
-            height,
-            maxHeight,
-            display,
-            opacity,
-            visibility,
-            transform,
-            position,
-            zIndex,
-          });
-          break;
-        }
-        node = node.parentElement;
-      }
-      console.log("[HOME_GRID_DIAG] visibility probe", {
-        gridRect: rect,
-        tileCount: tiles.length,
-        tileRect,
-        tileDisplay: tileStyles?.display,
-        tileVisibility: tileStyles?.visibility,
-        tileOpacity: tileStyles?.opacity,
-        tilePosition: tileStyles?.position,
-        tileZIndex: tileStyles?.zIndex,
-        suspiciousAncestor: suspicious[0] || null,
-      });
-    };
-    const timer = setTimeout(runProbe, 0);
-    return () => clearTimeout(timer);
-  }, [allowGridDiag, search, filteredListings.length, enableVirtualize]);
-
-  const hasListings = filteredListings.length > 0;
-  const hasRows = listingRows.length > 0;
-  const virtualInvalid =
-    !hasRows ||
-    !Number.isFinite(totalHeight) ||
-    totalHeight <= 0 ||
-    !Number.isFinite(rowStride) ||
-    rowStride <= 0 ||
-    !Number.isFinite(startIndex) ||
-    !Number.isFinite(endIndex) ||
-    startIndex > endIndex ||
-    virtualRows.length === 0;
-  const fallbackAll = !hasRows && hasListings;
-  const fallbackPartial = hasRows && virtualInvalid;
-  const fallbackListings = fallbackAll
-    ? filteredListings
-    : filteredListings.slice(0, Math.min(filteredListings.length, 16));
-  const renderListingTile = (item, listIndex) => {
-    const inventory = normalizeInventory(item);
-    const badgeStyle = getAvailabilityBadgeStyle(
-      inventory.availability,
-      isLight
-    );
-    const cover = coverFor(item.photo_url);
-    const itemKey =
-      item.id ?? item.listing_id ?? `${item.title || "listing"}-${listIndex}`;
-    return (
-      <Link
-        key={itemKey}
-        href={`/customer/listings/${item.id}`}
-        prefetch={false}
-        data-safe-nav="1"
-        data-listing-tile="1"
-        className="group relative flex flex-col overflow-hidden rounded-lg border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition shadow-sm pointer-events-auto touch-manipulation"
-        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
-        data-clickdiag-tile-id={clickDiagEnabled ? item.id || listIndex : undefined}
-        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
-        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id || listIndex)}
-        onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || listIndex)}
-        style={{
-          ...(supportsContentVisibility ? { contentVisibility: "auto" } : {}),
-          containIntrinsicSize: "320px 360px",
-          contain: "layout paint size",
-          ...(allowGridDiag ? { outline: "1px solid lime" } : {}),
-        }}
-      >
-        <div className="relative h-56 w-full overflow-hidden bg-white/5 border-b border-white/10 flex items-center justify-center">
-          {cover ? (
-            <FastImage
-              src={cover}
-              alt={item.title || "Listing"}
-              className="h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.02]"
-              style={{ objectFit: "contain", objectPosition: "center" }}
-              fallbackSrc="/business-placeholder.png"
-              fill
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 16vw"
-              priority={listIndex < 4}
-              decoding="async"
-            />
-          ) : (
-            <div className={`h-full w-full flex items-center justify-center text-[11px] ${textTone.subtle}`}>
-              No image
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col flex-1 p-4 gap-2">
-          <p className={`text-xs font-medium ${textTone.subtle} uppercase tracking-wide`}>
-            {item.category || "Listing"}
-            {item.city ? ` · ${item.city}` : ""}
-          </p>
-          <h3 className={`text-base font-semibold ${textTone.base} line-clamp-2 min-h-[3rem]`}>
-            {item.title}
-          </h3>
-          <div className={`mt-auto text-lg font-semibold ${textTone.strong}`}>
-            {item.price ? `$${item.price}` : "Price TBD"}
-          </div>
-        </div>
-      </Link>
-    );
-  };
 
   useEffect(() => {
     let isActive = true;
@@ -808,7 +369,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
         let query = client
           .from("listings")
           .select(
-            "id,title,description,price,category,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+            "id,title,description,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
           )
           .or(
             `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
@@ -816,7 +377,12 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           .order("created_at", { ascending: false })
           .limit(8);
         if (categoryValue && categoryValue !== "All") {
-          query = query.eq("category", categoryValue);
+          const categoryId = await resolveCategoryIdByName(client, categoryValue);
+          if (categoryId) {
+            query = query.eq("category_id", categoryId);
+          } else {
+            query = query.eq("category", categoryValue);
+          }
         }
         if (typeof query.abortSignal === "function") {
           query = query.abortSignal(controller.signal);
@@ -831,7 +397,12 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
           setHybridItemsError("Could not load item matches right now.");
           setHybridItems([]);
         } else {
-          setHybridItems(data || []);
+          setHybridItems(
+            (data || []).map((row) => ({
+              ...row,
+              category: row.category_info?.name || row.category,
+            }))
+          );
         }
       } catch (err) {
         if (!isActive || requestId !== hybridRequestIdRef.current) return;
@@ -1041,131 +612,21 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
             className="relative z-0 mt-4 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-12"
             data-home-tiles="1"
           >
-            {allListingsLoading ? (
-              <div className={`flex items-center gap-2 text-sm ${textTone.soft}`}>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading
-              </div>
-            ) : null}
-            {filteredListings.length ? (
-              !enableVirtualize ? (
-                <div
-                  ref={gridContainerRef}
-                  className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 yb-tile-scroll-guard-y"
-                  onPointerDown={handleTilePointerDown}
-                  onPointerMove={handleTilePointerMove}
-                  onPointerUp={handleTilePointerUp}
-                  onPointerCancel={handleTilePointerCancel}
-                  onClickCapture={handleTileClickCapture}
-                  style={allowGridDiag ? { outline: "1px solid red" } : undefined}
-                >
-                  {filteredListings.map((item, idx) => {
-                    const inventory = normalizeInventory(item);
-                    const badgeStyle = getAvailabilityBadgeStyle(
-                      inventory.availability,
-                      isLight
-                    );
-                    const cover = coverFor(item.photo_url);
-                    return (
-                      <Link
-                        key={item.id || idx}
-                        href={`/customer/listings/${item.id}`}
-                        prefetch={false}
-                        data-safe-nav="1"
-                        data-listing-tile="1"
-                        className="group relative flex flex-col overflow-hidden rounded-lg border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition shadow-sm pointer-events-auto touch-manipulation"
-                        data-clickdiag={clickDiagEnabled ? "tile" : undefined}
-                        data-clickdiag-tile-id={clickDiagEnabled ? item.id || idx : undefined}
-                        data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
-                        onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id || idx)}
-                        onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || idx)}
-                        style={allowGridDiag ? { outline: "1px solid lime" } : undefined}
-                      >
-                        <div className="relative h-56 w-full overflow-hidden bg-white/5 border-b border-white/10 flex items-center justify-center">
-                          {cover ? (
-                            <FastImage
-                              src={cover}
-                              alt={item.title || "Listing"}
-                              className="h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.02]"
-                              style={{ objectFit: "contain", objectPosition: "center" }}
-                              fallbackSrc="/business-placeholder.png"
-                              fill
-                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 16vw"
-                              priority={idx < 4}
-                              decoding="async"
-                            />
-                          ) : (
-                            <div className={`h-full w-full flex items-center justify-center text-[11px] ${textTone.subtle}`}>
-                              No image
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col flex-1 p-4 gap-2">
-                          <p className={`text-xs font-medium ${textTone.subtle} uppercase tracking-wide`}>
-                            {item.category || "Listing"}
-                            {item.city ? ` · ${item.city}` : ""}
-                          </p>
-                          <h3 className={`text-base font-semibold ${textTone.base} line-clamp-2 min-h-[3rem]`}>
-                            {item.title}
-                          </h3>
-                          <div className={`mt-auto text-lg font-semibold ${textTone.strong}`}>
-                            {item.price ? `$${item.price}` : "Price TBD"}
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div
-                  ref={gridContainerRef}
-                  className="relative yb-tile-scroll-guard-y"
-                  onPointerDown={handleTilePointerDown}
-                  onPointerMove={handleTilePointerMove}
-                  onPointerUp={handleTilePointerUp}
-                  onPointerCancel={handleTilePointerCancel}
-                  onClickCapture={handleTileClickCapture}
-                  style={{
-                    contain: "layout paint size",
-                    ...(allowGridDiag ? { outline: "1px solid red" } : {}),
-                  }}
-                >
-                  {fallbackAll || fallbackPartial ? (
-                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                      {fallbackListings.map((item, idx) =>
-                        renderListingTile(item, idx)
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ height: totalHeight }} aria-hidden="true" />
-                      {virtualRows.map(({ index: rowIndex, start }) => {
-                        const row = listingRows[rowIndex] || [];
-                        return (
-                          <div
-                            key={`row-${rowIndex}`}
-                            ref={rowIndex === 0 ? firstRowRef : undefined}
-                            className="absolute left-0 right-0 grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-                            style={{ transform: `translateY(${start}px)` }}
-                          >
-                            {row.map((item, itemIdx) => {
-                              const listIndex = rowIndex * safeColumns + itemIdx;
-                              return renderListingTile(item, listIndex);
-                            })}
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
-              )
-            ) : (
-              <div className={`text-sm ${textTone.soft} mt-3`}>
-                {allListingsLoading
-                  ? "Loading listings..."
-                  : "No listings available yet."}
-              </div>
-            )}
+            <CategoryTilesGrid
+              categories={featuredCategoryList}
+              isLoading={featuredCategoriesLoading}
+              error={featuredCategoriesError}
+              title="Shop by category"
+              viewAllHref="/listings"
+              textTone={textTone}
+              clickDiagEnabled={clickDiagEnabled}
+              onTilePointerDown={handleTilePointerDown}
+              onTilePointerMove={handleTilePointerMove}
+              onTilePointerUp={handleTilePointerUp}
+              onTilePointerCancel={handleTilePointerCancel}
+              onTileClickCapture={handleTileClickCapture}
+              diagTileClick={diagTileClick}
+            />
           </div>
         )}
       </div>
@@ -1173,7 +634,7 @@ function CustomerHomePageInner({ initialListings: initialListingsProp }) {
   );
 }
 
-export default function CustomerHomeClient({ initialListings }) {
+export default function CustomerHomeClient({ featuredCategories, featuredCategoriesError }) {
   const safeNavFlag = process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1";
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
@@ -1182,7 +643,10 @@ export default function CustomerHomeClient({ initialListings }) {
       {safeNavFlag ? <SafeNavFallback /> : null}
       <HomeGuard fallback={<HomeGuardFallback />}>
         <GuaranteedNavCapture />
-        <CustomerHomePageInner initialListings={initialListings} />
+        <CustomerHomePageInner
+          featuredCategories={featuredCategories}
+          featuredCategoriesError={featuredCategoriesError}
+        />
       </HomeGuard>
     </CustomerHomeErrorBoundary>
   );

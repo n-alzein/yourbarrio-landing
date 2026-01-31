@@ -124,6 +124,10 @@ button {
   color: #fff !important;
 }
 
+.business-auth-page .yb-auth-cta {
+  color: #fff !important;
+}
+
 .theme-light .theme-lock [class*="text-white/"] {
   color: rgba(255, 255, 255, 0.7) !important;
 }
@@ -217,6 +221,66 @@ button {
 
 .theme-light footer.theme-lock a:hover {
   color: #e5e5e5;
+}
+
+@keyframes yb-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes yb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.yb-fade-up {
+  animation: yb-fade-up 0.7s ease-out both;
+}
+
+.yb-fade-in {
+  animation: yb-fade-in 0.7s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yb-fade-up,
+  .yb-fade-in {
+    animation: none;
+  }
+}
+
+.yb-business-marketing .yb-business-glow {
+  display: none !important;
+}
+
+.yb-business-marketing .backdrop-blur-xl,
+.yb-business-marketing .backdrop-blur-lg,
+.yb-business-marketing .backdrop-blur-md {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: rgba(30, 41, 59, 0.7) !important;
+}
+
+.yb-business-marketing .yb-business-card {
+  -webkit-backdrop-filter: blur(24px) !important;
+  backdrop-filter: blur(24px) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(15, 23, 42, 0.35) !important;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.22),
+    0 2px 6px rgba(0, 0, 0, 0.18) !important;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .yb-business-marketing .yb-business-glow {
+    display: none !important;
+  }
+  .yb-business-marketing .backdrop-blur-xl,
+  .yb-business-marketing .backdrop-blur-lg,
+  .yb-business-marketing .backdrop-blur-md {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(30, 41, 59, 0.7) !important;
+  }
 }
 
 .theme-light footer.theme-lock p,

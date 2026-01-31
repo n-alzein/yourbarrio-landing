@@ -15,7 +15,7 @@ export async function GET(request) {
   if (listingId) {
     const { data, error } = await supabase
       .from("listings")
-      .select("*")
+      .select("*, category_info:business_categories(name,slug)")
       .eq("id", listingId)
       .eq("business_id", user.id)
       .maybeSingle();
@@ -38,7 +38,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from("listings")
-    .select("*")
+    .select("*, category_info:business_categories(name,slug)")
     .eq("business_id", user.id)
     .order("created_at", { ascending: false });
 

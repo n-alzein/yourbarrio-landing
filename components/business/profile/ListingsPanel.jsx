@@ -43,7 +43,9 @@ export default function ListingsPanel({ listings, tone }) {
                 </div>
                 <div className="p-4 space-y-1">
                   <p className={`text-sm font-semibold ${tone.textStrong}`}>{listing.title}</p>
-                  <p className={`text-xs ${tone.textMuted}`}>{listing.category || "Category"}</p>
+                  <p className={`text-xs ${tone.textMuted}`}>
+                    {listing.category_info?.name || listing.category || "Category"}
+                  </p>
                   <p className={`text-sm font-semibold ${tone.textStrong}`}>
                     {listing.price ? `$${listing.price}` : "Price TBD"}
                   </p>

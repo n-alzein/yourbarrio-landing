@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import { resolveCategoryIdByName } from "@/lib/categories";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export default function NewListingPage() {
@@ -159,12 +160,14 @@ export default function NewListingPage() {
         throw bizError;
       }
 
+      const categoryId = await resolveCategoryIdByName(client, form.category);
       const insertQuery = client.from("listings").insert({
         business_id: accountId,
         title: form.title,
         description: form.description,
         price: form.price,
         category: form.category,
+        category_id: categoryId,
         inventory_status: form.inventoryStatus,
         inventory_quantity:
           form.inventoryStatus === "out_of_stock"
@@ -346,8 +349,8 @@ export default function NewListingPage() {
                     Select category
                   </option>
                   {BUSINESS_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat} className="text-black">
-                      {cat}
+                    <option key={cat.slug} value={cat.name} className="text-black">
+                      {cat.name}
                     </option>
                   ))}
                 </select>

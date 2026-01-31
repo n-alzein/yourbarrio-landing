@@ -241,7 +241,9 @@ export default function PublicBusinessPreviewClient({
 
       const listingsQuery = client
         .from("listings")
-        .select("id,business_id,title,price,category,city,photo_url,created_at")
+        .select(
+          "id,business_id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at"
+        )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .limit(24);

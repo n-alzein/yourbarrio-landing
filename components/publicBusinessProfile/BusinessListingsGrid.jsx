@@ -50,7 +50,7 @@ export default function BusinessListingsGrid({ listings, className = "" }) {
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-4">
                   <p className="text-xs uppercase tracking-wide text-white/60">
-                    {item.category || "Listing"}
+                    {item.category_info?.name || item.category || "Listing"}
                     {item.city ? ` - ${item.city}` : ""}
                   </p>
                   <h3 className="text-base font-semibold text-white line-clamp-2">

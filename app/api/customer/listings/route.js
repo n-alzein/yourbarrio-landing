@@ -18,7 +18,7 @@ export async function GET(request) {
 
   const { data: listing, error: listingError } = await supabase
     .from("listings")
-    .select("*")
+    .select("*, category_info:business_categories(name,slug)")
     .eq("id", listingId)
     .maybeSingle();
 

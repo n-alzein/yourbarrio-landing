@@ -1,26 +1,12 @@
 "use client";
 
-import { Suspense } from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
-import { useAuth } from "@/components/AuthProvider";
-import { getCookieName } from "@/lib/supabase/browser";
+import { getSupabaseAuthCookieName } from "@/lib/supabase/cookieName";
 import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { withTimeout } from "@/lib/withTimeout";
 
-function BusinessLoginInner() {
-  const {
-    supabase,
-    beginAuthAttempt,
-    endAuthAttempt,
-    authAttemptId,
-    authStatus,
-    user,
-    role,
-  } = useAuth();
-  const searchParams = useSearchParams();
-  const isPopup = searchParams?.get("popup") === "1";
+function BusinessLoginInner({ isPopup }) {
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   const authTimeoutMs = 30000;
@@ -37,7 +23,6 @@ function BusinessLoginInner() {
   const mountedRef = useRef(false);
   const pendingRef = useRef(false);
   const attemptRef = useRef(0);
-  const globalAttemptIdRef = useRef(0);
   const didCompleteRef = useRef(false);
   const timeoutIdRef = useRef(null);
   const timeoutControllerRef = useRef(null);
@@ -45,7 +30,15 @@ function BusinessLoginInner() {
     `auth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
   const sessionRef = useRef(null);
-  const authAttemptIdRef = useRef(authAttemptId);
+  const supabaseRef = useRef(null);
+
+  const getSupabase = useCallback(async () => {
+    if (!supabaseRef.current) {
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+      supabaseRef.current = getSupabaseBrowserClient();
+    }
+    return supabaseRef.current;
+  }, []);
 
   const authDiagLog = useCallback(
     (event, payload = {}) => {
@@ -82,26 +75,19 @@ function BusinessLoginInner() {
   }, []);
 
   const closeAuthAttempt = useCallback(
-    (reason) => {
-      if (!globalAttemptIdRef.current) return;
-      endAuthAttempt(globalAttemptIdRef.current, reason);
+    (attemptId, reason) => {
       authDiagLog("auth:attempt:end", {
         action: "business_login",
-        attemptId: globalAttemptIdRef.current,
+        attemptId,
         reason,
       });
-      globalAttemptIdRef.current = 0;
     },
-    [authDiagLog, endAuthAttempt]
+    [authDiagLog]
   );
-
-  useEffect(() => {
-    authAttemptIdRef.current = authAttemptId;
-  }, [authAttemptId]);
 
   const getCookieStatus = useCallback(() => {
     if (typeof document === "undefined") return null;
-    const cookieName = getCookieName();
+    const cookieName = getSupabaseAuthCookieName();
     const cookieLength = document.cookie.length;
     const names = document.cookie
       .split(";")
@@ -121,7 +107,7 @@ function BusinessLoginInner() {
 
   const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
     if (typeof document === "undefined") return false;
-    const cookieName = getCookieName();
+    const cookieName = getSupabaseAuthCookieName();
     if (!cookieName) return false;
 
     const hasAuthCookie = () => {
@@ -216,7 +202,8 @@ function BusinessLoginInner() {
 
       let activeSession = sessionRef.current;
       try {
-        const { data } = await supabase.auth.getSession();
+        const client = supabaseRef.current ?? (await getSupabase());
+        const { data } = await client.auth.getSession();
         if (data?.session) {
           activeSession = data.session;
           sessionRef.current = data.session;
@@ -235,7 +222,7 @@ function BusinessLoginInner() {
         if (mountedRef.current) {
           setLoading(false);
         }
-        closeAuthAttempt("session");
+        closeAuthAttempt(attemptId, "session");
         await redirectToDashboard();
         return;
       }
@@ -246,47 +233,27 @@ function BusinessLoginInner() {
           `Login request timed out after ${Math.round(overallTimeoutMs / 1000)}s. Please check your connection and try again.`
         );
       }
-      closeAuthAttempt("timeout");
+      closeAuthAttempt(attemptId, "timeout");
     },
-    [authDiagLog, closeAuthAttempt, overallTimeoutMs, redirectToDashboard, supabase]
+    [authDiagLog, closeAuthAttempt, overallTimeoutMs, redirectToDashboard, getSupabase]
   );
-
-  useEffect(() => {
-    if (authStatus !== "authenticated" || !user?.id || role !== "business") return;
-    didCompleteRef.current = true;
-    if (timeoutIdRef.current) {
-      clearTimeout(timeoutIdRef.current);
-    }
-    pendingRef.current = false;
-    if (mountedRef.current) {
-      setLoading(false);
-    }
-    closeAuthAttempt("session");
-    authDiagLog("login:session:ready", { userId: user.id });
-    void redirectToDashboard();
-  }, [
-    authStatus,
-    authDiagLog,
-    closeAuthAttempt,
-    redirectToDashboard,
-    role,
-    user?.id,
-  ]);
 
   async function handleLogin(e) {
     e.preventDefault();
     if (pendingRef.current || loading) return;
-    if (!supabase) {
+    let supabase = null;
+    try {
+      supabase = await getSupabase();
+    } catch {
       setAuthError("Auth client not ready. Please refresh and try again.");
       return;
     }
-    globalAttemptIdRef.current = beginAuthAttempt("business_login");
-    authDiagLog("auth:attempt:begin", {
-      action: "business_login",
-      attemptId: globalAttemptIdRef.current,
-    });
     const attemptId = attemptRef.current + 1;
     attemptRef.current = attemptId;
+    authDiagLog("auth:attempt:begin", {
+      action: "business_login",
+      attemptId,
+    });
     didCompleteRef.current = false;
     if (timeoutIdRef.current) {
       clearTimeout(timeoutIdRef.current);
@@ -465,21 +432,24 @@ function BusinessLoginInner() {
           setLoading(false);
         }
       }
-      closeAuthAttempt("password");
+      closeAuthAttempt(attemptId, "password");
       authDiagLog("login:submit:end", { attemptId });
     }
   }
 
   async function handleGoogleLogin() {
     if (pendingRef.current || loading) return;
-    if (!supabase) {
+    let supabase = null;
+    try {
+      supabase = await getSupabase();
+    } catch {
       setAuthError("Auth client not ready. Please refresh and try again.");
       return;
     }
     let attemptId = 0;
     try {
-      attemptId = beginAuthAttempt("business_oauth");
-      globalAttemptIdRef.current = attemptId;
+      attemptId = attemptRef.current + 1;
+      attemptRef.current = attemptId;
       authDiagLog("auth:attempt:begin", {
         action: "business_oauth",
         attemptId,
@@ -511,14 +481,10 @@ function BusinessLoginInner() {
       }
     } finally {
       if (attemptId) {
-        endAuthAttempt(attemptId, "oauth");
         authDiagLog("auth:attempt:end", {
           action: "business_oauth",
           attemptId,
         });
-        if (globalAttemptIdRef.current === attemptId) {
-          globalAttemptIdRef.current = 0;
-        }
       }
     }
   }
@@ -535,27 +501,6 @@ function BusinessLoginInner() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!globalAttemptIdRef.current) return;
-    if (authAttemptIdRef.current === globalAttemptIdRef.current) return;
-    authDiagLog("login:stale:reset", {
-      attemptId: globalAttemptIdRef.current,
-      currentAttemptId: authAttemptIdRef.current,
-    });
-    globalAttemptIdRef.current = 0;
-    pendingRef.current = false;
-    if (timeoutIdRef.current) {
-      clearTimeout(timeoutIdRef.current);
-    }
-    if (timeoutControllerRef.current) {
-      timeoutControllerRef.current.abort();
-    }
-    if (mountedRef.current) {
-      setLoading(false);
-      setAuthError("");
-    }
-  }, [authAttemptId, authDiagLog]);
 
   useEffect(() => {
     if (!authDiagEnabled) return;
@@ -594,19 +539,6 @@ function BusinessLoginInner() {
       window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, [authDiagEnabled, authDiagLog, getCookieStatus, isPopup]);
-
-  useEffect(() => {
-    if (!authDiagEnabled || !supabase) return;
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      authDiagLog("auth:event", {
-        event,
-        hasSession: Boolean(session),
-      });
-    });
-    return () => {
-      data?.subscription?.unsubscribe();
-    };
-  }, [authDiagEnabled, authDiagLog, supabase]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -734,10 +666,6 @@ function BusinessLoginInner() {
   );
 }
 
-export default function BusinessLoginClient() {
-  return (
-    <Suspense fallback={<div className="w-full max-w-2xl min-h-[420px]" />}>
-      <BusinessLoginInner />
-    </Suspense>
-  );
+export default function BusinessLoginClient({ isPopup = false }) {
+  return <BusinessLoginInner isPopup={isPopup} />;
 }

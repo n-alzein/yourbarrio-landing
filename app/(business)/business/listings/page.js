@@ -42,7 +42,10 @@ export default function BusinessListingsPage() {
       : listings.reduce((sum, item) => sum + Number(item.price || 0), 0) /
         totalListings;
   const primaryCategory =
-    listings.find((item) => item.category)?.category ?? "Category pending";
+    listings.find((item) => item.category_info?.name || item.category)?.category_info
+      ?.name ||
+    listings.find((item) => item.category_info?.name || item.category)?.category ||
+    "Category pending";
   const lastUpdated = listings[0]?.created_at
     ? new Date(listings[0].created_at).toLocaleDateString()
     : "—";
@@ -698,7 +701,7 @@ export default function BusinessListingsPage() {
                         isLight ? "text-slate-600" : "text-slate-400"
                       }`}
                     >
-                      {listing.category || "Uncategorized"}
+                      {listing.category_info?.name || listing.category || "Uncategorized"}
                     </p>
 
                     {/* Title */}

@@ -31,7 +31,7 @@ async function getSavedListings() {
 
   const { data: listings, error: listingsError } = await supabase
     .from("listings")
-    .select("*")
+    .select("*, category_info:business_categories(name,slug)")
     .in("id", ids);
 
   if (listingsError) {
@@ -42,7 +42,12 @@ async function getSavedListings() {
     };
   }
 
-  return { user, saved: listings || [], error: null };
+  const normalized = (listings || []).map((row) => ({
+    ...row,
+    category: row.category_info?.name || row.category,
+  }));
+
+  return { user, saved: normalized, error: null };
 }
 
 export default async function CustomerSavedPage() {

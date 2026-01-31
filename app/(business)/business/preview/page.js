@@ -83,7 +83,9 @@ async function fetchProfile(supabase, id) {
 function buildListingsQuery(supabase, businessId, limit, filters) {
   let query = supabase
     .from("listings")
-    .select("id,business_id,title,price,category,city,photo_url,created_at")
+    .select(
+      "id,business_id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at"
+    )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })
     .limit(limit);

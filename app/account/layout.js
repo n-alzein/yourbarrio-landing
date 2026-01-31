@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import AppShell from "@/components/AppShell";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
@@ -15,7 +16,7 @@ export default async function AccountLayout({ children }) {
   const { user, profile } = await requireRole("customer");
 
   return (
-    <>
+    <AppShell>
       <AuthSeed user={user} profile={profile} role="customer" />
       <Suspense fallback={null}>
         <GlobalHeader surface="customer" />
@@ -24,6 +25,6 @@ export default async function AccountLayout({ children }) {
       <AccountShell>
         <Suspense fallback={null}>{children}</Suspense>
       </AccountShell>
-    </>
+    </AppShell>
   );
 }

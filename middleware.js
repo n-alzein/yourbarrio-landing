@@ -1,4 +1,8 @@
 // middleware.js
+// Debug: check Network -> response headers `x-mw-hit` and `x-mw-path`.
+// Visit `/health` and `/categories/test` to verify routing.
+// If `/health` 404s, routes may not be registering or an upstream rewrite is interfering.
+// If headers are missing, the request bypassed middleware or another middleware is active.
 import { NextResponse } from "next/server";
 import { clearSupabaseCookies, getSbCookieNamesFromRequest } from "@/lib/authCookies";
 import { updateSession } from "@/lib/supabase/middleware";
@@ -8,6 +12,33 @@ export async function middleware(request) {
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
   const pathname = request.nextUrl.pathname;
+  const wrapNext = () => {
+    const res = NextResponse.next();
+    res.headers.set("x-mw-hit", "1");
+    res.headers.set("x-mw-path", pathname);
+    return res;
+  };
+  const wrapRedirect = (url) => {
+    const res = NextResponse.redirect(url);
+    res.headers.set("x-mw-hit", "1");
+    res.headers.set("x-mw-path", pathname);
+    return res;
+  };
+  const wrapJson = (data, init) => {
+    const res = NextResponse.json(data, init);
+    res.headers.set("x-mw-hit", "1");
+    res.headers.set("x-mw-path", pathname);
+    return res;
+  };
+  const wrapResponse = (res) => {
+    res.headers.set("x-mw-hit", "1");
+    res.headers.set("x-mw-path", pathname);
+    return res;
+  };
+  const hasAuthCookie = getSbCookieNamesFromRequest(request).length > 0;
+  if (diagEnabled) {
+    console.warn("[AUTH_DIAG] mw:hit", { pathname, hasAuthCookie });
+  }
   const isApiRoute = pathname.startsWith("/api/");
   if (
     pathname.startsWith("/_next/") ||
@@ -15,7 +46,7 @@ export async function middleware(request) {
     pathname.startsWith("/images/") ||
     pathname.startsWith("/public/")
   ) {
-    return NextResponse.next();
+    return wrapNext();
   }
   const isPublicBusinessRoute =
     pathname === "/business" ||
@@ -23,9 +54,21 @@ export async function middleware(request) {
     pathname.startsWith("/business/about") ||
     pathname.startsWith("/business/login");
   if (isPublicBusinessRoute) {
-    return NextResponse.next();
+    return wrapNext();
   }
-  const hasAuthCookie = getSbCookieNamesFromRequest(request).length > 0;
+  const isPublicCategoryRoute =
+    pathname === "/categories" ||
+    pathname === "/categories/" ||
+    pathname.startsWith("/categories/");
+  if (isPublicCategoryRoute) {
+    if (diagEnabled) {
+      console.warn("[AUTH_DIAG] public_route:allow", {
+        pathname,
+        type: "categories",
+      });
+    }
+    return wrapNext();
+  }
 
   if (!isApiRoute && !hasAuthCookie) {
     const redirectUrl = new URL("/?redirected=1", request.url);
@@ -36,33 +79,33 @@ export async function middleware(request) {
         reason: "missing_auth_cookie",
       });
     }
-    return NextResponse.redirect(redirectUrl);
+    return wrapRedirect(redirectUrl);
   }
 
   if (pathname.startsWith("/api/auth/") || pathname === "/api/logout") {
-    return NextResponse.next();
+    return wrapNext();
   }
 
   const response = await updateSession(request);
   const refreshError = response.headers.get("x-supabase-refresh-error");
   if (refreshError === "refresh_token_already_used") {
     if (isApiRoute) {
-      const apiResponse = NextResponse.json(
+      const apiResponse = wrapJson(
         { error: "session_refresh_failed" },
         { status: 401 }
       );
       clearSupabaseCookies(apiResponse, request, {
         isProd: process.env.NODE_ENV === "production",
       });
-      return apiResponse;
+      return wrapResponse(apiResponse);
     }
 
     const redirectUrl = new URL("/?redirected=1", request.url);
-    const redirectResponse = NextResponse.redirect(redirectUrl);
+    const redirectResponse = wrapRedirect(redirectUrl);
     clearSupabaseCookies(redirectResponse, request, {
       isProd: process.env.NODE_ENV === "production",
     });
-    return redirectResponse;
+    return wrapResponse(redirectResponse);
   }
 
   if (diagEnabled) {
@@ -77,9 +120,16 @@ export async function middleware(request) {
       });
     }
   }
-  return response;
+  return wrapResponse(response);
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/customer/:path*", "/business/:path*"],
+  matcher: [
+    "/api/:path*",
+    "/customer/:path*",
+    "/business/:path*",
+    "/categories/:path*",
+    "/health",
+    "/categories/test",
+  ],
 };

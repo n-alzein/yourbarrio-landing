@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
+import { resolveCategoryIdByName } from "@/lib/categories";
 
 async function runHomeListingsQuery(client, { limit, city, category }) {
   let query = client
     .from("listings")
     .select(
-      "id,title,price,category,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+      "id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -16,7 +17,12 @@ async function runHomeListingsQuery(client, { limit, city, category }) {
     query = query.eq("city", city);
   }
   if (category) {
-    query = query.eq("category", category);
+    const categoryId = await resolveCategoryIdByName(client, category);
+    if (categoryId) {
+      query = query.eq("category_id", categoryId);
+    } else {
+      query = query.eq("category", category);
+    }
   }
 
   return query;

@@ -115,7 +115,9 @@ export async function GET(request) {
         .lte("viewed_at", toStr),
       supabase
         .from("listings")
-        .select("id, title, category, inventory_quantity")
+        .select(
+          "id, title, category, category_info:business_categories(name,slug), inventory_quantity"
+        )
         .eq("business_id", user.id),
       supabase
         .from("orders")
@@ -167,13 +169,17 @@ export async function GET(request) {
       row.id,
       {
         title: row.title,
-        category: row.category,
+        category: row.category_info?.name || row.category,
         inventoryQty: row.inventory_quantity ?? null,
       },
     ])
   );
   const categories = Array.from(
-    new Set(listingRows.map((row) => row.category).filter(Boolean))
+    new Set(
+      listingRows
+        .map((row) => row.category_info?.name || row.category)
+        .filter(Boolean)
+    )
   );
 
   const orders = ordersRes.data || [];

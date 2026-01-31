@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import HeaderAccountWidget from "@/components/nav/HeaderAccountWidget";
-import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
 import {
   getAvailabilityBadgeStyle,
   normalizeInventory,
@@ -24,14 +24,15 @@ import {
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 import { useCart } from "@/components/cart/CartProvider";
 
-const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES];
+const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES.map((cat) => cat.name)];
 
 const getInitialSearchTerm = (params) => (params?.get("q") || "").trim();
 
 const getInitialCategory = (params) => {
   const currentCategory = (params?.get("category") || "").trim();
+  const normalizedCurrent = normalizeCategoryName(currentCategory).toLowerCase();
   const matchedCategory = SEARCH_CATEGORIES.find(
-    (category) => category.toLowerCase() === currentCategory.toLowerCase()
+    (category) => normalizeCategoryName(category).toLowerCase() === normalizedCurrent
   );
   return matchedCategory || "All";
 };

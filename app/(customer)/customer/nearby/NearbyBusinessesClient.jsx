@@ -11,7 +11,7 @@ import FastImage from "@/components/FastImage";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import CustomerMap from "@/components/customer/CustomerMap";
-import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
 import { appendCrashLog } from "@/lib/crashlog";
 import { logDataDiag } from "@/lib/dataDiagnostics";
 
@@ -162,11 +162,13 @@ export default function NearbyBusinessesClient() {
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
     const urlCategory = (searchParams?.get("category") || "").trim();
+    const normalizedUrlCategory = normalizeCategoryName(urlCategory).toLowerCase();
     const matchedCategory = BUSINESS_CATEGORIES.find(
-      (category) => category.toLowerCase() === urlCategory.toLowerCase()
+      (category) =>
+        normalizeCategoryName(category.name).toLowerCase() === normalizedUrlCategory
     );
     setSearch(urlQuery);
-    setCategoryFilter(matchedCategory || "All");
+    setCategoryFilter(matchedCategory?.name || "All");
   }, [searchParams]);
 
   useEffect(() => {

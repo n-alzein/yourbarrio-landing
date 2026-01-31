@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+function normalizeWebsite(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+}
+
+function buildAddressForGeocode({ address, address_2, city, state, postal_code }) {
+  return [address, address_2, city, state, postal_code]
+    .map((value) => (value || "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 async function geocodeAddress(address) {
   const key = process.env.GOOGLE_GEOCODING_API_KEY;
   if (!key || !address) return null;
@@ -30,6 +45,10 @@ export async function POST(req) {
       category,
       description,
       address,
+      address_2,
+      city,
+      state,
+      postal_code,
       phone,
       website,
       latitude,
@@ -37,10 +56,7 @@ export async function POST(req) {
     } = body || {};
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "Missing userId" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
     }
 
     const supabase = getSupabaseServerClient();
@@ -51,26 +67,41 @@ export async function POST(req) {
       );
     }
 
+    const normalizedWebsite = normalizeWebsite(website);
+    const addressForGeocode = buildAddressForGeocode({
+      address,
+      address_2,
+      city,
+      state,
+      postal_code,
+    });
+
     const prefilledGeo =
       typeof latitude === "number" && typeof longitude === "number"
         ? { lat: latitude, lng: longitude }
         : null;
-    const geo = prefilledGeo || (await geocodeAddress(address));
+    const geo = prefilledGeo || (await geocodeAddress(addressForGeocode));
 
     const payload = {
       id: userId,
-      name,
+      role: "business",
+      business_name: name,
+      full_name: name,
       category,
       description,
       address,
+      address_2,
+      city,
+      state,
+      postal_code,
       phone,
-      website,
+      website: normalizedWebsite,
       latitude: geo?.lat ?? null,
       longitude: geo?.lng ?? null,
     };
 
     const { data, error } = await supabase
-      .from("businesses")
+      .from("users")
       .upsert(payload, { onConflict: "id" })
       .select("id")
       .single();

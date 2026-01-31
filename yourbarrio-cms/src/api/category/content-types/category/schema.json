@@ -47,6 +47,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::category.category"
+    },
+    "listings": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::listing.listing",
+      "mappedBy": "categories"
     }
   }
 }

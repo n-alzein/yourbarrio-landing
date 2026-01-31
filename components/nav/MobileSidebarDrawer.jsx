@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import useBodyScrollLock from "./useBodyScrollLock";
 
@@ -56,11 +56,16 @@ export default function MobileSidebarDrawer({
   const lastActiveRef = useRef(null);
   const portalNodeRef = useRef(null);
   const wasOpenRef = useRef(open);
+  const [mounted, setMounted] = useState(false);
   const portalStoreVersion = useSyncExternalStore(
     subscribePortal,
     getPortalSnapshot,
     getPortalServerSnapshot
   );
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useBodyScrollLock(open);
 
@@ -146,7 +151,7 @@ export default function MobileSidebarDrawer({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  if (typeof document === "undefined") return null;
+  if (!mounted || typeof document === "undefined") return null;
   void portalStoreVersion;
   const portalHost = document.querySelector(
     "div[data-mobile-sidebar-drawer=\"1\"]"

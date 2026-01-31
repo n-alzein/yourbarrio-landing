@@ -43,7 +43,7 @@ test.describe("Customer home tile scroll", () => {
     await page.locator("form").getByRole("button", { name: /log in/i }).click();
 
     await expect(page).toHaveURL(/\/customer\/home/);
-    const tile = page.locator('[data-listing-tile="1"]').first();
+    const tile = page.locator('[data-category-tile="1"]').first();
     await expect(tile).toBeVisible();
 
     await page.evaluate(() => {
@@ -51,7 +51,7 @@ test.describe("Customer home tile scroll", () => {
       document.addEventListener(
         "click",
         (event) => {
-          const tileEl = event.target?.closest?.('[data-listing-tile="1"]');
+          const tileEl = event.target?.closest?.('[data-category-tile="1"]');
           if (tileEl) window.__tileClicks += 1;
         },
         true
@@ -78,6 +78,6 @@ test.describe("Customer home tile scroll", () => {
     await expect(page.evaluate(() => window.__tileClicks)).resolves.toBe(0);
 
     await tile.tap();
-    await expect(page).toHaveURL(/\/customer\/listings\//);
+    await expect(page).toHaveURL(/\/category\//);
   });
 });

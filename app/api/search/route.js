@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
+import { resolveCategoryIdByName } from "@/lib/categories";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -58,13 +59,18 @@ async function searchListings(supabase, term, category) {
   let query = supabase
     .from("listings")
     .select(
-      "id,title,description,price,category,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+      "id,title,description,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
     )
     .or(
       `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
     );
   if (safeCategory) {
-    query = query.eq("category", safeCategory);
+    const categoryId = await resolveCategoryIdByName(supabase, safeCategory);
+    if (categoryId) {
+      query = query.eq("category_id", categoryId);
+    } else {
+      query = query.eq("category", safeCategory);
+    }
   }
   const { data, error } = await query
     .order("created_at", { ascending: false })
@@ -80,7 +86,7 @@ async function searchListings(supabase, term, category) {
     title: row.title,
     description: row.description,
     price: row.price,
-    category: row.category,
+    category: row.category_info?.name || row.category,
     city: row.city,
     photo_url: primaryPhotoUrl(row.photo_url),
     business_id: row.business_id,

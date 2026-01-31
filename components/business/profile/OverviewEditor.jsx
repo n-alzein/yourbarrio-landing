@@ -429,8 +429,8 @@ export default function OverviewEditor({
               >
                 <option value="">Select a category</option>
                 {BUSINESS_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
+                  <option key={category.slug} value={category.name}>
+                    {category.name}
                   </option>
                 ))}
               </select>

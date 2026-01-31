@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import AppShell from "@/components/AppShell";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
@@ -22,7 +23,7 @@ export default async function CustomerLayout({ children }) {
   const { user, profile } = await requireRole("customer");
 
   return (
-    <>
+    <AppShell>
       <AuthSeed user={user} profile={profile} role="customer" />
       <AuthRedirectGuard redirectTo={PATHS.auth.customerLogin}>
         <Suspense fallback={null}>
@@ -43,6 +44,6 @@ export default async function CustomerLayout({ children }) {
           </Suspense>
         </CustomerRouteShell>
       </AuthRedirectGuard>
-    </>
+    </AppShell>
   );
 }

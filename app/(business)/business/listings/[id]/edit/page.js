@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import { resolveCategoryIdByName } from "@/lib/categories";
 import { extractPhotoUrls } from "@/lib/listingPhotos";
 import { retry } from "@/lib/retry";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -91,7 +92,7 @@ export default function EditListingPage() {
           title: data.title || "",
           description: data.description || "",
           price: data.price || "",
-          category: data.category || "",
+          category: data.category_info?.name || data.category || "",
           city: data.city || "",
           inventoryQuantity: data.inventory_quantity ?? "",
           inventoryStatus: data.inventory_status || "in_stock",
@@ -198,11 +199,13 @@ export default function EditListingPage() {
         return;
       }
 
+      const categoryId = await resolveCategoryIdByName(client, form.category);
       const payload = {
         title: (form.title || "").trim(),
         description: form.description || "",
         price: form.price,
         category: form.category,
+        category_id: categoryId,
         city: form.city,
         inventory_status: form.inventoryStatus,
         inventory_quantity:
@@ -419,8 +422,8 @@ export default function EditListingPage() {
                     Select category
                   </option>
                   {BUSINESS_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat} className="text-black">
-                      {cat}
+                    <option key={cat.slug} value={cat.name} className="text-black">
+                      {cat.name}
                     </option>
                   ))}
                 </select>

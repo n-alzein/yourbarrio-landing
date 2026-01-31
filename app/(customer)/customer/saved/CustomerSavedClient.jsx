@@ -295,7 +295,7 @@ export default function CustomerSavedClient({
         }
         let listingQuery = client
           .from("listings")
-          .select("*")
+          .select("*, category_info:business_categories(name,slug)")
           .in("id", ids);
         if (typeof listingQuery.abortSignal === "function") {
           listingQuery = listingQuery.abortSignal(signal);
@@ -328,7 +328,10 @@ export default function CustomerSavedClient({
         if (!result || result.aborted) return;
         if (requestId !== requestIdRef.current) return;
         if (!result.ok) throw result.error;
-        const normalized = result.result || [];
+        const normalized = (result.result || []).map((row) => ({
+          ...row,
+          category: row.category_info?.name || row.category,
+        }));
         dispatchSaved({ type: "LOAD_FROM_CACHE_SUCCESS", saved: normalized });
         if (typeof window !== "undefined") {
           try {

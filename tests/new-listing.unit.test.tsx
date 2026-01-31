@@ -46,6 +46,15 @@ function makeSupabaseMock({ insertError } = {}) {
     data: { publicUrl: "https://example.com/1.jpg" },
   }));
 
+  const categoryQuery = {
+    select: vi.fn(() => categoryQuery),
+    eq: vi.fn(() => categoryQuery),
+    maybeSingle: vi.fn(async () => ({
+      data: { id: "cat-1", name: "Food & Drink", slug: "food-and-drink" },
+      error: null,
+    })),
+  };
+
   const usersQuery = {
     select: vi.fn(() => usersQuery),
     eq: vi.fn(() => usersQuery),
@@ -64,6 +73,7 @@ function makeSupabaseMock({ insertError } = {}) {
       from: vi.fn(() => ({ upload, getPublicUrl })),
     },
     from: vi.fn((table) => {
+      if (table === "business_categories") return categoryQuery;
       if (table === "users") return usersQuery;
       return { insert };
     }),

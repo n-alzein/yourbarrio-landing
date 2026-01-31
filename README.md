@@ -45,3 +45,9 @@ Manual Safari smoke test:
 - iPhone Safari: login → open `/customer/home` → scroll for 60s → background/foreground → no public navbar flash and no blank screen.
 - Unauthenticated access to `/customer/home` redirects to `/`.
 - Unauthenticated access to `/business/dashboard` redirects to `/business-auth/login`.
+
+## Business Categories (Listings)
+
+- Listings now store a normalized `category_id` that references `business_categories`, while the legacy `listings.category` string remains for compatibility.
+- The migration `supabase/migrations/20260131123000_business_categories.sql` seeds canonical categories, inserts any legacy ones, and backfills `category_id`.
+- A trigger keeps `listings.category` in sync with `category_id` on writes; plan to remove the legacy column after all clients have migrated.

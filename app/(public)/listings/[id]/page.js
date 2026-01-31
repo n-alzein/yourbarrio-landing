@@ -107,7 +107,7 @@ export default function ListingDetails({ params }) {
 
         const { data: item, error: listingError } = await client
           .from("listings")
-          .select("*")
+          .select("*, category_info:business_categories(name,slug)")
           .eq("id", id)
           .maybeSingle();
 
@@ -341,7 +341,11 @@ export default function ListingDetails({ params }) {
   const storeName = business?.business_name || business?.full_name || "Local business";
   const city = business?.city || "Your area";
   const address = business?.address || null;
-  const category = business?.category || listing.category || "Local listing";
+  const category =
+    business?.category ||
+    listing?.category_info?.name ||
+    listing?.category ||
+    "Local listing";
   const showMessage = role !== "business";
   const galleryPhotos = extractPhotoUrls(listing.photo_url);
   const inventory = normalizeInventory(listing);
