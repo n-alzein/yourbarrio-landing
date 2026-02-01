@@ -295,6 +295,15 @@ button {
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
+.theme-light nav.theme-lock[data-business-navbar="1"] {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.theme-light .yb-business-marketing nav.theme-lock .backdrop-blur-xl {
+  background: linear-gradient(90deg, rgba(15, 6, 32, 0.9), rgba(42, 8, 84, 0.8), rgba(74, 8, 83, 0.85)) !important;
+}
+
 .theme-light nav.theme-lock .text-white {
   color: #fff !important;
 }

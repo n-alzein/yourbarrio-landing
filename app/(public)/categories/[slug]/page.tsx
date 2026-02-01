@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import SafeImage from "@/components/SafeImage";
 import { fetchCategoryBySlug as fetchCategoryBySlugFromDb } from "@/lib/categories";
 import { CATEGORY_BY_SLUG } from "@/lib/businessCategories";
 
@@ -17,6 +18,23 @@ type SupabaseListing = {
   photo_url?: string | null;
   created_at?: string | null;
 };
+
+function formatPriceWithCents(value?: number | string | null) {
+  if (value === null || value === undefined || value === "") return "Price TBD";
+  const number = Number(value);
+  if (Number.isNaN(number)) return "Price TBD";
+  return `$${number.toFixed(2)}`;
+}
+
+function splitPriceWithCents(value?: number | string | null) {
+  const formatted = formatPriceWithCents(value);
+  if (formatted === "Price TBD") {
+    return { formatted, dollars: null, cents: null };
+  }
+  const normalized = formatted.replace("$", "");
+  const [dollars, cents = "00"] = normalized.split(".");
+  return { formatted, dollars, cents };
+}
 
 function humanizeSlug(slug: string) {
   return slug
@@ -145,29 +163,40 @@ export default async function CategoryListingsPage({
                   href={`/listings/${item.id}`}
                   className="group rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition overflow-hidden"
                 >
-                  <div className="relative h-36 sm:h-40 bg-slate-100 flex items-center justify-center">
-                    {cover ? (
-                      <img
-                        src={cover}
-                        alt={item.title || "Listing"}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span className="text-xs text-slate-400">No image</span>
-                    )}
+                  <div className="relative w-full h-[200px] sm:h-[220px] lg:h-[240px] overflow-hidden bg-gray-50 p-2">
+                    <SafeImage
+                      src={cover}
+                      alt={item.title || "Listing"}
+                      className="h-full w-full object-contain transition duration-500 group-hover:scale-105"
+                      loading="lazy"
+                    />
                   </div>
                   <div className="p-4 space-y-2">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                      {title}
-                      {item.city ? ` · ${item.city}` : ""}
+                    <div className="h-7 text-slate-900 tabular-nums">
+                      {(() => {
+                        const price = splitPriceWithCents(item.price);
+                        if (!price.dollars) {
+                          return (
+                            <span className="text-2xl font-bold leading-7">
+                              {price.formatted}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold leading-7">
+                              ${price.dollars}
+                            </span>
+                            <span className="text-sm font-semibold uppercase leading-5">
+                              {price.cents}
+                            </span>
+                          </span>
+                        );
+                      })()}
                     </div>
                     <h3 className="text-sm sm:text-base font-semibold text-slate-900 line-clamp-2">
                       {item.title || "Untitled listing"}
                     </h3>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {item.price ? `$${item.price}` : "Price TBD"}
-                    </div>
                   </div>
                 </Link>
               );

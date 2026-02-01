@@ -327,246 +327,68 @@ export default function BusinessListingsPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-4 md:py-8 text-slate-900 dark:text-slate-100">
       {process.env.NODE_ENV !== "production" ? <InventorySelfTest /> : null}
-      {/* Hero */}
+      {/* Snapshot banner */}
       <div
-        className={`rounded-3xl border shadow-xl p-8 md:p-10 flex flex-col md:flex-row items-start md:items-center gap-8 ${
+        className={`rounded-2xl border shadow-sm p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 ${
           isLight
-            ? "border-slate-200/70 bg-gradient-to-r from-white via-slate-50 to-white"
-            : "border-white/10 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950"
+            ? "bg-white border-slate-200/80"
+            : "bg-slate-900/70 border-white/10"
         }`}
       >
         <div className="flex-1">
-          <p
-            className={`text-sm font-semibold uppercase tracking-wide ${
-              isLight ? "text-indigo-800" : "text-indigo-200"
-            }`}
-          >
-            Catalog manager
-          </p>
-          <h1
-            className={`mt-2 text-3xl md:text-4xl font-extrabold leading-tight ${
-              isLight ? "text-slate-900" : "text-slate-100"
-            }`}
-          >
-            Your Listings, ready for shoppers
-          </h1>
-          <p
-            className={`mt-3 max-w-2xl ${
-              isLight ? "text-slate-700" : "text-slate-300"
-            }`}
-          >
-            Keep your catalog retail-ready with polished imagery, clear pricing, and quick edits. A streamlined workspace inspired by the world’s top marketplaces.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3 theme-lock">
-            <button
-              onClick={() => router.push("/business/listings/new")}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-white font-semibold shadow-lg shadow-indigo-200/60 dark:shadow-indigo-900/40 hover:bg-indigo-700 transition"
-            >
-              + Create new listing
-            </button>
-            <button
-              onClick={() => router.push("/business/dashboard")}
-              className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 font-semibold transition border ${
-                isLight
-                  ? "bg-white text-slate-900 border-slate-300 hover:bg-slate-50"
-                  : "text-white border-white/15 hover:bg-white/10"
-              }`}
-            >
-              View dashboard
-            </button>
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-slate-500 dark:text-slate-300">
-            <span
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 border shadow-sm ${
-                isLight
-                  ? "bg-white border-slate-200/80 text-slate-600"
-                  : "bg-white/5 border-white/10 text-slate-200"
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Live catalog
-            </span>
-            <span
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 border shadow-sm ${
-                isLight
-                  ? "bg-white border-slate-200/80 text-slate-600"
-                  : "bg-white/5 border-white/10 text-slate-200"
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full bg-sky-500" />
-              Inventory ready
-            </span>
-            <span
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 border shadow-sm ${
-                isLight
-                  ? "bg-white border-slate-200/80 text-slate-600"
-                  : "bg-white/5 border-white/10 text-slate-200"
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              Fast edits
-            </span>
-          </div>
-        </div>
-        <div className="w-full md:w-64">
           <div
-            className={`rounded-2xl border shadow-lg p-4 ${
-              isLight ? "bg-white border-slate-200/80" : "bg-slate-900/70 border-white/10"
+            className={`text-xs font-semibold uppercase tracking-wide ${
+              isLight ? "text-slate-600" : "text-slate-300"
             }`}
           >
-            <div
-              className={`text-sm font-semibold ${
-                isLight ? "text-slate-700" : "text-slate-300"
-              }`}
-            >
-              Snapshot
+            Snapshot
+          </div>
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <div className={`text-xs ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                Total listings
+              </div>
+              <div className={`text-lg font-semibold ${isLight ? "text-slate-900" : "text-slate-100"}`}>
+                {totalListings}
+              </div>
             </div>
-            <div className="mt-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isLight ? "text-slate-700" : "text-slate-400"
-                  }`}
-                >
-                  Total listings
-                </span>
-                <span
-                  className={`text-lg font-bold ${
-                    isLight ? "text-slate-900" : "text-slate-100"
-                  }`}
-                >
-                  {totalListings}
-                </span>
+            <div className="space-y-1">
+              <div className={`text-xs ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                Avg. price
               </div>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isLight ? "text-slate-700" : "text-slate-400"
-                  }`}
-                >
-                  Avg. price
-                </span>
-                <span
-                  className={`text-lg font-bold ${
-                    isLight ? "text-slate-900" : "text-slate-100"
-                  }`}
-                >
-                  {new Intl.NumberFormat("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                    maximumFractionDigits: 0,
-                  }).format(averagePrice || 0)}
-                </span>
+              <div className={`text-lg font-semibold ${isLight ? "text-slate-900" : "text-slate-100"}`}>
+                {new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                  maximumFractionDigits: 0,
+                }).format(averagePrice || 0)}
               </div>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isLight ? "text-slate-700" : "text-slate-400"
-                  }`}
-                >
-                  Lead category
-                </span>
-                <span
-                  className={`text-sm font-semibold ${
-                    isLight ? "text-slate-900" : "text-slate-100"
-                  }`}
-                >
-                  {primaryCategory}
-                </span>
+            </div>
+            <div className="space-y-1">
+              <div className={`text-xs ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                Lead category
               </div>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isLight ? "text-slate-700" : "text-slate-400"
-                  }`}
-                >
-                  Last update
-                </span>
-                <span
-                  className={`text-sm font-semibold ${
-                    isLight ? "text-slate-900" : "text-slate-100"
-                  }`}
-                >
-                  {lastUpdated}
-                </span>
+              <div className={`text-sm font-semibold ${isLight ? "text-slate-900" : "text-slate-100"}`}>
+                {primaryCategory}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className={`text-xs ${isLight ? "text-slate-500" : "text-slate-400"}`}>
+                Last update
+              </div>
+              <div className={`text-sm font-semibold ${isLight ? "text-slate-900" : "text-slate-100"}`}>
+                {lastUpdated}
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
-        <div
-          className={`rounded-2xl border shadow-sm p-4 ${
-            isLight ? "bg-white border-slate-200/80" : "bg-slate-900/80 border-white/10"
-          }`}
-        >
-          <div className={`text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
-            Catalog health
-          </div>
-          <div className="mt-2 flex items-end gap-2">
-            <span
-              className={`text-3xl font-extrabold ${
-                isLight ? "text-indigo-800" : "text-indigo-200"
-              }`}
-            >
-              {totalListings > 0 ? "On track" : "Start now"}
-            </span>
-            {totalListings > 0 && (
-              <span className="text-xs text-emerald-600 dark:text-emerald-300 font-semibold">
-                ✓ Published
-              </span>
-            )}
-          </div>
-          <p className={`mt-2 text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
-            Keep your items fresh with current pricing and imagery.
-          </p>
-        </div>
-        <div
-          className={`rounded-2xl border shadow-sm p-4 ${
-            isLight ? "bg-white border-slate-200/80" : "bg-slate-900/80 border-white/10"
-          }`}
-        >
-          <div className={`text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
-            Pricing overview
-          </div>
-          <div
-            className={`mt-2 text-3xl font-extrabold ${
-              isLight ? "text-slate-900" : "text-slate-100"
-            }`}
+        <div className="theme-lock">
+          <button
+            onClick={() => router.push("/business/listings/new")}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-white text-sm font-semibold shadow-md shadow-indigo-200/60 dark:shadow-indigo-900/40 hover:bg-indigo-700 transition"
           >
-            {new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-              maximumFractionDigits: 0,
-            }).format(averagePrice || 0)}
-          </div>
-          <p className={`mt-2 text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
-            Deliver clear, competitive pricing shoppers expect.
-          </p>
-        </div>
-        <div
-          className={`rounded-2xl border shadow-sm p-4 ${
-            isLight ? "bg-white border-slate-200/80" : "bg-slate-900/80 border-white/10"
-          }`}
-        >
-          <div className={`text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
-            Visibility
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            <span
-              className={`text-lg font-semibold ${
-                isLight ? "text-slate-900" : "text-slate-100"
-              }`}
-            >
-              Featured in local search
-            </span>
-          </div>
-          <p className={`mt-2 text-sm ${isLight ? "text-slate-700" : "text-slate-400"}`}>
-            Listings appear in neighborhood results for nearby shoppers.
-          </p>
+            + Create new listing
+          </button>
         </div>
       </div>
 
@@ -604,16 +426,6 @@ export default function BusinessListingsPage() {
                 Manage imagery, categories, and pricing in one place.
               </p>
             </div>
-            <button
-              onClick={() => router.push("/business/listings/new")}
-              className={`hidden sm:inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                isLight
-                  ? "border-slate-300 text-slate-900 hover:bg-slate-50"
-                  : "border-white/15 text-white hover:bg-white/10"
-              }`}
-            >
-              + New listing
-            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -15,6 +15,23 @@ import {
 import { installNetTrace } from "@/lib/netTrace";
 import { resolveCategoryIdByName } from "@/lib/categories";
 
+function formatPrice(value) {
+  if (value === null || value === undefined || value === "") return "Price TBD";
+  const number = Number(value);
+  if (Number.isNaN(number)) return String(value);
+  return `$${number.toFixed(2)}`;
+}
+
+function splitPrice(value) {
+  const formatted = formatPrice(value);
+  if (formatted === "Price TBD") {
+    return { formatted, dollars: null, cents: null };
+  }
+  const normalized = formatted.replace("$", "");
+  const [dollars, cents = "00"] = normalized.split(".");
+  return { formatted, dollars, cents };
+}
+
 export default function ListingsClient() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +213,7 @@ export default function ListingsClient() {
   }, [category, cacheKey, hasLoaded, retryKey, searchTerm]);
 
   return (
-    <div className="max-w-4xl mx-auto py-2 md:pt-1">
+    <div className="max-w-6xl mx-auto py-2 md:pt-1">
       {showListView ? (
         <button
           type="button"
@@ -206,7 +223,7 @@ export default function ListingsClient() {
           ← Go back
         </button>
       ) : null}
-      <div>
+      <div className="pt-4">
         <h1 className="text-3xl font-bold mb-2">
           {searchTerm
             ? `Search results for “${searchTerm}”`
@@ -216,9 +233,7 @@ export default function ListingsClient() {
           <p className="text-gray-600">
             Category: <span className="font-semibold">{category}</span>
           </p>
-        ) : (
-          <p className="text-gray-600">Browse all listings.</p>
-        )}
+        ) : null}
       </div>
 
       {loadError ? (
@@ -245,7 +260,7 @@ export default function ListingsClient() {
         </div>
       ) : null}
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {sortedListings.map((listing) => {
           const inventory = normalizeInventory(listing);
           const availability = getAvailabilityBadgeStyle(inventory);
@@ -253,36 +268,51 @@ export default function ListingsClient() {
             <Link
               key={listing.id}
               href={`/listings/${listing.id}`}
-              className="group flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg md:flex-row"
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
             >
-              <div className="relative h-40 w-full flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 md:h-32 md:w-48">
+              <div className="relative w-full h-[200px] sm:h-[220px] lg:h-[240px] overflow-hidden bg-gray-50 p-2">
                 <SafeImage
                   src={primaryPhotoUrl(listing.photo_url)}
                   alt={listing.title || "Listing photo"}
-                  fill
-                  className="object-cover transition duration-500 group-hover:scale-105"
-                  sizes="(max-width: 768px) 100vw, 192px"
+                  className="h-full w-full object-contain transition duration-500 group-hover:scale-105"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
                   onError={() => {}}
                   onLoad={() => {}}
                 />
+                {availability ? (
+                  <span
+                    className={`${availability.className} absolute left-3 top-3`}
+                  >
+                    {availability.label}
+                  </span>
+                ) : null}
               </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    {listing.title || "Untitled listing"}
-                  </h2>
-                  {availability ? (
-                    <span className={availability.className}>{availability.label}</span>
-                  ) : null}
+              <div className="flex flex-col gap-2 p-4">
+                <div className="h-7 text-gray-900 tabular-nums">
+                  {(() => {
+                    const price = splitPrice(listing.price);
+                    if (!price.dollars) {
+                      return (
+                        <span className="text-2xl font-bold leading-7">
+                          {price.formatted}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="flex items-baseline gap-1">
+                        <span className="text-2xl font-bold leading-7">
+                          ${price.dollars}
+                        </span>
+                        <span className="text-sm font-semibold uppercase leading-5">
+                          {price.cents}
+                        </span>
+                      </span>
+                    );
+                  })()}
                 </div>
-                <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                  {listing.description || "No description available."}
-                </p>
-                <div className="mt-3 flex items-center gap-2 text-xs uppercase tracking-wide text-gray-500">
-                  <span>{listing.category || "Uncategorized"}</span>
-                  <span>•</span>
-                  <span>{listing.city || "Your city"}</span>
-                </div>
+                <h2 className="text-sm font-semibold text-gray-900 line-clamp-3">
+                  {listing.title || "Untitled listing"}
+                </h2>
               </div>
             </Link>
           );

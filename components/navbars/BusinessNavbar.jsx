@@ -617,10 +617,11 @@ function BusinessNavbarInner({ pathname }) {
   --------------------------------------------------- */
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-50 bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock"
+      className="fixed top-0 inset-x-0 z-50 theme-lock"
       data-business-navbar="1"
     >
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
+      <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
+        <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
         {/* MOBILE LEFT GROUP */}
         <div className="flex items-center gap-3 md:hidden">
           <button
@@ -628,7 +629,7 @@ function BusinessNavbarInner({ pathname }) {
               setProfileMenuOpen(false);
               setMobileMenuOpen((open) => !open);
             }}
-            className="text-white"
+            className="h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition"
             aria-label="Open menu"
             aria-expanded={mobileMenuOpen}
             aria-controls={mobileDrawerId}
@@ -963,7 +964,7 @@ function BusinessNavbarInner({ pathname }) {
             </div>
           )}
         </div>
-
+      </div>
       </div>
 
     <MobileSidebarDrawer
