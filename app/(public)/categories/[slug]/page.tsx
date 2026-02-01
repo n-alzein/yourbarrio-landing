@@ -169,8 +169,6 @@ export default async function CategoryListingsPage({
                       alt={item.title || "Listing"}
                       className="h-full w-full object-contain transition duration-500 group-hover:scale-105"
                       loading="lazy"
-                      onError={() => {}}
-                      onLoad={() => {}}
                     />
                   </div>
                   <div className="p-4 space-y-2">

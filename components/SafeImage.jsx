@@ -8,8 +8,8 @@ export default function SafeImage({
   src,
   alt = "",
   fallbackSrc = "/business-placeholder.png",
-  onError,
-  onLoad,
+  onError = undefined,
+  onLoad = undefined,
   useNextImage = false,
   ...rest
 }) {
