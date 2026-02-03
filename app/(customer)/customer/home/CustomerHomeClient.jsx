@@ -31,6 +31,7 @@ import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCatego
 import { resolveCategoryIdByName } from "@/lib/categories";
 import { logDataDiag } from "@/lib/dataDiagnostics";
 import CategoryTilesGrid from "@/components/customer/CategoryTilesGrid";
+import { useLocation } from "@/components/location/LocationProvider";
 
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 function HomeGuardFallback() {
@@ -41,11 +42,11 @@ function HomeGuardFallback() {
 
   return (
     <div className={`min-h-screen ${textBase} relative px-6 pt-3`}>
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-[#05010d]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black" />
-        <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px]" />
-        <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
+      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 bg-[#05010d] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/40 via-fuchsia-900/30 to-black pointer-events-none" />
+        <div className="absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full bg-purple-600/30 blur-[120px] pointer-events-none" />
+        <div className="absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px] pointer-events-none" />
       </div>
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-3">
@@ -116,6 +117,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
   const { user, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const { location, hasLocation, hydrated: locationHydrated } = useLocation();
   const textTone = useMemo(
     () => ({
       base: isLight ? "text-slate-900" : "text-white",
@@ -130,6 +132,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
   );
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const showLocationEmpty = locationHydrated && !hasLocation;
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
   const homeBisect = {
@@ -242,6 +245,43 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     };
   }, [clickDiagEnabled, homeBisect.homeAudit]);
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF !== "1") return undefined;
+    if (typeof window === "undefined" || typeof PerformanceObserver === "undefined") {
+      return undefined;
+    }
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        // eslint-disable-next-line no-console
+        console.log("[longtask]", Math.round(entry.duration), "ms", entry);
+      }
+    });
+    try {
+      observer.observe({ entryTypes: ["longtask"] });
+    } catch {
+      return undefined;
+    }
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF !== "1") return undefined;
+    if (typeof window === "undefined" || typeof requestAnimationFrame === "undefined") {
+      return undefined;
+    }
+    let rafId = 0;
+    let last = performance.now();
+    const tick = (now) => {
+      const delta = now - last;
+      if (delta > 200) {
+        // eslint-disable-next-line no-console
+        console.log("[raf-stall]", Math.round(delta), "ms", new Date().toISOString());
+      }
+      last = now;
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+  useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
     const cleanup = installPreventDefaultTracer();
     return cleanup;
@@ -337,6 +377,13 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     const term = search.trim();
     const categoryValue = categoryFilter.trim();
 
+    if (!hasLocation) {
+      setHybridItems([]);
+      setHybridItemsError("Select a location to search.");
+      setHybridItemsLoading(false);
+      return undefined;
+    }
+
     const client = supabase ?? getSupabaseBrowserClient();
     if (!client) return undefined;
 
@@ -376,6 +423,11 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
           )
           .order("created_at", { ascending: false })
           .limit(8);
+        if (location.zip) {
+          query = query.eq("zip_code", location.zip);
+        } else if (location.city) {
+          query = query.ilike("city", location.city);
+        }
         if (categoryValue && categoryValue !== "All") {
           const categoryId = await resolveCategoryIdByName(client, categoryValue);
           if (categoryId) {
@@ -435,7 +487,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     return () => {
       isActive = false;
     };
-  }, [search, supabase, logCrashEvent, categoryFilter]);
+  }, [search, supabase, logCrashEvent, categoryFilter, hasLocation, location.city, location.zip]);
 
   if (loadingUser && !user) {
     return (
@@ -475,6 +527,11 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
         data-home-content="1"
       >
         <div className="w-full max-w-none">
+          {showLocationEmpty ? (
+            <div className="mb-4 rounded-2xl border border-white/12 bg-white/5 backdrop-blur-xl p-4 text-sm text-white/70">
+              Select a location to see listings near you.
+            </div>
+          ) : null}
           {authReady ? (
             <>
               {search ? (
@@ -609,8 +666,34 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
 
         {!search && (
           <div
-            className="relative z-0 mt-4 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-12"
+            className="relative z-10 mt-4 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-12"
             data-home-tiles="1"
+            onPointerDownCapture={(event) => {
+              if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF !== "1") return;
+              try {
+                const target = event.target;
+                const { clientX, clientY } = event;
+                const top = document.elementFromPoint(clientX, clientY);
+                const anchor = top?.closest?.("a[href]");
+                // eslint-disable-next-line no-console
+                console.log("[tile-hit-test]", {
+                  target: target?.tagName,
+                  currentTarget: event.currentTarget?.tagName,
+                  top: top?.tagName,
+                  anchor: anchor?.getAttribute?.("href") || null,
+                });
+                const startedAt = performance.now();
+                setTimeout(() => {
+                  // eslint-disable-next-line no-console
+                  console.log(
+                    "[perf] click_to_timeout0(ms)",
+                    Math.round(performance.now() - startedAt)
+                  );
+                }, 0);
+              } catch {
+                /* ignore */
+              }
+            }}
           >
             <CategoryTilesGrid
               categories={featuredCategoryList}

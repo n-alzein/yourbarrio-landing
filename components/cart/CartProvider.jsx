@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 
 /** @typedef {import("@/lib/types/cart").CartResponse} CartResponse */
@@ -41,6 +41,9 @@ export function CartProvider({ children }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const inFlightRef = useRef(false);
+  const abortRef = useRef(null);
+  const lastRefreshKeyRef = useRef(null);
 
   const syncCart = useCallback((payload) => {
     setCart(payload?.cart || null);
@@ -48,40 +51,70 @@ export function CartProvider({ children }) {
     setItems(payload?.cart?.cart_items || []);
   }, []);
 
-  const refreshCart = useCallback(async () => {
-    if (!user?.id || authStatus !== "authenticated") {
-      setCart(null);
-      setVendor(null);
-      setItems([]);
-      setLoading(false);
-      setError(null);
-      return { cart: null };
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/cart", {
-        method: "GET",
-        credentials: "include",
-      });
-      const payload = await parseResponse(response);
-      if (!response.ok) {
-        throw new Error(payload?.error || "Failed to load cart");
+  const refreshCart = useCallback(
+    async ({ reason } = {}) => {
+      if (!user?.id || authStatus !== "authenticated") {
+        setCart(null);
+        setVendor(null);
+        setItems([]);
+        setLoading(false);
+        setError(null);
+        return { cart: null };
       }
-      syncCart(payload);
-      return payload;
-    } catch (err) {
-      setError(err?.message || "Failed to load cart");
-      return { error: err?.message || "Failed to load cart" };
-    } finally {
-      setLoading(false);
-    }
-  }, [authStatus, syncCart, user?.id]);
+
+      if (inFlightRef.current) return { skipped: true };
+      inFlightRef.current = true;
+
+      if (abortRef.current?.abort) {
+        abortRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1") {
+        console.log("[cart] refresh:start", { reason });
+      }
+
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/cart", {
+          method: "GET",
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        const payload = await parseResponse(response);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to load cart");
+        }
+        syncCart(payload);
+        return payload;
+      } catch (err) {
+        if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1") {
+          console.log("[cart] refresh:error", { message: err?.message || String(err) });
+        }
+        setError(err?.message || "Failed to load cart");
+        return { error: err?.message || "Failed to load cart" };
+      } finally {
+        setLoading(false);
+        inFlightRef.current = false;
+      }
+    },
+    [authStatus, syncCart, user?.id]
+  );
 
   useEffect(() => {
-    refreshCart();
-  }, [refreshCart]);
+    if (!user?.id || authStatus !== "authenticated") return undefined;
+    const key = `${user.id}:${authStatus}`;
+    if (lastRefreshKeyRef.current === key) return undefined;
+    lastRefreshKeyRef.current = key;
+    refreshCart({ reason: "mount" });
+    return () => {
+      if (abortRef.current?.abort) {
+        abortRef.current.abort();
+      }
+    };
+  }, [authStatus, refreshCart, user?.id]);
 
   const addItem = useCallback(
     async ({ listingId, quantity = 1, clearExisting }) => {

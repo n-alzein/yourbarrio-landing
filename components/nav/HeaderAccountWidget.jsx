@@ -23,7 +23,8 @@ import { useCart } from "@/components/cart/CartProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
+import { useLocation } from "@/components/location/LocationProvider";
+import { getLocationLabel } from "@/lib/location";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
 
@@ -50,13 +51,15 @@ export default function HeaderAccountWidget({
   } = useAuth();
   const { itemCount } = useCart();
   const { openModal } = useModal();
+  const { location } = useLocation();
   const authDiagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
   const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [locationValue, setLocationValue] = useState("Your city");
+  // Location display derives only from the global provider state.
+  const locationLabel = getLocationLabel(location);
   const dropdownRef = useRef(null);
   const lastUnreadKeyRef = useRef(null);
   const refreshTimerRef = useRef(null);
@@ -145,43 +148,6 @@ export default function HeaderAccountWidget({
       }
     };
   }, [hasAuth, isCustomer, scheduleUnreadRefresh, unreadUserId, authStatus]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const cached = window.localStorage.getItem("yb-city");
-    if (cached) {
-      queueMicrotask(() => {
-        setLocationValue(cached);
-      });
-    }
-  }, []);
-
-  const buildUnreadChannel = useCallback(
-    (scopedClient) =>
-      scopedClient
-        .channel(`customer-unread-${unreadUserId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "conversations",
-            filter: `customer_id=eq.${unreadUserId}`,
-          },
-          () => {
-            loadUnreadCount();
-          }
-        ),
-    [unreadUserId, loadUnreadCount]
-  );
-
-  useRealtimeChannel({
-    supabase,
-    enabled:
-      hasAuth && isCustomer && authStatus === "authenticated" && Boolean(unreadUserId),
-    buildChannel: buildUnreadChannel,
-    diagLabel: "header-unread",
-  });
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -608,7 +574,7 @@ export default function HeaderAccountWidget({
                   <MapPin className="h-4 w-4 text-white/80" />
                   <div className="min-w-0">
                     <p className="text-xs uppercase tracking-[0.2em] text-white/50">Location</p>
-                    <p className="text-sm font-semibold text-white truncate">{locationValue}</p>
+                    <p className="text-sm font-semibold text-white truncate">{locationLabel}</p>
                   </div>
                 </div>
                 <Link

@@ -38,11 +38,17 @@ async function geocodeAddress(address) {
   return null;
 }
 
-async function fetchBusinesses(supabase) {
-  const businessesResult = await supabase
+async function fetchBusinesses(supabase, { city, zip }) {
+  let query = supabase
     .from("businesses")
     .select("*")
     .limit(400);
+  if (zip) {
+    query = query.eq("zip_code", zip);
+  } else if (city) {
+    query = query.ilike("city", city);
+  }
+  const businessesResult = await query;
   if (businessesResult.error) {
     console.warn("public-businesses: businesses query failed", businessesResult.error);
     return [];
@@ -50,12 +56,18 @@ async function fetchBusinesses(supabase) {
   return (businessesResult.data || []).map((row) => ({ ...row, _table: "businesses" }));
 }
 
-async function fetchUsers(supabase) {
-  const usersResult = await supabase
+async function fetchUsers(supabase, { city, zip }) {
+  let query = supabase
     .from("users")
     .select("*")
     .eq("role", "business")
     .limit(400);
+  if (zip) {
+    query = query.eq("zip_code", zip);
+  } else if (city) {
+    query = query.ilike("city", city);
+  }
+  const usersResult = await query;
   if (usersResult.error) {
     console.warn("public-businesses: users query failed", usersResult.error);
     return [];
@@ -63,11 +75,20 @@ async function fetchUsers(supabase) {
   return (usersResult.data || []).map((row) => ({ ...row, _table: "users" }));
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const city = (searchParams.get("city") || "").trim();
+    const zip = (searchParams.get("zip") || "").trim();
+    if (!city && !zip) {
+      return NextResponse.json({ businesses: [], message: "missing_location" }, { status: 200 });
+    }
     const supabase = createSupabaseClient();
 
-    const [businesses, users] = await Promise.all([fetchBusinesses(supabase), fetchUsers(supabase)]);
+    const [businesses, users] = await Promise.all([
+      fetchBusinesses(supabase, { city, zip }),
+      fetchUsers(supabase, { city, zip }),
+    ]);
 
     const combined = [...businesses, ...users];
     const deduped = [];

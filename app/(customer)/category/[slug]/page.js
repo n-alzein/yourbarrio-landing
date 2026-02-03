@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { fetchCategoryBySlug } from "@/lib/strapi";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -8,9 +9,60 @@ import { fetchCategoryBySlug as fetchCategoryBySlugFromDb } from "@/lib/categori
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function CategoryListingsPage({ params }) {
+async function safeParseLocationCookie() {
+  try {
+    const jar = await cookies();
+    const raw = jar.get("yb-location")?.value;
+    if (!raw) return { city: "", zip: "", label: "" };
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        city: String(parsed?.city || "").trim(),
+        zip: String(parsed?.zip || "").trim(),
+        label: String(parsed?.label || "").trim(),
+      };
+    } catch {
+      const decoded = decodeURIComponent(raw);
+      const parsed = JSON.parse(decoded);
+      return {
+        city: String(parsed?.city || "").trim(),
+        zip: String(parsed?.zip || "").trim(),
+        label: String(parsed?.label || "").trim(),
+      };
+    }
+  } catch {
+    return { city: "", zip: "", label: "" };
+  }
+}
+
+export default async function CategoryListingsPage({ params, searchParams }) {
   const slug = params?.slug;
   if (!slug) notFound();
+  const cityParam = Array.isArray(searchParams?.city)
+    ? searchParams?.city?.[0]
+    : searchParams?.city;
+  const zipParam = Array.isArray(searchParams?.zip)
+    ? searchParams?.zip?.[0]
+    : searchParams?.zip;
+  let city = (cityParam || "").trim();
+  let zip = (zipParam || "").trim();
+  let cookieLabel = "";
+  if (!city && !zip) {
+    const fromCookie = await safeParseLocationCookie();
+    city = fromCookie.city || "";
+    zip = fromCookie.zip || "";
+    cookieLabel = fromCookie.label || "";
+  }
+  const locationLabel = cookieLabel || zip || city;
+  const locationParams = new URLSearchParams();
+  if (zip) {
+    locationParams.set("zip", zip);
+  } else if (city) {
+    locationParams.set("city", city);
+  }
+  const homeHref = locationParams.toString()
+    ? `/customer/home?${locationParams.toString()}`
+    : "/customer/home";
 
   let category = null;
   try {
@@ -27,39 +79,62 @@ export default async function CategoryListingsPage({ params }) {
   if (supabase) {
     categoryRow = await fetchCategoryBySlugFromDb(supabase, slug);
     const categoryName = categoryRow?.name || category.name;
-    let query = supabase
-      .from("listings")
-      .select(
-        "id,title,description,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
-      )
-      .order("created_at", { ascending: false })
-      .limit(80);
-    if (categoryRow?.id) {
-      query = query.eq("category_id", categoryRow.id);
+
+    const applyLocation = (q) => {
+      if (zip) return q.eq("zip_code", zip);
+      if (city) return q.ilike("city", city);
+      return q;
+    };
+
+    const buildBaseQuery = () =>
+      applyLocation(
+        supabase
+          .from("listings")
+          .select(
+            "id,title,description,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+          )
+          .order("created_at", { ascending: false })
+          .limit(80)
+      );
+
+    let data = [];
+    let error = null;
+
+    if (!locationLabel) {
+      listings = [];
     } else {
-      query = query.in("category", [categoryName, slug]);
-    }
-    let { data, error } = await query;
-    if (!error && categoryRow?.id && Array.isArray(data) && data.length === 0) {
-      const fallbackQuery = supabase
-        .from("listings")
-        .select(
-          "id,title,description,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
-        )
-        .in("category", [categoryName, slug])
-        .order("created_at", { ascending: false })
-        .limit(80);
-      const fallbackResult = await fallbackQuery;
-      data = fallbackResult.data;
-      error = fallbackResult.error;
-    }
-    if (error) {
-      console.error("Failed to load category listings", {
-        slug,
-        message: error.message,
-      });
-    } else {
-      listings = Array.isArray(data) ? data : [];
+      if (categoryRow?.id) {
+        const primaryRes = await buildBaseQuery().eq("category_id", categoryRow.id);
+        data = primaryRes.data || [];
+        error = primaryRes.error;
+
+        if (!error && Array.isArray(data) && data.length === 0 && categoryRow?.name) {
+          const fallbackRes = await buildBaseQuery().ilike("category", categoryRow.name);
+          data = fallbackRes.data || [];
+          error = fallbackRes.error;
+        }
+        if (!error && Array.isArray(data) && data.length === 0 && slug) {
+          const slugFallbackRes = await buildBaseQuery().ilike("category", slug);
+          data = slugFallbackRes.data || [];
+          error = slugFallbackRes.error;
+        }
+      } else if (categoryName) {
+        const legacyRes = await buildBaseQuery().ilike("category", categoryName);
+        data = legacyRes.data || [];
+        error = legacyRes.error;
+
+        if (!error && Array.isArray(data) && data.length === 0 && slug) {
+          const slugFallbackRes = await buildBaseQuery().ilike("category", slug);
+          data = slugFallbackRes.data || [];
+          error = slugFallbackRes.error;
+        }
+      }
+
+      if (error) {
+        listings = [];
+      } else {
+        listings = Array.isArray(data) ? data : [];
+      }
     }
   }
 
@@ -68,7 +143,7 @@ export default async function CategoryListingsPage({ params }) {
       <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <Link
-            href="/customer/home"
+            href={homeHref}
             className="text-sm text-slate-500 hover:text-slate-900 transition"
           >
             ← Back to home
@@ -81,7 +156,11 @@ export default async function CategoryListingsPage({ params }) {
           ) : null}
         </div>
 
-        {listings.length === 0 ? (
+        {!locationLabel ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Select a location to see listings in this category.
+          </div>
+        ) : listings.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
             No listings available for this category yet.
           </div>

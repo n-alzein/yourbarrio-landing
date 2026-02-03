@@ -23,6 +23,13 @@ import {
 } from "@/lib/inventory";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 import { useCart } from "@/components/cart/CartProvider";
+import { useLocation } from "@/components/location/LocationProvider";
+import {
+  getLocationLabel,
+  normalizeLocationInput,
+  normalizeSelectedLocation,
+  setLocationSearchParams,
+} from "@/lib/location";
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES.map((cat) => cat.name)];
 
@@ -43,14 +50,18 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { itemCount } = useCart();
+  const { location, hasLocation, setLocation } = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileDrawerId = useId();
 
   const [searchTerm, setSearchTerm] = useState(() => getInitialSearchTerm(searchParams));
   const [selectedCategory, setSelectedCategory] = useState(() => getInitialCategory(searchParams));
   const [locationOpen, setLocationOpen] = useState(false);
-  const [locationValue, setLocationValue] = useState("Your city");
   const [locationInput, setLocationInput] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [locationSuggestLoading, setLocationSuggestLoading] = useState(false);
+  const [locationSuggestError, setLocationSuggestError] = useState(null);
+  const [locationSuggestIndex, setLocationSuggestIndex] = useState(-1);
   const [searchResults, setSearchResults] = useState({
     items: [],
     businesses: [],
@@ -62,8 +73,15 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
   const locationRef = useRef(null);
+  const locationPrefillRef = useRef(false);
+  const locationSuggestAbortRef = useRef(null);
+  const locationSuggestReqIdRef = useRef(0);
+  const locationSuggestSpinnerRef = useRef(null);
+  const locationSuggestShownAtRef = useRef(0);
   const searchRequestIdRef = useRef(0);
   const lastQueryRef = useRef("");
+  // Location display derives only from the global provider state.
+  const locationLabel = getLocationLabel(location);
 
   const sortedSearchItems = useMemo(
     () => sortListingsByAvailability(searchResults.items || []),
@@ -86,7 +104,10 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
     const params = new URLSearchParams();
     if (value) params.set("q", value);
     if (nextCategory && nextCategory !== "All") params.set("category", nextCategory);
-    const target = params.toString() ? `${baseSearchPath}?${params.toString()}` : baseSearchPath;
+    const withLocation = setLocationSearchParams(params, location);
+    const target = withLocation.toString()
+      ? `${baseSearchPath}?${withLocation.toString()}`
+      : baseSearchPath;
     setSuggestionsOpen(false);
     router.push(target);
   };
@@ -108,7 +129,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
     setSearchTerm(next);
     setSuggestionsOpen(false);
     if (itemId) {
-      router.push(`${listingPath}/${itemId}`);
+      const params = setLocationSearchParams(new URLSearchParams(), location);
+      const suffix = params.toString();
+      router.push(suffix ? `${listingPath}/${itemId}?${suffix}` : `${listingPath}/${itemId}`);
       return;
     }
     navigateToSearch(next, selectedCategory);
@@ -130,7 +153,19 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       return;
     }
 
-    const normalized = `${term.toLowerCase()}::${selectedCategory.toLowerCase()}`;
+    if (!hasLocation) {
+      queueMicrotask(() => {
+        setSearchResults({ items: [], businesses: [], places: [] });
+        setSearchError("Select a location to search.");
+        setSearchLoading(false);
+        setSuggestionsOpen(false);
+      });
+      lastQueryRef.current = "";
+      return;
+    }
+
+    const locationKey = location.zip || location.city || "none";
+    const normalized = `${term.toLowerCase()}::${selectedCategory.toLowerCase()}::${locationKey.toLowerCase()}`;
     if (normalized === lastQueryRef.current) {
       queueMicrotask(() => {
         setSuggestionsOpen(true);
@@ -150,6 +185,11 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       const params = new URLSearchParams();
       params.set("q", term);
       if (categoryParam) params.set("category", categoryParam);
+      if (location.zip) {
+        params.set("zip", location.zip);
+      } else if (location.city) {
+        params.set("city", location.city);
+      }
       fetch(`/api/search?${params.toString()}`, {
         signal: controller.signal,
       })
@@ -200,7 +240,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       clearTimeout(handle);
       controller.abort();
     };
-  }, [searchTerm, selectedCategory]);
+  }, [searchTerm, selectedCategory, hasLocation, location.city, location.zip]);
 
   // Close AI suggestions when clicking away
   useEffect(() => {
@@ -239,48 +279,170 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   }, [locationOpen]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const cached = window.localStorage.getItem("yb-city");
-    if (cached) {
-      queueMicrotask(() => {
-        setLocationValue(cached);
-      });
+    if (!locationOpen) {
+      locationPrefillRef.current = false;
       return;
     }
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const res = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          const city = (data?.city || "").trim();
-          if (city) {
-            window.localStorage.setItem("yb-city", city);
-            queueMicrotask(() => {
-              setLocationValue(city);
-            });
-          }
-        } catch {
-          // best effort
-        }
-      },
-      () => {
-        // ignore geolocation errors
-      },
-      { timeout: 8000 }
-    );
-  }, []);
+    if (locationPrefillRef.current) return;
+    locationPrefillRef.current = true;
+    setLocationInput(locationLabel !== "Your city" ? locationLabel : "");
+  }, [locationOpen, locationLabel]);
 
   useEffect(() => {
-    if (locationOpen && !locationInput && locationValue !== "Your city") {
-      queueMicrotask(() => {
-        setLocationInput(locationValue);
-      });
+    const abortInflight = () => {
+      if (locationSuggestAbortRef.current) {
+        locationSuggestAbortRef.current.abort();
+        locationSuggestAbortRef.current = null;
+      }
+    };
+
+    // Clear delayed spinner timer on every run (ONLY clear timer)
+    if (locationSuggestSpinnerRef.current) {
+      clearTimeout(locationSuggestSpinnerRef.current);
+      locationSuggestSpinnerRef.current = null;
     }
-  }, [locationOpen, locationInput, locationValue]);
+
+    if (!locationOpen) {
+      abortInflight();
+      locationSuggestReqIdRef.current += 1; // invalidate pending
+      locationSuggestShownAtRef.current = 0;
+      setLocationSuggestLoading(false);
+      setLocationSuggestError(null);
+      setLocationSuggestIndex(-1);
+      setLocationSuggestions([]);
+      return;
+    }
+
+    const term = locationInput.trim();
+
+    // If user cleared input, clear suggestions.
+    if (term.length === 0) {
+      abortInflight();
+      locationSuggestReqIdRef.current += 1;
+      locationSuggestShownAtRef.current = 0;
+      setLocationSuggestLoading(false);
+      setLocationSuggestError(null);
+      setLocationSuggestIndex(-1);
+      setLocationSuggestions([]);
+      return;
+    }
+
+    // If term is short (1 char), keep last suggestions to prevent flicker.
+    if (term.length < 2) {
+      abortInflight();
+      locationSuggestReqIdRef.current += 1;
+      locationSuggestShownAtRef.current = 0;
+      setLocationSuggestLoading(false);
+      setLocationSuggestError(null);
+      setLocationSuggestIndex(-1);
+      return;
+    }
+
+    const reqId = ++locationSuggestReqIdRef.current;
+
+    abortInflight();
+    const controller = new AbortController();
+    locationSuggestAbortRef.current = controller;
+
+    // Delay spinner so it doesn't flash on fast responses.
+    locationSuggestSpinnerRef.current = setTimeout(() => {
+      if (reqId !== locationSuggestReqIdRef.current) return;
+      locationSuggestShownAtRef.current = Date.now();
+      setLocationSuggestLoading(true);
+    }, 150);
+
+    const handle = setTimeout(() => {
+      setLocationSuggestError(null);
+
+      const debug = process.env.NODE_ENV !== "production";
+      const url = debug
+        ? `/api/location-suggest?q=${encodeURIComponent(term)}&debug=1`
+        : `/api/location-suggest?q=${encodeURIComponent(term)}`;
+
+      fetch(url, { signal: controller.signal })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || "location_suggest_failed");
+          }
+          return data;
+        })
+        .then((data) => {
+          if (controller.signal.aborted) return;
+          if (reqId !== locationSuggestReqIdRef.current) return;
+          const next = Array.isArray(data?.suggestions) ? data.suggestions : [];
+          setLocationSuggestions(next);
+          setLocationSuggestIndex(-1);
+          if (data?.error) {
+            setLocationSuggestError(data.error);
+          }
+        })
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          if (reqId !== locationSuggestReqIdRef.current) return;
+          setLocationSuggestError(err?.message || "Location suggestions unavailable.");
+          setLocationSuggestions([]);
+          setLocationSuggestIndex(-1);
+        })
+        .finally(() => {
+          if (controller.signal.aborted) return;
+          if (reqId !== locationSuggestReqIdRef.current) return;
+          if (locationSuggestSpinnerRef.current) {
+            clearTimeout(locationSuggestSpinnerRef.current);
+            locationSuggestSpinnerRef.current = null;
+          }
+          const shownAt = locationSuggestShownAtRef.current || 0;
+          const elapsed = shownAt ? Date.now() - shownAt : 9999;
+          const remaining = 300 - elapsed;
+
+          if (remaining > 0) {
+            setTimeout(() => {
+              if (controller.signal.aborted) return;
+              if (reqId !== locationSuggestReqIdRef.current) return;
+              setLocationSuggestLoading(false);
+            }, remaining);
+          } else {
+            setLocationSuggestLoading(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+      if (locationSuggestSpinnerRef.current) {
+        clearTimeout(locationSuggestSpinnerRef.current);
+        locationSuggestSpinnerRef.current = null;
+      }
+    };
+  }, [locationOpen, locationInput]);
+
+  const applyLocationSuggestion = (suggestion) => {
+    if (!suggestion) return;
+    setLocation(normalizeSelectedLocation(suggestion), { replace: true });
+    setLocationInput("");
+    setLocationSuggestions([]);
+    setLocationSuggestIndex(-1);
+    setLocationOpen(false);
+  };
+
+  const applyLocationInput = () => {
+    if (locationSuggestions.length > 0) {
+      applyLocationSuggestion(locationSuggestions[0]);
+      return;
+    }
+    const next = locationInput.trim();
+    setLocation(
+      next
+        ? normalizeLocationInput(next)
+        : { city: null, zip: null, lat: null, lng: null },
+      { replace: true }
+    );
+    setLocationInput("");
+    setLocationSuggestions([]);
+    setLocationSuggestIndex(-1);
+    setLocationOpen(false);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -343,7 +505,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           >
             <MapPin className="h-4 w-4 text-white/80" />
             <div className="leading-tight">
-              <div className="text-sm font-semibold">{locationValue}</div>
+              <div className="text-sm font-semibold">{locationLabel}</div>
             </div>
             <ChevronDown className="h-4 w-4 text-white/70" />
           </button>
@@ -357,30 +519,72 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                   type="text"
                   value={locationInput}
                   onChange={(event) => setLocationInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setLocationSuggestIndex((prev) =>
+                        Math.min(prev + 1, locationSuggestions.length - 1)
+                      );
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setLocationSuggestIndex((prev) => Math.max(prev - 1, 0));
+                      return;
+                    }
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (
+                        locationSuggestIndex >= 0 &&
+                        locationSuggestions[locationSuggestIndex]
+                      ) {
+                        applyLocationSuggestion(
+                          locationSuggestions[locationSuggestIndex]
+                        );
+                        return;
+                      }
+                      applyLocationInput();
+                    }
+                  }}
                   placeholder="e.g. Austin, 78701"
                   className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    const next = locationInput.trim();
-                    const value = next || "Your city";
-                    setLocationValue(value);
-                    if (typeof window !== "undefined") {
-                      if (value === "Your city") {
-                        window.localStorage.removeItem("yb-city");
-                      } else {
-                        window.localStorage.setItem("yb-city", value);
-                      }
-                    }
-                    setLocationInput("");
-                    setLocationOpen(false);
-                  }}
+                  onClick={applyLocationInput}
                   className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-white/90 transition"
                 >
                   Apply
                 </button>
               </div>
+              <div className="mt-3 text-xs text-white/60 min-h-[16px]">
+                {locationSuggestLoading ? "Searching locations..." : ""}
+              </div>
+              {locationSuggestError ? (
+                <div className="mt-3 text-xs text-rose-200">{locationSuggestError}</div>
+              ) : null}
+              {!locationSuggestLoading &&
+              !locationSuggestError &&
+              locationInput.trim().length >= 2 &&
+              locationSuggestions.length === 0 ? (
+                <div className="mt-3 text-xs text-white/60">No matches.</div>
+              ) : null}
+              {locationSuggestions.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-1">
+                  {locationSuggestions.map((suggestion, idx) => (
+                    <button
+                      key={suggestion.id || suggestion.label || idx}
+                      type="button"
+                      onClick={() => applyLocationSuggestion(suggestion)}
+                      className={`w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10 rounded-lg ${
+                        idx === locationSuggestIndex ? "bg-white/10" : ""
+                      }`}
+                    >
+                      {suggestion.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

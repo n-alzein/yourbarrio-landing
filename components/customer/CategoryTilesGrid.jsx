@@ -1,7 +1,11 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useLocation } from "@/components/location/LocationProvider";
+import { withLocationHref } from "@/lib/location";
 
 const FALLBACK_TILES = Array.from({ length: 8 });
 
@@ -21,7 +25,49 @@ export default function CategoryTilesGrid({
   onTilePointerCancel,
   diagTileClick,
 }) {
+  const { location } = useLocation();
+  const router = useRouter();
+  const debugNavPerf = process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1";
+  const withLocation = (href) => withLocationHref(href, location);
   const hasCategories = Array.isArray(categories) && categories.length > 0;
+  const prefetchedRef = useRef(new Set());
+
+  const markNavStart = useCallback(() => {
+    if (!debugNavPerf) return;
+    try {
+      performance.mark("cat_nav_click");
+    } catch {
+      /* ignore */
+    }
+  }, [debugNavPerf]);
+
+  const prefetchHref = useCallback(
+    (href) => {
+      if (!href) return;
+      if (prefetchedRef.current.has(href)) return;
+      prefetchedRef.current.add(href);
+      router.prefetch(href);
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const href = entry.target?.getAttribute?.("data-prefetch-href");
+          prefetchHref(href);
+        });
+      },
+      { rootMargin: "200px 0px" }
+    );
+
+    const tiles = document.querySelectorAll('[data-category-tile="1"]');
+    tiles.forEach((tile) => observer.observe(tile));
+    return () => observer.disconnect();
+  }, [categories, location?.city, location?.zip, prefetchHref]);
 
   if (isLoading) {
     return (
@@ -71,7 +117,7 @@ export default function CategoryTilesGrid({
           </div>
           {viewAllHref ? (
             <Link
-              href={viewAllHref}
+              href={withLocation(viewAllHref)}
               prefetch={false}
               className="text-sm font-semibold text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-md px-2 py-1"
             >
@@ -89,26 +135,69 @@ export default function CategoryTilesGrid({
           data-home-category-grid="1"
         >
           {categories.map((category, idx) => {
-            const href = `/categories/${category.slug}`;
+            const href = withLocation(`/categories/${category.slug}`);
             const tileTitle = category.name || "Category";
             return (
               <Link
                 key={category.id ?? category.slug ?? idx}
                 href={href}
-                prefetch={false}
+                prefetch
                 aria-label={`Shop ${tileTitle}`}
                 data-safe-nav="1"
                 data-category-tile="1"
+                data-prefetch-href={href}
                 data-clickdiag={clickDiagEnabled ? "tile" : undefined}
                 data-clickdiag-tile-id={clickDiagEnabled ? category.slug || idx : undefined}
                 data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                onPointerDown={(event) => {
+                  if (!debugNavPerf) return;
+                  try {
+                    performance.mark("cat_pointer_down");
+                  } catch {
+                    /* ignore */
+                  }
+                  // eslint-disable-next-line no-console
+                  console.log("[tile-pointer]", {
+                    target: event.target?.tagName,
+                    currentTarget: event.currentTarget?.tagName,
+                    href,
+                  });
+                }}
                 onClickCapture={
                   diagTileClick ? diagTileClick("REACT_TILE_CAPTURE", category.slug || idx) : undefined
                 }
-                onClick={
-                  diagTileClick ? diagTileClick("REACT_TILE_BUBBLE", category.slug || idx) : undefined
-                }
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 pointer-events-auto touch-manipulation active:scale-[0.99] active:shadow-sm"
+                onClick={(event) => {
+                  if (diagTileClick) {
+                    const handler = diagTileClick("REACT_TILE_BUBBLE", category.slug || idx);
+                    if (typeof handler === "function") handler(event);
+                  }
+                  if (debugNavPerf) {
+                    try {
+                      performance.mark("cat_click_handler");
+                      performance.measure(
+                        "pointerdown_to_click_handler",
+                        "cat_pointer_down",
+                        "cat_click_handler"
+                      );
+                      const entry = performance
+                        .getEntriesByName("pointerdown_to_click_handler")
+                        .slice(-1)[0];
+                      // eslint-disable-next-line no-console
+                      console.log(
+                        "[perf] pointerdown_to_click_handler(ms)",
+                        entry?.duration
+                      );
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  markNavStart();
+                }}
+                onNavigate={markNavStart}
+                onMouseEnter={() => prefetchHref(href)}
+                onFocus={() => prefetchHref(href)}
+                onTouchStart={() => prefetchHref(href)}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-colors duration-200 hover:shadow-md hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 pointer-events-auto touch-manipulation active:bg-white/10"
               >
                 <div className="relative aspect-[4/5] lg:aspect-[16/9] w-full overflow-hidden bg-white/5">
                   {category.tileImageUrl ? (

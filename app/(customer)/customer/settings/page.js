@@ -14,6 +14,7 @@ import {
   SettingsSection,
   inputClassName,
 } from "@/components/settings/SettingsSection";
+import ManagePasswordModal from "@/components/settings/ManagePasswordModal";
 
 export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [toast, setToast] = useState(null);
+  const [managePasswordOpen, setManagePasswordOpen] = useState(false);
   const toastTimerRef = useRef(null);
 
   const buildInitialForm = (userValue) => ({
@@ -583,15 +585,17 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-white">
-                  {providerName}
+                  Password & login
                 </p>
                 <p className="text-sm text-white/60">
                   Signed in via {providerLabel}
+                  {providerName ? ` · ${providerName}` : ""}
                 </p>
               </div>
               <button
-                disabled
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white/40"
+                type="button"
+                onClick={() => setManagePasswordOpen(true)}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
               >
                 Manage
               </button>
@@ -625,6 +629,14 @@ export default function SettingsPage() {
           </div>
         </div>
       ) : null}
+
+      <ManagePasswordModal
+        open={managePasswordOpen}
+        onClose={() => setManagePasswordOpen(false)}
+        supabase={supabase}
+        user={user}
+        onSuccess={(message) => showToast("success", message)}
+      />
     </div>
   );
 }

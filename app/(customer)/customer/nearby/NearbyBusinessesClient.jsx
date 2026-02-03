@@ -14,33 +14,7 @@ import CustomerMap from "@/components/customer/CustomerMap";
 import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
 import { appendCrashLog } from "@/lib/crashlog";
 import { logDataDiag } from "@/lib/dataDiagnostics";
-
-const SAMPLE_BUSINESSES = [
-  {
-    id: "sample-1",
-    name: "Barrio Cafe",
-    category: "Cafe",
-    categoryLabel: "Cafe",
-    address: "123 Sample St, San Francisco",
-    description: "Neighborhood coffee and light bites.",
-    website: "",
-    imageUrl: "",
-    source: "sample",
-    coords: { lat: 37.7749, lng: -122.4194 },
-  },
-  {
-    id: "sample-2",
-    name: "Barrio Market",
-    category: "Market",
-    categoryLabel: "Market",
-    address: "456 Grove Ave, San Francisco",
-    description: "Local grocery staples and fresh produce.",
-    website: "",
-    imageUrl: "",
-    source: "sample",
-    coords: { lat: 37.779, lng: -122.423 },
-  },
-];
+import { useLocation } from "@/components/location/LocationProvider";
 
 const isSameBusinessList = (prev, next) => {
   if (!Array.isArray(prev) || !Array.isArray(next)) return false;
@@ -56,6 +30,7 @@ export default function NearbyBusinessesClient() {
   const { user, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const { location, hydrated: locationHydrated } = useLocation();
   const textTone = useMemo(
     () => ({
       base: isLight ? "text-slate-900" : "text-white",
@@ -71,12 +46,20 @@ export default function NearbyBusinessesClient() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [userCity, setUserCity] = useState("");
+  const locationKey = location.zip
+    ? `zip:${location.zip}`
+    : location.city
+      ? `city:${location.city}`
+      : "";
   const mapEnabled = process.env.NEXT_PUBLIC_HOME_BISECT_MAP !== "0";
   const mapAvailable = mapEnabled && process.env.NEXT_PUBLIC_DISABLE_MAP !== "1";
+  const storageKey = locationKey
+    ? `yb_customer_nearby_businesses_${locationKey}`
+    : "yb_customer_nearby_businesses";
   const initialYb = (() => {
     if (typeof window === "undefined") return [];
     try {
-      const cached = sessionStorage.getItem("yb_customer_nearby_businesses");
+      const cached = sessionStorage.getItem(storageKey);
       const parsed = cached ? JSON.parse(cached) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch {
@@ -99,6 +82,7 @@ export default function NearbyBusinessesClient() {
   const ybRequestIdRef = useRef(0);
   const galleryRef = useRef(null);
   const stickyBarRef = useRef(null);
+  const showLocationEmpty = locationHydrated && !locationKey;
   const tileDragState = useRef({
     pointerId: null,
     pointerType: null,
@@ -122,6 +106,35 @@ export default function NearbyBusinessesClient() {
   }, [hasLoadedYb]);
 
   useEffect(() => {
+    if (!locationHydrated) return;
+    if (!locationKey) {
+      setYbBusinesses([]);
+      setHasLoadedYb(true);
+      setYbBusinessesLoading(false);
+      setYbBusinessesError(null);
+      return;
+    }
+    if (typeof window === "undefined") return;
+    try {
+      const cached = sessionStorage.getItem(storageKey);
+      const parsed = cached ? JSON.parse(cached) : [];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setYbBusinesses(parsed);
+        setHasLoadedYb(true);
+        setYbBusinessesLoading(false);
+        setYbBusinessesError(null);
+        return;
+      }
+    } catch {
+      /* ignore cache errors */
+    }
+    setYbBusinesses([]);
+    setHasLoadedYb(false);
+    setYbBusinessesLoading(true);
+    setYbBusinessesError(null);
+  }, [locationHydrated, locationKey, storageKey]);
+
+  useEffect(() => {
     if (typeof document === "undefined") return;
     const handleVisibility = () => setIsVisible(!document.hidden);
     document.addEventListener("visibilitychange", handleVisibility);
@@ -130,34 +143,8 @@ export default function NearbyBusinessesClient() {
 
   useEffect(() => {
     if (!mapAvailable) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    let cancelled = false;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        if (cancelled) return;
-        const lat = pos?.coords?.latitude;
-        const lng = pos?.coords?.longitude;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        try {
-          const res = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
-          if (!res.ok) return;
-          const payload = await res.json();
-          if (!cancelled && payload?.city) {
-            setUserCity(payload.city);
-          }
-        } catch (_) {
-          /* ignore */
-        }
-      },
-      () => {
-        /* ignore */
-      },
-      { enableHighAccuracy: true, maximumAge: 1000 * 60 * 10 }
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [mapAvailable]);
+    setUserCity(location.city || "");
+  }, [mapAvailable, location.city]);
 
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();
@@ -186,8 +173,10 @@ export default function NearbyBusinessesClient() {
   }, []);
 
   const normalizeCity = (value) => (value || "").trim().toLowerCase();
+  const normalizeZip = (value) => (value || "").toString().trim();
   const businessesForMap = useMemo(() => {
     const normalizedUserCity = normalizeCity(userCity);
+    const normalizedUserZip = normalizeZip(location.zip);
     const withCoords = (ybBusinesses || []).filter((biz) => {
       if (!biz) return false;
       const lat = biz.coords?.lat ?? biz.lat ?? biz.latitude;
@@ -196,12 +185,15 @@ export default function NearbyBusinessesClient() {
       const parsedLng = typeof lng === "number" ? lng : parseFloat(lng);
       return Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
     });
-    if (!normalizedUserCity) return withCoords;
-    const filtered = withCoords.filter(
-      (biz) => normalizeCity(biz?.city) === normalizedUserCity
-    );
+    if (!normalizedUserCity && !normalizedUserZip) return withCoords;
+    const filtered = withCoords.filter((biz) => {
+      if (normalizedUserZip) {
+        return normalizeZip(biz?.zip_code || biz?.zip) === normalizedUserZip;
+      }
+      return normalizeCity(biz?.city) === normalizedUserCity;
+    });
     return filtered.length ? filtered : withCoords;
-  }, [ybBusinesses, userCity]);
+  }, [ybBusinesses, userCity, location.zip]);
 
   const businessPhotoFor = (biz) =>
     primaryPhotoUrl(
@@ -300,6 +292,7 @@ export default function NearbyBusinessesClient() {
   }, []);
 
   useEffect(() => {
+    if (!locationHydrated || !locationKey) return undefined;
     if (!isVisible && ybFetchedRef.current) return undefined;
     let active = true;
     const loadYb = async () => {
@@ -318,7 +311,16 @@ export default function NearbyBusinessesClient() {
             () => controller.abort(new DOMException("Timeout", "AbortError")),
             12000
           );
-          const res = await fetch("/api/public-businesses", { signal: controller.signal });
+          const params = new URLSearchParams();
+          if (location.zip) {
+            params.set("zip", location.zip);
+          } else if (location.city) {
+            params.set("city", location.city);
+          }
+          const url = params.toString()
+            ? `/api/public-businesses?${params.toString()}`
+            : "/api/public-businesses";
+          const res = await fetch(url, { signal: controller.signal });
           clearTimeout(timeoutId);
           const payload = await res.json().catch(() => ({}));
           if (res.ok && Array.isArray(payload?.businesses)) {
@@ -332,7 +334,7 @@ export default function NearbyBusinessesClient() {
               message: "/api/public-businesses timed out after 12s",
             });
             if (active && requestId === ybRequestIdRef.current) {
-              setYbBusinesses(SAMPLE_BUSINESSES);
+              setYbBusinesses([]);
               setHasLoadedYb(true);
               setYbBusinessesError("Still loading businesses. Please refresh to retry.");
               setYbBusinessesLoading(false);
@@ -356,6 +358,11 @@ export default function NearbyBusinessesClient() {
               )
               .eq("role", "business")
               .limit(400);
+            if (location.zip) {
+              query = query.eq("zip_code", location.zip);
+            } else if (location.city) {
+              query = query.ilike("city", location.city);
+            }
             if (typeof query.abortSignal === "function") {
               query = query.abortSignal(controller.signal);
             }
@@ -383,11 +390,9 @@ export default function NearbyBusinessesClient() {
         if (!active || requestId !== ybRequestIdRef.current) return;
 
         if (!rows.length) {
-          setYbBusinesses((prev) =>
-            isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
-          );
+          setYbBusinesses((prev) => (isSameBusinessList(prev, []) ? prev : []));
           setHasLoadedYb(true);
-          setYbBusinessesError("Showing sample businesses — real data unavailable.");
+          setYbBusinessesError("No businesses available for this location yet.");
         } else {
           const parseNum = (val) => {
             if (typeof val === "number" && Number.isFinite(val)) return val;
@@ -407,6 +412,7 @@ export default function NearbyBusinessesClient() {
                 categoryLabel: row.category || "Local business",
                 address,
                 city: row.city || "",
+                zip_code: row.zip_code || row.zip || "",
                 description: row.description || row.bio || "",
                 website: row.website || "",
                 imageUrl: row.profile_photo_url || row.photo_url || "",
@@ -415,14 +421,14 @@ export default function NearbyBusinessesClient() {
               };
             })
             .filter(Boolean);
-          const next = mapped.length ? mapped : SAMPLE_BUSINESSES;
+          const next = mapped.length ? mapped : [];
           setYbBusinesses((prev) => (isSameBusinessList(prev, next) ? prev : next));
           setHasLoadedYb(true);
 
           if (typeof window !== "undefined") {
             try {
               sessionStorage.setItem(
-                "yb_customer_nearby_businesses",
+                storageKey,
                 JSON.stringify(next)
               );
             } catch {
@@ -433,11 +439,9 @@ export default function NearbyBusinessesClient() {
       } catch (err) {
         console.warn("Failed to load YourBarrio businesses", err);
         if (!active || requestId !== ybRequestIdRef.current) return;
-        setYbBusinesses((prev) =>
-          isSameBusinessList(prev, SAMPLE_BUSINESSES) ? prev : SAMPLE_BUSINESSES
-        );
+        setYbBusinesses((prev) => (isSameBusinessList(prev, []) ? prev : []));
         setHasLoadedYb(true);
-        setYbBusinessesError("Could not load businesses yet. Showing sample locations.");
+        setYbBusinessesError("Could not load businesses yet. Please try again.");
       } finally {
         if (active && requestId === ybRequestIdRef.current) {
           setYbBusinessesLoading(false);
@@ -454,7 +458,7 @@ export default function NearbyBusinessesClient() {
     return () => {
       active = false;
     };
-  }, [supabase, logCrashEvent, isVisible]);
+  }, [supabase, logCrashEvent, isVisible, locationHydrated, locationKey, location.city, location.zip, storageKey]);
 
   useEffect(() => {
     if (!ybBusinessesLoading) return;
@@ -632,7 +636,7 @@ export default function NearbyBusinessesClient() {
         <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full bg-pink-500/30 blur-[120px]" />
       </div>
 
-      {showNearbySticky && mounted
+      {showNearbySticky && mounted && !showLocationEmpty
         ? createPortal(
             <div
               className="fixed top-20 sm:top-20 inset-x-0 z-[4800] pointer-events-auto isolate will-change-transform"
@@ -657,14 +661,22 @@ export default function NearbyBusinessesClient() {
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 relative z-10">
         <div className="w-full max-w-none">
-          {renderNearbySection(false)}
-          <div className="mt-6 relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
-            <CustomerMap
-              mapEnabled={mapAvailable}
-              mapBusinesses={businessesForMap}
-              enableSearch={false}
-            />
-          </div>
+          {showLocationEmpty ? (
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 text-sm text-white/70">
+              Select a location to see nearby businesses.
+            </div>
+          ) : (
+            <>
+              {renderNearbySection(false)}
+              <div className="mt-6 relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
+                <CustomerMap
+                  mapEnabled={mapAvailable}
+                  mapBusinesses={businessesForMap}
+                  enableSearch={false}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </section>

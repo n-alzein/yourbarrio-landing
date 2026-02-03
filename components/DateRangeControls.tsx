@@ -13,7 +13,6 @@ type DateRangeControlsProps = {
   filters: DashboardFilters;
   categories: string[];
   businessName?: string;
-  businessAvatarUrl?: string | null;
   lastUpdated: string;
   onDateRangeChange: (value: DateRangeKey) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
@@ -24,19 +23,12 @@ const DateRangeControls = ({
   filters,
   categories,
   businessName,
-  businessAvatarUrl,
   lastUpdated,
   onDateRangeChange,
   onFiltersChange,
 }: DateRangeControlsProps) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const displayName = businessName || "YourBarrio";
-  const initials = displayName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 
   const activeFilters = useMemo(() => {
     return (
@@ -61,29 +53,16 @@ const DateRangeControls = ({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-xs font-semibold uppercase text-white">
-            {businessAvatarUrl ? (
-              <img
-                src={businessAvatarUrl}
-                alt={`${displayName} avatar`}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initials || "BY"
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Overview
-            </p>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              {displayName} Command Center
-            </h1>
-            <p className="text-sm text-slate-600">
-              Fast scan of revenue, conversion, and inventory signals.
-            </p>
-          </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Overview
+          </p>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            {displayName} Command Center
+          </h1>
+          <p className="text-sm text-slate-600">
+            Fast scan of revenue, conversion, and inventory signals.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div

@@ -7,6 +7,7 @@ import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
+import { useLocation } from "@/components/location/LocationProvider";
 import {
   getAvailabilityBadgeStyle,
   normalizeInventory,
@@ -42,10 +43,18 @@ export default function ListingsClient() {
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const { location, hydrated: locationHydrated } = useLocation();
   const category = searchParams.get("category")?.trim();
   const searchTerm = searchParams.get("q")?.trim();
   const showListView = Boolean(category);
-  const cacheKey = `${category || "all"}::${searchTerm || "all"}`;
+  const locationKey = location.zip
+    ? `zip:${location.zip}`
+    : location.city
+      ? `city:${location.city}`
+      : "none";
+  const cacheKey = `${locationKey}::${category || "all"}::${searchTerm || "all"}`;
+  const hasLocation = Boolean(location.zip || location.city);
+  const showLocationEmpty = locationHydrated && !hasLocation;
   const sortedListings = useMemo(
     () => sortListingsByAvailability(listings),
     [listings]
@@ -84,6 +93,7 @@ export default function ListingsClient() {
   // Hydrate from session cache so the page feels instant on back/forward
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!hasLocation) return;
     try {
       const raw = sessionStorage.getItem(cacheKey);
       const parsed = raw ? JSON.parse(raw) : null;
@@ -106,6 +116,14 @@ export default function ListingsClient() {
 
   useEffect(() => {
     const client = getSupabaseBrowserClient();
+    // Require a location before hitting Supabase.
+    if (!hasLocation) {
+      setListings([]);
+      setLoadError(null);
+      setHasLoaded(true);
+      setLoading(false);
+      return undefined;
+    }
     if (!client) {
       setListings([]);
       setLoading(false);
@@ -120,6 +138,11 @@ export default function ListingsClient() {
           .from("listings")
           .select("*, category_info:business_categories(name,slug)")
           .order("created_at", { ascending: false });
+        if (location.zip) {
+          query = query.eq("zip_code", location.zip);
+        } else if (location.city) {
+          query = query.ilike("city", location.city);
+        }
         if (category) {
           const categoryId = await resolveCategoryIdByName(client, category);
           if (categoryId) {
@@ -210,7 +233,7 @@ export default function ListingsClient() {
       active = false;
       controller.abort();
     };
-  }, [category, cacheKey, hasLoaded, retryKey, searchTerm]);
+  }, [category, cacheKey, hasLoaded, retryKey, searchTerm, hasLocation, location.city, location.zip]);
 
   return (
     <div className="max-w-6xl mx-auto py-2 md:pt-1">
@@ -236,6 +259,12 @@ export default function ListingsClient() {
         ) : null}
       </div>
 
+      {showLocationEmpty ? (
+        <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-gray-600">
+          Select a location to see listings near you.
+        </div>
+      ) : null}
+
       {loadError ? (
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
           <div className="font-semibold">Unable to load listings</div>
@@ -254,7 +283,7 @@ export default function ListingsClient() {
         <div className="mt-6">Loading listings...</div>
       ) : null}
 
-      {!loading && !loadError && sortedListings.length === 0 ? (
+      {!loading && !loadError && !showLocationEmpty && sortedListings.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-gray-600">
           No listings found. Try a different search.
         </div>
@@ -288,22 +317,22 @@ export default function ListingsClient() {
                 ) : null}
               </div>
               <div className="flex flex-col gap-2 p-4">
-                <div className="h-7 text-gray-900 tabular-nums">
+                <div className="text-gray-900 tabular-nums leading-none">
                   {(() => {
                     const price = splitPrice(listing.price);
                     if (!price.dollars) {
                       return (
-                        <span className="text-2xl font-bold leading-7">
+                        <span className="text-2xl font-bold leading-none">
                           {price.formatted}
                         </span>
                       );
                     }
                     return (
-                      <span className="flex items-baseline gap-1">
-                        <span className="text-2xl font-bold leading-7">
+                      <span className="inline-flex items-start gap-0">
+                        <span className="text-2xl font-bold leading-none">
                           ${price.dollars}
                         </span>
-                        <span className="text-sm font-semibold uppercase leading-5">
+                        <span className="relative top-[0.1em] text-[0.65em] font-semibold uppercase leading-none align-top">
                           {price.cents}
                         </span>
                       </span>

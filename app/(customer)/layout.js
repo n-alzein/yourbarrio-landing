@@ -6,6 +6,7 @@ import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
 import { requireRole } from "@/lib/auth/server";
 import { PATHS } from "@/lib/auth/paths";
+import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,7 +41,7 @@ export default async function CustomerLayout({ children }) {
               </div>
             }
           >
-            {children}
+            <CustomerRealtimeProvider>{children}</CustomerRealtimeProvider>
           </Suspense>
         </CustomerRouteShell>
       </AuthRedirectGuard>

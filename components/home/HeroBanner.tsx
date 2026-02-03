@@ -30,7 +30,7 @@ export default function HeroBanner({ banner, imageUrl, priority = false }: HeroB
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent md:bg-gradient-to-r" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent md:bg-gradient-to-r pointer-events-none" />
         <div className="relative z-10 flex h-full items-end md:items-center">
           <div className="w-full px-6 py-8 sm:px-8 md:px-10 lg:px-12">
           <div className="mx-auto flex max-w-xl flex-col items-center text-center">

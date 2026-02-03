@@ -1,23 +1,19 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
-import { fetchCategoryBySlug as fetchCategoryBySlugFromDb } from "@/lib/categories";
 import { CATEGORY_BY_SLUG } from "@/lib/businessCategories";
+import CategoryPerfMark from "./CategoryPerfMark";
+import {
+  getCategoryListingsCached,
+  getCategoryRowCached,
+  type SupabaseListing,
+} from "@/lib/categoryListingsCached";
 
 export const revalidate = 60;
 
-type SupabaseListing = {
-  id: string;
-  title?: string | null;
-  price?: number | string | null;
-  category?: string | null;
-  category_info?: { name?: string | null; slug?: string | null }[] | null;
-  city?: string | null;
-  photo_url?: string | null;
-  created_at?: string | null;
-};
+const LISTINGS_LIMIT = 40;
 
 function formatPriceWithCents(value?: number | string | null) {
   if (value === null || value === undefined || value === "") return "Price TBD";
@@ -45,62 +41,108 @@ function humanizeSlug(slug: string) {
     .join(" ");
 }
 
+async function safeParseLocationCookie() {
+  try {
+    const jar = await cookies();
+    const raw = jar.get("yb-location")?.value;
+    if (!raw) return { city: "", zip: "", label: "" };
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        city: String(parsed?.city || "").trim(),
+        zip: String(parsed?.zip || "").trim(),
+        label: String(parsed?.label || "").trim(),
+      };
+    } catch {
+      const decoded = decodeURIComponent(raw);
+      const parsed = JSON.parse(decoded);
+      return {
+        city: String(parsed?.city || "").trim(),
+        zip: String(parsed?.zip || "").trim(),
+        label: String(parsed?.label || "").trim(),
+      };
+    }
+  } catch {
+    return { city: "", zip: "", label: "" };
+  }
+}
+
 export default async function CategoryListingsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ city?: string | string[]; zip?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const sp = (searchParams ? await searchParams : undefined) || {};
   const categorySlug = slug?.trim();
   if (!categorySlug) notFound();
+  const cityParam = Array.isArray(sp.city) ? sp.city[0] : sp.city;
+  const zipParam = Array.isArray(sp.zip) ? sp.zip[0] : sp.zip;
+  let city = (cityParam || "").trim();
+  let zip = (zipParam || "").trim();
+  let cookieLabel = "";
+  if (!city && !zip) {
+    const fromCookie = await safeParseLocationCookie();
+    city = fromCookie.city || "";
+    zip = fromCookie.zip || "";
+    cookieLabel = fromCookie.label || "";
+  }
+  const locationLabel = cookieLabel || zip || city;
+  const locationParams = new URLSearchParams();
+  if (zip) {
+    locationParams.set("zip", zip);
+  } else if (city) {
+    locationParams.set("city", city);
+  }
+  const listingsHref = locationParams.toString()
+    ? `/listings?${locationParams.toString()}`
+    : "/listings";
 
   let listings: SupabaseListing[] = [];
   const normalizedSlug = categorySlug.toLowerCase();
   let categoryName =
     CATEGORY_BY_SLUG.get(normalizedSlug)?.name || humanizeSlug(categorySlug);
   let listingsError: Error | null = null;
+  const totalStart = Date.now();
   try {
-    const supabase = getPublicSupabaseServerClient();
-    const categoryRow = await fetchCategoryBySlugFromDb(supabase, categorySlug);
+    const categoryTimer = `[categories] fetchCategory ${categorySlug} ${Date.now()}`;
+    console.time(categoryTimer);
+    const categoryRow = await getCategoryRowCached(categorySlug);
+    console.timeEnd(categoryTimer);
     const fallbackCategory = CATEGORY_BY_SLUG.get(normalizedSlug);
     if (!categoryRow && !fallbackCategory) {
       notFound();
     }
     categoryName = categoryRow?.name || fallbackCategory?.name || categoryName;
-    let query = supabase
-      .from("listings")
-      .select(
-        "id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at"
-      )
-      .order("created_at", { ascending: false })
-      .limit(80);
-    if (categoryRow?.id) {
-      query = query.eq("category_id", categoryRow.id);
+    if (!locationLabel) {
+      listings = [];
+      listingsError = null;
     } else {
-      query = query.in("category", [categoryName, categorySlug]);
-    }
-    let { data, error } = await query;
-    if (!error && categoryRow?.id && Array.isArray(data) && data.length === 0) {
-      const fallbackQuery = supabase
-        .from("listings")
-        .select(
-          "id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at"
-        )
-        .in("category", [categoryName, categorySlug])
-        .order("created_at", { ascending: false })
-        .limit(80);
-      const fallbackResult = await fallbackQuery;
-      data = fallbackResult.data;
-      error = fallbackResult.error;
-    }
-    if (error) {
-      listingsError = error;
-      console.error("Failed to load category listings", {
-        slug: categorySlug,
-        message: error.message,
+      const listingsTimer = `[categories] listings ${categorySlug} ${Date.now()}`;
+      console.time(listingsTimer);
+      const listingResult = await getCategoryListingsCached({
+        categoryId: categoryRow?.id ?? null,
+        categoryName,
+        categorySlug,
+        city,
+        zip,
+        limit: LISTINGS_LIMIT,
       });
-    } else {
-      listings = Array.isArray(data) ? data : [];
+      console.timeEnd(listingsTimer);
+      if (listingResult.error) {
+        listingsError = listingResult.error;
+        listings = [];
+      } else {
+        listingsError = null;
+        listings = listingResult.listings || [];
+      }
+      console.log("[categories:branch]", {
+        slug: categorySlug,
+        branch: listingResult.branch,
+        fallbacks: listingResult.fallbacks,
+      });
     }
   } catch (error) {
     const digest = (error as { digest?: string } | null)?.digest || "";
@@ -116,20 +158,22 @@ export default async function CategoryListingsPage({
   }
   console.log("[categories]", {
     slug: categorySlug,
+    city,
+    zip,
+    limit: LISTINGS_LIMIT,
     rows: listings.length,
     error: listingsError?.message,
+    totalMs: Date.now() - totalStart,
   });
-  const title =
-    listings[0]?.category_info?.[0]?.name ||
-    listings[0]?.category ||
-    categoryName;
+  const title = categoryName;
 
   return (
     <section className="w-full px-5 sm:px-6 md:px-8 lg:px-12 py-6">
+      <CategoryPerfMark />
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <Link
-            href="/listings"
+            href={listingsHref}
             className="text-sm text-slate-500 hover:text-slate-900 transition"
           >
             ← Back to listings
@@ -142,7 +186,11 @@ export default async function CategoryListingsPage({
           </p>
         </div>
 
-        {listingsError ? (
+        {!locationLabel ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Select a location to see listings in this category.
+          </div>
+        ) : listingsError ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-700">
             <div className="text-base font-semibold">Listings unavailable</div>
             <p className="mt-2 text-sm">
@@ -172,22 +220,22 @@ export default async function CategoryListingsPage({
                     />
                   </div>
                   <div className="p-4 space-y-2">
-                    <div className="h-7 text-slate-900 tabular-nums">
+                    <div className="text-slate-900 tabular-nums leading-none">
                       {(() => {
                         const price = splitPriceWithCents(item.price);
                         if (!price.dollars) {
                           return (
-                            <span className="text-2xl font-bold leading-7">
+                            <span className="text-2xl font-bold leading-none">
                               {price.formatted}
                             </span>
                           );
                         }
                         return (
-                          <span className="flex items-baseline gap-1">
-                            <span className="text-2xl font-bold leading-7">
+                          <span className="inline-flex items-start gap-0">
+                            <span className="text-2xl font-bold leading-none">
                               ${price.dollars}
                             </span>
-                            <span className="text-sm font-semibold uppercase leading-5">
+                            <span className="relative top-[0.1em] text-[0.65em] font-semibold uppercase leading-none align-top">
                               {price.cents}
                             </span>
                           </span>

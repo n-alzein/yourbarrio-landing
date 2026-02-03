@@ -155,7 +155,6 @@ const DashboardPage = () => {
           filters={filters}
           categories={categories}
           businessName={data?.businessName}
-          businessAvatarUrl={data?.businessAvatarUrl}
           lastUpdated={data?.lastUpdated ?? "Just now"}
           onDateRangeChange={setDateRange}
           onFiltersChange={setFilters}
