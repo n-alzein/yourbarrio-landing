@@ -63,11 +63,11 @@ export default function MobileSidebarDrawer({
     getPortalServerSnapshot
   );
 
+  useBodyScrollLock(open);
+
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useBodyScrollLock(open);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;

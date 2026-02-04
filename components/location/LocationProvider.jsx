@@ -137,33 +137,43 @@ export function LocationProvider({ children }) {
   }, [setLocation]);
 
   useEffect(() => {
+    const scheduled = new Set();
+    const schedule = (fn) => {
+      const id = setTimeout(fn, 0);
+      scheduled.add(id);
+    };
+    const clearScheduled = () => {
+      scheduled.forEach((id) => clearTimeout(id));
+      scheduled.clear();
+    };
     const urlLocation = getLocationFromSearchParams(searchParams);
     if (hasLocation(urlLocation)) {
       if (!isSameLocation(urlLocation, locationRef.current)) {
-        setLocationState(urlLocation);
+        schedule(() => setLocationState(urlLocation));
       }
       persistLocation(urlLocation);
       didInitRef.current = true;
-      setHydrated(true);
-      return;
+      schedule(() => setHydrated(true));
+      return clearScheduled;
     }
 
     if (!didInitRef.current) {
       const stored = readStoredLocation();
       if (stored && hasLocation(stored)) {
-        setLocationState(stored);
+        schedule(() => setLocationState(stored));
         persistLocation(stored);
         syncUrl(stored, true);
       }
       didInitRef.current = true;
-      setHydrated(true);
-      return;
+      schedule(() => setHydrated(true));
+      return clearScheduled;
     }
 
     if (hasLocation(locationRef.current)) {
       syncUrl(locationRef.current, true);
     }
-    setHydrated(true);
+    schedule(() => setHydrated(true));
+    return clearScheduled;
   }, [searchParams, syncUrl]);
 
   useEffect(() => {

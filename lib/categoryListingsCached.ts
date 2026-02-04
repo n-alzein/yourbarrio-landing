@@ -50,36 +50,31 @@ export async function getCategoryListingsCached({
   categoryName,
   categorySlug,
   city,
-  zip,
   limit,
 }: {
   categoryId?: string | null;
   categoryName?: string | null;
   categorySlug?: string | null;
   city?: string | null;
-  zip?: string | null;
   limit?: number;
 }): Promise<ListingsResult> {
   const normalizedSlug = typeof categorySlug === "string" ? categorySlug.trim() : "";
   const normalizedName = typeof categoryName === "string" ? categoryName.trim() : "";
   const normalizedCity = typeof city === "string" ? city.trim() : "";
-  const normalizedZip = typeof zip === "string" ? zip.trim() : "";
   const resolvedLimit = typeof limit === "number" ? limit : DEFAULT_LIMIT;
 
-  if (!normalizedCity && !normalizedZip) {
+  if (!normalizedCity) {
     return { listings: [], error: null, branch: "no-location", fallbacks: [] };
   }
 
   const cacheTags = ["category:listings"];
   if (normalizedSlug) cacheTags.push(`category:${normalizedSlug}`);
-  if (normalizedZip) cacheTags.push(`zip:${normalizedZip}`);
   if (normalizedCity) cacheTags.push(`city:${normalizedCity}`);
 
   const cached = unstable_cache(
     async () => {
       const supabase = getPublicSupabaseServerClient();
       const applyLocation = (q: any) => {
-        if (normalizedZip) return q.eq("zip_code", normalizedZip);
         if (normalizedCity) return q.ilike("city", normalizedCity);
         return q;
       };
@@ -96,45 +91,33 @@ export async function getCategoryListingsCached({
       let error: Error | null = null;
       const fallbacks: string[] = [];
       let branch = "none";
-      const timerBase = `[categories] listings ${normalizedSlug || normalizedName || "unknown"} ${Date.now()}`;
-
       if (categoryId) {
         branch = "category_id";
-        console.time(`${timerBase} primary`);
         const primaryRes = await buildBaseQuery().eq("category_id", categoryId);
-        console.timeEnd(`${timerBase} primary`);
         data = primaryRes.data || [];
         error = primaryRes.error;
 
         if (!error && Array.isArray(data) && data.length === 0 && normalizedName) {
           fallbacks.push("category_name");
-          console.time(`${timerBase} fallback-name`);
           const fallbackRes = await buildBaseQuery().ilike("category", normalizedName);
-          console.timeEnd(`${timerBase} fallback-name`);
           data = fallbackRes.data || [];
           error = fallbackRes.error;
         }
         if (!error && Array.isArray(data) && data.length === 0 && normalizedSlug) {
           fallbacks.push("category_slug");
-          console.time(`${timerBase} fallback-slug`);
           const slugFallbackRes = await buildBaseQuery().ilike("category", normalizedSlug);
-          console.timeEnd(`${timerBase} fallback-slug`);
           data = slugFallbackRes.data || [];
           error = slugFallbackRes.error;
         }
       } else if (normalizedName) {
         branch = "legacy_category";
-        console.time(`${timerBase} legacy`);
         const legacyRes = await buildBaseQuery().ilike("category", normalizedName);
-        console.timeEnd(`${timerBase} legacy`);
         data = legacyRes.data || [];
         error = legacyRes.error;
 
         if (!error && Array.isArray(data) && data.length === 0 && normalizedSlug) {
           fallbacks.push("category_slug");
-          console.time(`${timerBase} legacy-slug`);
           const slugFallbackRes = await buildBaseQuery().ilike("category", normalizedSlug);
-          console.timeEnd(`${timerBase} legacy-slug`);
           data = slugFallbackRes.data || [];
           error = slugFallbackRes.error;
         }
@@ -151,7 +134,6 @@ export async function getCategoryListingsCached({
       normalizedName || "none",
       normalizedSlug || "none",
       normalizedCity || "none",
-      normalizedZip || "none",
       String(resolvedLimit),
     ],
     {

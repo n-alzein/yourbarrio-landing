@@ -24,7 +24,7 @@ import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useLocation } from "@/components/location/LocationProvider";
-import { getLocationLabel } from "@/lib/location";
+import { getLocationLabel, isZipLike, normalizeSelectedLocation } from "@/lib/location";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
 
@@ -51,19 +51,34 @@ export default function HeaderAccountWidget({
   } = useAuth();
   const { itemCount } = useCart();
   const { openModal } = useModal();
-  const { location } = useLocation();
+  const { location, setLocation } = useLocation();
   const authDiagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
   const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [mobileLocationOpen, setMobileLocationOpen] = useState(false);
+  const [mobileLocationInput, setMobileLocationInput] = useState("");
+  const [mobileLocationSuggestions, setMobileLocationSuggestions] = useState([]);
+  const [mobileLocationSuggestLoading, setMobileLocationSuggestLoading] = useState(false);
+  const [mobileLocationSuggestError, setMobileLocationSuggestError] = useState(null);
+  const [mobileLocationSuggestIndex, setMobileLocationSuggestIndex] = useState(-1);
+  const [mobileLocationSelectHint, setMobileLocationSelectHint] = useState(null);
   // Location display derives only from the global provider state.
   const locationLabel = getLocationLabel(location);
+  const mobileLocationNoMatchMessage = isZipLike(mobileLocationInput)
+    ? "No matches. Try another postal code."
+    : "No matches. Try another city.";
   const dropdownRef = useRef(null);
   const lastUnreadKeyRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const unreadRequestIdRef = useRef(0);
+  const mobileLocationPrefillRef = useRef(false);
+  const mobileLocationSuggestAbortRef = useRef(null);
+  const mobileLocationSuggestReqIdRef = useRef(0);
+  const mobileLocationSuggestSpinnerRef = useRef(null);
+  const mobileLocationSuggestShownAtRef = useRef(0);
 
   const accountUser = user;
   const accountProfile = profile;
@@ -165,6 +180,174 @@ export default function HeaderAccountWidget({
   }, [profileMenuOpen]);
 
   useEffect(() => {
+    if (mobileMenuOpen) return;
+    setMobileLocationOpen(false);
+    setMobileLocationInput("");
+    setMobileLocationSuggestions([]);
+    setMobileLocationSuggestIndex(-1);
+    setMobileLocationSelectHint(null);
+    setMobileLocationSuggestError(null);
+    setMobileLocationSuggestLoading(false);
+    mobileLocationPrefillRef.current = false;
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    let timeoutId = null;
+    if (!mobileLocationOpen) {
+      mobileLocationPrefillRef.current = false;
+      return;
+    }
+    if (mobileLocationPrefillRef.current) return;
+    mobileLocationPrefillRef.current = true;
+    timeoutId = setTimeout(() => {
+      setMobileLocationInput(locationLabel !== "Your city" ? locationLabel : "");
+    }, 0);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [mobileLocationOpen, locationLabel]);
+
+  useEffect(() => {
+    const scheduled = new Set();
+    const schedule = (fn) => {
+      const id = setTimeout(fn, 0);
+      scheduled.add(id);
+    };
+    const clearScheduled = () => {
+      scheduled.forEach((id) => clearTimeout(id));
+      scheduled.clear();
+    };
+    const abortInflight = () => {
+      if (mobileLocationSuggestAbortRef.current) {
+        mobileLocationSuggestAbortRef.current.abort();
+        mobileLocationSuggestAbortRef.current = null;
+      }
+    };
+
+    if (mobileLocationSuggestSpinnerRef.current) {
+      clearTimeout(mobileLocationSuggestSpinnerRef.current);
+      mobileLocationSuggestSpinnerRef.current = null;
+    }
+
+    if (!mobileLocationOpen) {
+      abortInflight();
+      mobileLocationSuggestReqIdRef.current += 1;
+      mobileLocationSuggestShownAtRef.current = 0;
+      schedule(() => setMobileLocationSuggestLoading(false));
+      schedule(() => setMobileLocationSuggestError(null));
+      schedule(() => setMobileLocationSuggestIndex(-1));
+      schedule(() => setMobileLocationSuggestions([]));
+      schedule(() => setMobileLocationSelectHint(null));
+      return clearScheduled;
+    }
+
+    const term = mobileLocationInput.trim();
+
+    if (term.length === 0) {
+      abortInflight();
+      mobileLocationSuggestReqIdRef.current += 1;
+      mobileLocationSuggestShownAtRef.current = 0;
+      schedule(() => setMobileLocationSuggestLoading(false));
+      schedule(() => setMobileLocationSuggestError(null));
+      schedule(() => setMobileLocationSuggestIndex(-1));
+      schedule(() => setMobileLocationSuggestions([]));
+      schedule(() => setMobileLocationSelectHint(null));
+      return clearScheduled;
+    }
+
+    if (term.length < 2) {
+      abortInflight();
+      mobileLocationSuggestReqIdRef.current += 1;
+      mobileLocationSuggestShownAtRef.current = 0;
+      schedule(() => setMobileLocationSuggestLoading(false));
+      schedule(() => setMobileLocationSuggestError(null));
+      schedule(() => setMobileLocationSuggestIndex(-1));
+      schedule(() => setMobileLocationSelectHint(null));
+      return clearScheduled;
+    }
+
+    const reqId = ++mobileLocationSuggestReqIdRef.current;
+
+    abortInflight();
+    const controller = new AbortController();
+    mobileLocationSuggestAbortRef.current = controller;
+
+    mobileLocationSuggestSpinnerRef.current = setTimeout(() => {
+      if (reqId !== mobileLocationSuggestReqIdRef.current) return;
+      mobileLocationSuggestShownAtRef.current = Date.now();
+      setMobileLocationSuggestLoading(true);
+    }, 150);
+
+    const handle = setTimeout(() => {
+      setMobileLocationSuggestError(null);
+
+      const debug = process.env.NODE_ENV !== "production";
+      const url = debug
+        ? `/api/location-suggest?q=${encodeURIComponent(term)}&debug=1`
+        : `/api/location-suggest?q=${encodeURIComponent(term)}`;
+
+      fetch(url, { signal: controller.signal })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || "location_suggest_failed");
+          }
+          return data;
+        })
+        .then((data) => {
+          if (controller.signal.aborted) return;
+          if (reqId !== mobileLocationSuggestReqIdRef.current) return;
+          const next = Array.isArray(data?.suggestions) ? data.suggestions : [];
+          setMobileLocationSuggestions(next);
+          setMobileLocationSuggestIndex(-1);
+          setMobileLocationSelectHint(null);
+          if (data?.error) {
+            setMobileLocationSuggestError(data.error);
+          }
+        })
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          if (reqId !== mobileLocationSuggestReqIdRef.current) return;
+          setMobileLocationSuggestError(err?.message || "Location suggestions unavailable.");
+          setMobileLocationSuggestions([]);
+          setMobileLocationSuggestIndex(-1);
+          setMobileLocationSelectHint(null);
+        })
+        .finally(() => {
+          if (controller.signal.aborted) return;
+          if (reqId !== mobileLocationSuggestReqIdRef.current) return;
+          if (mobileLocationSuggestSpinnerRef.current) {
+            clearTimeout(mobileLocationSuggestSpinnerRef.current);
+            mobileLocationSuggestSpinnerRef.current = null;
+          }
+          const shownAt = mobileLocationSuggestShownAtRef.current || 0;
+          const elapsed = shownAt ? Date.now() - shownAt : 9999;
+          const remaining = 300 - elapsed;
+
+          if (remaining > 0) {
+            setTimeout(() => {
+              if (controller.signal.aborted) return;
+              if (reqId !== mobileLocationSuggestReqIdRef.current) return;
+              setMobileLocationSuggestLoading(false);
+            }, remaining);
+          } else {
+            setMobileLocationSuggestLoading(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      clearScheduled();
+      clearTimeout(handle);
+      controller.abort();
+      if (mobileLocationSuggestSpinnerRef.current) {
+        clearTimeout(mobileLocationSuggestSpinnerRef.current);
+        mobileLocationSuggestSpinnerRef.current = null;
+      }
+    };
+  }, [mobileLocationOpen, mobileLocationInput]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleUnreadRefresh = () => {
       loadUnreadCount();
@@ -181,6 +364,16 @@ export default function HeaderAccountWidget({
     window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
     return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
   }, []);
+
+  const applyMobileLocationSuggestion = (suggestion) => {
+    if (!suggestion) return;
+    setLocation(normalizeSelectedLocation(suggestion), { replace: true });
+    setMobileLocationInput("");
+    setMobileLocationSuggestions([]);
+    setMobileLocationSuggestIndex(-1);
+    setMobileLocationSelectHint(null);
+    setMobileLocationOpen(false);
+  };
 
   useEffect(() => {
     if (!authDiagEnabled) return;
@@ -517,164 +710,269 @@ export default function HeaderAccountWidget({
           <div className="text-sm text-white/70" aria-live="polite">
             {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
           </div>
-        ) : !hasAuth ? (
-          <>
+        ) : null}
+
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => {
-                onCloseMobileMenu?.();
-                openModal("customer-login");
-              }}
-              disabled={disableCtas}
-              aria-busy={disableCtas}
-              className={`w-full text-center text-white/70 hover:text-white ${
-                disableCtas ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-              data-public-cta="signin"
+              onClick={() => setMobileLocationOpen((open) => !open)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-white/90 transition hover:bg-white/10"
+              aria-expanded={mobileLocationOpen}
+              aria-controls="mobile-location-editor"
             >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onCloseMobileMenu?.();
-                openModal("customer-signup");
-              }}
-              disabled={disableCtas}
-              aria-busy={disableCtas}
-              className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
-                disableCtas ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-              data-public-cta="signup"
-            >
-              Sign up
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-              <SafeImage
-                src={avatar}
-                alt="Profile avatar"
-                className="h-11 w-11 rounded-2xl object-cover border border-white/20"
-                width={44}
-                height={44}
-                sizes="44px"
-                useNextImage
+              <MapPin className="h-4 w-4 text-white/80" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-white/50">Location</p>
+                <p className="text-sm font-semibold text-white truncate">{locationLabel}</p>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-white/60 transition ${
+                  mobileLocationOpen ? "rotate-180" : ""
+                }`}
               />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-                {email ? <p className="text-xs text-white/60 truncate">{email}</p> : null}
-              </div>
-            </div>
-
-            {isCustomer ? (
-              <div className="flex items-center gap-3">
-                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                  <MapPin className="h-4 w-4 text-white/80" />
-                  <div className="min-w-0">
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/50">Location</p>
-                    <p className="text-sm font-semibold text-white truncate">{locationLabel}</p>
-                  </div>
-                </div>
-                <Link
-                  href="/cart"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/90 transition hover:text-white"
-                  aria-label="View cart"
-                  data-safe-nav="1"
-                >
-                  <ShoppingCart className="h-5 w-5" />
-                  {itemCount > 0 ? (
-                    <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
-                      {itemCount}
-                    </span>
-                  ) : null}
-                </Link>
-              </div>
-            ) : null}
-
-            {isBusiness ? (
+            </button>
+            {hasAuth && isCustomer ? (
               <Link
-                href="/business/dashboard"
+                href="/cart"
                 onClick={() => onCloseMobileMenu?.()}
-                className="text-left text-white/70 hover:text-white"
+                className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/90 transition hover:text-white"
+                aria-label="View cart"
                 data-safe-nav="1"
               >
-                Business dashboard
+                <ShoppingCart className="h-5 w-5" />
+                {itemCount > 0 ? (
+                  <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                    {itemCount}
+                  </span>
+                ) : null}
               </Link>
             ) : null}
+          </div>
 
-            {isCustomer ? (
-              <>
+          {mobileLocationOpen ? (
+            <div
+              id="mobile-location-editor"
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+            >
+              <div className="text-xs uppercase tracking-[0.22em] text-white/60">
+                Set location
+              </div>
+              <div className="mt-2 text-sm text-white/80">Enter a city or ZIP code.</div>
+              <div className="mt-4 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={mobileLocationInput}
+                  onChange={(event) => {
+                    setMobileLocationInput(event.target.value);
+                    setMobileLocationSelectHint(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setMobileLocationSuggestIndex((prev) =>
+                        Math.min(prev + 1, mobileLocationSuggestions.length - 1)
+                      );
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setMobileLocationSuggestIndex((prev) => Math.max(prev - 1, 0));
+                      return;
+                    }
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (mobileLocationSuggestions.length > 0) {
+                        const selected =
+                          mobileLocationSuggestIndex >= 0 &&
+                          mobileLocationSuggestions[mobileLocationSuggestIndex]
+                            ? mobileLocationSuggestions[mobileLocationSuggestIndex]
+                            : mobileLocationSuggestions[0];
+                        applyMobileLocationSuggestion(selected);
+                        return;
+                      }
+                      setMobileLocationSelectHint("Select a suggestion to set your location.");
+                    }
+                  }}
+                  placeholder="e.g. Austin, 78701"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
+                />
+              </div>
+              <div className="mt-3 text-xs text-white/60 min-h-[16px]">
+                {mobileLocationSuggestLoading ? "Searching locations..." : ""}
+              </div>
+              {mobileLocationSuggestError ? (
+                <div className="mt-3 text-xs text-rose-200">
+                  {mobileLocationSuggestError}
+                </div>
+              ) : null}
+              {mobileLocationSelectHint ? (
+                <div className="mt-2 text-xs text-white/60">
+                  {mobileLocationSelectHint}
+                </div>
+              ) : null}
+              {!mobileLocationSuggestLoading &&
+              !mobileLocationSuggestError &&
+              mobileLocationInput.trim().length >= 2 &&
+              mobileLocationSuggestions.length === 0 ? (
+                <div className="mt-3 text-xs text-white/60">
+                  {mobileLocationNoMatchMessage}
+                </div>
+              ) : null}
+              {mobileLocationSuggestions.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-1">
+                  {mobileLocationSuggestions.map((suggestion, idx) => (
+                    <button
+                      key={suggestion.id || suggestion.label || idx}
+                      type="button"
+                      onClick={() => applyMobileLocationSuggestion(suggestion)}
+                      className={`w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10 rounded-lg ${
+                        idx === mobileLocationSuggestIndex ? "bg-white/10" : ""
+                      }`}
+                    >
+                      {suggestion.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {!showRateLimit ? (
+          !hasAuth ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  onCloseMobileMenu?.();
+                  openModal("customer-login");
+                }}
+                disabled={disableCtas}
+                aria-busy={disableCtas}
+                className={`w-full text-center text-white/70 hover:text-white ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
+                data-public-cta="signin"
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onCloseMobileMenu?.();
+                  openModal("customer-signup");
+                }}
+                disabled={disableCtas}
+                aria-busy={disableCtas}
+                className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
+                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                }`}
+                data-public-cta="signup"
+              >
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <SafeImage
+                  src={avatar}
+                  alt="Profile avatar"
+                  className="h-11 w-11 rounded-2xl object-cover border border-white/20"
+                  width={44}
+                  height={44}
+                  sizes="44px"
+                  useNextImage
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                  {email ? <p className="text-xs text-white/60 truncate">{email}</p> : null}
+                </div>
+              </div>
+
+              {isBusiness ? (
                 <Link
-                  href="/customer/home"
+                  href="/business/dashboard"
                   onClick={() => onCloseMobileMenu?.()}
                   className="text-left text-white/70 hover:text-white"
                   data-safe-nav="1"
                 >
-                  YB Home
+                  Business dashboard
                 </Link>
-                <Link
-                  href="/customer/nearby"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white"
-                  data-safe-nav="1"
-                >
-                  Nearby businesses
-                </Link>
-                <Link
-                  href="/customer/messages"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white flex items-center justify-between"
-                  data-safe-nav="1"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Messages
-                  </span>
-                  {unreadCount > 0 ? (
-                    <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {unreadCount}
+              ) : null}
+
+              {isCustomer ? (
+                <>
+                  <Link
+                    href="/customer/home"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white"
+                    data-safe-nav="1"
+                  >
+                    YB Home
+                  </Link>
+                  <Link
+                    href="/customer/nearby"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white"
+                    data-safe-nav="1"
+                  >
+                    Nearby businesses
+                  </Link>
+                  <Link
+                    href="/customer/messages"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white flex items-center justify-between"
+                    data-safe-nav="1"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Messages
                     </span>
-                  ) : null}
-                </Link>
-                <Link
-                  href="/account/orders"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white"
-                  data-safe-nav="1"
-                >
-                  My Orders
-                </Link>
-                <Link
-                  href="/account/purchase-history"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white"
-                  data-safe-nav="1"
-                >
-                  Purchase History
-                </Link>
-                <Link
-                  href="/customer/saved"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white"
-                  data-safe-nav="1"
-                >
-                  Saved items
-                </Link>
-                <Link
-                  href="/customer/settings"
-                  onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white"
-                  data-safe-nav="1"
-                >
-                  Account settings
-                </Link>
-              </>
-            ) : null}
-          </>
-        )}
+                    {unreadCount > 0 ? (
+                      <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        {unreadCount}
+                      </span>
+                    ) : null}
+                  </Link>
+                  <Link
+                    href="/account/orders"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white"
+                    data-safe-nav="1"
+                  >
+                    My Orders
+                  </Link>
+                  <Link
+                    href="/account/purchase-history"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white"
+                    data-safe-nav="1"
+                  >
+                    Purchase History
+                  </Link>
+                  <Link
+                    href="/customer/saved"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white"
+                    data-safe-nav="1"
+                  >
+                    Saved items
+                  </Link>
+                  <Link
+                    href="/customer/settings"
+                    onClick={() => onCloseMobileMenu?.()}
+                    className="text-left text-white/70 hover:text-white"
+                    data-safe-nav="1"
+                  >
+                    Account settings
+                  </Link>
+                </>
+              ) : null}
+            </>
+          )
+        ) : null}
 
         <ThemeToggle
           showLabel

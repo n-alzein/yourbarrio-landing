@@ -51,7 +51,7 @@ const setCachedResponse = (key, payload) => {
   });
 };
 
-async function searchListings(supabase, term, category, { city, zip }) {
+async function searchListings(supabase, term, category, { city }) {
   const safe = sanitize(term);
   if (!safe) return [];
   const safeCategory = sanitize(category);
@@ -64,9 +64,7 @@ async function searchListings(supabase, term, category, { city, zip }) {
     .or(
       `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
     );
-  if (zip) {
-    query = query.eq("zip_code", zip);
-  } else if (city) {
+  if (city) {
     query = query.ilike("city", city);
   }
   if (safeCategory) {
@@ -103,7 +101,7 @@ async function searchListings(supabase, term, category, { city, zip }) {
   }));
 }
 
-async function searchBusinesses(supabase, term, category, { city, zip }) {
+async function searchBusinesses(supabase, term, category, { city }) {
   const safe = sanitize(term);
   if (!safe) return [];
   const safeCategory = sanitize(category);
@@ -117,9 +115,7 @@ async function searchBusinesses(supabase, term, category, { city, zip }) {
     .or(
       `business_name.ilike.%${safe}%,full_name.ilike.%${safe}%,category.ilike.%${safe}%,description.ilike.%${safe}%,city.ilike.%${safe}%`
     );
-  if (zip) {
-    query = query.eq("zip_code", zip);
-  } else if (city) {
+  if (city) {
     query = query.ilike("city", city);
   }
   if (safeCategory) {
@@ -205,8 +201,7 @@ export async function GET(request) {
   const query = (searchParams.get("q") || "").trim();
   const category = (searchParams.get("category") || "").trim();
   const city = sanitize(searchParams.get("city") || "");
-  const zip = sanitize(searchParams.get("zip") || "");
-  const locationKey = (zip || city || "none").toLowerCase();
+  const locationKey = (city || "none").toLowerCase();
   const cacheKey = `${query.toLowerCase()}::${category.toLowerCase()}::${locationKey}`;
 
   if (!query) {
@@ -218,7 +213,7 @@ export async function GET(request) {
     });
   }
 
-  if (!city && !zip) {
+  if (!city) {
     return NextResponse.json({
       items: [],
       businesses: [],
@@ -251,8 +246,8 @@ export async function GET(request) {
   }
 
   const [items, businesses, places] = await Promise.all([
-    supabase ? searchListings(supabase, query, category, { city, zip }) : [],
-    supabase ? searchBusinesses(supabase, query, category, { city, zip }) : [],
+    supabase ? searchListings(supabase, query, category, { city }) : [],
+    supabase ? searchBusinesses(supabase, query, category, { city }) : [],
     searchMapboxPlaces(query),
   ]);
 

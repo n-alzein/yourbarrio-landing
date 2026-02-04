@@ -9,7 +9,6 @@ export default function CategoryPerfMark() {
       performance.mark("cat_page_mount");
       performance.measure("cat_click_to_mount", "cat_nav_click", "cat_page_mount");
       const entry = performance.getEntriesByName("cat_click_to_mount").slice(-1)[0];
-      // eslint-disable-next-line no-console
       console.log("[perf] cat_click_to_mount(ms)", entry?.duration);
     } catch {
       /* ignore */

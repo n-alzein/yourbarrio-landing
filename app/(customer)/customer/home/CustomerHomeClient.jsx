@@ -251,7 +251,6 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     }
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        // eslint-disable-next-line no-console
         console.log("[longtask]", Math.round(entry.duration), "ms", entry);
       }
     });
@@ -272,7 +271,6 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     const tick = (now) => {
       const delta = now - last;
       if (delta > 200) {
-        // eslint-disable-next-line no-console
         console.log("[raf-stall]", Math.round(delta), "ms", new Date().toISOString());
       }
       last = now;
@@ -423,9 +421,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
           )
           .order("created_at", { ascending: false })
           .limit(8);
-        if (location.zip) {
-          query = query.eq("zip_code", location.zip);
-        } else if (location.city) {
+        if (location.city) {
           query = query.ilike("city", location.city);
         }
         if (categoryValue && categoryValue !== "All") {
@@ -487,7 +483,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     return () => {
       isActive = false;
     };
-  }, [search, supabase, logCrashEvent, categoryFilter, hasLocation, location.city, location.zip]);
+  }, [search, supabase, logCrashEvent, categoryFilter, hasLocation, location.city]);
 
   if (loadingUser && !user) {
     return (
@@ -675,7 +671,6 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
                 const { clientX, clientY } = event;
                 const top = document.elementFromPoint(clientX, clientY);
                 const anchor = top?.closest?.("a[href]");
-                // eslint-disable-next-line no-console
                 console.log("[tile-hit-test]", {
                   target: target?.tagName,
                   currentTarget: event.currentTarget?.tagName,
@@ -684,7 +679,6 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
                 });
                 const startedAt = performance.now();
                 setTimeout(() => {
-                  // eslint-disable-next-line no-console
                   console.log(
                     "[perf] click_to_timeout0(ms)",
                     Math.round(performance.now() - startedAt)

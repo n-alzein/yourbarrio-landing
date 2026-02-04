@@ -4,7 +4,7 @@ import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supab
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
 import { resolveCategoryIdByName } from "@/lib/categories";
 
-async function runHomeListingsQuery(client, { limit, city, zip, category }) {
+async function runHomeListingsQuery(client, { limit, city, category }) {
   let query = client
     .from("listings")
     .select(
@@ -13,9 +13,7 @@ async function runHomeListingsQuery(client, { limit, city, zip, category }) {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (zip) {
-    query = query.eq("zip_code", zip);
-  } else if (city) {
+  if (city) {
     query = query.ilike("city", city);
   }
   if (category) {
@@ -35,7 +33,6 @@ export async function GET(request) {
   const limitParam = Number(url.searchParams.get("limit") || 80);
   const limit = Number.isFinite(limitParam) ? Math.max(1, limitParam) : 80;
   const city = url.searchParams.get("city") || null;
-  const zip = url.searchParams.get("zip") || null;
   const category = url.searchParams.get("category") || null;
   const supabaseHost = (() => {
     try {
@@ -54,7 +51,7 @@ export async function GET(request) {
   let listings = [];
   let source = "none";
 
-  if (!city && !zip) {
+  if (!city) {
     return NextResponse.json(
       { listings: [], message: "missing_location" },
       {
@@ -72,7 +69,6 @@ export async function GET(request) {
     const { data, error } = await runHomeListingsQuery(sessionClient, {
       limit,
       city,
-      zip,
       category,
     });
     if (error) {
@@ -90,7 +86,6 @@ export async function GET(request) {
       const { data, error } = await runHomeListingsQuery(serviceClient, {
         limit,
         city,
-        zip,
         category,
       });
       if (error) {

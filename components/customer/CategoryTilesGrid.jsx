@@ -156,7 +156,6 @@ export default function CategoryTilesGrid({
                   } catch {
                     /* ignore */
                   }
-                  // eslint-disable-next-line no-console
                   console.log("[tile-pointer]", {
                     target: event.target?.tagName,
                     currentTarget: event.currentTarget?.tagName,
@@ -182,7 +181,6 @@ export default function CategoryTilesGrid({
                       const entry = performance
                         .getEntriesByName("pointerdown_to_click_handler")
                         .slice(-1)[0];
-                      // eslint-disable-next-line no-console
                       console.log(
                         "[perf] pointerdown_to_click_handler(ms)",
                         entry?.duration

@@ -16,14 +16,12 @@ export default function CustomerRealtimeProvider({ children }) {
   const [debouncedEnabled, setDebouncedEnabled] = useState(false);
 
   useEffect(() => {
-    let timeoutId = null;
-    if (shouldEnable) {
-      timeoutId = setTimeout(() => setDebouncedEnabled(true), 400);
-    } else {
-      setDebouncedEnabled(false);
-    }
+    const delay = shouldEnable ? 400 : 0;
+    const timeoutId = setTimeout(() => {
+      setDebouncedEnabled(shouldEnable);
+    }, delay);
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
     };
   }, [shouldEnable]);
 

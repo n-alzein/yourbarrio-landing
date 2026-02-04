@@ -38,14 +38,12 @@ async function geocodeAddress(address) {
   return null;
 }
 
-async function fetchBusinesses(supabase, { city, zip }) {
+async function fetchBusinesses(supabase, { city }) {
   let query = supabase
     .from("businesses")
     .select("*")
     .limit(400);
-  if (zip) {
-    query = query.eq("zip_code", zip);
-  } else if (city) {
+  if (city) {
     query = query.ilike("city", city);
   }
   const businessesResult = await query;
@@ -56,15 +54,13 @@ async function fetchBusinesses(supabase, { city, zip }) {
   return (businessesResult.data || []).map((row) => ({ ...row, _table: "businesses" }));
 }
 
-async function fetchUsers(supabase, { city, zip }) {
+async function fetchUsers(supabase, { city }) {
   let query = supabase
     .from("users")
     .select("*")
     .eq("role", "business")
     .limit(400);
-  if (zip) {
-    query = query.eq("zip_code", zip);
-  } else if (city) {
+  if (city) {
     query = query.ilike("city", city);
   }
   const usersResult = await query;
@@ -79,15 +75,14 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const city = (searchParams.get("city") || "").trim();
-    const zip = (searchParams.get("zip") || "").trim();
-    if (!city && !zip) {
+    if (!city) {
       return NextResponse.json({ businesses: [], message: "missing_location" }, { status: 200 });
     }
     const supabase = createSupabaseClient();
 
     const [businesses, users] = await Promise.all([
-      fetchBusinesses(supabase, { city, zip }),
-      fetchUsers(supabase, { city, zip }),
+      fetchBusinesses(supabase, { city }),
+      fetchUsers(supabase, { city }),
     ]);
 
     const combined = [...businesses, ...users];

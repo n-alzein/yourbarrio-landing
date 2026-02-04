@@ -45,12 +45,11 @@ async function safeParseLocationCookie() {
   try {
     const jar = await cookies();
     const raw = jar.get("yb-location")?.value;
-    if (!raw) return { city: "", zip: "", label: "" };
+    if (!raw) return { city: "", label: "" };
     try {
       const parsed = JSON.parse(raw);
       return {
         city: String(parsed?.city || "").trim(),
-        zip: String(parsed?.zip || "").trim(),
         label: String(parsed?.label || "").trim(),
       };
     } catch {
@@ -58,12 +57,11 @@ async function safeParseLocationCookie() {
       const parsed = JSON.parse(decoded);
       return {
         city: String(parsed?.city || "").trim(),
-        zip: String(parsed?.zip || "").trim(),
         label: String(parsed?.label || "").trim(),
       };
     }
   } catch {
-    return { city: "", zip: "", label: "" };
+    return { city: "", label: "" };
   }
 }
 
@@ -72,28 +70,20 @@ export default async function CategoryListingsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ city?: string | string[]; zip?: string | string[] }>;
+  searchParams?: Promise<{ city?: string | string[] }>;
 }) {
   const { slug } = await params;
   const sp = (searchParams ? await searchParams : undefined) || {};
   const categorySlug = slug?.trim();
   if (!categorySlug) notFound();
   const cityParam = Array.isArray(sp.city) ? sp.city[0] : sp.city;
-  const zipParam = Array.isArray(sp.zip) ? sp.zip[0] : sp.zip;
   let city = (cityParam || "").trim();
-  let zip = (zipParam || "").trim();
-  let cookieLabel = "";
-  if (!city && !zip) {
+  if (!city) {
     const fromCookie = await safeParseLocationCookie();
     city = fromCookie.city || "";
-    zip = fromCookie.zip || "";
-    cookieLabel = fromCookie.label || "";
   }
-  const locationLabel = cookieLabel || zip || city;
   const locationParams = new URLSearchParams();
-  if (zip) {
-    locationParams.set("zip", zip);
-  } else if (city) {
+  if (city) {
     locationParams.set("city", city);
   }
   const listingsHref = locationParams.toString()
@@ -107,30 +97,23 @@ export default async function CategoryListingsPage({
   let listingsError: Error | null = null;
   const totalStart = Date.now();
   try {
-    const categoryTimer = `[categories] fetchCategory ${categorySlug} ${Date.now()}`;
-    console.time(categoryTimer);
     const categoryRow = await getCategoryRowCached(categorySlug);
-    console.timeEnd(categoryTimer);
     const fallbackCategory = CATEGORY_BY_SLUG.get(normalizedSlug);
     if (!categoryRow && !fallbackCategory) {
       notFound();
     }
     categoryName = categoryRow?.name || fallbackCategory?.name || categoryName;
-    if (!locationLabel) {
+    if (!city) {
       listings = [];
       listingsError = null;
     } else {
-      const listingsTimer = `[categories] listings ${categorySlug} ${Date.now()}`;
-      console.time(listingsTimer);
       const listingResult = await getCategoryListingsCached({
         categoryId: categoryRow?.id ?? null,
         categoryName,
         categorySlug,
         city,
-        zip,
         limit: LISTINGS_LIMIT,
       });
-      console.timeEnd(listingsTimer);
       if (listingResult.error) {
         listingsError = listingResult.error;
         listings = [];
@@ -159,7 +142,6 @@ export default async function CategoryListingsPage({
   console.log("[categories]", {
     slug: categorySlug,
     city,
-    zip,
     limit: LISTINGS_LIMIT,
     rows: listings.length,
     error: listingsError?.message,
@@ -186,7 +168,7 @@ export default async function CategoryListingsPage({
           </p>
         </div>
 
-        {!locationLabel ? (
+        {!city ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
             Select a location to see listings in this category.
           </div>

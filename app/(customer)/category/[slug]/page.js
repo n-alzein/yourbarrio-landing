@@ -13,12 +13,11 @@ async function safeParseLocationCookie() {
   try {
     const jar = await cookies();
     const raw = jar.get("yb-location")?.value;
-    if (!raw) return { city: "", zip: "", label: "" };
+    if (!raw) return { city: "", label: "" };
     try {
       const parsed = JSON.parse(raw);
       return {
         city: String(parsed?.city || "").trim(),
-        zip: String(parsed?.zip || "").trim(),
         label: String(parsed?.label || "").trim(),
       };
     } catch {
@@ -26,12 +25,11 @@ async function safeParseLocationCookie() {
       const parsed = JSON.parse(decoded);
       return {
         city: String(parsed?.city || "").trim(),
-        zip: String(parsed?.zip || "").trim(),
         label: String(parsed?.label || "").trim(),
       };
     }
   } catch {
-    return { city: "", zip: "", label: "" };
+    return { city: "", label: "" };
   }
 }
 
@@ -41,23 +39,13 @@ export default async function CategoryListingsPage({ params, searchParams }) {
   const cityParam = Array.isArray(searchParams?.city)
     ? searchParams?.city?.[0]
     : searchParams?.city;
-  const zipParam = Array.isArray(searchParams?.zip)
-    ? searchParams?.zip?.[0]
-    : searchParams?.zip;
   let city = (cityParam || "").trim();
-  let zip = (zipParam || "").trim();
-  let cookieLabel = "";
-  if (!city && !zip) {
+  if (!city) {
     const fromCookie = await safeParseLocationCookie();
     city = fromCookie.city || "";
-    zip = fromCookie.zip || "";
-    cookieLabel = fromCookie.label || "";
   }
-  const locationLabel = cookieLabel || zip || city;
   const locationParams = new URLSearchParams();
-  if (zip) {
-    locationParams.set("zip", zip);
-  } else if (city) {
+  if (city) {
     locationParams.set("city", city);
   }
   const homeHref = locationParams.toString()
@@ -81,7 +69,6 @@ export default async function CategoryListingsPage({ params, searchParams }) {
     const categoryName = categoryRow?.name || category.name;
 
     const applyLocation = (q) => {
-      if (zip) return q.eq("zip_code", zip);
       if (city) return q.ilike("city", city);
       return q;
     };
@@ -100,7 +87,7 @@ export default async function CategoryListingsPage({ params, searchParams }) {
     let data = [];
     let error = null;
 
-    if (!locationLabel) {
+    if (!city) {
       listings = [];
     } else {
       if (categoryRow?.id) {
@@ -156,7 +143,7 @@ export default async function CategoryListingsPage({ params, searchParams }) {
           ) : null}
         </div>
 
-        {!locationLabel ? (
+        {!city ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
             Select a location to see listings in this category.
           </div>

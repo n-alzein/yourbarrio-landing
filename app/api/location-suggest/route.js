@@ -2,6 +2,28 @@ import { NextResponse } from "next/server";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 6;
+const ZIP_REGEX = /\b\d{5}(?:-\d{4})?\b/;
+
+const compactSpaces = (value) => (value || "").replace(/\s+/g, " ").trim();
+
+const extractCityFromLabel = (label) => {
+  if (typeof label !== "string") return "";
+  const withoutZip = label.replace(ZIP_REGEX, "");
+  const normalized = withoutZip.replace(/[-\u2014]/g, ",");
+  const parts = normalized
+    .split(",")
+    .map((part) => compactSpaces(part))
+    .filter(Boolean);
+  return parts[0] || "";
+};
+
+const normalizeRegionCode = (value) => {
+  const compacted = compactSpaces(value).toLowerCase();
+  if (!compacted) return "";
+  const parts = compacted.split("-");
+  const tail = parts[parts.length - 1] || "";
+  return tail ? tail.toUpperCase() : "";
+};
 
 const parseContext = (feature) => {
   const context = {};
@@ -12,10 +34,12 @@ const parseContext = (feature) => {
       context.city = item.text;
     } else if (item.id.startsWith("region.")) {
       context.region = item.text;
+      if (item.short_code) context.region_code = item.short_code;
     } else if (item.id.startsWith("postcode.")) {
       context.postcode = item.text;
     } else if (item.id.startsWith("country.")) {
       context.country = item.text;
+      if (item.short_code) context.country_code = item.short_code;
     }
   }
   if (!context.postcode && feature?.place_type?.includes("postcode")) {
@@ -95,16 +119,31 @@ export async function GET(request) {
     const suggestions = (payload?.features || []).map((feature) => {
       const kind = feature?.place_type?.includes("postcode") ? "postcode" : "place";
       const context = parseContext(feature);
+      const label = feature.place_name || feature.text || "";
+      const city =
+        context.city ||
+        (kind === "place" ? feature.text || "" : "") ||
+        extractCityFromLabel(label);
+      const regionCode = normalizeRegionCode(context.region_code || "");
+      const state = regionCode || context.region || "";
       return {
         id: feature.id || feature.place_name,
         place_id: feature.id || feature.place_name,
         kind,
-        label: feature.place_name || feature.text || "",
+        label,
         center: {
           lng: Array.isArray(feature.center) ? feature.center[0] : null,
           lat: Array.isArray(feature.center) ? feature.center[1] : null,
         },
         bbox: feature.bbox || undefined,
+        city,
+        state: state || undefined,
+        region: context.region || undefined,
+        region_code: context.region_code || undefined,
+        country: context.country || undefined,
+        country_code: context.country_code || undefined,
+        postcode: context.postcode || undefined,
+        zip: context.postcode || undefined,
         context,
       };
     });

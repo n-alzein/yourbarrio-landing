@@ -47,13 +47,9 @@ export default function ListingsClient() {
   const category = searchParams.get("category")?.trim();
   const searchTerm = searchParams.get("q")?.trim();
   const showListView = Boolean(category);
-  const locationKey = location.zip
-    ? `zip:${location.zip}`
-    : location.city
-      ? `city:${location.city}`
-      : "none";
+  const locationKey = location.city ? `city:${location.city}` : "none";
   const cacheKey = `${locationKey}::${category || "all"}::${searchTerm || "all"}`;
-  const hasLocation = Boolean(location.zip || location.city);
+  const hasLocation = Boolean(location.city);
   const showLocationEmpty = locationHydrated && !hasLocation;
   const sortedListings = useMemo(
     () => sortListingsByAvailability(listings),
@@ -105,7 +101,7 @@ export default function ListingsClient() {
     } catch {
       // ignore cache errors
     }
-  }, [cacheKey]);
+  }, [cacheKey, hasLocation]);
 
   // Safety: don't leave loading true forever
   useEffect(() => {
@@ -138,9 +134,7 @@ export default function ListingsClient() {
           .from("listings")
           .select("*, category_info:business_categories(name,slug)")
           .order("created_at", { ascending: false });
-        if (location.zip) {
-          query = query.eq("zip_code", location.zip);
-        } else if (location.city) {
+        if (location.city) {
           query = query.ilike("city", location.city);
         }
         if (category) {
@@ -233,7 +227,7 @@ export default function ListingsClient() {
       active = false;
       controller.abort();
     };
-  }, [category, cacheKey, hasLoaded, retryKey, searchTerm, hasLocation, location.city, location.zip]);
+  }, [category, cacheKey, hasLoaded, retryKey, searchTerm, hasLocation, location.city]);
 
   return (
     <div className="max-w-6xl mx-auto py-2 md:pt-1">

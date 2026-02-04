@@ -46,11 +46,7 @@ export default function NearbyBusinessesClient() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [userCity, setUserCity] = useState("");
-  const locationKey = location.zip
-    ? `zip:${location.zip}`
-    : location.city
-      ? `city:${location.city}`
-      : "";
+  const locationKey = location.city ? `city:${location.city}` : "";
   const mapEnabled = process.env.NEXT_PUBLIC_HOME_BISECT_MAP !== "0";
   const mapAvailable = mapEnabled && process.env.NEXT_PUBLIC_DISABLE_MAP !== "1";
   const storageKey = locationKey
@@ -173,10 +169,8 @@ export default function NearbyBusinessesClient() {
   }, []);
 
   const normalizeCity = (value) => (value || "").trim().toLowerCase();
-  const normalizeZip = (value) => (value || "").toString().trim();
   const businessesForMap = useMemo(() => {
     const normalizedUserCity = normalizeCity(userCity);
-    const normalizedUserZip = normalizeZip(location.zip);
     const withCoords = (ybBusinesses || []).filter((biz) => {
       if (!biz) return false;
       const lat = biz.coords?.lat ?? biz.lat ?? biz.latitude;
@@ -185,15 +179,12 @@ export default function NearbyBusinessesClient() {
       const parsedLng = typeof lng === "number" ? lng : parseFloat(lng);
       return Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
     });
-    if (!normalizedUserCity && !normalizedUserZip) return withCoords;
+    if (!normalizedUserCity) return withCoords;
     const filtered = withCoords.filter((biz) => {
-      if (normalizedUserZip) {
-        return normalizeZip(biz?.zip_code || biz?.zip) === normalizedUserZip;
-      }
       return normalizeCity(biz?.city) === normalizedUserCity;
     });
     return filtered.length ? filtered : withCoords;
-  }, [ybBusinesses, userCity, location.zip]);
+  }, [ybBusinesses, userCity]);
 
   const businessPhotoFor = (biz) =>
     primaryPhotoUrl(
@@ -312,11 +303,9 @@ export default function NearbyBusinessesClient() {
             12000
           );
           const params = new URLSearchParams();
-          if (location.zip) {
-            params.set("zip", location.zip);
-          } else if (location.city) {
-            params.set("city", location.city);
-          }
+        if (location.city) {
+          params.set("city", location.city);
+        }
           const url = params.toString()
             ? `/api/public-businesses?${params.toString()}`
             : "/api/public-businesses";
@@ -358,9 +347,7 @@ export default function NearbyBusinessesClient() {
               )
               .eq("role", "business")
               .limit(400);
-            if (location.zip) {
-              query = query.eq("zip_code", location.zip);
-            } else if (location.city) {
+            if (location.city) {
               query = query.ilike("city", location.city);
             }
             if (typeof query.abortSignal === "function") {
@@ -458,7 +445,7 @@ export default function NearbyBusinessesClient() {
     return () => {
       active = false;
     };
-  }, [supabase, logCrashEvent, isVisible, locationHydrated, locationKey, location.city, location.zip, storageKey]);
+  }, [supabase, logCrashEvent, isVisible, locationHydrated, locationKey, location.city, storageKey]);
 
   useEffect(() => {
     if (!ybBusinessesLoading) return;

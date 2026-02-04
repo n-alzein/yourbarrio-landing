@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   Loader2,
@@ -26,7 +26,7 @@ import { useCart } from "@/components/cart/CartProvider";
 import { useLocation } from "@/components/location/LocationProvider";
 import {
   getLocationLabel,
-  normalizeLocationInput,
+  isZipLike,
   normalizeSelectedLocation,
   setLocationSearchParams,
 } from "@/lib/location";
@@ -52,7 +52,10 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const { itemCount } = useCart();
   const { location, hasLocation, setLocation } = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const mobileDrawerId = useId();
+  const mobileDrawerId = useMemo(
+    () => `global-mobile-drawer-${surface || "public"}`,
+    [surface]
+  );
 
   const [searchTerm, setSearchTerm] = useState(() => getInitialSearchTerm(searchParams));
   const [selectedCategory, setSelectedCategory] = useState(() => getInitialCategory(searchParams));
@@ -62,6 +65,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const [locationSuggestLoading, setLocationSuggestLoading] = useState(false);
   const [locationSuggestError, setLocationSuggestError] = useState(null);
   const [locationSuggestIndex, setLocationSuggestIndex] = useState(-1);
+  const [locationSelectHint, setLocationSelectHint] = useState(null);
   const [searchResults, setSearchResults] = useState({
     items: [],
     businesses: [],
@@ -82,6 +86,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   const lastQueryRef = useRef("");
   // Location display derives only from the global provider state.
   const locationLabel = getLocationLabel(location);
+  const locationNoMatchMessage = isZipLike(locationInput)
+    ? "No matches. Try another postal code."
+    : "No matches. Try another city.";
 
   const sortedSearchItems = useMemo(
     () => sortListingsByAvailability(searchResults.items || []),
@@ -164,7 +171,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       return;
     }
 
-    const locationKey = location.zip || location.city || "none";
+    const locationKey = location.city || "none";
     const normalized = `${term.toLowerCase()}::${selectedCategory.toLowerCase()}::${locationKey.toLowerCase()}`;
     if (normalized === lastQueryRef.current) {
       queueMicrotask(() => {
@@ -185,9 +192,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       const params = new URLSearchParams();
       params.set("q", term);
       if (categoryParam) params.set("category", categoryParam);
-      if (location.zip) {
-        params.set("zip", location.zip);
-      } else if (location.city) {
+      if (location.city) {
         params.set("city", location.city);
       }
       fetch(`/api/search?${params.toString()}`, {
@@ -240,7 +245,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       clearTimeout(handle);
       controller.abort();
     };
-  }, [searchTerm, selectedCategory, hasLocation, location.city, location.zip]);
+  }, [searchTerm, selectedCategory, hasLocation, location.city]);
 
   // Close AI suggestions when clicking away
   useEffect(() => {
@@ -279,16 +284,31 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
   }, [locationOpen]);
 
   useEffect(() => {
+    let timeoutId = null;
     if (!locationOpen) {
       locationPrefillRef.current = false;
       return;
     }
     if (locationPrefillRef.current) return;
     locationPrefillRef.current = true;
-    setLocationInput(locationLabel !== "Your city" ? locationLabel : "");
+    timeoutId = setTimeout(() => {
+      setLocationInput(locationLabel !== "Your city" ? locationLabel : "");
+    }, 0);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [locationOpen, locationLabel]);
 
   useEffect(() => {
+    const scheduled = new Set();
+    const schedule = (fn) => {
+      const id = setTimeout(fn, 0);
+      scheduled.add(id);
+    };
+    const clearScheduled = () => {
+      scheduled.forEach((id) => clearTimeout(id));
+      scheduled.clear();
+    };
     const abortInflight = () => {
       if (locationSuggestAbortRef.current) {
         locationSuggestAbortRef.current.abort();
@@ -306,11 +326,12 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       abortInflight();
       locationSuggestReqIdRef.current += 1; // invalidate pending
       locationSuggestShownAtRef.current = 0;
-      setLocationSuggestLoading(false);
-      setLocationSuggestError(null);
-      setLocationSuggestIndex(-1);
-      setLocationSuggestions([]);
-      return;
+      schedule(() => setLocationSuggestLoading(false));
+      schedule(() => setLocationSuggestError(null));
+      schedule(() => setLocationSuggestIndex(-1));
+      schedule(() => setLocationSuggestions([]));
+      schedule(() => setLocationSelectHint(null));
+      return clearScheduled;
     }
 
     const term = locationInput.trim();
@@ -320,11 +341,12 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       abortInflight();
       locationSuggestReqIdRef.current += 1;
       locationSuggestShownAtRef.current = 0;
-      setLocationSuggestLoading(false);
-      setLocationSuggestError(null);
-      setLocationSuggestIndex(-1);
-      setLocationSuggestions([]);
-      return;
+      schedule(() => setLocationSuggestLoading(false));
+      schedule(() => setLocationSuggestError(null));
+      schedule(() => setLocationSuggestIndex(-1));
+      schedule(() => setLocationSuggestions([]));
+      schedule(() => setLocationSelectHint(null));
+      return clearScheduled;
     }
 
     // If term is short (1 char), keep last suggestions to prevent flicker.
@@ -332,10 +354,11 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       abortInflight();
       locationSuggestReqIdRef.current += 1;
       locationSuggestShownAtRef.current = 0;
-      setLocationSuggestLoading(false);
-      setLocationSuggestError(null);
-      setLocationSuggestIndex(-1);
-      return;
+      schedule(() => setLocationSuggestLoading(false));
+      schedule(() => setLocationSuggestError(null));
+      schedule(() => setLocationSuggestIndex(-1));
+      schedule(() => setLocationSelectHint(null));
+      return clearScheduled;
     }
 
     const reqId = ++locationSuggestReqIdRef.current;
@@ -373,6 +396,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           const next = Array.isArray(data?.suggestions) ? data.suggestions : [];
           setLocationSuggestions(next);
           setLocationSuggestIndex(-1);
+          setLocationSelectHint(null);
           if (data?.error) {
             setLocationSuggestError(data.error);
           }
@@ -383,6 +407,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           setLocationSuggestError(err?.message || "Location suggestions unavailable.");
           setLocationSuggestions([]);
           setLocationSuggestIndex(-1);
+          setLocationSelectHint(null);
         })
         .finally(() => {
           if (controller.signal.aborted) return;
@@ -408,6 +433,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
     }, 250);
 
     return () => {
+      clearScheduled();
       clearTimeout(handle);
       controller.abort();
       if (locationSuggestSpinnerRef.current) {
@@ -419,28 +445,12 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
   const applyLocationSuggestion = (suggestion) => {
     if (!suggestion) return;
+    // We store city as the canonical location to match DB schema; zip is only used for lookup.
     setLocation(normalizeSelectedLocation(suggestion), { replace: true });
     setLocationInput("");
     setLocationSuggestions([]);
     setLocationSuggestIndex(-1);
-    setLocationOpen(false);
-  };
-
-  const applyLocationInput = () => {
-    if (locationSuggestions.length > 0) {
-      applyLocationSuggestion(locationSuggestions[0]);
-      return;
-    }
-    const next = locationInput.trim();
-    setLocation(
-      next
-        ? normalizeLocationInput(next)
-        : { city: null, zip: null, lat: null, lng: null },
-      { replace: true }
-    );
-    setLocationInput("");
-    setLocationSuggestions([]);
-    setLocationSuggestIndex(-1);
+    setLocationSelectHint(null);
     setLocationOpen(false);
   };
 
@@ -518,7 +528,10 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                 <input
                   type="text"
                   value={locationInput}
-                  onChange={(event) => setLocationInput(event.target.value)}
+                  onChange={(event) => {
+                    setLocationInput(event.target.value);
+                    setLocationSelectHint(null);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "ArrowDown") {
                       event.preventDefault();
@@ -534,28 +547,21 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                     }
                     if (event.key === "Enter") {
                       event.preventDefault();
-                      if (
-                        locationSuggestIndex >= 0 &&
-                        locationSuggestions[locationSuggestIndex]
-                      ) {
-                        applyLocationSuggestion(
+                      if (locationSuggestions.length > 0) {
+                        const selected =
+                          locationSuggestIndex >= 0 &&
                           locationSuggestions[locationSuggestIndex]
-                        );
+                            ? locationSuggestions[locationSuggestIndex]
+                            : locationSuggestions[0];
+                        applyLocationSuggestion(selected);
                         return;
                       }
-                      applyLocationInput();
+                      setLocationSelectHint("Select a suggestion to set your location.");
                     }
                   }}
                   placeholder="e.g. Austin, 78701"
                   className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
-                <button
-                  type="button"
-                  onClick={applyLocationInput}
-                  className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-black hover:bg-white/90 transition"
-                >
-                  Apply
-                </button>
               </div>
               <div className="mt-3 text-xs text-white/60 min-h-[16px]">
                 {locationSuggestLoading ? "Searching locations..." : ""}
@@ -563,11 +569,16 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
               {locationSuggestError ? (
                 <div className="mt-3 text-xs text-rose-200">{locationSuggestError}</div>
               ) : null}
+              {locationSelectHint ? (
+                <div className="mt-2 text-xs text-white/60">{locationSelectHint}</div>
+              ) : null}
               {!locationSuggestLoading &&
               !locationSuggestError &&
               locationInput.trim().length >= 2 &&
               locationSuggestions.length === 0 ? (
-                <div className="mt-3 text-xs text-white/60">No matches.</div>
+                <div className="mt-3 text-xs text-white/60">
+                  {locationNoMatchMessage}
+                </div>
               ) : null}
               {locationSuggestions.length > 0 ? (
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-1">
