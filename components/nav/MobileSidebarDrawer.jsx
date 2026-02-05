@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import useBodyScrollLock from "./useBodyScrollLock";
 
@@ -24,6 +24,18 @@ function getPortalSnapshot() {
 
 function getPortalServerSnapshot() {
   return 0;
+}
+
+function subscribeNoop() {
+  return () => {};
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
 }
 
 const FOCUSABLE_SELECTORS = [
@@ -56,7 +68,11 @@ export default function MobileSidebarDrawer({
   const lastActiveRef = useRef(null);
   const portalNodeRef = useRef(null);
   const wasOpenRef = useRef(open);
-  const [mounted, setMounted] = useState(false);
+  const isClient = useSyncExternalStore(
+    subscribeNoop,
+    getClientSnapshot,
+    getServerSnapshot
+  );
   const portalStoreVersion = useSyncExternalStore(
     subscribePortal,
     getPortalSnapshot,
@@ -64,10 +80,6 @@ export default function MobileSidebarDrawer({
   );
 
   useBodyScrollLock(open);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -151,7 +163,7 @@ export default function MobileSidebarDrawer({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  if (!mounted || typeof document === "undefined") return null;
+  if (!isClient || typeof document === "undefined") return null;
   void portalStoreVersion;
   const portalHost = document.querySelector(
     "div[data-mobile-sidebar-drawer=\"1\"]"

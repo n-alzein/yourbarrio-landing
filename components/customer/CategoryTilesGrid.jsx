@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useLocation } from "@/components/location/LocationProvider";
 import { withLocationHref } from "@/lib/location";
 
@@ -26,11 +25,9 @@ export default function CategoryTilesGrid({
   diagTileClick,
 }) {
   const { location } = useLocation();
-  const router = useRouter();
   const debugNavPerf = process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1";
   const withLocation = (href) => withLocationHref(href, location);
   const hasCategories = Array.isArray(categories) && categories.length > 0;
-  const prefetchedRef = useRef(new Set());
 
   const markNavStart = useCallback(() => {
     if (!debugNavPerf) return;
@@ -40,34 +37,6 @@ export default function CategoryTilesGrid({
       /* ignore */
     }
   }, [debugNavPerf]);
-
-  const prefetchHref = useCallback(
-    (href) => {
-      if (!href) return;
-      if (prefetchedRef.current.has(href)) return;
-      prefetchedRef.current.add(href);
-      router.prefetch(href);
-    },
-    [router]
-  );
-
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return undefined;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          const href = entry.target?.getAttribute?.("data-prefetch-href");
-          prefetchHref(href);
-        });
-      },
-      { rootMargin: "200px 0px" }
-    );
-
-    const tiles = document.querySelectorAll('[data-category-tile="1"]');
-    tiles.forEach((tile) => observer.observe(tile));
-    return () => observer.disconnect();
-  }, [categories, location?.city, location?.zip, prefetchHref]);
 
   if (isLoading) {
     return (
@@ -141,7 +110,7 @@ export default function CategoryTilesGrid({
               <Link
                 key={category.id ?? category.slug ?? idx}
                 href={href}
-                prefetch
+                prefetch={false}
                 aria-label={`Shop ${tileTitle}`}
                 data-safe-nav="1"
                 data-category-tile="1"
@@ -192,9 +161,6 @@ export default function CategoryTilesGrid({
                   markNavStart();
                 }}
                 onNavigate={markNavStart}
-                onMouseEnter={() => prefetchHref(href)}
-                onFocus={() => prefetchHref(href)}
-                onTouchStart={() => prefetchHref(href)}
                 className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-colors duration-200 hover:shadow-md hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 pointer-events-auto touch-manipulation active:bg-white/10"
               >
                 <div className="relative aspect-[4/5] lg:aspect-[16/9] w-full overflow-hidden bg-white/5">

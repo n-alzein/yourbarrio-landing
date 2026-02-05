@@ -7,6 +7,7 @@ const nextConfig = {
     process.env.NEXT_PUBLIC_REACT_COMPILER !== "false",
   images: {
     formats: ["image/avif", "image/webp"],
+    qualities: [75, 82],
     remotePatterns: [
       {
         protocol: "https",

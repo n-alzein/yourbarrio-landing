@@ -181,14 +181,17 @@ export default function HeaderAccountWidget({
 
   useEffect(() => {
     if (mobileMenuOpen) return;
-    setMobileLocationOpen(false);
-    setMobileLocationInput("");
-    setMobileLocationSuggestions([]);
-    setMobileLocationSuggestIndex(-1);
-    setMobileLocationSelectHint(null);
-    setMobileLocationSuggestError(null);
-    setMobileLocationSuggestLoading(false);
-    mobileLocationPrefillRef.current = false;
+    const timeoutId = setTimeout(() => {
+      setMobileLocationOpen(false);
+      setMobileLocationInput("");
+      setMobileLocationSuggestions([]);
+      setMobileLocationSuggestIndex(-1);
+      setMobileLocationSelectHint(null);
+      setMobileLocationSuggestError(null);
+      setMobileLocationSuggestLoading(false);
+      mobileLocationPrefillRef.current = false;
+    }, 0);
+    return () => clearTimeout(timeoutId);
   }, [mobileMenuOpen]);
 
   useEffect(() => {
