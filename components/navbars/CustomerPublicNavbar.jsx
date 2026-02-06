@@ -48,17 +48,17 @@ export default function CustomerPublicNavbar() {
 
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-50 theme-lock"
+      className="fixed top-0 inset-x-0 z-50 theme-lock yb-navbar yb-navbar-bordered"
       data-public-nav
       data-customer-public-navbar="1"
     >
-      <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
+      <div>
         <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14">
           <div className="h-20 flex items-center justify-between">
             {/* MOBILE MENU BUTTON */}
             <button
               aria-label="Toggle menu"
-              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition mr-2"
+              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center active:scale-[0.98] transition mr-2"
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
               aria-controls={mobileDrawerId}
@@ -146,7 +146,7 @@ export default function CustomerPublicNavbar() {
                   <button
                     type="button"
                     onClick={() => openModal("customer-signup")}
-                    className="px-5 py-2 rounded-xl font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white"
+                className="px-5 py-2 rounded-xl font-semibold bg-[var(--color-primary)] text-white"
                   >
                     Sign Up
                   </button>
@@ -187,7 +187,7 @@ export default function CustomerPublicNavbar() {
           <div className="flex flex-col gap-3">
             <Link
               href="/business"
-              className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+              className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
               onClick={() => setOpen(false)}
             >
               For Business
@@ -195,7 +195,7 @@ export default function CustomerPublicNavbar() {
             {hasSession ? (
               <Link
                 href="/customer/home"
-                className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
                 onClick={() => setOpen(false)}
               >
                 My account
@@ -204,7 +204,7 @@ export default function CustomerPublicNavbar() {
               <>
                 <button
                   type="button"
-                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
                   onClick={() => {
                     setOpen(false);
                     openModal("customer-login");
@@ -214,7 +214,7 @@ export default function CustomerPublicNavbar() {
                 </button>
                 <button
                   type="button"
-                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 shadow-lg shadow-fuchsia-900/40"
+                    className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-[var(--color-primary)]"
                   onClick={() => {
                     setOpen(false);
                     openModal("customer-signup");

@@ -467,7 +467,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl use-backdrop-blur border-b border-white/10 theme-lock pointer-events-auto"
+      className="fixed top-0 inset-x-0 z-[5000] theme-lock pointer-events-auto yb-navbar yb-navbar-bordered"
       data-nav-surface={surface}
       data-nav-guard="1"
     >
@@ -515,7 +515,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           <button
             type="button"
             onClick={() => setLocationOpen((open) => !open)}
-            className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-left text-white/90 shadow-lg shadow-purple-950/20 transition hover:bg-white/15"
+            className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-left text-white/90 transition hover:bg-white/15"
             aria-haspopup="dialog"
             aria-expanded={locationOpen}
           >
@@ -527,9 +527,9 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           </button>
 
           {locationOpen ? (
-            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl border border-white/10 bg-[#0b0618]/95 p-4 text-white shadow-xl shadow-purple-950/30 backdrop-blur-2xl use-backdrop-blur use-backdrop-blur-fallback">
-              <div className="text-xs uppercase tracking-[0.22em] text-white/60">Set location</div>
-              <div className="mt-2 text-sm text-white/80">Enter a city or ZIP code.</div>
+            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl p-4 yb-dropdown-surface">
+              <div className="text-xs uppercase tracking-[0.22em] yb-dropdown-title">Set location</div>
+              <div className="mt-2 text-sm yb-dropdown-muted">Enter a city or ZIP code.</div>
               <div className="mt-4 flex items-center gap-2">
                 <input
                   type="text"
@@ -566,23 +566,23 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                     }
                   }}
                   placeholder="e.g. Austin, 78701"
-                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
               </div>
-              <div className="mt-3 text-xs text-white/60 min-h-[16px]">
+              <div className="mt-3 text-xs yb-dropdown-muted min-h-[16px]">
                 {locationSuggestLoading ? "Searching locations..." : ""}
               </div>
               {locationSuggestError ? (
                 <div className="mt-3 text-xs text-rose-200">{locationSuggestError}</div>
               ) : null}
               {locationSelectHint ? (
-                <div className="mt-2 text-xs text-white/60">{locationSelectHint}</div>
+                <div className="mt-2 text-xs yb-dropdown-muted">{locationSelectHint}</div>
               ) : null}
               {!locationSuggestLoading &&
               !locationSuggestError &&
               locationInput.trim().length >= 2 &&
               locationSuggestions.length === 0 ? (
-                <div className="mt-3 text-xs text-white/60">
+                <div className="mt-3 text-xs yb-dropdown-muted">
                   {locationNoMatchMessage}
                 </div>
               ) : null}
@@ -593,7 +593,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                       key={suggestion.id || suggestion.label || idx}
                       type="button"
                       onClick={() => applyLocationSuggestion(suggestion)}
-                      className={`w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10 rounded-lg ${
+                      className={`w-full text-left px-3 py-2 text-sm rounded-lg yb-dropdown-item ${
                         idx === locationSuggestIndex ? "bg-white/10" : ""
                       }`}
                     >
@@ -610,7 +610,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           <div className="md:hidden flex-1" data-nav-guard="1">
             <form
               onSubmit={handleSubmitSearch}
-              className="relative flex w-[calc(100%-3rem)] items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+              className="relative flex w-[calc(100%-3rem)] items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2"
             >
               <Search className="h-4 w-4 text-white/70" />
               <input
@@ -625,7 +625,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
               <button
                 type="submit"
                 aria-label="Search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-white p-1.5 text-black"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-white p-1.5 text-black yb-navbar-light"
               >
                 <Search className="h-4 w-4" />
               </button>
@@ -638,7 +638,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
             <div ref={searchBoxRef} className="w-full max-w-3xl relative" data-nav-guard="1">
             <form
               onSubmit={handleSubmitSearch}
-              className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10 backdrop-blur-lg use-backdrop-blur shadow-lg shadow-purple-950/20"
+              className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10"
             >
                 <div className="hidden lg:flex items-center gap-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 bg-white/5 border-r border-white/10">
                   <label htmlFor="global-search-category" className="sr-only">
@@ -677,7 +677,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                 </div>
                 <button
                   type="submit"
-                  className="px-5 bg-white text-sm font-semibold text-black hover:bg-white/90 transition"
+                  className="px-5 bg-white text-sm font-semibold text-black hover:bg-white/90 transition yb-navbar-light"
                 >
                   Search
                 </button>
@@ -685,7 +685,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
               {suggestionsOpen && (searchLoading || searchError || hasHybridResults) ? (
                 <div className="absolute left-0 right-0 top-full mt-2 z-50">
-                <div className="rounded-2xl border border-white/10 bg-[#0b0618]/92 backdrop-blur-2xl use-backdrop-blur use-backdrop-blur-fallback shadow-xl shadow-purple-950/20 p-3 text-white">
+                <div className="rounded-2xl p-3 yb-dropdown-surface">
                   {searchError ? (
                       <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-rose-200 mb-2">
                         {searchError}
@@ -694,11 +694,11 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/60">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] yb-dropdown-muted">
                           <PackageSearch className="h-4 w-4" />
                           Items
                           {searchLoading ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-white/60" />
+                            <Loader2 className="h-3 w-3 animate-spin yb-dropdown-muted" />
                           ) : null}
                         </div>
                         <div className="space-y-2">
@@ -713,7 +713,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                                 key={`item-${item.id}`}
                                 type="button"
                                 onClick={() => handleSuggestionSelect(item.title, item.id)}
-                                className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                                className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
                               >
                                 <div className="h-10 w-10 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] font-semibold text-white/80">
                                   {item.category
@@ -722,7 +722,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                                 </div>
                                 <div className="flex-1">
                                   <div className="text-sm font-semibold leading-snug">{item.title}</div>
-                                  <div className="text-[11px] text-white/60">
+                                  <div className="text-[11px] yb-dropdown-muted">
                                     {item.category || "Local listing"}
                                     {item.price ? ` · $${item.price}` : ""}
                                   </div>
@@ -744,7 +744,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                       </div>
 
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/60">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] yb-dropdown-muted">
                           <Store className="h-4 w-4" />
                           Businesses & places
                         </div>
@@ -754,14 +754,14 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                               key={`biz-${biz.id}`}
                               type="button"
                               onClick={() => handleSuggestionSelect(biz.name)}
-                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
                             >
                               <div className="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-200/30 flex items-center justify-center">
                                 <Store className="h-4 w-4 text-emerald-200" />
                               </div>
                               <div className="flex-1">
                                 <div className="text-sm font-semibold leading-snug">{biz.name}</div>
-                                <div className="text-[11px] text-white/60">
+                                <div className="text-[11px] yb-dropdown-muted">
                                   {biz.category || "Local business"}
                                   {biz.city ? ` · ${biz.city}` : ""}
                                 </div>
@@ -774,14 +774,14 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
                               key={`place-${place.id}`}
                               type="button"
                               onClick={() => handleSuggestionSelect(place.name)}
-                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
                             >
                               <div className="h-10 w-10 rounded-lg bg-blue-500/20 border border-blue-200/30 flex items-center justify-center">
                                 <MapPin className="h-4 w-4 text-blue-100" />
                               </div>
                               <div className="flex-1">
                                 <div className="text-sm font-semibold leading-snug">{place.name}</div>
-                                <div className="text-[11px] text-white/60">
+                                <div className="text-[11px] yb-dropdown-muted">
                                   {place.address || "Nearby result"}
                                 </div>
                               </div>

@@ -50,11 +50,11 @@ export default function BusinessMarketingNavbar() {
 
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-50 theme-lock"
+      className="fixed top-0 inset-x-0 z-50 theme-lock yb-navbar yb-navbar-bordered"
       data-public-nav
       data-business-public-navbar="1"
     >
-      <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
+      <div>
         <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12 xl:px-14">
           <div className="h-20 flex items-center justify-between">
             {/* LEFT SIDE */}
@@ -103,7 +103,7 @@ export default function BusinessMarketingNavbar() {
               <Link
                 href="/business-auth/register"
                 onClick={(e) => handlePopup(e, "/business-auth/register")}
-                className="px-5 py-2 rounded-xl font-semibold bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white"
+                className="px-5 py-2 rounded-xl font-semibold bg-[var(--color-primary)] text-white"
               >
                 Create Account
               </Link>
@@ -112,7 +112,7 @@ export default function BusinessMarketingNavbar() {
             {/* MOBILE MENU BUTTON */}
             <button
               aria-label="Toggle menu"
-              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition"
+              className="md:hidden h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center active:scale-[0.98] transition"
               onClick={() => setOpen((o) => !o)}
             >
               <div className="flex flex-col gap-1.5">
@@ -140,12 +140,9 @@ export default function BusinessMarketingNavbar() {
       {/* MOBILE MENU */}
       {open && (
         <div className="md:hidden fixed inset-0 z-40">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-xl"
-            onClick={() => setOpen(false)}
-          />
+          <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
           <div className="absolute inset-x-0 top-20 px-4 pb-6">
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-purple-950/90 via-purple-900/80 to-fuchsia-900/80 shadow-2xl text-white">
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-[var(--yb-navbar-bg)] text-white">
               <div className="px-6 pt-6 pb-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
                 <div className="flex flex-col gap-3 text-lg font-semibold">
@@ -165,14 +162,14 @@ export default function BusinessMarketingNavbar() {
               <div className="px-6 py-6 flex flex-col gap-3">
                 <Link
                   href="/"
-                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
                   onClick={() => setOpen(false)}
                 >
                   For Customers
                 </Link>
                 <Link
                   href="/business/login"
-                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15 backdrop-blur-sm"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
                   onClick={(e) => {
                     setOpen(false);
                     handlePopup(e, "/business-auth/login");
@@ -182,7 +179,7 @@ export default function BusinessMarketingNavbar() {
                 </Link>
                 <Link
                   href="/business-auth/register"
-                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 shadow-lg shadow-fuchsia-900/40"
+                  className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-[var(--color-primary)]"
                   onClick={(e) => {
                     setOpen(false);
                     handlePopup(e, "/business-auth/register");

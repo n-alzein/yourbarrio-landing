@@ -2,11 +2,13 @@
 
 import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import useBodyScrollLock from "./useBodyScrollLock";
+import { X } from "lucide-react";
+import SafeImage from "@/components/SafeImage";
+import useBodyScrollLock from "@/components/nav/useBodyScrollLock";
 
 let portalVersion = 0;
 const portalListeners = new Set();
-let mobileSidebarOpenCount = 0;
+let accountSidebarOpenCount = 0;
 
 function bumpPortalVersion() {
   portalVersion += 1;
@@ -52,23 +54,24 @@ const FOCUSABLE_SELECTORS = [
   "[tabindex]:not([tabindex=\"-1\"])",
 ].join(",");
 
-export default function MobileSidebarDrawer({
+export default function AccountSidebar({
   open,
-  onClose,
-  title = "Menu",
+  onOpenChange,
+  anchorRef,
+  title = "Your Account",
+  displayName,
+  email,
+  avatar,
   children,
-  footer = null,
-  id,
-  showHeader = true,
 }) {
   const reactId = useId();
-  const panelId = id || `mobile-drawer-${reactId}`;
+  const panelId = `account-sidebar-${reactId}`;
   const titleId = `${panelId}-title`;
   const panelRef = useRef(null);
   const closeButtonRef = useRef(null);
   const lastActiveRef = useRef(null);
-  const portalNodeRef = useRef(null);
   const wasOpenRef = useRef(open);
+  const portalNodeRef = useRef(null);
   const isClient = useSyncExternalStore(
     subscribeNoop,
     getClientSnapshot,
@@ -86,7 +89,7 @@ export default function MobileSidebarDrawer({
     if (typeof document === "undefined") return undefined;
     if (portalNodeRef.current) return undefined;
     const node = document.createElement("div");
-    node.dataset.mobileSidebarDrawer = "1";
+    node.dataset.accountSidebar = "1";
     document.body.appendChild(node);
     portalNodeRef.current = node;
     bumpPortalVersion();
@@ -104,36 +107,35 @@ export default function MobileSidebarDrawer({
   }, []);
 
   useEffect(() => {
-    if (open) {
-      lastActiveRef.current = document.activeElement;
-      requestAnimationFrame(() => {
-        if (closeButtonRef.current) {
-          closeButtonRef.current.focus();
-          return;
-        }
-        panelRef.current?.focus();
-      });
-    }
-  }, [open]);
+    if (!open) return;
+    lastActiveRef.current = anchorRef?.current || document.activeElement;
+    requestAnimationFrame(() => {
+      if (closeButtonRef.current) {
+        closeButtonRef.current.focus();
+        return;
+      }
+      panelRef.current?.focus();
+    });
+  }, [open, anchorRef]);
 
   useEffect(() => {
     if (!wasOpenRef.current || open) {
       wasOpenRef.current = open;
       return;
     }
-    const lastActive = lastActiveRef.current;
-    if (lastActive && typeof lastActive.focus === "function") {
-      requestAnimationFrame(() => lastActive.focus());
+    const anchorEl = anchorRef?.current || lastActiveRef.current;
+    if (anchorEl && typeof anchorEl.focus === "function") {
+      requestAnimationFrame(() => anchorEl.focus());
     }
     wasOpenRef.current = open;
-  }, [open]);
+  }, [open, anchorRef]);
 
   useEffect(() => {
     if (!open) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose?.();
+        onOpenChange?.(false);
         return;
       }
       if (event.key !== "Tab") return;
@@ -162,15 +164,15 @@ export default function MobileSidebarDrawer({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onOpenChange]);
 
   useEffect(() => {
     if (!open || typeof document === "undefined") return undefined;
-    mobileSidebarOpenCount += 1;
+    accountSidebarOpenCount += 1;
     document.documentElement.dataset.sidebarOpen = "1";
     return () => {
-      mobileSidebarOpenCount = Math.max(0, mobileSidebarOpenCount - 1);
-      if (mobileSidebarOpenCount === 0) {
+      accountSidebarOpenCount = Math.max(0, accountSidebarOpenCount - 1);
+      if (accountSidebarOpenCount === 0) {
         delete document.documentElement.dataset.sidebarOpen;
       }
     };
@@ -178,9 +180,7 @@ export default function MobileSidebarDrawer({
 
   if (!isClient || typeof document === "undefined") return null;
   void portalStoreVersion;
-  const portalHost = document.querySelector(
-    "div[data-mobile-sidebar-drawer=\"1\"]"
-  );
+  const portalHost = document.querySelector("div[data-account-sidebar=\"1\"]");
   if (!portalHost) return null;
 
   return createPortal(
@@ -192,11 +192,11 @@ export default function MobileSidebarDrawer({
         className={`absolute inset-0 yb-overlay transition-opacity duration-200 ${
           open ? "opacity-100" : "opacity-0"
         }`}
-        onClick={onClose}
+        onClick={() => onOpenChange?.(false)}
       />
       <div
-        className={`absolute inset-y-0 left-0 w-[88vw] max-w-[360px] transform transition-transform duration-300 ease-out ${
-          open ? "translate-x-0" : "-translate-x-full"
+        className={`absolute inset-y-0 right-0 w-[380px] max-w-[90vw] transform transition-transform duration-300 ease-out ${
+          open ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(event) => event.stopPropagation()}
       >
@@ -204,49 +204,46 @@ export default function MobileSidebarDrawer({
           ref={panelRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={showHeader ? titleId : undefined}
-          aria-label={!showHeader ? title : undefined}
+          aria-labelledby={titleId}
           id={panelId}
           tabIndex={-1}
-          className="yb-sidebar-panel yb-dropdown-surface flex h-full flex-col border-r border-[var(--yb-border)]"
+          className="yb-sidebar-panel flex h-full flex-col border-l border-[var(--yb-border)]"
         >
-          {showHeader ? (
-            <div className="yb-sidebar-header flex items-center justify-between px-5 py-4">
-              <div>
-                <div id={titleId} className="text-sm font-semibold">
-                  {title}
-                </div>
-                <div className="text-[11px] yb-dropdown-muted">YourBarrio</div>
+          <div className="yb-sidebar-header flex items-start justify-between px-6 py-5">
+            <div>
+              <div id={titleId} className="text-sm font-semibold">
+                {title}
               </div>
-              <button
-                ref={closeButtonRef}
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
-                aria-label="Close menu"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor">
-                  <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="mt-1 text-xs yb-dropdown-muted">YourBarrio</div>
             </div>
-          ) : (
             <button
               ref={closeButtonRef}
               type="button"
-              onClick={onClose}
-              className="absolute right-4 top-4 z-10 rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
-              aria-label="Close menu"
+              onClick={() => onOpenChange?.(false)}
+              className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+              aria-label="Close account menu"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor">
-                <path strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
-          )}
-          <div className={`flex-1 overflow-y-auto px-5 ${showHeader ? "py-5" : "pb-5 pt-4"}`}>
-            {children}
           </div>
-          {footer ? <div className="border-t border-white/10 px-5 py-4">{footer}</div> : null}
+
+          <div className="flex items-center gap-3 border-b border-[var(--yb-border)] px-6 py-4">
+            <SafeImage
+              src={avatar}
+              alt="Profile avatar"
+              className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
+              width={48}
+              height={48}
+              sizes="48px"
+              useNextImage
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{displayName}</p>
+              {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
         </div>
       </div>
     </div>,

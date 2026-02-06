@@ -1,23 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bookmark,
-  ChevronDown,
-  Compass,
-  Home,
-  LogOut,
-  MapPin,
-  MessageSquare,
-  ShoppingCart,
-  Settings,
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, LogOut, MapPin, ShoppingCart } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import { useModal } from "@/components/modals/ModalProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
+import AccountMenuItems from "@/components/nav/AccountMenuItems";
+import AccountSidebar from "@/components/nav/AccountSidebar";
 import { useCart } from "@/components/cart/CartProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
@@ -56,6 +48,7 @@ export default function HeaderAccountWidget({
     process.env.NODE_ENV !== "production";
   const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [accountSidebarOpen, setAccountSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileLocationOpen, setMobileLocationOpen] = useState(false);
   const [mobileLocationInput, setMobileLocationInput] = useState("");
@@ -70,6 +63,7 @@ export default function HeaderAccountWidget({
     ? "No matches. Try another postal code."
     : "No matches. Try another city.";
   const dropdownRef = useRef(null);
+  const accountTriggerRef = useRef(null);
   const lastUnreadKeyRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const unreadRequestIdRef = useRef(0);
@@ -83,6 +77,12 @@ export default function HeaderAccountWidget({
   const accountProfile = profile;
   const isCustomer = !role || role === "customer" || role === "admin" || role === "internal";
   const isBusiness = role === "business";
+  const sidebarFeatureEnabled = process.env.NEXT_PUBLIC_ACCOUNT_SIDEBAR !== "0";
+  const [useSidebarDesktop, setUseSidebarDesktop] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (!sidebarFeatureEnabled) return false;
+    return window.matchMedia("(min-width: 1024px)").matches;
+  });
 
   const avatar = resolveImageSrc(
     accountProfile?.profile_photo_url?.trim() ||
@@ -362,10 +362,31 @@ export default function HeaderAccountWidget({
     if (typeof window === "undefined") return undefined;
     const handleReset = () => {
       setProfileMenuOpen(false);
+      setAccountSidebarOpen(false);
     };
     window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
     return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
   }, []);
+
+  useEffect(() => {
+    if (!sidebarFeatureEnabled || typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(min-width: 1024px)");
+    const handleChange = () => {
+      const matches = media.matches;
+      setUseSidebarDesktop(matches);
+      if (matches) {
+        setProfileMenuOpen(false);
+      } else {
+        setAccountSidebarOpen(false);
+      }
+    };
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, [sidebarFeatureEnabled]);
 
   const applyMobileLocationSuggestion = (suggestion) => {
     if (!suggestion) return;
@@ -470,46 +491,6 @@ export default function HeaderAccountWidget({
     </div>
   );
 
-  const quickActions = [
-    {
-      href: "/customer/home",
-      title: "YB Home",
-      description: "Back to customer home",
-      icon: Home,
-    },
-    {
-      href: "/customer/nearby",
-      title: "Nearby businesses",
-      description: "Explore what's buzzing near you",
-      icon: Compass,
-    },
-    {
-      href: "/customer/messages",
-      title: "Messages",
-      description: "Chat with local businesses",
-      icon: MessageSquare,
-      showBadge: true,
-    },
-    {
-      href: "/account/orders",
-      title: "My Orders",
-      description: "Track active requests",
-      icon: ShoppingCart,
-    },
-    {
-      href: "/account/purchase-history",
-      title: "Purchase History",
-      description: "Review fulfilled orders",
-      icon: Bookmark,
-    },
-    {
-      href: "/customer/saved",
-      title: "Saved items",
-      description: "Instant access to your favorites",
-      icon: Bookmark,
-    },
-  ];
-
   const scheduleProfileMenuClose = useCallback(() => {
     if (!profileMenuOpen) return;
     if (typeof queueMicrotask === "function") {
@@ -518,6 +499,14 @@ export default function HeaderAccountWidget({
       setTimeout(() => setProfileMenuOpen(false), 0);
     }
   }, [profileMenuOpen]);
+
+  const handleAccountNavigate = useCallback(() => {
+    if (useSidebarDesktop) {
+      setAccountSidebarOpen(false);
+      return;
+    }
+    scheduleProfileMenuClose();
+  }, [useSidebarDesktop, scheduleProfileMenuClose]);
 
   if (variant === "desktop") {
     if (showRateLimit) {
@@ -549,7 +538,7 @@ export default function HeaderAccountWidget({
             onClick={() => openModal("customer-signup")}
             disabled={disableCtas}
             aria-busy={disableCtas}
-            className={`px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold ${
+            className={`px-5 py-2 rounded-xl bg-[var(--color-primary)] text-white font-semibold ${
               disableCtas ? "opacity-60 cursor-not-allowed" : ""
             }`}
             data-public-cta="signup"
@@ -561,7 +550,8 @@ export default function HeaderAccountWidget({
     }
 
     return (
-      <div className="flex items-center gap-3">
+      <>
+        <div className="flex items-center gap-3">
         {isBusiness ? (
           <Link
             href="/business/dashboard"
@@ -572,9 +562,18 @@ export default function HeaderAccountWidget({
         ) : null}
         <div className="relative" ref={dropdownRef} data-nav-guard="1">
           <button
-            onClick={() => setProfileMenuOpen((open) => !open)}
-            className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm use-backdrop-blur border border-white/10 hover:border-white/30 transition"
+            ref={accountTriggerRef}
+            onClick={() => {
+              if (useSidebarDesktop) {
+                setAccountSidebarOpen(true);
+                return;
+              }
+              setProfileMenuOpen((open) => !open);
+            }}
+            className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 border border-white/10 hover:border-white/30 transition"
             data-nav-guard="1"
+            aria-haspopup="dialog"
+            aria-expanded={useSidebarDesktop ? accountSidebarOpen : profileMenuOpen}
           >
             <span className="relative">
               <SafeImage
@@ -588,7 +587,7 @@ export default function HeaderAccountWidget({
                 priority
               />
               {unreadCount > 0 ? (
-                <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
+                <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               ) : null}
@@ -601,99 +600,75 @@ export default function HeaderAccountWidget({
 
           {profileMenuOpen ? (
             <div
-              className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl use-backdrop-blur use-backdrop-blur-fallback z-[5100]"
+              className="absolute right-0 mt-4 w-80 rounded-3xl px-1.5 pb-3 pt-1.5 yb-dropdown-surface z-[5100]"
               data-nav-guard="1"
             >
-              <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
+              <div className="rounded-[26px]">
                 <div className="flex items-center gap-3 px-4 py-4">
                   <SafeImage
                     src={avatar}
                     alt="Profile avatar"
-                    className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                    className="h-12 w-12 rounded-2xl object-cover border border-white/20"
                     width={48}
                     height={48}
                     sizes="48px"
                     useNextImage
                   />
                   <div>
-                    <p className="text-sm font-semibold text-white">{displayName}</p>
-                    {email ? <p className="text-xs text-white/60">{email}</p> : null}
+                    <p className="text-sm font-semibold">{displayName}</p>
+                    {email ? <p className="text-xs yb-dropdown-muted">{email}</p> : null}
                   </div>
                 </div>
 
-                <div className="px-2 pb-1 pt-2 space-y-1">
-                  {isCustomer
-                    ? quickActions.map(({ href, title, description, icon: Icon, showBadge }) => (
-                        <Link
-                          key={href}
-                          href={href}
-                          onClick={scheduleProfileMenuClose}
-                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation text-left"
-                          data-safe-nav="1"
-                        >
-                          <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-semibold text-white/90">{title}</p>
-                              {showBadge && unreadCount > 0 ? (
-                                <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                  {unreadCount}
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="text-xs text-white/60">{description}</p>
-                          </div>
-                        </Link>
-                      ))
-                    : null}
-
-                  {isBusiness ? (
-                    <Link
-                      href="/business/dashboard"
-                      onClick={scheduleProfileMenuClose}
-                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation text-left"
-                      data-safe-nav="1"
+                <AccountMenuItems
+                  variant="dropdown"
+                  isCustomer={isCustomer}
+                  isBusiness={isBusiness}
+                  unreadCount={unreadCount}
+                  onNavigate={handleAccountNavigate}
+                  logout={(
+                    <LogoutButton
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                      onSuccess={() => setProfileMenuOpen(false)}
                     >
-                      <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
-                        <Settings className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-white/90">Business dashboard</p>
-                        <p className="text-xs text-white/60">Manage your storefront</p>
-                      </div>
-                    </Link>
-                  ) : null}
-                </div>
-
-                <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                  {isCustomer ? (
-                    <Link
-                      href="/customer/settings"
-                      onClick={scheduleProfileMenuClose}
-                      className="flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10 touch-manipulation text-left"
-                      data-safe-nav="1"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Account settings
-                      </span>
-                    </Link>
-                  ) : null}
-                  <LogoutButton
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
-                    onSuccess={() => setProfileMenuOpen(false)}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Logout
-                  </LogoutButton>
-                </div>
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </LogoutButton>
+                  )}
+                />
               </div>
             </div>
           ) : null}
         </div>
-      </div>
+        </div>
+        {hasAuth && useSidebarDesktop ? (
+          <AccountSidebar
+            open={accountSidebarOpen}
+            onOpenChange={setAccountSidebarOpen}
+            anchorRef={accountTriggerRef}
+            displayName={displayName}
+            email={email}
+            avatar={avatar}
+          >
+            <AccountMenuItems
+              variant="sidebar"
+              isCustomer={isCustomer}
+              isBusiness={isBusiness}
+              unreadCount={unreadCount}
+              onNavigate={handleAccountNavigate}
+              logout={(
+                <LogoutButton
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                  onSuccess={() => setAccountSidebarOpen(false)}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </LogoutButton>
+              )}
+            />
+          </AccountSidebar>
+        ) : null}
+      </>
     );
   }
 
@@ -703,12 +678,31 @@ export default function HeaderAccountWidget({
       onClose={() => onCloseMobileMenu?.()}
       title={hasAuth ? "My account" : "Welcome"}
       id={mobileDrawerId}
+      showHeader={!hasAuth}
     >
       <div
-        className="flex flex-col gap-5 text-white"
+        className="flex flex-col gap-6"
         data-nav-surface={surface}
         data-nav-guard="1"
       >
+        {hasAuth ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-3">
+            <SafeImage
+              src={avatar}
+              alt="Profile avatar"
+              className="h-11 w-11 rounded-2xl object-cover border border-[var(--yb-border)]"
+              width={44}
+              height={44}
+              sizes="44px"
+              useNextImage
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{displayName}</p>
+              {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
+            </div>
+          </div>
+        ) : null}
+
         {showRateLimit ? (
           <div className="text-sm text-white/70" aria-live="polite">
             {rateLimitMessage || "Temporarily rate-limited. Please wait a moment."}
@@ -720,17 +714,17 @@ export default function HeaderAccountWidget({
             <button
               type="button"
               onClick={() => setMobileLocationOpen((open) => !open)}
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-white/90 transition hover:bg-white/10"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-3 text-left transition hover:bg-black/5"
               aria-expanded={mobileLocationOpen}
               aria-controls="mobile-location-editor"
             >
-              <MapPin className="h-4 w-4 text-white/80" />
+              <MapPin className="h-4 w-4" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/50">Location</p>
-                <p className="text-sm font-semibold text-white truncate">{locationLabel}</p>
+                <p className="text-xs uppercase tracking-[0.2em] yb-dropdown-muted">Location</p>
+                <p className="text-sm font-semibold truncate">{locationLabel}</p>
               </div>
               <ChevronDown
-                className={`h-4 w-4 text-white/60 transition ${
+                className={`h-4 w-4 yb-dropdown-muted transition ${
                   mobileLocationOpen ? "rotate-180" : ""
                 }`}
               />
@@ -739,7 +733,7 @@ export default function HeaderAccountWidget({
               <Link
                 href="/cart"
                 onClick={() => onCloseMobileMenu?.()}
-                className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/90 transition hover:text-white"
+                className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--yb-border)] bg-white transition hover:bg-black/5"
                 aria-label="View cart"
                 data-safe-nav="1"
               >
@@ -756,12 +750,12 @@ export default function HeaderAccountWidget({
           {mobileLocationOpen ? (
             <div
               id="mobile-location-editor"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+              className="rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-4"
             >
-              <div className="text-xs uppercase tracking-[0.22em] text-white/60">
+              <div className="text-xs uppercase tracking-[0.22em] yb-dropdown-muted">
                 Set location
               </div>
-              <div className="mt-2 text-sm text-white/80">Enter a city or ZIP code.</div>
+              <div className="mt-2 text-sm yb-dropdown-muted">Enter a city or ZIP code.</div>
               <div className="mt-4 flex items-center gap-2">
                 <input
                   type="text"
@@ -798,19 +792,19 @@ export default function HeaderAccountWidget({
                     }
                   }}
                   placeholder="e.g. Austin, 78701"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-lg border border-[var(--yb-border)] bg-white px-3 py-2 text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
                 />
               </div>
-              <div className="mt-3 text-xs text-white/60 min-h-[16px]">
+              <div className="mt-3 text-xs yb-dropdown-muted min-h-[16px]">
                 {mobileLocationSuggestLoading ? "Searching locations..." : ""}
               </div>
               {mobileLocationSuggestError ? (
-                <div className="mt-3 text-xs text-rose-200">
+                <div className="mt-3 text-xs text-rose-600">
                   {mobileLocationSuggestError}
                 </div>
               ) : null}
               {mobileLocationSelectHint ? (
-                <div className="mt-2 text-xs text-white/60">
+                <div className="mt-2 text-xs yb-dropdown-muted">
                   {mobileLocationSelectHint}
                 </div>
               ) : null}
@@ -818,19 +812,19 @@ export default function HeaderAccountWidget({
               !mobileLocationSuggestError &&
               mobileLocationInput.trim().length >= 2 &&
               mobileLocationSuggestions.length === 0 ? (
-                <div className="mt-3 text-xs text-white/60">
+                <div className="mt-3 text-xs yb-dropdown-muted">
                   {mobileLocationNoMatchMessage}
                 </div>
               ) : null}
               {mobileLocationSuggestions.length > 0 ? (
-                <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-1">
+                <div className="mt-3 rounded-xl border border-[var(--yb-border)] bg-white p-1">
                   {mobileLocationSuggestions.map((suggestion, idx) => (
                     <button
                       key={suggestion.id || suggestion.label || idx}
                       type="button"
                       onClick={() => applyMobileLocationSuggestion(suggestion)}
-                      className={`w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10 rounded-lg ${
-                        idx === mobileLocationSuggestIndex ? "bg-white/10" : ""
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-black/5 rounded-lg ${
+                        idx === mobileLocationSuggestIndex ? "bg-black/5" : ""
                       }`}
                     >
                       {suggestion.label}
@@ -853,7 +847,7 @@ export default function HeaderAccountWidget({
                 }}
                 disabled={disableCtas}
                 aria-busy={disableCtas}
-                className={`w-full text-center text-white/70 hover:text-white ${
+                className={`w-full text-center yb-dropdown-muted hover:text-[var(--yb-text)] ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
                 data-public-cta="signin"
@@ -868,7 +862,7 @@ export default function HeaderAccountWidget({
                 }}
                 disabled={disableCtas}
                 aria-busy={disableCtas}
-                className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
+                className={`px-4 py-2 bg-[var(--color-primary)] rounded-xl text-center font-semibold text-white ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
                 data-public-cta="signup"
@@ -878,27 +872,11 @@ export default function HeaderAccountWidget({
             </>
           ) : (
             <>
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                <SafeImage
-                  src={avatar}
-                  alt="Profile avatar"
-                  className="h-11 w-11 rounded-2xl object-cover border border-white/20"
-                  width={44}
-                  height={44}
-                  sizes="44px"
-                  useNextImage
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-                  {email ? <p className="text-xs text-white/60 truncate">{email}</p> : null}
-                </div>
-              </div>
-
               {isBusiness ? (
                 <Link
                   href="/business/dashboard"
                   onClick={() => onCloseMobileMenu?.()}
-                  className="text-left text-white/70 hover:text-white"
+                  className="text-left yb-dropdown-muted hover:text-[var(--yb-text)]"
                   data-safe-nav="1"
                 >
                   Business dashboard
@@ -906,78 +884,24 @@ export default function HeaderAccountWidget({
               ) : null}
 
               {isCustomer ? (
-                <>
-                  <Link
-                    href="/customer/home"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white"
-                    data-safe-nav="1"
-                  >
-                    YB Home
-                  </Link>
-                  <Link
-                    href="/customer/nearby"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white"
-                    data-safe-nav="1"
-                  >
-                    Nearby businesses
-                  </Link>
-                  <Link
-                    href="/customer/messages"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white flex items-center justify-between"
-                    data-safe-nav="1"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      Messages
-                    </span>
-                    {unreadCount > 0 ? (
-                      <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        {unreadCount}
-                      </span>
-                    ) : null}
-                  </Link>
-                  <Link
-                    href="/account/orders"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white"
-                    data-safe-nav="1"
-                  >
-                    My Orders
-                  </Link>
-                  <Link
-                    href="/account/purchase-history"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white"
-                    data-safe-nav="1"
-                  >
-                    Purchase History
-                  </Link>
-                  <Link
-                    href="/customer/saved"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white"
-                    data-safe-nav="1"
-                  >
-                    Saved items
-                  </Link>
-                  <Link
-                    href="/customer/settings"
-                    onClick={() => onCloseMobileMenu?.()}
-                    className="text-left text-white/70 hover:text-white"
-                    data-safe-nav="1"
-                  >
-                    Account settings
-                  </Link>
-                </>
+                <AccountMenuItems
+                  variant="sidebar"
+                  isCustomer={isCustomer}
+                  isBusiness={false}
+                  unreadCount={unreadCount}
+                  onNavigate={() => onCloseMobileMenu?.()}
+                  logout={(
+                    <LogoutButton mobile onSuccess={() => onCloseMobileMenu?.()} />
+                  )}
+                />
               ) : null}
             </>
           )
         ) : null}
 
-        {hasAuth ? <LogoutButton mobile onSuccess={() => onCloseMobileMenu?.()} /> : null}
+        {hasAuth && !isCustomer ? (
+          <LogoutButton mobile onSuccess={() => onCloseMobileMenu?.()} />
+        ) : null}
       </div>
     </MobileSidebarDrawer>
   );

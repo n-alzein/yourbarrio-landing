@@ -969,7 +969,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
   --------------------------------------------------- */
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
+      className="fixed top-0 inset-x-0 z-[5000] theme-lock pointer-events-auto yb-navbar yb-navbar-bordered"
       data-clickdiag={clickDiagEnabled ? "navbar" : undefined}
       onClickCapture={handleNavCapture}
       data-nav-guard="1"
@@ -1022,7 +1022,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           <button
             type="button"
             onClick={() => setLocationOpen((open) => !open)}
-            className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-left text-white/90 shadow-lg shadow-purple-950/20 transition hover:bg-white/15"
+            className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-left text-white/90 transition hover:bg-white/15"
             aria-haspopup="dialog"
             aria-expanded={locationOpen}
           >
@@ -1034,9 +1034,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           </button>
 
           {locationOpen ? (
-            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl border border-white/10 bg-[#0b0618]/95 p-4 text-white shadow-xl shadow-purple-950/30 backdrop-blur-2xl">
-              <div className="text-xs uppercase tracking-[0.22em] text-white/60">Set location</div>
-              <div className="mt-2 text-sm text-white/80">Enter a city or ZIP code.</div>
+            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl p-4 yb-dropdown-surface">
+              <div className="text-xs uppercase tracking-[0.22em] yb-dropdown-title">Set location</div>
+              <div className="mt-2 text-sm yb-dropdown-muted">Enter a city or ZIP code.</div>
               <div className="mt-4 flex items-center gap-2">
                 <input
                   type="text"
@@ -1073,23 +1073,23 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     }
                   }}
                   placeholder="e.g. Austin, 78701"
-                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="w-40 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
               </div>
-              <div className="mt-3 text-xs text-white/60 min-h-[16px]">
+              <div className="mt-3 text-xs yb-dropdown-muted min-h-[16px]">
                 {locationSuggestLoading ? "Searching locations..." : ""}
               </div>
               {locationSuggestError ? (
                 <div className="mt-3 text-xs text-rose-200">{locationSuggestError}</div>
               ) : null}
               {locationSelectHint ? (
-                <div className="mt-2 text-xs text-white/60">{locationSelectHint}</div>
+                <div className="mt-2 text-xs yb-dropdown-muted">{locationSelectHint}</div>
               ) : null}
               {!locationSuggestLoading &&
               !locationSuggestError &&
               locationInput.trim().length >= 2 &&
               locationSuggestions.length === 0 ? (
-                <div className="mt-3 text-xs text-white/60">
+                <div className="mt-3 text-xs yb-dropdown-muted">
                   {locationNoMatchMessage}
                 </div>
               ) : null}
@@ -1100,12 +1100,12 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                       key={suggestion.id || suggestion.label || idx}
                       type="button"
                       onClick={() => applyLocationSuggestion(suggestion)}
-                      className={`w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10 rounded-lg ${
-                        idx === locationSuggestIndex ? "bg-white/10" : ""
-                      }`}
-                    >
-                      {suggestion.label}
-                    </button>
+                    className={`w-full text-left px-3 py-2 text-sm rounded-lg yb-dropdown-item ${
+                      idx === locationSuggestIndex ? "bg-white/10" : ""
+                    }`}
+                  >
+                    {suggestion.label}
+                  </button>
                   ))}
                 </div>
               ) : null}
@@ -1120,7 +1120,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           >
             <form
               onSubmit={handleSubmitSearch}
-              className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10 backdrop-blur-lg shadow-lg shadow-purple-950/20"
+              className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10"
             >
               <div className="hidden lg:flex items-center gap-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 bg-white/5 border-r border-white/10">
                 <label htmlFor="customer-search-category" className="sr-only">
@@ -1159,7 +1159,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               </div>
               <button
                 type="submit"
-                className="px-5 bg-white text-sm font-semibold text-black hover:bg-white/90 transition"
+                className="px-5 bg-white text-sm font-semibold text-black hover:bg-white/90 transition yb-navbar-light"
               >
                 Search
               </button>
@@ -1167,7 +1167,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
             {suggestionsOpen && (searchLoading || searchError || hasHybridResults) && (
               <div className="absolute left-0 right-0 top-full mt-2 z-50">
-                <div className="rounded-2xl border border-white/10 bg-[#0b0618]/92 backdrop-blur-2xl shadow-xl shadow-purple-950/20 p-3 text-white">
+                <div className="rounded-2xl p-3 yb-dropdown-surface">
                   {searchError ? (
                     <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-rose-200 mb-2">
                       {searchError}
@@ -1176,10 +1176,10 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/60">
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] yb-dropdown-muted">
                         <PackageSearch className="h-4 w-4" />
                         Items
-                        {searchLoading ? <Loader2 className="h-3 w-3 animate-spin text-white/60" /> : null}
+                        {searchLoading ? <Loader2 className="h-3 w-3 animate-spin yb-dropdown-muted" /> : null}
                       </div>
                       <div className="space-y-2">
                         {sortedSearchItems.slice(0, 4).map((item) => {
@@ -1193,7 +1193,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                             key={`item-${item.id}`}
                             type="button"
                             onClick={() => handleSuggestionSelect(item.title, item.id)}
-                            className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                            className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
                           >
                             <div className="h-10 w-10 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] font-semibold text-white/80">
                               {item.category
@@ -1202,7 +1202,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                             </div>
                             <div className="flex-1">
                               <div className="text-sm font-semibold leading-snug">{item.title}</div>
-                              <div className="text-[11px] text-white/60">
+                              <div className="text-[11px] yb-dropdown-muted">
                                 {item.category || "Local listing"}
                                 {item.price ? ` · $${item.price}` : ""}
                               </div>
@@ -1224,7 +1224,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/60">
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] yb-dropdown-muted">
                         <Store className="h-4 w-4" />
                         Businesses & places
                       </div>
@@ -1234,14 +1234,14 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                             key={`biz-${biz.id}`}
                             type="button"
                             onClick={() => handleSuggestionSelect(biz.name)}
-                            className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                            className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
                           >
                             <div className="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-200/30 flex items-center justify-center">
                               <Store className="h-4 w-4 text-emerald-200" />
                             </div>
                             <div className="flex-1">
                               <div className="text-sm font-semibold leading-snug">{biz.name}</div>
-                              <div className="text-[11px] text-white/60">
+                              <div className="text-[11px] yb-dropdown-muted">
                                 {biz.category || "Local business"}
                                 {biz.city ? ` · ${biz.city}` : ""}
                               </div>
@@ -1254,14 +1254,14 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                             key={`place-${place.id}`}
                             type="button"
                             onClick={() => handleSuggestionSelect(place.name)}
-                            className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 hover:border-white/30 hover:bg-white/10 transition flex items-start gap-3"
+                            className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
                           >
                             <div className="h-10 w-10 rounded-lg bg-blue-500/20 border border-blue-200/30 flex items-center justify-center">
                               <MapPin className="h-4 w-4 text-blue-100" />
                             </div>
                             <div className="flex-1">
                               <div className="text-sm font-semibold leading-snug">{place.name}</div>
-                              <div className="text-[11px] text-white/60">
+                              <div className="text-[11px] yb-dropdown-muted">
                                 {place.address || "Nearby result"}
                               </div>
                             </div>
@@ -1329,7 +1329,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 onClick={() => openModal("customer-signup")}
                 disabled={disableCtas}
                 aria-busy={disableCtas}
-                className={`px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 text-white font-semibold ${
+                className={`px-5 py-2 rounded-xl bg-[var(--color-primary)] text-white font-semibold ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
                 data-customer-cta="signup"
@@ -1358,7 +1358,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               <button
                 onClick={() => setProfileMenuOpen((open) => !open)}
                 data-clickdiag={clickDiagEnabled ? "navbar-user" : undefined}
-                className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
+                className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 border border-white/10 hover:border-white/30 transition"
               >
                 <div className="relative">
                   <SafeImage
@@ -1372,7 +1372,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     priority
                   />
                   {badgeReady && unreadCount > 0 ? (
-                    <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white shadow-lg shadow-rose-900/40">
+                    <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   ) : null}
@@ -1385,26 +1385,26 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
               {profileMenuOpen && (
                 <div
-                  className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl z-[5100]"
+                  className="absolute right-0 mt-4 w-80 rounded-3xl px-1.5 pb-3 pt-1.5 yb-dropdown-surface z-[5100]"
                   data-clickdiag={clickDiagEnabled ? "dropdown" : undefined}
                   ref={dropdownPanelRef}
                   data-nav-guard="1"
                 >
-                  <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
+                  <div className="rounded-[26px]">
                     <div className="flex items-center gap-3 px-4 py-4">
                       <SafeImage
                         src={avatar}
                         alt="Profile avatar"
-                        className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
+                        className="h-12 w-12 rounded-2xl object-cover border border-white/20"
                         width={48}
                         height={48}
                         sizes="48px"
                         useNextImage
                       />
                       <div>
-                        <p className="text-sm font-semibold text-white">{displayName}</p>
+                        <p className="text-sm font-semibold">{displayName}</p>
                         {email && (
-                          <p className="text-xs text-white/60">{email}</p>
+                          <p className="text-xs yb-dropdown-muted">{email}</p>
                         )}
                       </div>
                     </div>
@@ -1437,14 +1437,14 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-semibold text-white/90">{title}</p>
+                              <p className="text-sm font-semibold">{title}</p>
                               {showBadge && badgeReady && unreadCount > 0 ? (
                                 <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                                   {unreadCount}
                                 </span>
                               ) : null}
                             </div>
-                            <p className="text-xs text-white/60">{description}</p>
+                            <p className="text-xs yb-dropdown-muted">{description}</p>
                           </div>
                         </Link>
                       ))}
@@ -1462,7 +1462,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                           }
                           diagClick("NAV_SETTINGS_BUBBLE")(e);
                         }}
-                        className="flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10 touch-manipulation text-left"
+                        className="flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold transition hover:bg-white/10 touch-manipulation text-left"
                         data-clickdiag={clickDiagEnabled ? "nav-settings" : undefined}
                         data-clickdiag-bound={clickDiagEnabled ? "nav-settings" : undefined}
                         ref={navSettingsRef}
@@ -1475,7 +1475,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                         </span>
                       </Link>
                       <LogoutButton
-                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                         onSuccess={closeMenus}
                       >
                         <LogOut className="h-4 w-4" />
@@ -1497,7 +1497,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
       >
         <form
           onSubmit={handleSubmitSearch}
-          className="relative flex w-[calc(100%-3rem)] items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 shadow-sm"
+          className="relative flex w-[calc(100%-3rem)] items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2"
         >
           <Search className="h-4 w-4 text-white/70" />
           <input
@@ -1512,7 +1512,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           <button
             type="submit"
             aria-label="Search"
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-white p-1.5 text-black"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-white p-1.5 text-black yb-navbar-light"
           >
             <Search className="h-4 w-4" />
           </button>
@@ -1551,7 +1551,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 }}
                 disabled={disableCtas}
                 aria-busy={disableCtas}
-                className={`px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 rounded-xl text-center font-semibold ${
+                className={`px-4 py-2 bg-[var(--color-primary)] rounded-xl text-center font-semibold ${
                   disableCtas ? "opacity-60 cursor-not-allowed" : ""
                 }`}
                 data-customer-cta="signup"

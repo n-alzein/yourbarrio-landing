@@ -12,12 +12,13 @@ import {
   LogOut,
   PackageSearch,
   MessageSquare,
-  Settings,
   Store,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
+import AccountSidebar from "@/components/nav/AccountSidebar";
+import BusinessAccountMenuItems from "@/components/nav/BusinessAccountMenuItems";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
@@ -87,7 +88,7 @@ function BusinessNavbarInner({ pathname }) {
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
 
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [accountSidebarOpen, setAccountSidebarOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -96,7 +97,7 @@ function BusinessNavbarInner({ pathname }) {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const mobileDrawerId = useId();
-  const dropdownRef = useRef(null);
+  const accountTriggerRef = useRef(null);
   const notificationsRef = useRef(null);
   const displayName =
     profile?.business_name ||
@@ -106,24 +107,6 @@ function BusinessNavbarInner({ pathname }) {
     "Account";
 
   const badgeReady = !loadingUser;
-
-  useEffect(() => {
-    if (!profileMenuOpen) return;
-    const handleClick = (event) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target)
-      ) {
-        setProfileMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("touchstart", handleClick);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("touchstart", handleClick);
-    };
-  }, [profileMenuOpen]);
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -185,14 +168,14 @@ function BusinessNavbarInner({ pathname }) {
   };
 
   const closeMenus = () => {
-    setProfileMenuOpen(false);
+    setAccountSidebarOpen(false);
     setMobileMenuOpen(false);
   };
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleReset = () => {
-      setProfileMenuOpen(false);
+      setAccountSidebarOpen(false);
       setMobileMenuOpen(false);
       setNotificationsOpen(false);
     };
@@ -462,7 +445,7 @@ function BusinessNavbarInner({ pathname }) {
       authBusy ? "authBusy" : null,
       loadingUser && !user ? "loadingUser" : null,
       authStatus === "loading" ? "authStatus=loading" : null,
-      profileMenuOpen ? "profileMenuOpen" : null,
+      accountSidebarOpen ? "accountSidebarOpen" : null,
       mobileMenuOpen ? "mobileMenuOpen" : null,
       overlayPresent ? "overlayPresent" : null,
       login?.disabled ? "login.disabled" : null,
@@ -616,19 +599,19 @@ function BusinessNavbarInner({ pathname }) {
   --------------------------------------------------- */
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-50 theme-lock"
+      className="fixed top-0 inset-x-0 z-50 theme-lock yb-navbar yb-navbar-bordered"
       data-business-navbar="1"
     >
-      <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
+      <div>
         <div className="w-full px-5 sm:px-6 md:px-8 lg:px-10 xl:px-14 flex items-center justify-between h-20">
         {/* MOBILE LEFT GROUP */}
         <div className="flex items-center gap-3 md:hidden">
           <button
             onClick={() => {
-              setProfileMenuOpen(false);
+              setAccountSidebarOpen(false);
               setMobileMenuOpen((open) => !open);
             }}
-            className="h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center shadow-lg active:scale-[0.98] transition"
+            className="h-11 w-11 rounded-xl border border-white/15 bg-white/5 text-white flex items-center justify-center active:scale-[0.98] transition"
             aria-label="Open menu"
             aria-expanded={mobileMenuOpen}
             aria-controls={mobileDrawerId}
@@ -761,12 +744,12 @@ function BusinessNavbarInner({ pathname }) {
                 </button>
 
                 {notificationsOpen ? (
-                  <div className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl">
-                    <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
+                  <div className="absolute right-0 mt-4 w-80 rounded-3xl px-1.5 pb-3 pt-1.5 yb-dropdown-surface">
+                    <div className="rounded-[26px]">
                       <div className="px-4 py-4 flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-white">Notifications</p>
-                          <p className="text-xs text-white/60">Order updates & alerts</p>
+                          <p className="text-sm font-semibold yb-dropdown-title">Notifications</p>
+                          <p className="text-xs yb-dropdown-muted">Order updates & alerts</p>
                         </div>
                         <div className="flex items-center gap-3">
                           {notificationUnreadCount > 0 ? (
@@ -785,7 +768,7 @@ function BusinessNavbarInner({ pathname }) {
                                 loadNotificationCount();
                                 loadNotifications();
                               }}
-                              className="text-[11px] text-white/70 hover:text-white"
+                              className="text-[11px] yb-dropdown-muted hover:text-[var(--yb-text)]"
                             >
                               Mark all read
                             </button>
@@ -801,7 +784,7 @@ function BusinessNavbarInner({ pathname }) {
                               setNotifications([]);
                               setNotificationUnreadCount(0);
                             }}
-                            className="text-[11px] text-white/70 hover:text-white"
+                            className="text-[11px] yb-dropdown-muted hover:text-[var(--yb-text)]"
                           >
                             Clear
                           </button>
@@ -810,11 +793,11 @@ function BusinessNavbarInner({ pathname }) {
 
                       <div className="px-2 pb-2 space-y-2">
                         {notificationsLoading ? (
-                          <div className="rounded-2xl px-4 py-4 text-xs text-white/70">
+                          <div className="rounded-2xl px-4 py-4 text-xs yb-dropdown-muted">
                             Loading notifications...
                           </div>
                         ) : notifications.length === 0 ? (
-                          <div className="rounded-2xl px-4 py-4 text-xs text-white/70">
+                          <div className="rounded-2xl px-4 py-4 text-xs yb-dropdown-muted">
                             No notifications yet.
                           </div>
                         ) : (
@@ -835,15 +818,15 @@ function BusinessNavbarInner({ pathname }) {
                                   : "border-white/20 bg-white/10"
                               }`}
                             >
-                              <p className="text-sm font-semibold text-white/90">
+                              <p className="text-sm font-semibold">
                                 {notification.title}
                               </p>
                               {notification.body ? (
-                                <p className="text-xs text-white/60 mt-1">
+                                <p className="text-xs yb-dropdown-muted mt-1">
                                   {notification.body}
                                 </p>
                               ) : null}
-                              <p className="text-[11px] text-white/50 mt-2">
+                              <p className="text-[11px] yb-dropdown-muted mt-2">
                                 {new Date(notification.created_at).toLocaleString("en-US", {
                                   dateStyle: "medium",
                                   timeStyle: "short",
@@ -858,10 +841,13 @@ function BusinessNavbarInner({ pathname }) {
                 ) : null}
               </div>
 
-              <div className="relative" ref={dropdownRef}>
+              <div className="relative">
                 <button
-                  onClick={() => setProfileMenuOpen((open) => !open)}
-                  className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
+                  ref={accountTriggerRef}
+                  onClick={() => setAccountSidebarOpen(true)}
+                  className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 border border-white/10 hover:border-white/30 transition"
+                  aria-haspopup="dialog"
+                  aria-expanded={accountSidebarOpen}
                 >
                   <SafeImage
                     src={avatar}
@@ -878,113 +864,66 @@ function BusinessNavbarInner({ pathname }) {
                   </span>
                   <ChevronDown className="h-4 w-4 text-white/70" />
                 </button>
-
-                {profileMenuOpen && (
-                  <div className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl">
-                    <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
-                      <div className="flex items-center gap-3 px-4 py-4">
-                        <SafeImage
-                          src={avatar}
-                          alt="Profile avatar"
-                          className="h-12 w-12 rounded-2xl object-cover border border-white/20 shadow-inner shadow-black/50"
-                          width={48}
-                          height={48}
-                          sizes="48px"
-                          useNextImage
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-white">{displayName}</p>
-                          {email && (
-                            <p className="text-xs text-white/60">{email}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="px-2 pb-1 pt-2 space-y-1">
-                        {quickActions.map(
-                          ({ href, title, description, icon: Icon, showBadge }) => (
-                            <Link
-                              key={href}
-                              href={href}
-                              onClick={closeMenus}
-                              className="flex items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10"
-                            >
-                              <div className="h-11 w-11 rounded-2xl bg-white/10 flex items-center justify-center text-white">
-                                <Icon className="h-5 w-5" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-semibold text-white/90">
-                                    {title}
-                                  </p>
-                                  {showBadge && badgeReady && unreadCount > 0 ? (
-                                    <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                                      {unreadCount}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <p className="text-xs text-white/60">{description}</p>
-                              </div>
-                            </Link>
-                          )
-                        )}
-                      </div>
-
-                      <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                        <Link
-                          href="/business/settings"
-                          onClick={closeMenus}
-                          className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-                        >
-                          <span className="flex items-center gap-2">
-                            <Settings className="h-4 w-4" />
-                            Account settings
-                          </span>
-                        </Link>
-                        <LogoutButton
-                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-900/30 transition hover:opacity-90"
-                          onSuccess={closeMenus}
-                        >
-                          <LogOut className="h-4 w-4" /> Logout
-                        </LogoutButton>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}
         </div>
       </div>
       </div>
+      {isBusinessAuthed ? (
+        <AccountSidebar
+          open={accountSidebarOpen}
+          onOpenChange={setAccountSidebarOpen}
+          anchorRef={accountTriggerRef}
+          title="Business Account"
+          displayName={displayName}
+          email={email}
+          avatar={avatar}
+        >
+          <BusinessAccountMenuItems
+            items={quickActions}
+            unreadCount={unreadCount}
+            onNavigate={() => setAccountSidebarOpen(false)}
+            logout={(
+              <LogoutButton
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                onSuccess={() => setAccountSidebarOpen(false)}
+              >
+                <LogOut className="h-4 w-4" /> Logout
+              </LogoutButton>
+            )}
+          />
+        </AccountSidebar>
+      ) : null}
 
     <MobileSidebarDrawer
       open={mobileMenuOpen}
       onClose={() => setMobileMenuOpen(false)}
       title={isBusinessAuthed ? "Business menu" : "Welcome"}
       id={mobileDrawerId}
+      showHeader={!isBusinessAuthed}
     >
       {isBusinessAuthed && (
-        <div className="mb-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+        <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-3 py-3">
           <SafeImage
             src={avatar}
             alt="Avatar"
-            className="h-12 w-12 rounded-2xl object-cover border border-white/20"
+            className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
             width={48}
             height={48}
             sizes="48px"
             useNextImage
           />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">
+            <p className="text-sm font-semibold truncate">
               {displayName}
             </p>
-            {email && <p className="text-xs text-white/60 truncate">{email}</p>}
+            {email && <p className="text-xs yb-dropdown-muted truncate">{email}</p>}
           </div>
         </div>
       )}
 
-      <div className="flex flex-col gap-4 text-white">
+      <div className="flex flex-col gap-6">
         {!isBusinessAuthed && (
           <>
             <NavItem
@@ -1005,44 +944,12 @@ function BusinessNavbarInner({ pathname }) {
         )}
 
         {isBusinessAuthed && (
-          <>
-            <NavItem
-              href="/business/dashboard"
-              isActive={isActive}
-              closeMenus={closeMenus}
-            >
-              Open dashboard
-            </NavItem>
-            <NavItem
-              href="/business/profile"
-              isActive={isActive}
-              closeMenus={closeMenus}
-            >
-              Business Profile
-            </NavItem>
-            <NavItem
-              href="/business/listings"
-              isActive={isActive}
-              closeMenus={closeMenus}
-            >
-              Manage listings
-            </NavItem>
-            <NavItem
-              href="/business/messages"
-              isActive={isActive}
-              closeMenus={closeMenus}
-              badgeCount={unreadCount}
-            >
-              Messages
-            </NavItem>
-            <NavItem
-              href="/business/orders"
-              isActive={isActive}
-              closeMenus={closeMenus}
-            >
-              Orders
-            </NavItem>
-          </>
+          <BusinessAccountMenuItems
+            items={quickActions}
+            unreadCount={unreadCount}
+            onNavigate={closeMenus}
+            logout={<LogoutButton mobile onSuccess={() => setMobileMenuOpen(false)} />}
+          />
         )}
 
         {!isBusinessAuthed ? (
@@ -1073,18 +980,7 @@ function BusinessNavbarInner({ pathname }) {
               Sign Up
             </Link>
           </>
-        ) : (
-          <>
-            <NavItem
-              href="/business/settings"
-              isActive={isActive}
-              closeMenus={closeMenus}
-            >
-              Settings
-            </NavItem>
-            <LogoutButton mobile onSuccess={() => setMobileMenuOpen(false)} />
-          </>
-        )}
+        ) : null}
       </div>
     </MobileSidebarDrawer>
   </nav>

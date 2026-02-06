@@ -1,33 +1,27 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 export default function LogoutButton({
   children,
   className = "",
   mobile,
-  onSuccess,
 }) {
   const { logout } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const resetTimerRef = useRef(null);
 
   async function handleClick() {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       await logout();
-      onSuccess?.();
     } catch (err) {
-      console.error("Logout failed", err);
-    } finally {
-      if (resetTimerRef.current) {
-        clearTimeout(resetTimerRef.current);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Logout failed", err);
       }
-      resetTimerRef.current = setTimeout(() => {
-        setIsSubmitting(false);
-      }, 500);
+      setIsSubmitting(false);
+      return;
     }
   }
 
