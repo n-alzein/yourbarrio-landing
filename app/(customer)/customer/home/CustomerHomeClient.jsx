@@ -119,6 +119,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { location, hasLocation, hydrated: locationHydrated } = useLocation();
+  // Slightly stronger light-theme tones to preserve contrast on white surfaces.
   const textTone = useMemo(
     () => ({
       base: isLight ? "text-slate-900" : "text-white",
@@ -126,7 +127,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
       muted: isLight ? "text-slate-700" : "text-white/80",
       soft: isLight ? "text-slate-600" : "text-white/70",
       subtle: isLight ? "text-slate-500" : "text-white/60",
-      faint: isLight ? "text-slate-400" : "text-white/50",
+      faint: isLight ? "text-slate-600" : "text-white/50",
       tint: isLight ? "text-slate-700" : "text-white/75",
     }),
     [isLight]

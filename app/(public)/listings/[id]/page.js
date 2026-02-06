@@ -534,7 +534,7 @@ export default function ListingDetails({ params }) {
                     disabled={messageLoading}
                     className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold transition border ${
                       messageLoading
-                        ? "bg-white/60 text-slate-400"
+                        ? "bg-white/60 text-slate-600"
                         : "bg-white text-slate-900 hover:bg-slate-50"
                     }`}
                     style={{ borderColor: "var(--border)" }}

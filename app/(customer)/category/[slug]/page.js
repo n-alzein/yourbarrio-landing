@@ -169,11 +169,11 @@ export default async function CategoryListingsPage({ params, searchParams }) {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs text-slate-400">No image</span>
+                      <span className="text-xs text-slate-600">No image</span>
                     )}
                   </div>
                   <div className="p-4 space-y-2">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
+                    <div className="text-xs uppercase tracking-wide text-slate-600">
                       {item.category_info?.name || item.category || "Listing"}
                       {item.city ? ` · ${item.city}` : ""}
                     </div>
