@@ -8,34 +8,74 @@ import { clearSupabaseCookies, getSbCookieNamesFromRequest } from "@/lib/authCoo
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request) {
+  const mwStart = performance.now();
   const diagEnabled =
     process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
     process.env.NODE_ENV !== "production";
   const pathname = request.nextUrl.pathname;
-  const wrapNext = () => {
-    const res = NextResponse.next();
-    res.headers.set("x-mw-hit", "1");
-    res.headers.set("x-mw-path", pathname);
+  const perfEnabled =
+    request.nextUrl.searchParams?.get("perf") === "1" ||
+    process.env.NEXT_PUBLIC_PERF_DEBUG === "1";
+  const requestHeaders = new Headers(request.headers);
+  if (perfEnabled) {
+    requestHeaders.set("x-perf", "1");
+    requestHeaders.set("x-perf-path", pathname);
+  }
+  const timing = [];
+  const markTiming = (name, startAt) => {
+    if (!perfEnabled) return;
+    const dur = performance.now() - startAt;
+    timing.push(`${name};dur=${Math.round(dur)}`);
+  };
+  const wrapPerfHeaders = (res) => {
+    if (perfEnabled) {
+      if (timing.length) {
+        res.headers.set("Server-Timing", timing.join(", "));
+      } else {
+        res.headers.set("Server-Timing", `middleware;dur=${Math.round(performance.now() - mwStart)}`);
+      }
+      res.headers.set("x-perf", "1");
+      res.headers.set("x-perf-path", pathname);
+      try {
+        res.cookies.set("yb-perf", "1", { path: "/", maxAge: 600 });
+      } catch {
+        // best effort
+      }
+    }
     return res;
   };
+  const wrapNext = () => {
+    const t0 = performance.now();
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    res.headers.set("x-mw-hit", "1");
+    res.headers.set("x-mw-path", pathname);
+    markTiming("mw_next", t0);
+    return wrapPerfHeaders(res);
+  };
   const wrapRedirect = (url) => {
+    const t0 = performance.now();
     const res = NextResponse.redirect(url);
     res.headers.set("x-mw-hit", "1");
     res.headers.set("x-mw-path", pathname);
-    return res;
+    markTiming("mw_redirect", t0);
+    return wrapPerfHeaders(res);
   };
   const wrapJson = (data, init) => {
+    const t0 = performance.now();
     const res = NextResponse.json(data, init);
     res.headers.set("x-mw-hit", "1");
     res.headers.set("x-mw-path", pathname);
-    return res;
+    markTiming("mw_json", t0);
+    return wrapPerfHeaders(res);
   };
   const wrapResponse = (res) => {
     res.headers.set("x-mw-hit", "1");
     res.headers.set("x-mw-path", pathname);
-    return res;
+    return wrapPerfHeaders(res);
   };
+  const cookieStart = performance.now();
   const hasAuthCookie = getSbCookieNamesFromRequest(request).length > 0;
+  markTiming("mw_cookies", cookieStart);
   if (diagEnabled) {
     console.warn("[AUTH_DIAG] mw:hit", { pathname, hasAuthCookie });
   }
@@ -86,7 +126,9 @@ export async function middleware(request) {
     return wrapNext();
   }
 
-  const response = await updateSession(request);
+  const sessionStart = performance.now();
+  const response = await updateSession(request, requestHeaders);
+  markTiming("mw_session", sessionStart);
   const refreshError = response.headers.get("x-supabase-refresh-error");
   if (refreshError === "refresh_token_already_used") {
     if (isApiRoute) {

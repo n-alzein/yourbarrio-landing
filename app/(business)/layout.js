@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import AppShell from "@/components/AppShell";
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
@@ -23,7 +22,7 @@ export default async function BusinessLayout({ children }) {
   const { user, profile } = await requireRole("business");
 
   return (
-    <AppShell>
+    <>
       <AuthSeed user={user} profile={profile} role="business" />
       <AuthRedirectGuard redirectTo={PATHS.auth.businessLogin}>
         <BusinessNavbar requireAuth />
@@ -42,6 +41,6 @@ export default async function BusinessLayout({ children }) {
           </Suspense>
         </BusinessRouteShell>
       </AuthRedirectGuard>
-    </AppShell>
+    </>
   );
 }

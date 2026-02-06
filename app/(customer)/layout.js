@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import AppShell from "@/components/AppShell";
+import { headers, cookies } from "next/headers";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
@@ -16,22 +16,59 @@ export const metadata = {
   },
 };
 
-function CustomerRouteShell({ children = null }) {
-  return <div className="pt-0 md:pt-12 min-h-screen">{children}</div>;
+function CustomerRouteShell({ children = null, className = "" }) {
+  return (
+    <div className={`pt-0 md:pt-12 min-h-screen${className ? ` ${className}` : ""}`}>
+      {children}
+    </div>
+  );
 }
 
 export default async function CustomerLayout({ children }) {
+  const headerList = await headers();
+  const userAgent = headerList.get("user-agent") || "";
+  const isSafari =
+    userAgent.includes("Safari") &&
+    !userAgent.includes("Chrome") &&
+    !userAgent.includes("Chromium") &&
+    !userAgent.includes("Edg") &&
+    !userAgent.includes("OPR");
+  const perfCookie = (await cookies()).get("yb-perf")?.value === "1";
   const { user, profile } = await requireRole("customer");
 
   return (
-    <AppShell>
+    <>
+      {isSafari ? (
+        <style>{`
+          .customer-shell.yb-safari .backdrop-blur-xl,
+          .customer-shell.yb-safari .backdrop-blur-lg,
+          .customer-shell.yb-safari .backdrop-blur-md,
+          .customer-shell.yb-safari .use-backdrop-blur {
+            -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
+            background: rgba(12, 12, 16, 0.9) !important;
+          }
+          .customer-shell.yb-safari .app-shell-glow,
+          .customer-shell.yb-safari .animated-bg {
+            display: none !important;
+          }
+        `}</style>
+      ) : null}
+      {isSafari && perfCookie ? (
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'console.log(\"[nav-guard] applied (customer) – reused business login fix\")',
+          }}
+        />
+      ) : null}
       <AuthSeed user={user} profile={profile} role="customer" />
       <AuthRedirectGuard redirectTo={PATHS.auth.customerLogin}>
         <Suspense fallback={null}>
           <GlobalHeader surface="customer" />
         </Suspense>
         <InactivityLogout />
-        <CustomerRouteShell>
+        <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>
           <Suspense
             fallback={
               <div className="min-h-screen px-6 md:px-10 pt-24 text-white">
@@ -45,6 +82,6 @@ export default async function CustomerLayout({ children }) {
           </Suspense>
         </CustomerRouteShell>
       </AuthRedirectGuard>
-    </AppShell>
+    </>
   );
 }

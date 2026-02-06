@@ -1,14 +1,24 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 const STORAGE_KEY = "yb-theme";
 const THEMES = ["light", "dark"];
 
 const ThemeContext = createContext(null);
 
-export function ThemeProvider({ children }) {
+export function ThemeProvider({ children, forcedTheme = "light" }) {
+  const hasForcedTheme = THEMES.includes(forcedTheme);
   const [theme, setTheme] = useState(() => {
+    if (hasForcedTheme) return forcedTheme;
     if (typeof window === "undefined") return "light";
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved && THEMES.includes(saved) ? saved : "light";
@@ -19,14 +29,17 @@ export function ThemeProvider({ children }) {
     () => false
   );
 
+  const resolvedTheme = hasForcedTheme ? forcedTheme : theme;
+
   useEffect(() => {
     const root = document.documentElement;
     THEMES.forEach((name) => root.classList.remove(`theme-${name}`));
-    root.classList.add(`theme-${theme}`);
-    localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+    root.classList.add(`theme-${resolvedTheme}`);
+    localStorage.setItem(STORAGE_KEY, resolvedTheme);
+  }, [resolvedTheme]);
 
   useEffect(() => {
+    if (hasForcedTheme) return undefined;
     const handleStorage = (event) => {
       if (event.key !== STORAGE_KEY) return;
       if (event.newValue && THEMES.includes(event.newValue)) {
@@ -35,18 +48,21 @@ export function ThemeProvider({ children }) {
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, []);
+  }, [hasForcedTheme]);
 
-  const setThemeSafe = (next) => setTheme(THEMES.includes(next) ? next : "light");
+  const setThemeSafe = useCallback((next) => {
+    if (hasForcedTheme) return;
+    setTheme(THEMES.includes(next) ? next : "light");
+  }, [hasForcedTheme]);
 
   const value = useMemo(
     () => ({
-      theme,
+      theme: resolvedTheme,
       hydrated,
       setTheme: setThemeSafe,
       themes: THEMES,
     }),
-    [theme, hydrated]
+    [hydrated, resolvedTheme, setThemeSafe]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

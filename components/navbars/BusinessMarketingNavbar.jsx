@@ -3,9 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import ThemeToggle from "../ThemeToggle";
-import { useTheme } from "../ThemeProvider";
+import { useEffect, useState } from "react";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
@@ -27,9 +25,6 @@ function NavItem({ href, children, active, onClick, className }) {
 export default function BusinessMarketingNavbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const { hydrated, setTheme } = useTheme();
-  const hasForcedLight = useRef(false);
-
   useEffect(() => {
     // Prevent background scroll when the mobile menu is open
     if (typeof document === "undefined") return;
@@ -47,18 +42,6 @@ export default function BusinessMarketingNavbar() {
     window.addEventListener(AUTH_UI_RESET_EVENT, handleReset);
     return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
   }, []);
-
-  useEffect(() => {
-    if (!hydrated || hasForcedLight.current) return;
-
-    const onBusinessLanding = pathname.startsWith("/business");
-
-    if (onBusinessLanding) {
-      // Keep marketing flow light-themed to match the business landing visuals
-      setTheme("light");
-      hasForcedLight.current = true;
-    }
-  }, [hydrated, pathname, setTheme]);
 
   const handlePopup = (event, path) => {
     event.preventDefault();
@@ -102,8 +85,6 @@ export default function BusinessMarketingNavbar() {
 
             {/* RIGHT SIDE */}
             <div className="hidden md:flex items-center gap-x-6">
-              <ThemeToggle className="hidden md:flex" />
-
               <Link
                 href="/"
                 className="px-4 py-2 rounded-lg text-sm font-semibold text-white/90 border border-white/20 hover:bg-white/10 transition"
@@ -177,16 +158,6 @@ export default function BusinessMarketingNavbar() {
                     About YourBarrio
                   </NavItem>
                 </div>
-              </div>
-
-              <div className="h-px bg-white/10 mx-6" />
-
-              <div className="px-6 py-5 flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold">Theme</div>
-                  <div className="text-xs text-white/60">Match your vibe</div>
-                </div>
-                <ThemeToggle showLabel={false} />
               </div>
 
               <div className="h-px bg-white/10 mx-6" />

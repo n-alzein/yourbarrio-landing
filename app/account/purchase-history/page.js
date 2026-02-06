@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AccountNavTabs from "@/components/account/AccountNavTabs";
 import { requireRole } from "@/lib/auth/server";
 
 const HISTORY_STATUSES = ["fulfilled"];
@@ -43,22 +44,7 @@ export default async function PurchaseHistoryPage({ searchParams }) {
           <div className="h-4" />
         </div>
 
-        <div className="flex items-center gap-3 mb-4">
-          <Link
-            href="/account/orders"
-            className="rounded-full border px-4 py-2 text-sm font-semibold"
-            style={{ borderColor: "var(--border)" }}
-          >
-            Pending
-          </Link>
-          <Link
-            href="/account/purchase-history"
-            className="rounded-full px-4 py-2 text-sm font-semibold"
-            style={{ background: "var(--text)", color: "var(--background)" }}
-          >
-            History
-          </Link>
-        </div>
+        <AccountNavTabs active="history" variant="history" />
 
         {error ? (
           <div className="rounded-2xl p-4 text-sm text-rose-200" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>

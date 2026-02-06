@@ -1,5 +1,7 @@
 // app/layout.js
 import "./globals.css";
+import "./safari-layer-budget.css";
+import AppShell from "@/components/AppShell";
 
 export const metadata = {
   title: "YourBarrio – Find What You Need Nearby",
@@ -36,7 +38,7 @@ export default function RootLayout({ children }) {
         ))}
       </head>
       <body className="min-h-screen w-full overflow-x-hidden antialiased text-white">
-        {children}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

@@ -3,10 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
-import ThemeToggle from "../ThemeToggle";
+import { useEffect, useId, useState } from "react";
 import { useModal } from "../modals/ModalProvider";
-import { useTheme } from "../ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 
@@ -29,9 +27,7 @@ export default function CustomerPublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
-  const { hydrated, setTheme } = useTheme();
   const { authStatus } = useAuth();
-  const hasForcedLight = useRef(false);
   const hasSession = authStatus === "authenticated";
   const mobileDrawerId = useId();
 
@@ -49,21 +45,6 @@ export default function CustomerPublicNavbar() {
     media.addListener(handleChange);
     return () => media.removeListener(handleChange);
   }, []);
-
-  useEffect(() => {
-    if (!hydrated || hasForcedLight.current) return;
-
-    const onPublicLanding =
-      !pathname.startsWith("/business") &&
-      !pathname.startsWith("/business-auth") &&
-      !pathname.startsWith("/customer");
-
-    if (onPublicLanding) {
-      // Default public landing experience to light theme without blocking user toggles later
-      setTheme("light");
-      hasForcedLight.current = true;
-    }
-  }, [hydrated, pathname, setTheme]);
 
   return (
     <nav
@@ -138,8 +119,6 @@ export default function CustomerPublicNavbar() {
 
             {/* RIGHT SIDE */}
             <div className="hidden md:flex items-center gap-x-6">
-              <ThemeToggle className="hidden md:flex" />
-
               <Link
                 href="/business"
                 className="px-4 py-2 rounded-lg text-sm font-semibold text-white/90 border border-white/20 hover:bg-white/10 transition"
@@ -203,14 +182,6 @@ export default function CustomerPublicNavbar() {
                 About YourBarrio
               </NavItem>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-            <div>
-              <div className="text-sm font-semibold">Theme</div>
-              <div className="text-xs text-white/60">Match your vibe</div>
-            </div>
-            <ThemeToggle showLabel={false} />
           </div>
 
           <div className="flex flex-col gap-3">

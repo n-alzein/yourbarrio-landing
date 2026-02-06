@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
-import ThemeToggle from "../ThemeToggle";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
@@ -932,14 +931,6 @@ function BusinessNavbarInner({ pathname }) {
                       </div>
 
                       <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                        <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
-                          <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
-                            Theme
-                          </span>
-                          <ThemeToggle
-                            buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-                          />
-                        </div>
                         <Link
                           href="/business/settings"
                           onClick={closeMenus}
@@ -992,13 +983,6 @@ function BusinessNavbarInner({ pathname }) {
           </div>
         </div>
       )}
-
-      <ThemeToggle
-        showLabel
-        align="left"
-        className="mb-5 self-start"
-        buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-      />
 
       <div className="flex flex-col gap-4 text-white">
         {!isBusinessAuthed && (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLocation } from "@/components/location/LocationProvider";
 import { withLocationHref } from "@/lib/location";
+import { markNavInProgress } from "@/lib/nav/safariNavGuard";
 
 const FALLBACK_TILES = Array.from({ length: 8 });
 
@@ -112,6 +113,7 @@ export default function CategoryTilesGrid({
                 href={href}
                 prefetch={false}
                 aria-label={`Shop ${tileTitle}`}
+                data-layer="tile"
                 data-safe-nav="1"
                 data-category-tile="1"
                 data-prefetch-href={href}
@@ -125,11 +127,9 @@ export default function CategoryTilesGrid({
                   } catch {
                     /* ignore */
                   }
-                  console.log("[tile-pointer]", {
-                    target: event.target?.tagName,
-                    currentTarget: event.currentTarget?.tagName,
-                    href,
-                  });
+                }}
+                onPointerDownCapture={() => {
+                  markNavInProgress(href);
                 }}
                 onClickCapture={
                   diagTileClick ? diagTileClick("REACT_TILE_CAPTURE", category.slug || idx) : undefined
@@ -161,7 +161,7 @@ export default function CategoryTilesGrid({
                   markNavStart();
                 }}
                 onNavigate={markNavStart}
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-colors duration-200 hover:shadow-md hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 pointer-events-auto touch-manipulation active:bg-white/10"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-colors duration-200 hover:shadow-md hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 pointer-events-auto touch-manipulation active:bg-white/10 tile"
               >
                 <div className="relative aspect-[4/5] lg:aspect-[16/9] w-full overflow-hidden bg-white/5">
                   {category.tileImageUrl ? (

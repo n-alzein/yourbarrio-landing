@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: "./tests",
   timeout: 60000,
   expect: { timeout: 10000 },
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" } },
+    { name: "webkit", use: { browserName: "webkit" } },
+  ],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
     trace: "retain-on-failure",

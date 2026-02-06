@@ -30,6 +30,7 @@ import {
   normalizeSelectedLocation,
   setLocationSearchParams,
 } from "@/lib/location";
+import { markNavInProgress } from "@/lib/nav/safariNavGuard";
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES.map((cat) => cat.name)];
 
@@ -466,7 +467,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
   return (
     <nav
-      className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl border-b border-white/10 theme-lock pointer-events-auto"
+      className="fixed top-0 inset-x-0 z-[5000] bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 backdrop-blur-xl use-backdrop-blur border-b border-white/10 theme-lock pointer-events-auto"
       data-nav-surface={surface}
       data-nav-guard="1"
     >
@@ -482,7 +483,12 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
             <path strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <Link href={logoHref} aria-label="Go to home" className="touch-manipulation">
+        <Link
+          href={logoHref}
+          aria-label="Go to home"
+          className="touch-manipulation"
+          onPointerDownCapture={() => markNavInProgress(logoHref)}
+        >
           <span className="relative block h-10 w-10 md:hidden">
             <Image
               src="/business-placeholder2.png"
@@ -521,7 +527,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
           </button>
 
           {locationOpen ? (
-            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl border border-white/10 bg-[#0b0618]/95 p-4 text-white shadow-xl shadow-purple-950/30 backdrop-blur-2xl">
+            <div className="absolute left-0 top-full z-50 mt-3 w-72 rounded-2xl border border-white/10 bg-[#0b0618]/95 p-4 text-white shadow-xl shadow-purple-950/30 backdrop-blur-2xl use-backdrop-blur use-backdrop-blur-fallback">
               <div className="text-xs uppercase tracking-[0.22em] text-white/60">Set location</div>
               <div className="mt-2 text-sm text-white/80">Enter a city or ZIP code.</div>
               <div className="mt-4 flex items-center gap-2">
@@ -630,10 +636,10 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
         {showSearch ? (
           <div className="hidden md:flex flex-1 justify-center" data-nav-guard="1">
             <div ref={searchBoxRef} className="w-full max-w-3xl relative" data-nav-guard="1">
-              <form
-                onSubmit={handleSubmitSearch}
-                className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10 backdrop-blur-lg shadow-lg shadow-purple-950/20"
-              >
+            <form
+              onSubmit={handleSubmitSearch}
+              className="flex flex-1 items-stretch rounded-2xl overflow-hidden border border-white/15 bg-white/10 backdrop-blur-lg use-backdrop-blur shadow-lg shadow-purple-950/20"
+            >
                 <div className="hidden lg:flex items-center gap-2 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/70 bg-white/5 border-r border-white/10">
                   <label htmlFor="global-search-category" className="sr-only">
                     Category
@@ -679,8 +685,8 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
               {suggestionsOpen && (searchLoading || searchError || hasHybridResults) ? (
                 <div className="absolute left-0 right-0 top-full mt-2 z-50">
-                  <div className="rounded-2xl border border-white/10 bg-[#0b0618]/92 backdrop-blur-2xl shadow-xl shadow-purple-950/20 p-3 text-white">
-                    {searchError ? (
+                <div className="rounded-2xl border border-white/10 bg-[#0b0618]/92 backdrop-blur-2xl use-backdrop-blur use-backdrop-blur-fallback shadow-xl shadow-purple-950/20 p-3 text-white">
+                  {searchError ? (
                       <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-rose-200 mb-2">
                         {searchError}
                       </div>

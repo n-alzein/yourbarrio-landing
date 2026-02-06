@@ -16,7 +16,6 @@ import {
 import SafeImage from "@/components/SafeImage";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
-import ThemeToggle from "@/components/ThemeToggle";
 import { useModal } from "@/components/modals/ModalProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { useCart } from "@/components/cart/CartProvider";
@@ -511,6 +510,15 @@ export default function HeaderAccountWidget({
     },
   ];
 
+  const scheduleProfileMenuClose = useCallback(() => {
+    if (!profileMenuOpen) return;
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(() => setProfileMenuOpen(false));
+    } else {
+      setTimeout(() => setProfileMenuOpen(false), 0);
+    }
+  }, [profileMenuOpen]);
+
   if (variant === "desktop") {
     if (showRateLimit) {
       return (
@@ -565,7 +573,7 @@ export default function HeaderAccountWidget({
         <div className="relative" ref={dropdownRef} data-nav-guard="1">
           <button
             onClick={() => setProfileMenuOpen((open) => !open)}
-            className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm border border-white/10 hover:border-white/30 transition"
+            className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 backdrop-blur-sm use-backdrop-blur border border-white/10 hover:border-white/30 transition"
             data-nav-guard="1"
           >
             <span className="relative">
@@ -593,7 +601,7 @@ export default function HeaderAccountWidget({
 
           {profileMenuOpen ? (
             <div
-              className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl z-[5100]"
+              className="absolute right-0 mt-4 w-80 rounded-3xl border border-white/15 bg-[#0d041c]/95 px-1.5 pb-3 pt-1.5 shadow-2xl shadow-purple-950/30 backdrop-blur-2xl use-backdrop-blur use-backdrop-blur-fallback z-[5100]"
               data-nav-guard="1"
             >
               <div className="rounded-[26px] bg-gradient-to-br from-white/8 via-white/5 to-white/0">
@@ -619,7 +627,7 @@ export default function HeaderAccountWidget({
                         <Link
                           key={href}
                           href={href}
-                          onClick={() => setProfileMenuOpen(false)}
+                          onClick={scheduleProfileMenuClose}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation text-left"
                           data-safe-nav="1"
                         >
@@ -644,7 +652,7 @@ export default function HeaderAccountWidget({
                   {isBusiness ? (
                     <Link
                       href="/business/dashboard"
-                      onClick={() => setProfileMenuOpen(false)}
+                      onClick={scheduleProfileMenuClose}
                       className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition hover:bg-white/10 touch-manipulation text-left"
                       data-safe-nav="1"
                     >
@@ -660,18 +668,10 @@ export default function HeaderAccountWidget({
                 </div>
 
                 <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                  <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
-                      Theme
-                    </span>
-                    <ThemeToggle
-                      buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-                    />
-                  </div>
                   {isCustomer ? (
                     <Link
                       href="/customer/settings"
-                      onClick={() => setProfileMenuOpen(false)}
+                      onClick={scheduleProfileMenuClose}
                       className="flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/90 transition hover:bg-white/10 touch-manipulation text-left"
                       data-safe-nav="1"
                     >
@@ -976,13 +976,6 @@ export default function HeaderAccountWidget({
             </>
           )
         ) : null}
-
-        <ThemeToggle
-          showLabel
-          align="left"
-          className="self-start"
-          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-        />
 
         {hasAuth ? <LogoutButton mobile onSuccess={() => onCloseMobileMenu?.()} /> : null}
       </div>

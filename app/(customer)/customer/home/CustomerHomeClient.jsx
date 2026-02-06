@@ -27,6 +27,7 @@ import {
 import { installPreventDefaultTracer } from "@/lib/tracePreventDefault";
 import { installHomeNavInstrumentation } from "@/lib/navInstrumentation";
 import { appendCrashLog } from "@/lib/crashlog";
+import { dumpStallRecorder } from "@/lib/stallRecorder";
 import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
 import { resolveCategoryIdByName } from "@/lib/categories";
 import { logDataDiag } from "@/lib/dataDiagnostics";
@@ -135,6 +136,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
   const showLocationEmpty = locationHydrated && !hasLocation;
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
+  const tileHitTestEnabled = process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1";
   const homeBisect = {
     homeAudit: process.env.NEXT_PUBLIC_HOME_BISECT_HOME_AUDIT !== "0",
     pdTracer: process.env.NEXT_PUBLIC_HOME_BISECT_PD_TRACER !== "0",
@@ -178,6 +180,28 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
+
+  useEffect(() => {
+    if (!tileHitTestEnabled) return undefined;
+    if (typeof document === "undefined") return undefined;
+    const handleClickCapture = (event) => {
+      try {
+        const target = event.target;
+        const tile = target?.closest?.('[data-layer="tile"], [data-safe-nav="1"]');
+        if (!tile) return;
+        const anchor = target?.closest?.("a[href]");
+        console.log("[tile-hit-test]", {
+          target: target?.tagName,
+          currentTarget: event.currentTarget?.tagName,
+          anchor: anchor?.getAttribute?.("href") || null,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    document.addEventListener("click", handleClickCapture, true);
+    return () => document.removeEventListener("click", handleClickCapture, true);
+  }, [tileHitTestEnabled]);
 
   useEffect(() => {
     if (!clickDiagEnabled || !homeBisect.pdTracer) return undefined;
@@ -268,14 +292,15 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     }
     let rafId = 0;
     let last = performance.now();
-    const tick = (now) => {
-      const delta = now - last;
-      if (delta > 200) {
-        console.log("[raf-stall]", Math.round(delta), "ms", new Date().toISOString());
-      }
-      last = now;
-      rafId = requestAnimationFrame(tick);
-    };
+      const tick = (now) => {
+        const delta = now - last;
+        if (delta > 200) {
+          console.log("[raf-stall]", Math.round(delta), "ms", new Date().toISOString());
+          dumpStallRecorder("raf-stall");
+        }
+        last = now;
+        rafId = requestAnimationFrame(tick);
+      };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, []);
@@ -664,30 +689,6 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
           <div
             className="relative z-10 mt-4 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-12"
             data-home-tiles="1"
-            onPointerDownCapture={(event) => {
-              if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF !== "1") return;
-              try {
-                const target = event.target;
-                const { clientX, clientY } = event;
-                const top = document.elementFromPoint(clientX, clientY);
-                const anchor = top?.closest?.("a[href]");
-                console.log("[tile-hit-test]", {
-                  target: target?.tagName,
-                  currentTarget: event.currentTarget?.tagName,
-                  top: top?.tagName,
-                  anchor: anchor?.getAttribute?.("href") || null,
-                });
-                const startedAt = performance.now();
-                setTimeout(() => {
-                  console.log(
-                    "[perf] click_to_timeout0(ms)",
-                    Math.round(performance.now() - startedAt)
-                  );
-                }, 0);
-              } catch {
-                /* ignore */
-              }
-            }}
           >
             <CategoryTilesGrid
               categories={featuredCategoryList}

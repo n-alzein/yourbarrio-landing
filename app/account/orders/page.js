@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AccountNavTabs from "@/components/account/AccountNavTabs";
 import OrderStatusBadge from "@/components/orders/OrderStatusBadge";
 import {
   formatMoney,
@@ -50,23 +51,7 @@ export default async function AccountOrdersPage({ searchParams }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 mb-4">
-          <Link
-            href="/account/orders"
-            aria-current="page"
-            className="inline-flex items-center justify-center rounded-full border border-transparent px-4 h-11 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-2"
-            style={{ background: "var(--text)", color: "var(--background)" }}
-          >
-            Pending
-          </Link>
-          <Link
-            href="/account/purchase-history"
-            className="inline-flex items-center justify-center rounded-full border px-4 h-11 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-2"
-            style={{ borderColor: "var(--border)" }}
-          >
-            History
-          </Link>
-        </div>
+        <AccountNavTabs active="orders" variant="orders" />
 
         {error ? (
           <div

@@ -23,14 +23,12 @@ import {
 } from "lucide-react";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
-import ThemeToggle from "../ThemeToggle";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import { useTheme } from "@/components/ThemeProvider";
 import { useModal } from "../modals/ModalProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
-import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import {
   getAvailabilityBadgeStyle,
   normalizeInventory,
@@ -957,32 +955,6 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     });
   }, [badgeReady, canLoadUnread, loadUnreadCount]);
 
-  const buildUnreadChannel = useCallback(
-    (activeClient) =>
-      activeClient
-        .channel(`customer-unread-${user?.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "conversations",
-            filter: `customer_id=eq.${user?.id}`,
-          },
-          () => {
-            loadUnreadCount();
-          }
-        ),
-    [user?.id, loadUnreadCount]
-  );
-
-  useRealtimeChannel({
-    supabase,
-    enabled: badgeReady && authStatus === "authenticated" && Boolean(user?.id),
-    buildChannel: buildUnreadChannel,
-    diagLabel: "customer-unread",
-  });
-
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleUnreadRefresh = () => {
@@ -1479,14 +1451,6 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     </div>
 
                     <div className="mt-2 border-t border-white/10 px-4 pt-3">
-                      <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
-                        <span className="text-[11px] uppercase tracking-[0.2em] text-white/50">
-                          Theme
-                        </span>
-                        <ThemeToggle
-                          buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-                        />
-                      </div>
                       <Link
                         href="/customer/settings"
                         onClick={(e) => {
@@ -1699,13 +1663,6 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               </NavItem>
             </>
           )}
-
-          <ThemeToggle
-            showLabel
-            align="left"
-            className="self-start"
-            buttonClassName="px-2.5 py-1.5 text-[11px] font-medium text-white/70 border-white/10 bg-white/5 hover:bg-white/10"
-          />
 
           {hasAuth ? <LogoutButton mobile /> : null}
         </div>

@@ -7,6 +7,10 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import OverlayGuard from "@/components/OverlayGuard";
 import DevOnlyNavRecorderLoader from "@/components/DevOnlyNavRecorderLoader";
 import DebugToolsClient from "@/components/debug/DebugToolsClient";
+import SafariLayersDebug from "@/components/debug/SafariLayersDebug";
+import StallRecorderClient from "@/components/debug/StallRecorderClient";
+import SafariNavGuardClient from "@/components/nav/SafariNavGuardClient";
+import SafariDesktopClassClient from "@/components/SafariDesktopClassClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
 import WebVitalsReporter from "@/components/WebVitalsReporter";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -21,7 +25,7 @@ export default function AppShell({ children }) {
       <WebVitalsReporter />
       <ScrollToTop />
       <DevOnlyNavRecorderLoader />
-      <ThemeProvider>
+      <ThemeProvider forcedTheme="light">
         <OverlayGuard />
         <div className="absolute inset-0 -z-10 overflow-hidden h-full">
           <div className="absolute inset-0" style={{ background: "var(--bg-solid)" }} />
@@ -31,8 +35,8 @@ export default function AppShell({ children }) {
               background: "linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end))",
             }}
           />
-          <div className="pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
-          <div className="pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
+          <div className="app-shell-glow pointer-events-none absolute -top-32 -left-24 h-[420px] w-[420px] rounded-full blur-[120px] bg-[var(--glow-1)]" />
+          <div className="app-shell-glow pointer-events-none absolute top-40 -right-24 h-[480px] w-[480px] rounded-full blur-[120px] bg-[var(--glow-2)]" />
           <div className="animated-bg" />
         </div>
 
@@ -51,6 +55,10 @@ export default function AppShell({ children }) {
         </Suspense>
       </ThemeProvider>
       <DebugToolsClient />
+      <SafariLayersDebug />
+      <StallRecorderClient />
+      <SafariNavGuardClient />
+      <SafariDesktopClassClient />
     </div>
   );
 }

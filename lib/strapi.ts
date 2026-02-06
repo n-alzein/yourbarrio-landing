@@ -1,4 +1,5 @@
 import { BUSINESS_CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/businessCategories";
+import { logServerTiming, perfTimingEnabled } from "@/lib/serverTiming";
 
 type StrapiResponse<T> = {
   data: T;
@@ -52,6 +53,8 @@ export async function strapiFetch<T>(
   path: string,
   options: StrapiFetchOptions = {},
 ): Promise<T> {
+  const timingEnabled = perfTimingEnabled();
+  const timingStart = timingEnabled ? performance.now() : 0;
   const baseUrl = process.env.STRAPI_URL;
   const token = process.env.STRAPI_API_TOKEN;
 
@@ -146,7 +149,14 @@ export async function strapiFetch<T>(
   };
 
   if (!dedupe) {
-    return runFetch();
+    const result = await runFetch();
+    if (timingEnabled) {
+      logServerTiming("strapiFetch", {
+        path: normalizedPath,
+        durationMs: Math.round(performance.now() - timingStart),
+      });
+    }
+    return result;
   }
 
   const inFlight = getStrapiInFlightMap();
@@ -162,6 +172,23 @@ export async function strapiFetch<T>(
     .catch((error) => {
       throw error;
     });
+  if (timingEnabled) {
+    promise
+      .then(() => {
+        logServerTiming("strapiFetch", {
+          path: normalizedPath,
+          durationMs: Math.round(performance.now() - timingStart),
+          dedupe: Boolean(existing),
+        });
+      })
+      .catch(() => {
+        logServerTiming("strapiFetch_error", {
+          path: normalizedPath,
+          durationMs: Math.round(performance.now() - timingStart),
+          dedupe: Boolean(existing),
+        });
+      });
+  }
   inFlight.set(key, promise);
   return promise;
 }

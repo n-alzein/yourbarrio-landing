@@ -34,6 +34,34 @@ async function parseResponse(response) {
   }
 }
 
+const REFRESH_COOLDOWN_MS = 3000;
+const CACHE_TTL_MS = 5000;
+
+let globalRefreshInFlight = null;
+let globalLastSuccessAt = 0;
+let globalLastAttemptAt = 0;
+let globalRefreshCalls = 0;
+let globalMountCount = 0;
+let globalUnmountCount = 0;
+let globalStackHintEvery = 10;
+let globalCache = { ts: 0, payload: null };
+
+const getPerfDebug = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    if (process.env.NEXT_PUBLIC_PERF_DEBUG === "1") return true;
+  } catch {}
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("perf") === "1") return true;
+  } catch {}
+  try {
+    return window.localStorage.getItem("PERF_DEBUG") === "1";
+  } catch {
+    return false;
+  }
+};
+
 export function CartProvider({ children }) {
   const { user, authStatus } = useAuth();
   const [cart, setCart] = useState(null);
@@ -41,9 +69,10 @@ export function CartProvider({ children }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const inFlightRef = useRef(false);
   const abortRef = useRef(null);
   const lastRefreshKeyRef = useRef(null);
+  const perfDebug = getPerfDebug();
+  const mountStartedAtRef = useRef(0);
 
   const syncCart = useCallback((payload) => {
     setCart(payload?.cart || null);
@@ -62,8 +91,70 @@ export function CartProvider({ children }) {
         return { cart: null };
       }
 
-      if (inFlightRef.current) return { skipped: true };
-      inFlightRef.current = true;
+      globalRefreshCalls += 1;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__cartRefreshCalls = globalRefreshCalls;
+      }
+
+      const now = Date.now();
+      const lastSuccessAgoMs = globalLastSuccessAt ? now - globalLastSuccessAt : null;
+      const lastAttemptAgoMs = globalLastAttemptAt ? now - globalLastAttemptAt : null;
+      const cacheSource =
+        typeof window !== "undefined" && window.__YB_CART_CACHE__
+          ? window.__YB_CART_CACHE__
+          : globalCache;
+      const cacheFresh =
+        cacheSource?.payload && now - cacheSource.ts < CACHE_TTL_MS;
+      if (perfDebug) {
+        const shouldLogStack = globalRefreshCalls % globalStackHintEvery === 0;
+        console.log("[cart] refresh:attempt", {
+          reason,
+          mountCount: globalMountCount,
+          refreshCalls: globalRefreshCalls,
+          inFlight: Boolean(globalRefreshInFlight),
+          lastSuccessAgoMs,
+          lastAttemptAgoMs,
+          stackHint: shouldLogStack ? new Error().stack : undefined,
+        });
+      }
+
+      if (reason === "mount" && cacheFresh) {
+        syncCart(cacheSource.payload);
+        if (perfDebug) {
+          console.log("[cart] refresh:skip", {
+            reason,
+            skip: "cache",
+            cacheAgeMs: now - cacheSource.ts,
+          });
+        }
+        return { skipped: true, skip: "cache", payload: cacheSource.payload };
+      }
+
+      if (globalRefreshInFlight) {
+        if (perfDebug) {
+          console.log("[cart] refresh:skip", {
+            reason,
+            skip: "in_flight",
+            lastAttemptAgoMs,
+          });
+        }
+        return { skipped: true, skip: "in_flight" };
+      }
+      if (
+        reason === "mount" &&
+        lastAttemptAgoMs != null &&
+        lastAttemptAgoMs < REFRESH_COOLDOWN_MS
+      ) {
+        if (perfDebug) {
+          console.log("[cart] refresh:skip", {
+            reason,
+            skip: "cooldown",
+            lastAttemptAgoMs,
+          });
+        }
+        return { skipped: true, skip: "cooldown" };
+      }
+      globalLastAttemptAt = now;
 
       if (abortRef.current?.abort) {
         abortRef.current.abort();
@@ -71,50 +162,112 @@ export function CartProvider({ children }) {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1") {
-        console.log("[cart] refresh:start", { reason });
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch("/api/cart", {
-          method: "GET",
-          credentials: "same-origin",
-          signal: controller.signal,
-        });
-        const payload = await parseResponse(response);
-        if (!response.ok) {
-          throw new Error(payload?.error || "Failed to load cart");
-        }
-        syncCart(payload);
-        return payload;
-      } catch (err) {
+      const runFetch = async () => {
         if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1") {
-          console.log("[cart] refresh:error", { message: err?.message || String(err) });
+          console.log("[cart] refresh:start", { reason });
         }
-        setError(err?.message || "Failed to load cart");
-        return { error: err?.message || "Failed to load cart" };
-      } finally {
-        setLoading(false);
-        inFlightRef.current = false;
-      }
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await fetch("/api/cart", {
+            method: "GET",
+            credentials: "same-origin",
+            signal: controller.signal,
+          });
+          const payload = await parseResponse(response);
+          if (!response.ok) {
+            throw new Error(payload?.error || "Failed to load cart");
+          }
+          syncCart(payload);
+          if (typeof window !== "undefined") {
+            window.__YB_CART_CACHE__ = {
+              ts: Date.now(),
+              payload,
+            };
+          }
+          globalCache = { ts: Date.now(), payload };
+          globalLastSuccessAt = Date.now();
+          return payload;
+        } catch (err) {
+          const message = err?.message || String(err);
+          if (err?.name === "AbortError" || /aborted/i.test(message)) {
+            return { aborted: true };
+          }
+          if (process.env.NEXT_PUBLIC_DEBUG_NAV_PERF === "1") {
+            console.log("[cart] refresh:error", { message });
+          }
+          setError(message || "Failed to load cart");
+          return { error: message || "Failed to load cart" };
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      globalRefreshInFlight = new Promise((resolve) => {
+        if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(
+            () => {
+              runFetch().then(resolve);
+            },
+            { timeout: 1200 }
+          );
+        } else {
+          setTimeout(() => {
+            runFetch().then(resolve);
+          }, 0);
+        }
+      }).finally(() => {
+        globalRefreshInFlight = null;
+      });
+
+      return globalRefreshInFlight;
     },
-    [authStatus, syncCart, user?.id]
+    [authStatus, perfDebug, syncCart, user?.id]
   );
 
   useEffect(() => {
     if (!user?.id || authStatus !== "authenticated") return undefined;
+    if (perfDebug) {
+      if (typeof window !== "undefined") {
+        globalMountCount += 1;
+        window.__YB_CART_MOUNT_COUNT__ = globalMountCount;
+        console.log("[cart] mount_count", window.__YB_CART_MOUNT_COUNT__);
+        console.log("[cart] mount_path", window.location?.pathname);
+      }
+    }
+    mountStartedAtRef.current = Date.now();
     const key = `${user.id}:${authStatus}`;
     if (lastRefreshKeyRef.current === key) return undefined;
     lastRefreshKeyRef.current = key;
-    refreshCart({ reason: "mount" });
+    const run = () => refreshCart({ reason: "mount" });
+    let idleId = null;
+    let timeoutId = null;
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(run, { timeout: 1200 });
+    } else {
+      timeoutId = setTimeout(run, 0);
+    }
     return () => {
+      if (idleId && typeof window !== "undefined" && window.cancelIdleCallback) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       if (abortRef.current?.abort) {
         abortRef.current.abort();
       }
+      if (perfDebug && typeof window !== "undefined") {
+        globalUnmountCount += 1;
+        const mountedForMs = mountStartedAtRef.current
+          ? Date.now() - mountStartedAtRef.current
+          : null;
+        console.log("[cart] unmount_count", globalUnmountCount);
+        console.log("[cart] unmount_path", window.location?.pathname);
+        console.log("[cart] mounted_for_ms", mountedForMs);
+      }
     };
-  }, [authStatus, refreshCart, user?.id]);
+  }, [authStatus, refreshCart, syncCart, user?.id, perfDebug]);
 
   const addItem = useCallback(
     async ({ listingId, quantity = 1, clearExisting }) => {
