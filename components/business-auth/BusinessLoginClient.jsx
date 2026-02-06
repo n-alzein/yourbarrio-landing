@@ -5,6 +5,7 @@ import { getSupabaseAuthCookieName } from "@/lib/supabase/cookieName";
 import { PATHS } from "@/lib/auth/paths";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { withTimeout } from "@/lib/withTimeout";
+import { signOutLocalSession } from "@/lib/auth/logout";
 
 function BusinessLoginInner({ isPopup }) {
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
@@ -356,7 +357,7 @@ function BusinessLoginInner({ isPopup }) {
       }
 
       if (profile?.role !== "business") {
-        await supabase.auth.signOut();
+        await signOutLocalSession(supabase, "local");
         throw new Error("Only business accounts can log in here.");
       }
 
@@ -541,76 +542,65 @@ function BusinessLoginInner({ isPopup }) {
   }, [authDiagEnabled, authDiagLog, getCookieStatus, isPopup]);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="w-full flex justify-center px-4 mt-24 grow">
-        <div
-          className="max-w-md w-full max-h-[420px] p-8 rounded-2xl backdrop-blur-xl overflow-y-auto animate-fadeIn"
-          style={{
-            background: "rgba(30, 41, 59, 0.4)",
-            border: "1px solid rgba(51, 65, 85, 0.5)",
-            boxShadow: "0 0 50px -12px rgba(0, 0, 0, 0.5)",
-          }}
-        >
-          <h1
-            className="text-3xl font-extrabold text-center mb-3 tracking-tight"
-            style={{ color: "#fff" }}
-          >
-            Business Login
-          </h1>
+    <div
+      className="max-w-md w-full p-8 rounded-2xl border border-[var(--yb-border)] bg-white animate-fadeIn"
+    >
+        <h1 className="text-3xl font-extrabold text-center mb-3 tracking-tight text-slate-900">
+          Business Login
+        </h1>
 
-          <p className="text-center mb-6" style={{ color: "#94a3b8" }}>
+          <p className="text-center mb-6 text-slate-600">
             Sign in to manage your business
           </p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             {authError ? (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {authError}
               </div>
             ) : null}
-            <input
-              id="business-login-email"
-              name="email"
-              type="email"
-              placeholder="Email"
-              className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
-              style={{
-                background: "rgba(30, 41, 59, 0.5)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#fff",
-              }}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className="space-y-1.5">
+              <label
+                htmlFor="business-login-email"
+                className="text-sm font-medium text-slate-900"
+              >
+                Email
+              </label>
+              <input
+                id="business-login-email"
+                name="email"
+                type="email"
+                placeholder="you@company.com"
+                className="w-full px-4 py-3 rounded-xl border border-[var(--yb-border)] bg-white text-slate-900 placeholder:text-slate-500 transition focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
 
-            <input
-              id="business-login-password"
-              name="password"
-              type="password"
-              placeholder="Password"
-              className="w-full px-4 py-3 rounded-xl transition focus:outline-none focus:ring-2"
-              style={{
-                background: "rgba(30, 41, 59, 0.5)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#fff",
-              }}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="space-y-1.5">
+              <label
+                htmlFor="business-login-password"
+                className="text-sm font-medium text-slate-900"
+              >
+                Password
+              </label>
+              <input
+                id="business-login-password"
+                name="password"
+                type="password"
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-xl border border-[var(--yb-border)] bg-white text-slate-900 placeholder:text-slate-500 transition focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl font-semibold text-lg active:scale-[0.98] transition-all duration-200"
-              style={{
-                background: "#2563eb",
-                color: "#fff",
-                boxShadow: "0 10px 15px -3px rgba(30, 58, 138, 0.3)",
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
+              className="w-full py-3 rounded-xl font-semibold text-lg bg-[#6E34FF] text-white transition hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? "Signing in..." : "Log in"}
             </button>
@@ -619,49 +609,30 @@ function BusinessLoginInner({ isPopup }) {
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full mt-5 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition"
-            style={{
-              background: "rgba(51, 65, 85, 0.5)",
-              border: "1px solid rgba(71, 85, 105, 0.3)",
-              color: "#fff",
-            }}
+            className="w-full mt-5 py-3 rounded-xl font-medium flex items-center justify-center gap-2 border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50"
           >
             <img src="/google-icon.svg" className="h-5 w-5" alt="Google" />
             Continue with Google
           </button>
 
-          <p className="text-center text-sm mt-4" style={{ color: "#94a3b8" }}>
+          <p className="text-center text-sm mt-4 text-slate-600">
             Don&apos;t have an account?{" "}
             <a
               href="/business-auth/register"
-              className="font-medium hover:underline"
-              style={{ color: "#60a5fa" }}
+              className="font-medium text-[var(--color-primary)] hover:underline"
             >
               Sign up
             </a>
           </p>
-        </div>
-
-        <style>{`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fadeIn {
-            animation: fadeIn 0.6s ease-out;
-          }
-          .business-auth-page input::placeholder {
-            color: #94a3b8;
-          }
-          .business-auth-page input:focus {
-            border-color: rgba(59, 130, 246, 0.5);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-          }
-          .business-auth-page button:hover:not(:disabled) {
-            filter: brightness(1.1);
-          }
-        `}</style>
-      </div>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.6s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

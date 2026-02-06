@@ -191,84 +191,88 @@ function BusinessRegisterInner({ isPopup }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div
-        className="w-full max-w-md p-8 rounded-2xl backdrop-blur-xl animate-fadeIn"
-        style={{
-          background: "rgba(30, 41, 59, 0.4)",
-          border: "1px solid rgba(51, 65, 85, 0.5)",
-          boxShadow: "0 0 40px -12px rgba(0, 0, 0, 0.5)",
-        }}
-      >
+    <div className="w-full max-w-md p-8 rounded-2xl border border-[var(--yb-border)] bg-white animate-fadeIn">
         <h1
-          className="text-3xl font-extrabold text-center mb-3 tracking-tight"
-          style={{ color: "#fff" }}
+          className="text-3xl font-extrabold text-center mb-3 tracking-tight text-slate-900"
         >
           Create Business Account
         </h1>
 
-        <p className="text-center mb-6" style={{ color: "#94a3b8" }}>
+        <p className="text-center mb-6 text-slate-600">
           Start reaching local customers today
         </p>
 
         <button
           onClick={handleGoogle}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold active:scale-[0.98] transition-all"
-          style={{ background: "#fff", color: "#000" }}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <img src="/google-icon.svg" alt="" className="w-5 h-5" />
           Sign up with Google
         </button>
 
         <div className="my-6 flex items-center gap-4">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs" style={{ color: "#94a3b8" }}>
+          <div className="h-px flex-1 bg-[var(--yb-border)]" />
+          <span className="text-xs text-slate-500">
             or
           </span>
-          <div className="h-px flex-1 bg-white/10" />
+          <div className="h-px flex-1 bg-[var(--yb-border)]" />
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Business name"
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 placeholder:text-slate-400"
-            style={{ color: "#94a3b8" }}
-            required
-          />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-900" htmlFor="business-name">
+              Business name
+            </label>
+            <input
+              id="business-name"
+              type="text"
+              placeholder="Your business"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+              required
+            />
+          </div>
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 placeholder:text-slate-400"
-            style={{ color: "#94a3b8" }}
-            required
-          />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-900" htmlFor="business-email">
+              Email
+            </label>
+            <input
+              id="business-email"
+              type="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+              required
+            />
+          </div>
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 placeholder:text-slate-400"
-            style={{ color: "#94a3b8" }}
-            required
-          />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-900" htmlFor="business-password">
+              Password
+            </label>
+            <input
+              id="business-password"
+              type="password"
+              placeholder="Create a password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+              required
+            />
+          </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="yb-auth-cta w-full py-3 rounded-xl font-semibold bg-indigo-500 hover:bg-indigo-400 transition"
+            className="w-full py-3 rounded-xl font-semibold bg-[#6E34FF] text-white transition hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? "Creating..." : "Create account"}
           </button>
         </form>
-      </div>
     </div>
   );
 }
