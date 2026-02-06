@@ -501,7 +501,7 @@ export default function BusinessListingsPage() {
                     <div className={`h-56 w-full flex items-center justify-center ${
                       isLight ? "bg-white" : "bg-slate-800"
                     }`}>
-                      <span className={isLight ? "text-slate-400" : "text-slate-500"}>No image</span>
+                      <span className={isLight ? "text-slate-600" : "text-slate-500"}>No image</span>
                     </div>
                   )}
 

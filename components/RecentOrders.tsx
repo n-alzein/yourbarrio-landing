@@ -90,7 +90,7 @@ const RecentOrders = ({ orders }: RecentOrdersProps) => {
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {order.customerName}
-                      <div className="text-xs text-slate-400">{order.items} items</div>
+                      <div className="text-xs text-slate-600">{order.items} items</div>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">
                       {formatCurrency(order.total)}

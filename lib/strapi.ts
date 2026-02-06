@@ -24,6 +24,13 @@ type StrapiFetchOptions = {
   dedupe?: boolean;
 };
 
+function buildBodySnippet(rawBody: string, maxLength = 140) {
+  if (!rawBody) return "";
+  const normalized = rawBody.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  return ` - ${normalized.slice(0, maxLength)}`;
+}
+
 function getStrapiDebugStack() {
   const stack = new Error().stack;
   if (!stack) return "";
@@ -53,7 +60,7 @@ export async function strapiFetch<T>(
   path: string,
   options: StrapiFetchOptions = {},
 ): Promise<T> {
-  const timingEnabled = perfTimingEnabled();
+  const timingEnabled = await perfTimingEnabled();
   const timingStart = timingEnabled ? performance.now() : 0;
   const baseUrl = process.env.STRAPI_URL;
   const token = process.env.STRAPI_API_TOKEN;
@@ -115,7 +122,7 @@ export async function strapiFetch<T>(
           } catch {
             // Ignore JSON parse errors for non-JSON responses.
           }
-          const bodySnippet = rawBody ? ` - ${rawBody.slice(0, 400)}` : "";
+          const bodySnippet = buildBodySnippet(rawBody);
           throw new Error(`Strapi request failed (${response.status}): ${message}${bodySnippet}`);
         }
 
@@ -127,7 +134,7 @@ export async function strapiFetch<T>(
         }
 
         const rawBody = await response.text().catch(() => "");
-        const bodySnippet = rawBody ? ` - ${rawBody.slice(0, 400)}` : "";
+        const bodySnippet = buildBodySnippet(rawBody);
         throw new Error(
           `Strapi request failed (${response.status}): ${response.statusText}${bodySnippet}`,
         );
@@ -151,7 +158,7 @@ export async function strapiFetch<T>(
   if (!dedupe) {
     const result = await runFetch();
     if (timingEnabled) {
-      logServerTiming("strapiFetch", {
+      await logServerTiming("strapiFetch", {
         path: normalizedPath,
         durationMs: Math.round(performance.now() - timingStart),
       });
@@ -175,14 +182,14 @@ export async function strapiFetch<T>(
   if (timingEnabled) {
     promise
       .then(() => {
-        logServerTiming("strapiFetch", {
+        void logServerTiming("strapiFetch", {
           path: normalizedPath,
           durationMs: Math.round(performance.now() - timingStart),
           dedupe: Boolean(existing),
         });
       })
       .catch(() => {
-        logServerTiming("strapiFetch_error", {
+        void logServerTiming("strapiFetch_error", {
           path: normalizedPath,
           durationMs: Math.round(performance.now() - timingStart),
           dedupe: Boolean(existing),
@@ -194,7 +201,14 @@ export async function strapiFetch<T>(
 }
 
 export async function fetchStrapiBanners() {
-  return strapiFetch<any[]>("/api/banners?populate=*", { revalidate: 60 });
+  try {
+    return await strapiFetch<any[]>("/api/banners?populate=*", { revalidate: 60 });
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[fetchStrapiBanners] unavailable, returning empty array:", error);
+    }
+    return [];
+  }
 }
 
 type StrapiMediaAttributes = {
