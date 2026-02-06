@@ -17,10 +17,11 @@ import { AuthProvider } from "@/components/AuthProvider";
 import ScrollToTop from "@/components/ScrollToTop";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { LocationProvider } from "@/components/location/LocationProvider";
+import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 
 export default function AppShell({ children }) {
   return (
-    <div className="relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col pt-20">
+    <div className="app-shell-root relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col pt-20">
       <CrashLoggerClient />
       <WebVitalsReporter />
       <ScrollToTop />
@@ -28,9 +29,12 @@ export default function AppShell({ children }) {
       <ThemeProvider forcedTheme="light">
         <OverlayGuard />
         <div className="absolute inset-0 -z-10 overflow-hidden h-full">
-          <div className="absolute inset-0" style={{ background: "var(--bg-solid)" }} />
           <div
-            className="absolute inset-0"
+            className="app-shell-bg-solid absolute inset-0"
+            style={{ background: "var(--bg-solid)" }}
+          />
+          <div
+            className="app-shell-bg-gradient absolute inset-0"
             style={{
               background: "linear-gradient(to bottom, var(--bg-gradient-start), var(--bg-gradient-end))",
             }}
@@ -44,12 +48,14 @@ export default function AppShell({ children }) {
         <Suspense fallback={null}>
           <LocationProvider>
             <AuthProvider>
-              <CartProvider>
-                <ModalMount>
-                  <main className="flex-1 w-full min-h-screen">{children}</main>
-                  <Footer />
-                </ModalMount>
-              </CartProvider>
+              <RealtimeProvider>
+                <CartProvider>
+                  <ModalMount>
+                    <main className="flex-1 w-full min-h-screen">{children}</main>
+                    <Footer />
+                  </ModalMount>
+                </CartProvider>
+              </RealtimeProvider>
             </AuthProvider>
           </LocationProvider>
         </Suspense>

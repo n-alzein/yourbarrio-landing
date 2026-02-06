@@ -1,5 +1,4 @@
 import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
-import BusinessMarketingFooter from "@/components/marketing/BusinessMarketingFooter";
 
 export const metadata = {
   other: {
@@ -12,7 +11,6 @@ export default function BusinessMarketingLayout({ children }) {
     <>
       <BusinessAuthRedirector />
       {children}
-      <BusinessMarketingFooter />
     </>
   );
 }

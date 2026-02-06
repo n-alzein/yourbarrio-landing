@@ -1,10 +1,11 @@
-html.safari-desktop .use-backdrop-blur {
+html.theme-light.safari-desktop .use-backdrop-blur {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  background-color: var(--color-surface) !important;
 }
 
-html.safari-desktop .use-backdrop-blur-fallback {
-  background-color: rgba(12, 12, 16, 0.92) !important;
+html.theme-light.safari-desktop .use-backdrop-blur-fallback {
+  background-color: var(--color-surface) !important;
 }
 
 html.safari-desktop .animated-bg {
@@ -20,16 +21,16 @@ html.safari-desktop .app-shell-glow {
   backdrop-filter: none !important;
 }
 
-html.safari-desktop .use-backdrop-blur,
-html.safari-desktop [class*="backdrop-blur"] {
+html.theme-light.safari-desktop .use-backdrop-blur,
+html.theme-light.safari-desktop [class*="backdrop-blur"] {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
-  background-color: rgba(0, 0, 0, 0.92) !important;
+  background-color: var(--color-surface) !important;
 }
 
-html.safari-desktop nav[data-nav-surface],
-html.safari-desktop nav.theme-lock {
-  background-color: rgba(10, 10, 14, 0.96) !important;
+html.theme-light.safari-desktop nav[data-nav-surface],
+html.theme-light.safari-desktop nav.theme-lock {
+  background-color: var(--navbar-bg) !important;
   background-image: none !important;
 }
 

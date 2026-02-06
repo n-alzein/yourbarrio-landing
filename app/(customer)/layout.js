@@ -46,7 +46,7 @@ export default async function CustomerLayout({ children }) {
           .customer-shell.yb-safari .use-backdrop-blur {
             -webkit-backdrop-filter: none !important;
             backdrop-filter: none !important;
-            background: rgba(12, 12, 16, 0.9) !important;
+            background: var(--color-surface) !important;
           }
           .customer-shell.yb-safari .app-shell-glow,
           .customer-shell.yb-safari .animated-bg {

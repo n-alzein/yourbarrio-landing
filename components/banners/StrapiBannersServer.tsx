@@ -20,7 +20,10 @@ export default async function StrapiBannersServer() {
   try {
     banners = await fetchStrapiBanners();
   } catch (error) {
-    console.error("Failed to load Strapi banners:", error);
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[StrapiBannersServer] failed to load banners:", error);
+    }
+    return null;
   }
 
   const now = new Date();

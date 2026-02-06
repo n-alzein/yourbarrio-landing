@@ -52,7 +52,7 @@ export default function MobileMenuSheet({
   return (
     <div className="fixed inset-0 z-[60] md:hidden">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+        className="absolute inset-0 bg-black/50"
         onClick={onClose}
         aria-hidden
       />
@@ -60,7 +60,7 @@ export default function MobileMenuSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="absolute inset-x-0 top-4 mx-4 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-purple-950/95 via-purple-900/85 to-fuchsia-900/85 text-white shadow-2xl"
+        className="absolute inset-x-0 top-4 mx-4 overflow-hidden rounded-3xl border border-[var(--yb-navbar-border)] bg-[var(--yb-navbar-bg)] text-white"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="text-sm font-semibold text-white">{title}</div>

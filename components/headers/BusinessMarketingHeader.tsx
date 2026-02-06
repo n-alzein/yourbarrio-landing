@@ -68,7 +68,7 @@ export default function BusinessMarketingHeader() {
           hidden ? "-translate-y-full" : "translate-y-0"
         }`}
       >
-        <div className="backdrop-blur-xl bg-gradient-to-r from-purple-950/80 via-purple-900/60 to-fuchsia-900/70 border-b border-white/10 shadow-lg">
+        <div className="yb-navbar yb-navbar-bordered">
           <HeaderShell>
             <div className="flex items-center gap-4">
               <Link href="/business" className="flex items-center gap-3">
@@ -96,7 +96,7 @@ export default function BusinessMarketingHeader() {
                       href={item.href}
                       active={isActivePath(pathname, item.href)}
                       activeClassName="text-white"
-                      inactiveClassName="text-white/70 hover:text-white"
+                      inactiveClassName="yb-navbar-muted hover:text-white"
                     >
                       {item.label}
                     </NavLink>
@@ -108,13 +108,13 @@ export default function BusinessMarketingHeader() {
             <div className="hidden md:flex items-center gap-4">
               <Link
                 href={LOGIN_HREF}
-                className="text-sm font-medium text-white/80 hover:text-white transition-colors"
+                className="text-sm font-medium yb-navbar-muted hover:text-white transition-colors"
               >
                 Log in
               </Link>
               <Link
                 href={CTA_HREF}
-                className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-fuchsia-900/30 transition hover:brightness-110"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Get started
               </Link>
@@ -170,7 +170,7 @@ export default function BusinessMarketingHeader() {
           <Link
             href={CTA_HREF}
             onClick={() => setMenuOpen(false)}
-            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-fuchsia-900/30"
+            className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
           >
             Get started
           </Link>

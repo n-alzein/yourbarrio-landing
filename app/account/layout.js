@@ -39,7 +39,7 @@ export default async function AccountLayout({ children }) {
           .account-shell.yb-safari .use-backdrop-blur {
             -webkit-backdrop-filter: none !important;
             backdrop-filter: none !important;
-            background: rgba(12, 12, 16, 0.9) !important;
+            background: var(--color-surface) !important;
           }
           .account-shell.yb-safari .app-shell-glow,
           .account-shell.yb-safari .animated-bg {

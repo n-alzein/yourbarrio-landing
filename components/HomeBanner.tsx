@@ -12,9 +12,17 @@ type BannerEntity = BannerAttributes & {
 
 export default async function HomeBanner() {
   // Server-side fetch keeps the API token out of the browser bundle.
-  const banners = await strapiFetch<BannerEntity[]>(
-    "/api/banners?populate=*&sort=createdAt:desc&pagination[pageSize]=1",
-  );
+  let banners: BannerEntity[] = [];
+  try {
+    banners = await strapiFetch<BannerEntity[]>(
+      "/api/banners?populate=*&sort=createdAt:desc&pagination[pageSize]=1",
+    );
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[HomeBanner] Strapi unavailable, banner skipped:", error);
+    }
+    return null;
+  }
 
   const banner = banners?.[0];
   if (!banner) return null;
