@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { PATHS } from "@/lib/auth/paths";
+import { isLogoutRedirectInFlight } from "@/lib/auth/logout";
 
 export default function AuthRedirectGuard({ children, redirectTo }) {
   const { authStatus, user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const fallbackArmedRef = useRef(false);
 
   useEffect(() => {
@@ -24,20 +24,12 @@ export default function AuthRedirectGuard({ children, redirectTo }) {
     if (!target) return;
     if (pathname === target || pathname === `${target}/`) return;
 
-    router.replace(target);
-    router.refresh();
-
-    if (typeof window !== "undefined" && !fallbackArmedRef.current) {
-      fallbackArmedRef.current = true;
-      const currentPath = `${window.location.pathname}${window.location.search}`;
-      setTimeout(() => {
-        const nextPath = `${window.location.pathname}${window.location.search}`;
-        if (nextPath === currentPath) {
-          window.location.assign(target);
-        }
-      }, 350);
-    }
-  }, [authStatus, pathname, redirectTo, router, user]);
+    if (typeof window === "undefined") return;
+    if (isLogoutRedirectInFlight()) return;
+    if (fallbackArmedRef.current) return;
+    fallbackArmedRef.current = true;
+    window.location.assign(target);
+  }, [authStatus, pathname, redirectTo, user]);
 
   if (authStatus === "loading") return null;
   if (authStatus !== "authenticated" || !user) return null;

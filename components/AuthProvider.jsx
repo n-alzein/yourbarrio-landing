@@ -24,6 +24,11 @@ import {
 import { PATHS } from "@/lib/auth/paths";
 import AuthStateDebug from "@/components/debug/AuthStateDebug";
 import { stopRealtime } from "@/lib/realtimeManager";
+import {
+  isLogoutRedirectInFlight,
+  performLogout,
+  resolveLogoutRedirect,
+} from "@/lib/auth/logout";
 
 const AuthContext = createContext({
   supabase: null,
@@ -135,6 +140,7 @@ const authStore = {
   guardSubscribed: false,
   authUnsubscribe: null,
   loggingOut: false,
+  logoutRedirectInFlight: false,
   providerInstanceId: null,
   bootstrapAbortController: null,
 };
@@ -184,6 +190,14 @@ function emitAuthUiReset(reason) {
     })
   );
   logAuthDiag("ui:reset", { reason });
+}
+
+function isAuthNavigationSuppressed() {
+  return (
+    authStore.loggingOut ||
+    authStore.logoutRedirectInFlight ||
+    isLogoutRedirectInFlight()
+  );
 }
 
 function clearSupabaseCookiesClient() {
@@ -655,13 +669,12 @@ function ensureAuthListener() {
         clearVerifiedUserCache();
         applySignedOutState("auth_event:signed_out", {
           resetGuardState: true,
-          clearAuthSuppression: true,
+          clearAuthSuppression: false,
           extraState: {
             lastAuthEvent: event,
             lastError: null,
           },
         });
-        void cleanupRealtimeChannels();
         return;
       }
 
@@ -747,9 +760,10 @@ export function AuthProvider({
   useEffect(() => {
     if (isNestedProvider) return;
     if (typeof window === "undefined") return;
+    if (isAuthNavigationSuppressed()) return;
     const event = authState.lastAuthEvent;
     if (!event) return;
-    if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED"].includes(event)) {
+    if (!["SIGNED_IN", "TOKEN_REFRESHED"].includes(event)) {
       return;
     }
     logAuthDiag("router:refresh", { event });
@@ -758,6 +772,7 @@ export function AuthProvider({
 
   useEffect(() => {
     if (isNestedProvider) return;
+    if (isAuthNavigationSuppressed()) return;
     if (authState.lastAuthEvent !== "SIGNED_OUT") return;
     if (!pathname) return;
     if (!isProtectedPath(pathname)) return;
@@ -766,9 +781,8 @@ export function AuthProvider({
       : PATHS.auth.customerLogin;
     if (pathname === target || pathname === `${target}/`) return;
     logAuthDiag("route_guard:signed_out_redirect", { from: pathname, to: target });
-    router.replace(target);
-    router.refresh();
-  }, [authState.lastAuthEvent, isNestedProvider, pathname, router]);
+    redirectWithGuard(target);
+  }, [authState.lastAuthEvent, isNestedProvider, pathname]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -910,6 +924,7 @@ export function AuthProvider({
 
   const logout = useCallback(
     async (options = {}) => {
+      if (isAuthNavigationSuppressed()) return;
       const { redirectTo, reason = "logout" } = options;
       const role = authStore.state.role;
       const inferredRole =
@@ -918,16 +933,15 @@ export function AuthProvider({
         window.location.pathname.startsWith("/business")
           ? "business"
           : "customer");
-      const resolvedRedirect =
-        redirectTo ||
-        (inferredRole === "business"
-          ? PATHS.public.businessLanding
-          : PATHS.auth.customerLogin);
-      const shouldRedirect = typeof window !== "undefined";
+      const publicRedirect = resolveLogoutRedirect({
+        role: inferredRole,
+        redirectTo,
+      });
 
       resetAuthUiState("logout:pre");
       emitAuthUiReset("logout:pre");
       authStore.loggingOut = true;
+      authStore.logoutRedirectInFlight = true;
       applySignedOutState("logout:pre", {
         resetGuardState: true,
         resetAuthUi: false,
@@ -943,61 +957,20 @@ export function AuthProvider({
         authBusy: authStore.state.authBusy,
         reason,
         role,
-        redirectTo: resolvedRedirect,
+        redirectTo: publicRedirect,
       });
 
-      try {
-        try {
-          await cleanupRealtimeChannels();
-        } catch (err) {
-          logAuthDiag("logout:realtime:error", {
-            message: err?.message || String(err),
-          });
-        }
-        clearVerifiedUserCache();
-        clearSupabaseAuthStorage();
-        clearSupabaseCookiesClient();
-        if (authStore.supabase?.auth?.signOut) {
-          try {
-            await authStore.supabase.auth.signOut({ scope: "local" });
-          } catch (err) {
-            logAuthDiag("logout:supabase:error", {
-              message: err?.message || String(err),
-            });
-          }
-        }
-
-        if (shouldRedirect) {
-          try {
-            await fetch("/api/auth/signout", {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-            });
-          } catch (err) {
-            logAuthDiag("logout:server:error", {
-              message: err?.message || String(err),
-            });
-          }
-        }
-      } finally {
-        resetAuthUiState("logout:finally");
-        if (shouldRedirect) {
-          router.replace(resolvedRedirect);
-          router.refresh();
-          if (typeof window !== "undefined") {
-            const currentPath = `${window.location.pathname}${window.location.search}`;
-            setTimeout(() => {
-              const nextPath = `${window.location.pathname}${window.location.search}`;
-              if (nextPath === currentPath) {
-                window.location.assign(resolvedRedirect);
-              }
-            }, 350);
-          }
-        }
-      }
+      clearVerifiedUserCache();
+      clearSupabaseAuthStorage();
+      clearSupabaseCookiesClient();
+      await performLogout({
+        supabase: authStore.supabase,
+        role: inferredRole,
+        redirectTo: publicRedirect,
+        callServerSignout: typeof window !== "undefined",
+      });
     },
-    [router]
+    []
   );
 
   const value = useMemo(
@@ -1150,6 +1123,7 @@ export function AuthProvider({
   useEffect(() => {
     if (isNestedProvider) return;
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
+    if (authStore.logoutRedirectInFlight) return;
     if (authStore.loggingOut) {
       authStore.loggingOut = false;
     }
@@ -1158,6 +1132,7 @@ export function AuthProvider({
   useEffect(() => {
     if (isNestedProvider) return;
     if (typeof window === "undefined") return;
+    if (isAuthNavigationSuppressed()) return;
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
     if (!pathname) return;
     if (!isProtectedPath(pathname)) return;
@@ -1175,13 +1150,13 @@ export function AuthProvider({
       to: target,
       role: lastKnownRoleRef.current,
     });
-    router.replace(target);
-    router.refresh();
-  }, [authState.authStatus, authState.user, isNestedProvider, pathname, router]);
+    redirectWithGuard(target);
+  }, [authState.authStatus, authState.user, isNestedProvider, pathname]);
 
   useEffect(() => {
     if (isNestedProvider) return;
     if (typeof window === "undefined") return;
+    if (isAuthNavigationSuppressed()) return;
     if (authState.authStatus !== "authenticated" || !authState.user) return;
     if (!pathname) return;
     if (!pathname.startsWith("/business-auth")) return;
@@ -1198,7 +1173,6 @@ export function AuthProvider({
       role: authState.role,
     });
     router.replace(target);
-    router.refresh();
   }, [
     authState.authStatus,
     authState.role,
