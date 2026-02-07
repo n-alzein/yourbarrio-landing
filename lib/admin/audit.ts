@@ -7,7 +7,7 @@ type AuditParams = {
   targetType?: string | null;
   targetId?: string | null;
   meta?: Record<string, any> | null;
-  actorUserId?: string;
+  actorUserId?: string | null;
 };
 
 type LogAdminActionParams = {
@@ -17,6 +17,10 @@ type LogAdminActionParams = {
   targetId?: string | null;
   meta?: Record<string, any> | null;
 };
+
+type AuditResult =
+  | { ok: true; id: string | null }
+  | { ok: false; reason: "missing_actor_user_id" | "rpc_error" | "exception" | "client_exception" };
 
 const warnedActions = new Set<string>();
 const diagEnabled =
@@ -41,11 +45,19 @@ export async function logAdminAction(
     targetId = null,
     meta = {},
   }: LogAdminActionParams
-) {
+): Promise<AuditResult> {
+  const normalizedActorUserId = (actorUserId || "").trim();
+  if (!normalizedActorUserId) {
+    warnAuditOnce(action, "missing_actor_user_id", {
+      message: "Skipping admin audit RPC because actorUserId was missing.",
+    });
+    return { ok: false, reason: "missing_actor_user_id" };
+  }
+
   const payload = {
-    p_action: action,
-    p_actor_user_id: actorUserId ?? null,
-    p_target_type: targetType ?? "",
+    p_action: String(action ?? ""),
+    p_actor_user_id: normalizedActorUserId,
+    p_target_type: String(targetType ?? ""),
     p_target_id: String(targetId ?? ""),
     p_meta: meta ?? {},
   };
@@ -58,15 +70,15 @@ export async function logAdminAction(
         code: error.code,
         hint: error.hint,
       });
-      return null;
+      return { ok: false, reason: "rpc_error" };
     }
-    return data as string;
+    return { ok: true, id: (data as string) ?? null };
   } catch (error: any) {
     warnAuditOnce(action, "exception", {
       message: error?.message || "Unknown audit error",
       digest: error?.digest,
     });
-    return null;
+    return { ok: false, reason: "exception" };
   }
 }
 
@@ -92,6 +104,6 @@ export async function audit({
       message: error?.message || "Unknown audit error",
       digest: error?.digest,
     });
-    return null;
+    return { ok: false, reason: "client_exception" };
   }
 }
