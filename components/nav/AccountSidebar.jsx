@@ -59,6 +59,8 @@ export default function AccountSidebar({
   onOpenChange,
   anchorRef,
   title = "Your Account",
+  showTitle = true,
+  profileFirst = false,
   displayName,
   email,
   avatar,
@@ -209,39 +211,84 @@ export default function AccountSidebar({
           tabIndex={-1}
           className="yb-sidebar-panel flex h-full flex-col border-l border-[var(--yb-border)]"
         >
-          <div className="yb-sidebar-header flex items-start justify-between px-6 py-5">
-            <div>
-              <div id={titleId} className="text-sm font-semibold">
-                {title}
+          {profileFirst ? (
+            <>
+              <div className="yb-sidebar-header flex items-center justify-start px-6 py-3">
+                <span id={titleId} className="sr-only">
+                  {title}
+                </span>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={() => onOpenChange?.(false)}
+                  className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+                  aria-label="Close account menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <div className="mt-1 text-xs yb-dropdown-muted">YourBarrio</div>
-            </div>
-            <button
-              ref={closeButtonRef}
-              type="button"
-              onClick={() => onOpenChange?.(false)}
-              className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
-              aria-label="Close account menu"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
 
-          <div className="flex items-center gap-3 border-b border-[var(--yb-border)] px-6 py-4">
-            <SafeImage
-              src={avatar}
-              alt="Profile avatar"
-              className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
-              width={48}
-              height={48}
-              sizes="48px"
-              useNextImage
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">{displayName}</p>
-              {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
-            </div>
-          </div>
+              <div className="flex items-center gap-3 border-b border-[var(--yb-border)] px-6 py-5">
+                <SafeImage
+                  src={avatar}
+                  alt="Profile avatar"
+                  className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
+                  width={48}
+                  height={48}
+                  sizes="48px"
+                  useNextImage
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{displayName}</p>
+                  {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="yb-sidebar-header flex items-start justify-between px-6 py-5">
+                <div>
+                  {showTitle ? (
+                    <>
+                      <div id={titleId} className="text-sm font-semibold">
+                        {title}
+                      </div>
+                      <div className="mt-1 text-xs yb-dropdown-muted">YourBarrio</div>
+                    </>
+                  ) : (
+                    <span id={titleId} className="sr-only">
+                      {title}
+                    </span>
+                  )}
+                </div>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={() => onOpenChange?.(false)}
+                  className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+                  aria-label="Close account menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 border-b border-[var(--yb-border)] px-6 py-4">
+                <SafeImage
+                  src={avatar}
+                  alt="Profile avatar"
+                  className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
+                  width={48}
+                  height={48}
+                  sizes="48px"
+                  useNextImage
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{displayName}</p>
+                  {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
         </div>

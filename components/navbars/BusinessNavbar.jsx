@@ -876,6 +876,8 @@ function BusinessNavbarInner({ pathname }) {
           onOpenChange={setAccountSidebarOpen}
           anchorRef={accountTriggerRef}
           title="Business Account"
+          showTitle={false}
+          profileFirst
           displayName={displayName}
           email={email}
           avatar={avatar}

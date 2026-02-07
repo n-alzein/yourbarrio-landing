@@ -14,7 +14,7 @@ import {
   SettingsSection,
   inputClassName,
 } from "@/components/settings/SettingsSection";
-import ManagePasswordModal from "@/components/settings/ManagePasswordModal";
+import ManagePasswordDialog from "@/components/settings/ManagePasswordDialog";
 
 export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
@@ -630,7 +630,7 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <ManagePasswordModal
+      <ManagePasswordDialog
         open={managePasswordOpen}
         onClose={() => setManagePasswordOpen(false)}
         supabase={supabase}
