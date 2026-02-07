@@ -9,6 +9,7 @@ import { useModal } from "./ModalProvider";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { withTimeout } from "@/lib/withTimeout";
 import { resolvePostLoginTarget } from "@/lib/auth/redirects";
+import { isAdminProfile } from "@/lib/auth/isAdmin";
 
 export default function CustomerLoginModal({ onClose, next: nextFromModalProps = null }) {
   const {
@@ -81,9 +82,15 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
   const resolveLoginTarget = useCallback(
     (profileOverride, roleOverride) => {
       const next = getNextParam();
+      const profileForRouting = profileOverride || null;
+      const normalizedRole = roleOverride || null;
+      const adminRoleHint = isAdminProfile(profileForRouting, [])
+        ? ["admin_readonly"]
+        : [];
       return resolvePostLoginTarget({
-        profile: profileOverride || null,
-        role: roleOverride || null,
+        profile: profileForRouting,
+        role: normalizedRole,
+        roles: adminRoleHint,
         next,
       });
     },
@@ -231,6 +238,14 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
       }
 
       const dest = resolveLoginTarget(profile, profile?.role);
+      if (authDiagEnabled) {
+        console.log("[AUTH_DIAG] customer-login:redirect:resolved", {
+          role: profile?.role ?? role ?? null,
+          isInternal: profile?.is_internal === true,
+          next: getNextParam(),
+          dest,
+        });
+      }
 
       onClose?.();
 

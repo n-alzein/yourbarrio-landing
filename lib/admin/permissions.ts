@@ -1,6 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
+import { isAdminProfile } from "@/lib/auth/isAdmin";
 import { getProfileCached, getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 
 export const ADMIN_ROLES = [
@@ -90,7 +91,7 @@ export async function getAdminRolesForUser(userId?: string): Promise<AdminRole[]
   // Backward-compatible fallback until all admins move to admin_role_members.
   if (!roles.length) {
     const profile = await getProfileCached(userId, supabase);
-    if (profile?.role === "admin" || profile?.is_internal === true) {
+    if (isAdminProfile(profile, [])) {
       return ["admin_readonly" as AdminRole];
     }
   }
@@ -116,9 +117,7 @@ export async function requireAdmin(options: RequireAdminOptions = {}): Promise<A
   const rpcIsAdmin = await checkIsAdminViaRpc(supabase);
   const roles = await getAdminRolesForUser(user.id);
   const profile = await getProfileCached(user.id, supabase);
-  const fallbackIsAdmin = Boolean(
-    roles.length || profile?.role === "admin" || profile?.is_internal === true
-  );
+  const fallbackIsAdmin = isAdminProfile(profile, roles);
 
   const isAdmin = Boolean(devAllowlistUsed || rpcIsAdmin === true || fallbackIsAdmin);
   const resolvedRoles: AdminRole[] = [...roles];

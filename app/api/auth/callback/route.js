@@ -48,6 +48,7 @@ export async function GET(request) {
     const target = resolvePostLoginTarget({
       profile: profile || null,
       role,
+      roles: [],
       next: nextParam,
     });
     response.headers.set("location", new URL(target, request.url).toString());

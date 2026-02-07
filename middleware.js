@@ -10,8 +10,8 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function middleware(request) {
   const mwStart = performance.now();
   const diagEnabled =
-    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
-    process.env.NODE_ENV !== "production";
+    process.env.AUTH_GUARD_DIAG === "1" ||
+    process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const pathname = request.nextUrl.pathname;
   const perfEnabled =
     request.nextUrl.searchParams?.get("perf") === "1" ||
