@@ -5,8 +5,10 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -722,8 +724,7 @@ export function AuthProvider({
   initialRole = null,
 }) {
   const parentAuth = useContext(AuthContext);
-  const isNestedProviderRef = useRef(Boolean(parentAuth?.providerInstanceId));
-  const isNestedProvider = isNestedProviderRef.current;
+  const [isNestedProvider] = useState(() => Boolean(parentAuth?.providerInstanceId));
   const pathname = usePathname();
   const authDiagEnabledLocal = useMemo(
     () =>
@@ -744,8 +745,10 @@ export function AuthProvider({
 
   const mountedRef = useRef(true);
   const fetchWrappedRef = useRef(false);
-  const providerInstanceIdRef = useRef(
-    `auth-${Math.random().toString(36).slice(2, 10)}`
+  const reactId = useId();
+  const providerInstanceId = useMemo(
+    () => `auth-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
+    [reactId]
   );
   const authUiFailsafeTimerRef = useRef(null);
   const router = useRouter();
@@ -787,10 +790,10 @@ export function AuthProvider({
   useEffect(() => {
     mountedRef.current = true;
     authStore.providerCount += 1;
-    authStore.providerInstanceId = providerInstanceIdRef.current;
+    authStore.providerInstanceId = providerInstanceId;
     if (authDiagEnabledLocal && authStore.providerCount > 1) {
       console.warn("[AUTH_DIAG] provider:multiple", {
-        providerInstanceId: providerInstanceIdRef.current,
+        providerInstanceId,
         providerCount: authStore.providerCount,
         pathname: typeof window !== "undefined" ? window.location.pathname : null,
       });
@@ -830,6 +833,7 @@ export function AuthProvider({
     supabase,
     authDiagEnabledLocal,
     allowBootstrap,
+    providerInstanceId,
   ]);
 
   useEffect(() => {
@@ -1001,7 +1005,7 @@ export function AuthProvider({
       authAction: authState.authAction,
       authAttemptId: authState.authAttemptId,
       authActionStartedAt: authState.authActionStartedAt,
-      providerInstanceId: providerInstanceIdRef.current,
+      providerInstanceId,
       refreshProfile,
       logout,
       beginAuthAttempt,
@@ -1032,6 +1036,7 @@ export function AuthProvider({
       refreshProfile,
       resetAuthUiStateCb,
       seedAuthStateCb,
+      providerInstanceId,
     ]
   );
 
@@ -1039,7 +1044,7 @@ export function AuthProvider({
     if (isNestedProvider) return;
     if (!authDiagEnabledLocal) return;
     console.log("[AUTH_DIAG] status", {
-      providerInstanceId: providerInstanceIdRef.current,
+      providerInstanceId,
       authStatus: authState.authStatus,
       status:
         authState.authStatus === "authenticated"
@@ -1068,6 +1073,7 @@ export function AuthProvider({
     authState.user,
     authDiagEnabledLocal,
     isNestedProvider,
+    providerInstanceId,
   ]);
 
   useEffect(() => {
