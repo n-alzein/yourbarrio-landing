@@ -326,9 +326,11 @@ export async function getEffectiveActorAndTarget(
       .eq("id", validation.targetUserId)
       .maybeSingle();
 
-    const rawRole = targetUser?.role || null;
-    if (rawRole === "customer" || rawRole === "business") {
-      targetRole = rawRole;
+    // In this app, missing/unknown role is treated as customer by default.
+    // Only explicit "business" should route to business dashboards.
+    if (targetUser) {
+      const rawRole = targetUser.role || null;
+      targetRole = rawRole === "business" ? "business" : "customer";
     }
   } catch {
     targetRole = null;
