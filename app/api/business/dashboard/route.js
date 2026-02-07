@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
 
 const SALES_STATUSES = ["fulfilled", "completed"];
 
@@ -74,12 +74,12 @@ const mapOrderTab = (status) => {
 };
 
 export async function GET(request) {
-  const supabase = await getSupabaseServerClient();
-  const { user, error: userError } = await getUserCached(supabase);
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await getBusinessDataClientForRequest();
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
+  const supabase = access.client;
+  const businessUserId = access.effectiveUserId;
 
   const { searchParams } = new URL(request.url);
   const fromParam = searchParams.get("from");
@@ -103,14 +103,14 @@ export async function GET(request) {
       supabase
         .from("orders")
         .select("id, order_number, created_at, total, status, contact_name, user_id")
-        .eq("vendor_id", user.id)
+        .eq("vendor_id", businessUserId)
         .in("status", SALES_STATUSES)
         .gte("created_at", fromStr)
         .lte("created_at", toStr),
       supabase
         .from("business_views")
         .select("viewed_at")
-        .eq("business_id", user.id)
+        .eq("business_id", businessUserId)
         .gte("viewed_at", fromStr)
         .lte("viewed_at", toStr),
       supabase
@@ -118,17 +118,17 @@ export async function GET(request) {
         .select(
           "id, title, category, category_info:business_categories(name,slug), inventory_quantity"
         )
-        .eq("business_id", user.id),
+        .eq("business_id", businessUserId),
       supabase
         .from("orders")
         .select("id, order_number, created_at, total, status, contact_name, user_id")
-        .eq("vendor_id", user.id)
+        .eq("vendor_id", businessUserId)
         .order("created_at", { ascending: false })
         .limit(8),
       supabase
         .from("users")
         .select("business_name, full_name, profile_photo_url")
-        .eq("id", user.id)
+        .eq("id", businessUserId)
         .maybeSingle(),
     ]);
 
@@ -209,14 +209,14 @@ export async function GET(request) {
       supabase
         .from("orders")
         .select("created_at, total")
-        .eq("vendor_id", user.id)
+        .eq("vendor_id", businessUserId)
         .in("status", SALES_STATUSES)
         .gte("created_at", compareFromStr)
         .lte("created_at", compareToStr),
       supabase
         .from("business_views")
         .select("viewed_at")
-        .eq("business_id", user.id)
+        .eq("business_id", businessUserId)
         .gte("viewed_at", compareFromStr)
         .lte("viewed_at", compareToStr),
     ]);
@@ -397,10 +397,15 @@ export async function GET(request) {
       recentOrders,
       categories,
       businessName:
+        access.effectiveProfile?.business_name ||
+        access.effectiveProfile?.full_name ||
         businessRes.data?.business_name ||
         businessRes.data?.full_name ||
         "YourBarrio",
-      businessAvatarUrl: businessRes.data?.profile_photo_url || null,
+      businessAvatarUrl:
+        access.effectiveProfile?.profile_photo_url ||
+        businessRes.data?.profile_photo_url ||
+        null,
     },
     { status: 200 }
   );

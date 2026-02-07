@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
 
 export async function GET(request) {
-  const supabase = await getSupabaseServerClient();
-  const { user, error: userError } = await getUserCached(supabase);
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await getBusinessDataClientForRequest();
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
+  const supabase = access.client;
+  const effectiveUserId = access.effectiveUserId;
 
   const { searchParams } = new URL(request.url);
   const listingId = searchParams.get("id");
@@ -17,7 +17,7 @@ export async function GET(request) {
       .from("listings")
       .select("*, category_info:business_categories(name,slug)")
       .eq("id", listingId)
-      .eq("business_id", user.id)
+      .eq("business_id", effectiveUserId)
       .maybeSingle();
 
     if (error) {
@@ -39,7 +39,7 @@ export async function GET(request) {
   const { data, error } = await supabase
     .from("listings")
     .select("*, category_info:business_categories(name,slug)")
-    .eq("business_id", user.id)
+    .eq("business_id", effectiveUserId)
     .order("created_at", { ascending: false });
 
   if (error) {

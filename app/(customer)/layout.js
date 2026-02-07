@@ -4,7 +4,7 @@ import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
-import { requireRole } from "@/lib/auth/server";
+import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import { PATHS } from "@/lib/auth/paths";
 import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
 
@@ -34,7 +34,13 @@ export default async function CustomerLayout({ children }) {
     !userAgent.includes("Edg") &&
     !userAgent.includes("OPR");
   const perfCookie = (await cookies()).get("yb-perf")?.value === "1";
-  const { user, profile } = await requireRole("customer");
+  const {
+    user,
+    profile,
+    effectiveProfile,
+    effectiveRole,
+    targetRole,
+  } = await requireEffectiveRole("customer");
 
   return (
     <>
@@ -62,7 +68,11 @@ export default async function CustomerLayout({ children }) {
           }}
         />
       ) : null}
-      <AuthSeed user={user} profile={profile} role="customer" />
+      <AuthSeed
+        user={user}
+        profile={effectiveProfile || profile}
+        role={targetRole || effectiveRole || "customer"}
+      />
       <AuthRedirectGuard redirectTo={PATHS.auth.customerLogin}>
         <Suspense fallback={null}>
           <GlobalHeader surface="customer" />

@@ -1,4 +1,4 @@
-import { getServerAuth } from "@/lib/auth/server";
+import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
 import BusinessAnnouncementsPreview from "@/components/publicBusinessProfile/BusinessAnnouncementsPreview";
@@ -195,12 +195,9 @@ async function fetchReviewRatings(supabase, businessId) {
 }
 
 export default async function BusinessPreviewPage() {
-  const { supabase, user } = await getServerAuth();
-  if (!user) {
-    throw new Error("Missing authenticated user for business preview.");
-  }
+  const { supabase, effectiveUserId } = await requireEffectiveRole("business");
 
-  const profile = await fetchProfile(supabase, user.id);
+  const profile = await fetchProfile(supabase, effectiveUserId);
 
   if (!profile) {
     return (
@@ -220,22 +217,22 @@ export default async function BusinessPreviewPage() {
 
   const [gallery, announcements, listings, reviews, reviewRatings] =
     await Promise.all([
-      fetchGallery(supabase, user.id),
-      fetchAnnouncements(supabase, user.id),
-      fetchListingsWithFallback(supabase, user.id, 24),
-      fetchReviews(supabase, user.id),
-      fetchReviewRatings(supabase, user.id),
+      fetchGallery(supabase, effectiveUserId),
+      fetchAnnouncements(supabase, effectiveUserId),
+      fetchListingsWithFallback(supabase, effectiveUserId, 24),
+      fetchReviews(supabase, effectiveUserId),
+      fetchReviewRatings(supabase, effectiveUserId),
     ]);
 
   const ratingSummary = buildRatingSummary(reviewRatings || []);
 
   return (
     <div className="pointer-events-none min-h-screen text-white -mt-20">
-      <PreviewAutoRefresh businessId={user.id} />
+      <PreviewAutoRefresh businessId={effectiveUserId} />
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}
-        publicPath={`/customer/b/${user.id}`}
+        publicPath={`/customer/b/${effectiveUserId}`}
       />
 
       <div className="mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8">
@@ -248,7 +245,7 @@ export default async function BusinessPreviewPage() {
         <BusinessListingsGrid listings={listings} className="rounded-none" />
         <ViewerContextEnhancer>
           <BusinessReviewsPanel
-            businessId={user.id}
+            businessId={effectiveUserId}
             initialReviews={reviews}
             ratingSummary={ratingSummary}
             reviewCount={ratingSummary?.count || reviews?.length || 0}

@@ -424,6 +424,10 @@ button {
   border-bottom: 1px solid var(--yb-navbar-border);
 }
 
+nav.theme-lock.yb-navbar {
+  top: var(--yb-support-mode-offset, 0px) !important;
+}
+
 .yb-navbar .text-white {
   color: var(--yb-navbar-fg) !important;
 }

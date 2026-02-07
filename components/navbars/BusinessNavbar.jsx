@@ -69,7 +69,7 @@ function NavItem({
   );
 }
 
-function BusinessNavbarInner({ pathname }) {
+function BusinessNavbarInner({ pathname, forcedAuth = null }) {
   const router = useRouter();
   const {
     user,
@@ -99,11 +99,15 @@ function BusinessNavbarInner({ pathname }) {
   const mobileDrawerId = useId();
   const accountTriggerRef = useRef(null);
   const notificationsRef = useRef(null);
+  const resolvedUser = forcedAuth?.user ?? user;
+  const resolvedProfile = forcedAuth?.profile ?? profile;
+  const resolvedRole = forcedAuth?.role ?? role;
+  const supportModeActive = Boolean(forcedAuth?.supportMode);
   const displayName =
-    profile?.business_name ||
-    profile?.full_name ||
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
+    resolvedProfile?.business_name ||
+    resolvedProfile?.full_name ||
+    resolvedUser?.user_metadata?.full_name ||
+    resolvedUser?.user_metadata?.name ||
     "Account";
 
   const badgeReady = !loadingUser;
@@ -129,7 +133,7 @@ function BusinessNavbarInner({ pathname }) {
   /* Load avatar */
   useEffect(() => {
     async function loadPhoto() {
-      if (!user || !supabase) {
+      if (!resolvedUser || !supabase) {
         setPhotoUrl(null);
         return;
       }
@@ -137,24 +141,24 @@ function BusinessNavbarInner({ pathname }) {
       const { data } = await supabase
         .from("users")
         .select("profile_photo_url")
-        .eq("id", user.id)
+        .eq("id", resolvedUser.id)
         .single();
 
       setPhotoUrl(data?.profile_photo_url ?? null);
     }
     loadPhoto();
-  }, [user, supabase]);
+  }, [resolvedUser, supabase]);
 
   const avatar = resolveImageSrc(
-    profile?.profile_photo_url?.trim() || photoUrl?.trim() || "",
+    resolvedProfile?.profile_photo_url?.trim() || photoUrl?.trim() || "",
     "/business-placeholder.png"
   );
 
   const isActive = (href) => pathname === href;
   const email =
-    profile?.email ||
-    user?.email ||
-    user?.user_metadata?.email ||
+    resolvedProfile?.email ||
+    resolvedUser?.email ||
+    resolvedUser?.user_metadata?.email ||
     null;
 
   const handleBusinessAuthClick = (event, path) => {
@@ -233,9 +237,12 @@ function BusinessNavbarInner({ pathname }) {
   ];
 
   const canLoadUnread =
-    Boolean(user?.id) && role === "business" && authStatus !== "unauthenticated";
+    !supportModeActive &&
+    Boolean(resolvedUser?.id) &&
+    resolvedRole === "business" &&
+    authStatus !== "unauthenticated";
   const loadUnreadCount = useCallback(async () => {
-    const userId = user?.id;
+    const userId = resolvedUser?.id;
     if (!userId || !canLoadUnread) return;
     try {
       const total = await fetchUnreadTotal({
@@ -247,7 +254,7 @@ function BusinessNavbarInner({ pathname }) {
     } catch (err) {
       console.warn("Failed to load unread messages", err);
     }
-  }, [supabase, user?.id, canLoadUnread]);
+  }, [supabase, resolvedUser?.id, canLoadUnread]);
 
   useEffect(() => {
     if (!badgeReady || !canLoadUnread) return;
@@ -259,20 +266,20 @@ function BusinessNavbarInner({ pathname }) {
   const buildUnreadChannel = useCallback(
     (activeClient) =>
       activeClient
-        .channel(`business-unread-${user?.id}`)
+        .channel(`business-unread-${resolvedUser?.id}`)
         .on(
           "postgres_changes",
           {
             event: "*",
             schema: "public",
             table: "conversations",
-            filter: `business_id=eq.${user?.id}`,
+            filter: `business_id=eq.${resolvedUser?.id}`,
           },
           () => {
             loadUnreadCount();
           }
         ),
-    [user?.id, loadUnreadCount]
+    [resolvedUser?.id, loadUnreadCount]
   );
 
   useRealtimeChannel({
@@ -280,8 +287,8 @@ function BusinessNavbarInner({ pathname }) {
     enabled:
       badgeReady &&
       authStatus === "authenticated" &&
-      role === "business" &&
-      Boolean(user?.id),
+      resolvedRole === "business" &&
+      Boolean(resolvedUser?.id),
     buildChannel: buildUnreadChannel,
     diagLabel: "business-unread",
   });
@@ -296,71 +303,71 @@ function BusinessNavbarInner({ pathname }) {
   }, [loadUnreadCount]);
 
   const loadNotificationCount = useCallback(async () => {
-    if (!supabase || !user?.id || role !== "business") return;
+    if (!supabase || !resolvedUser?.id || resolvedRole !== "business") return;
     const { count } = await supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
-      .eq("recipient_user_id", user.id)
+      .eq("recipient_user_id", resolvedUser.id)
       .is("read_at", null);
     setNotificationUnreadCount(count || 0);
-  }, [supabase, user?.id, role]);
+  }, [supabase, resolvedUser?.id, resolvedRole]);
 
   const loadNotifications = useCallback(async () => {
-    if (!supabase || !user?.id || role !== "business") return;
+    if (!supabase || !resolvedUser?.id || resolvedRole !== "business") return;
     setNotificationsLoading(true);
     try {
       const { data } = await supabase
         .from("notifications")
         .select("id,title,body,created_at,read_at,order_id")
-        .eq("recipient_user_id", user.id)
+        .eq("recipient_user_id", resolvedUser.id)
         .order("created_at", { ascending: false })
         .limit(8);
       setNotifications(data || []);
     } finally {
       setNotificationsLoading(false);
     }
-  }, [supabase, user?.id, role]);
+  }, [supabase, resolvedUser?.id, resolvedRole]);
 
   const markNotificationRead = useCallback(
     async (notificationId) => {
-      if (!supabase || !user?.id) return;
+      if (!supabase || !resolvedUser?.id) return;
       await supabase
         .from("notifications")
         .update({ read_at: new Date().toISOString() })
         .eq("id", notificationId)
-        .eq("recipient_user_id", user.id);
+        .eq("recipient_user_id", resolvedUser.id);
       loadNotificationCount();
       loadNotifications();
     },
-    [supabase, user?.id, loadNotificationCount, loadNotifications]
+    [supabase, resolvedUser?.id, loadNotificationCount, loadNotifications]
   );
 
   useEffect(() => {
-    if (!badgeReady || role !== "business") return;
+    if (!badgeReady || resolvedRole !== "business") return;
     queueMicrotask(() => {
       loadNotificationCount();
       loadNotifications();
     });
-  }, [badgeReady, role, loadNotificationCount, loadNotifications]);
+  }, [badgeReady, resolvedRole, loadNotificationCount, loadNotifications]);
 
   const buildNotificationsChannel = useCallback(
     (activeClient) =>
       activeClient
-        .channel(`business-notifications-${user?.id}`)
+        .channel(`business-notifications-${resolvedUser?.id}`)
         .on(
           "postgres_changes",
           {
             event: "*",
             schema: "public",
             table: "notifications",
-            filter: `recipient_user_id=eq.${user?.id}`,
+            filter: `recipient_user_id=eq.${resolvedUser?.id}`,
           },
           () => {
             loadNotificationCount();
             loadNotifications();
           }
         ),
-    [user?.id, loadNotificationCount, loadNotifications]
+    [resolvedUser?.id, loadNotificationCount, loadNotifications]
   );
 
   useRealtimeChannel({
@@ -368,8 +375,8 @@ function BusinessNavbarInner({ pathname }) {
     enabled:
       badgeReady &&
       authStatus === "authenticated" &&
-      role === "business" &&
-      Boolean(user?.id),
+      resolvedRole === "business" &&
+      Boolean(resolvedUser?.id),
     buildChannel: buildNotificationsChannel,
     diagLabel: "business-notifications",
   });
@@ -379,11 +386,11 @@ function BusinessNavbarInner({ pathname }) {
     if (authBusy && lastAuthEvent !== "SIGNED_OUT") {
       reasons.push("authBusy");
     }
-    if (loadingUser && !user && lastAuthEvent !== "SIGNED_OUT") {
+    if (loadingUser && !resolvedUser && lastAuthEvent !== "SIGNED_OUT") {
       reasons.push("loadingUser");
     }
     return reasons;
-  }, [authBusy, lastAuthEvent, loadingUser, user]);
+  }, [authBusy, lastAuthEvent, loadingUser, resolvedUser]);
   const disableCtas = disableReasons.length > 0;
 
   useEffect(() => {
@@ -391,7 +398,7 @@ function BusinessNavbarInner({ pathname }) {
     console.log("[AUTH_DIAG] cta:BusinessNavbar", {
       providerInstanceId,
       authStatus,
-      hasAuth: Boolean(user),
+      hasAuth: Boolean(resolvedUser),
       authBusy,
       authAction,
       authAttemptId,
@@ -443,7 +450,7 @@ function BusinessNavbarInner({ pathname }) {
 
     const diagDisableReasons = [
       authBusy ? "authBusy" : null,
-      loadingUser && !user ? "loadingUser" : null,
+      loadingUser && !resolvedUser ? "loadingUser" : null,
       authStatus === "loading" ? "authStatus=loading" : null,
       accountSidebarOpen ? "accountSidebarOpen" : null,
       mobileMenuOpen ? "mobileMenuOpen" : null,
@@ -456,7 +463,7 @@ function BusinessNavbarInner({ pathname }) {
     console.log("[AUTH_DIAG] cta:BusinessNavbar:render", {
       providerInstanceId,
       authStatus,
-      hasAuth: Boolean(user),
+      hasAuth: Boolean(resolvedUser),
       authBusy,
       authAction,
       authAttemptId,
@@ -592,7 +599,7 @@ function BusinessNavbarInner({ pathname }) {
     };
   }, [authDiagEnabled, disableCtas]);
 
-  const isBusinessAuthed = Boolean(user) && role === "business";
+  const isBusinessAuthed = Boolean(resolvedUser) && resolvedRole === "business";
 
   /* ---------------------------------------------------
      NAVBAR
@@ -621,7 +628,7 @@ function BusinessNavbarInner({ pathname }) {
             </svg>
           </button>
 
-          <Link href={user ? "/business/dashboard" : "/business"}>
+          <Link href={isBusinessAuthed ? "/business/dashboard" : "/business"}>
             <span className="relative block h-32 w-32">
               <Image
                 src="/logo.png"
@@ -644,7 +651,7 @@ function BusinessNavbarInner({ pathname }) {
         <div className="hidden md:flex items-center gap-10">
           {/* Logo */}
           <div className="relative flex items-center">
-            <Link href={user ? "/business/dashboard" : "/business"}>
+            <Link href={isBusinessAuthed ? "/business/dashboard" : "/business"}>
               <span className="relative block h-32 w-32">
                 <Image
                   src="/logo.png"
@@ -759,12 +766,12 @@ function BusinessNavbarInner({ pathname }) {
                                 const ids = notifications
                                   .filter((item) => !item.read_at)
                                   .map((item) => item.id);
-                                if (!supabase || !user?.id || ids.length === 0) return;
+                                if (!supabase || !resolvedUser?.id || ids.length === 0) return;
                                 await supabase
                                   .from("notifications")
                                   .update({ read_at: new Date().toISOString() })
                                   .in("id", ids)
-                                  .eq("recipient_user_id", user.id);
+                                  .eq("recipient_user_id", resolvedUser.id);
                                 loadNotificationCount();
                                 loadNotifications();
                               }}
@@ -776,11 +783,11 @@ function BusinessNavbarInner({ pathname }) {
                           <button
                             type="button"
                             onClick={async () => {
-                              if (!supabase || !user?.id || notifications.length === 0) return;
+                              if (!supabase || !resolvedUser?.id || notifications.length === 0) return;
                               await supabase
                                 .from("notifications")
                                 .delete()
-                                .eq("recipient_user_id", user.id);
+                                .eq("recipient_user_id", resolvedUser.id);
                               setNotifications([]);
                               setNotificationUnreadCount(0);
                             }}
@@ -989,7 +996,7 @@ function BusinessNavbarInner({ pathname }) {
   );
 }
 
-export default function BusinessNavbar() {
+export default function BusinessNavbar({ forcedAuth = null }) {
   const pathname = usePathname();
-  return <BusinessNavbarInner key={pathname} pathname={pathname} />;
+  return <BusinessNavbarInner key={pathname} pathname={pathname} forcedAuth={forcedAuth} />;
 }

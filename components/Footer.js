@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useModal } from "./modals/ModalProvider";
 import { useAuth } from "./AuthProvider";
 
 export default function Footer({ className = "" }) {
+  const pathname = usePathname();
   const { openModal } = useModal();
   const { user, profile, role } = useAuth();
+  const isAdminRoute = pathname?.startsWith("/admin");
 
   const resolvedRole = role || user?.app_metadata?.role || profile?.role;
   const aboutHref =
@@ -19,7 +22,7 @@ export default function Footer({ className = "" }) {
   return (
     <footer
       className={`bg-white border-t border-slate-200 py-10 theme-lock w-full ${
-        className || "mt-20"
+        className || (isAdminRoute ? "mt-0" : "mt-20")
       }`}
     >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">

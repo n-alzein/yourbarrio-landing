@@ -1,5 +1,5 @@
 import BusinessProfilePage from "@/components/business/profile/BusinessProfilePage";
-import { getServerAuth } from "@/lib/auth/server";
+import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 
 async function safeQuery(promise, fallback, label) {
   try {
@@ -68,48 +68,45 @@ function buildRatingSummary(rows) {
 }
 
 export default async function BusinessProfileRoute() {
-  const { supabase, user } = await getServerAuth();
-  if (!user) {
-    throw new Error("Missing authenticated user for business profile.");
-  }
+  const { supabase, effectiveUserId } = await requireEffectiveRole("business");
 
   const profileQuery = supabase
     .from("users")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", effectiveUserId)
     .maybeSingle();
 
   const galleryQuery = supabase
     .from("business_gallery_photos")
     .select("id, business_id, photo_url, caption, sort_order, created_at")
-    .eq("business_id", user.id)
+    .eq("business_id", effectiveUserId)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
 
   const reviewRatingQuery = supabase
     .from("business_reviews")
     .select("rating")
-    .eq("business_id", user.id);
+    .eq("business_id", effectiveUserId);
 
   const listingsQuery = supabase
     .from("listings")
     .select(
       "id, business_id, title, price, category, category_id, category_info:business_categories(name,slug), photo_url, created_at"
     )
-    .eq("business_id", user.id)
+    .eq("business_id", effectiveUserId)
     .order("created_at", { ascending: false });
 
   const announcementsQuery = supabase
     .from("business_announcements")
     .select("id, business_id, title, body, is_published, starts_at, ends_at, created_at")
-    .eq("business_id", user.id)
+    .eq("business_id", effectiveUserId)
     .order("created_at", { ascending: false });
 
   const [profileResult, galleryResult, reviewListResult, reviewRatingsResult, listingsResult, announcementsResult] =
     await Promise.all([
       safeQuery(profileQuery, null, "profile"),
       safeQuery(galleryQuery, [], "gallery"),
-      fetchReviewList(supabase, user.id),
+      fetchReviewList(supabase, effectiveUserId),
       safeQuery(reviewRatingQuery, [], "review ratings"),
       safeQuery(listingsQuery, [], "listings"),
       safeQuery(announcementsQuery, [], "announcements"),
@@ -133,14 +130,14 @@ export default async function BusinessProfileRoute() {
     profile_photo_url: rawProfile.profile_photo_url,
     cover_photo_url: rawProfile.cover_photo_url,
   } : null) || {
-    id: user.id,
-    business_name: user.user_metadata?.full_name || "",
-    full_name: user.user_metadata?.full_name || "",
+    id: effectiveUserId,
+    business_name: "",
+    full_name: "",
     category: "",
     description: "",
     website: "",
     phone: "",
-    email: user.email || "",
+    email: "",
     address: "",
     city: "",
     hours_json: null,

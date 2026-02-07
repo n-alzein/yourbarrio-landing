@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
 import { fetchConversationById, fetchConversations } from "@/lib/messages";
 
 export async function GET(request) {
-  const supabase = await getSupabaseServerClient();
-  const { user, error: userError } = await getUserCached(supabase);
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await getBusinessDataClientForRequest();
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
+  const supabase = access.client;
+  const effectiveUserId = access.effectiveUserId;
 
   const { searchParams } = new URL(request.url);
   const conversationId = searchParams.get("conversationId");
@@ -24,7 +24,7 @@ export async function GET(request) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
-      if (conversation.business_id !== user.id) {
+      if (conversation.business_id !== effectiveUserId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 
@@ -35,7 +35,7 @@ export async function GET(request) {
 
     const conversations = await fetchConversations({
       supabase,
-      userId: user.id,
+      userId: effectiveUserId,
       role: "business",
     });
     const response = NextResponse.json({ conversations }, { status: 200 });

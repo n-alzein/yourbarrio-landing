@@ -25,7 +25,10 @@ export default function AppShell({ children }) {
   const flushFooterOnHome = pathname === "/" || pathname === "/customer/home";
 
   return (
-    <div className="app-shell-root relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col pt-20">
+    <div
+      className="app-shell-root relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col"
+      style={{ paddingTop: "calc(5rem + var(--yb-support-mode-offset, 0px))" }}
+    >
       <CrashLoggerClient />
       <WebVitalsReporter />
       <ScrollToTop />

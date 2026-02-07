@@ -40,6 +40,7 @@ export default async function AdminImpersonationPage({
         <h3 className="mb-2 text-sm font-semibold text-neutral-300">Stop by session id (optional)</h3>
         <div className="flex flex-wrap gap-2">
           <input name="sessionId" placeholder="session_id (optional, defaults to cookie session)" className="min-w-80 rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm" />
+          <input type="hidden" name="returnTo" value="/admin/impersonation" />
           <button type="submit" className="rounded bg-neutral-100 px-3 py-2 text-sm font-medium text-black hover:bg-neutral-300">
             Stop support mode
           </button>
@@ -80,6 +81,7 @@ export default async function AdminImpersonationPage({
                       {isOwner && isActive ? (
                         <form action={stopImpersonationAction}>
                           <input type="hidden" name="sessionId" value={session.id} />
+                          <input type="hidden" name="returnTo" value="/admin/impersonation" />
                           <button type="submit" className="rounded border border-neutral-700 px-2 py-1 text-xs hover:border-neutral-500">
                             Stop
                           </button>

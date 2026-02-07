@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
+import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
 import { getLowStockThreshold } from "@/lib/inventory";
 
 const STATUS_TABS = {
@@ -132,63 +132,13 @@ async function getOrCreateConversationId(client, customerId, businessId) {
   return upserted?.id || null;
 }
 
-async function getProfile(supabase, userId) {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id,role,business_name,full_name")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
-}
-
-async function ensureVendorMember(supabase, vendorId, userId) {
-  if (!vendorId || !userId) return;
-  const { data: existing } = await supabase
-    .from("vendor_members")
-    .select("id")
-    .eq("vendor_id", vendorId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (existing?.id) return;
-
-  const { error } = await supabase.from("vendor_members").insert({
-    vendor_id: vendorId,
-    user_id: userId,
-    role: "owner",
-  });
-
-  if (error && error.code !== "23505") {
-    throw error;
-  }
-}
-
 export async function GET(request) {
-  const supabase = await getSupabaseServerClient();
-  const { user, error: userError } = await getUserCached(supabase);
-
-  if (userError || !user) {
-    return jsonError("Unauthorized", 401);
+  const access = await getBusinessDataClientForRequest();
+  if (!access.ok) {
+    return jsonError(access.error, access.status);
   }
-
-  let profile;
-  try {
-    profile = await getProfile(supabase, user.id);
-  } catch (err) {
-    return jsonError(err?.message || "Failed to load profile", 500);
-  }
-
-  if (profile?.role !== "business") {
-    return jsonError("Forbidden", 403);
-  }
-
-  try {
-    await ensureVendorMember(supabase, profile.id, user.id);
-  } catch (err) {
-    return jsonError(err?.message || "Failed to verify membership", 500);
-  }
+  const supabase = access.client;
+  const effectiveUserId = access.effectiveUserId;
 
   const { searchParams } = new URL(request.url);
   const tab = searchParams.get("tab") || "new";
@@ -197,7 +147,7 @@ export async function GET(request) {
   const { data, error } = await supabase
     .from("orders")
     .select("*, order_items(*)")
-    .eq("vendor_id", profile.id)
+    .eq("vendor_id", effectiveUserId)
     .in("status", statusList)
     .order("created_at", { ascending: false });
 
@@ -209,24 +159,13 @@ export async function GET(request) {
 }
 
 export async function PATCH(request) {
-  const supabase = await getSupabaseServerClient();
+  const access = await getBusinessDataClientForRequest();
+  if (!access.ok) {
+    return jsonError(access.error, access.status);
+  }
+  const supabase = access.client;
+  const effectiveUserId = access.effectiveUserId;
   const serviceClient = getSupabaseServiceClient();
-  const { user, error: userError } = await getUserCached(supabase);
-
-  if (userError || !user) {
-    return jsonError("Unauthorized", 401);
-  }
-
-  let profile;
-  try {
-    profile = await getProfile(supabase, user.id);
-  } catch (err) {
-    return jsonError(err?.message || "Failed to load profile", 500);
-  }
-
-  if (profile?.role !== "business") {
-    return jsonError("Forbidden", 403);
-  }
 
   let body = {};
   try {
@@ -246,7 +185,7 @@ export async function PATCH(request) {
     .from("orders")
     .select("id, status, vendor_id, confirmed_at, fulfilled_at, cancelled_at")
     .eq("id", orderId)
-    .eq("vendor_id", profile.id)
+    .eq("vendor_id", effectiveUserId)
     .maybeSingle();
 
   if (existingOrderError) {
@@ -314,7 +253,7 @@ export async function PATCH(request) {
     try {
       await decrementInventoryForOrder({
         client: inventoryClient,
-        businessId: profile.id,
+        businessId: effectiveUserId,
         timestamp,
         items: orderItems,
       });
@@ -329,7 +268,7 @@ export async function PATCH(request) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", orderId)
-        .eq("vendor_id", profile.id);
+        .eq("vendor_id", effectiveUserId);
 
       return jsonError(
         inventoryError?.message || "Failed to update inventory",
@@ -345,7 +284,7 @@ export async function PATCH(request) {
       .from("notifications")
       .insert({
         recipient_user_id: data.user_id,
-        vendor_id: profile.id,
+        vendor_id: effectiveUserId,
         order_id: data.id,
         type: "order_status",
         title: `Order ${data.order_number} update`,
@@ -361,7 +300,7 @@ export async function PATCH(request) {
     const conversationId = await getOrCreateConversationId(
       notificationClient,
       data.user_id,
-      profile.id
+      effectiveUserId
     );
     if (!conversationId) {
       return jsonError("Failed to start conversation", 500);
@@ -371,7 +310,7 @@ export async function PATCH(request) {
       .from("messages")
       .insert({
         conversation_id: conversationId,
-        sender_id: profile.id,
+        sender_id: effectiveUserId,
         recipient_id: data.user_id,
         body: `Order ${data.order_number} update: Your order status is now ${statusLabel}.`,
       });

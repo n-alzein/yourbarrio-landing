@@ -3,7 +3,7 @@ import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
-import { requireRole } from "@/lib/auth/server";
+import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import { PATHS } from "@/lib/auth/paths";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +19,37 @@ function BusinessRouteShell({ children = null }) {
 }
 
 export default async function BusinessLayout({ children }) {
-  const { user, profile } = await requireRole("business");
+  const {
+    user,
+    authUser,
+    profile,
+    effectiveProfile,
+    effectiveUserId,
+    effectiveRole,
+    supportMode,
+    targetRole,
+  } = await requireEffectiveRole("business");
 
   return (
     <>
-      <AuthSeed user={user} profile={profile} role="business" />
+      <AuthSeed
+        user={user}
+        profile={effectiveProfile || profile}
+        role={targetRole || effectiveRole || "business"}
+      />
       <AuthRedirectGuard redirectTo={PATHS.auth.businessLogin}>
-        <BusinessNavbar requireAuth />
+        <BusinessNavbar
+          requireAuth
+          forcedAuth={{
+            supportMode,
+            role: targetRole || effectiveRole || "business",
+            user: {
+              ...(authUser || user || {}),
+              id: effectiveUserId || user?.id,
+            },
+            profile: effectiveProfile || profile || null,
+          }}
+        />
         <InactivityLogout />
         <BusinessRouteShell>
           <Suspense

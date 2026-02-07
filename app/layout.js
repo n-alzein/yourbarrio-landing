@@ -1,6 +1,7 @@
 // app/layout.js
 import "./globals.css";
 import "./safari-layer-budget.css";
+import GlobalSupportModeBanner from "@/components/admin/GlobalSupportModeBanner";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({ children }) {
         ))}
       </head>
       <body className="min-h-screen w-full overflow-x-hidden antialiased text-white">
+        <GlobalSupportModeBanner />
         <AppShell>{children}</AppShell>
       </body>
     </html>

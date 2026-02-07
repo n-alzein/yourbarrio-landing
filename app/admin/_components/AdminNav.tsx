@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminLogoutAction } from "@/app/admin/actions";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
@@ -22,6 +23,14 @@ export default function AdminNav() {
           {item.label}
         </Link>
       ))}
+      <form action={adminLogoutAction}>
+        <button
+          type="submit"
+          className="w-full rounded-md border border-red-900 bg-red-950 px-3 py-2 text-left text-sm text-red-100 hover:border-red-700"
+        >
+          Log out
+        </button>
+      </form>
     </nav>
   );
 }

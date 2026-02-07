@@ -11,13 +11,14 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   acknowledgeAuthTokenInvalid,
   getAuthGuardState,
   getSupabaseBrowserClient,
   clearSupabaseAuthStorage,
   getCookieName,
+  resetSupabaseClient,
   subscribeAuthGuard,
 } from "@/lib/supabase/browser";
 import {
@@ -727,6 +728,7 @@ export function AuthProvider({
   const parentAuth = useContext(AuthContext);
   const [isNestedProvider] = useState(() => Boolean(parentAuth?.providerInstanceId));
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const authDiagEnabledLocal = useMemo(
     () =>
       process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
@@ -857,6 +859,28 @@ export function AuthProvider({
     if (!pathname) return;
     emitAuthUiReset("route_change");
   }, [isNestedProvider, pathname]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (typeof window === "undefined") return;
+    const signedOut = searchParams?.get("signedout") === "1";
+    if (!signedOut) return;
+
+    clearVerifiedUserCache();
+    clearSupabaseAuthStorage();
+    clearSupabaseCookiesClient();
+    applySignedOutState("signedout_param", {
+      resetGuardState: true,
+      clearAuthSuppression: true,
+    });
+    resetSupabaseClient();
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("signedout");
+    const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+    window.history.replaceState({}, "", next);
+    router.refresh();
+  }, [isNestedProvider, router, searchParams]);
 
   useEffect(() => {
     if (isNestedProvider) return undefined;

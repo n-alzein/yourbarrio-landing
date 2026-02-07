@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import AdminNav from "@/app/admin/_components/AdminNav";
 import ImpersonationBanner from "@/app/admin/_components/ImpersonationBanner";
+import AdminNavbar from "@/components/nav/AdminNavbar";
 import { getEffectiveUserId } from "@/lib/admin/impersonation";
 import { isAdminDevAllowlistConfigured, requireAdmin } from "@/lib/admin/permissions";
 import { getRequestPath } from "@/lib/url/getRequestPath";
@@ -37,14 +38,15 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const showBypassBanner = isAdminBypassRlsEnabled();
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="mx-auto grid w-full max-w-7xl gap-4 p-4 md:grid-cols-[220px_1fr]">
+    <div className="yb-admin-shell min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
+      <AdminNavbar />
+      <div className="mx-auto grid w-full max-w-7xl flex-1 gap-4 p-4 md:grid-cols-[220px_1fr]">
         <aside className="space-y-3">
           <h1 className="text-lg font-semibold">YourBarrio Admin</h1>
           <p className="text-xs text-neutral-400">Signed in as {admin.user.email || admin.user.id}</p>
           <AdminNav />
         </aside>
-        <main className="space-y-4">
+        <main className="space-y-4 flex-1">
           {showAllowlistBanner ? (
             <div className="rounded-md border border-yellow-700 bg-yellow-950/70 px-3 py-2 text-sm text-yellow-100">
               Dev allowlist is active for this admin session. Do not use in production.
@@ -57,7 +59,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           ) : null}
           {activeImpersonation ? (
             <ImpersonationBanner
-              targetLabel={activeImpersonation.targetUserName || activeImpersonation.targetUserEmail || activeImpersonation.targetUserId}
+              targetLabel={
+                activeImpersonation.targetUserName ||
+                activeImpersonation.targetUserEmail ||
+                activeImpersonation.targetUserId
+              }
               sessionId={activeImpersonation.sessionId}
             />
           ) : null}
