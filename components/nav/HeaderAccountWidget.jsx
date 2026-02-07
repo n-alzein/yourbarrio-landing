@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, LogOut, MapPin, ShoppingCart } from "lucide-react";
+import { ChevronDown, LogOut, MapPin } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import { useModal } from "@/components/modals/ModalProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
+import CartNavActionClient from "@/components/nav/CartNavActionClient";
 import AccountMenuItems from "@/components/nav/AccountMenuItems";
 import AccountSidebar from "@/components/nav/AccountSidebar";
-import { useCart } from "@/components/cart/CartProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -40,7 +40,6 @@ export default function HeaderAccountWidget({
     lastAuthEvent,
     providerInstanceId,
   } = useAuth();
-  const { itemCount } = useCart();
   const { openModal } = useModal();
   const { location, setLocation } = useLocation();
   const authDiagEnabled =
@@ -729,22 +728,7 @@ export default function HeaderAccountWidget({
                 }`}
               />
             </button>
-            {hasAuth && isCustomer ? (
-              <Link
-                href="/cart"
-                onClick={() => onCloseMobileMenu?.()}
-                className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--yb-border)] bg-white transition hover:bg-black/5"
-                aria-label="View cart"
-                data-safe-nav="1"
-              >
-                <ShoppingCart className="h-5 w-5" />
-                {itemCount > 0 ? (
-                  <span className="absolute -top-2 -right-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
-                    {itemCount}
-                  </span>
-                ) : null}
-              </Link>
-            ) : null}
+            <CartNavActionClient variant="mobile" onNavigate={onCloseMobileMenu} />
           </div>
 
           {mobileLocationOpen ? (
