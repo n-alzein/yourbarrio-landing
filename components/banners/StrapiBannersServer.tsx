@@ -15,15 +15,17 @@ function isBannerLive(banner: any, now: Date) {
   return true;
 }
 
-export default async function StrapiBannersServer() {
-  let banners: any[] = [];
-  try {
-    banners = await fetchStrapiBanners();
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[StrapiBannersServer] failed to load banners:", error);
+export default async function StrapiBannersServer({ banners: preloadedBanners }: { banners?: any[] | null } = {}) {
+  let banners: any[] = Array.isArray(preloadedBanners) ? preloadedBanners : [];
+  if (!Array.isArray(preloadedBanners)) {
+    try {
+      banners = await fetchStrapiBanners();
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[StrapiBannersServer] failed to load banners:", error);
+      }
+      return null;
     }
-    return null;
   }
 
   const now = new Date();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useModal } from "./modals/ModalProvider";
 import { useAuth } from "./AuthProvider";
 
-export default function Footer() {
+export default function Footer({ className = "" }) {
   const { openModal } = useModal();
   const { user, profile, role } = useAuth();
 
@@ -17,7 +17,11 @@ export default function Footer() {
         : "/about";
 
   return (
-    <footer className="mt-20 bg-white border-t border-slate-200 py-10 theme-lock w-full">
+    <footer
+      className={`bg-white border-t border-slate-200 py-10 theme-lock w-full ${
+        className || "mt-20"
+      }`}
+    >
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div className="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 text-slate-700">
 

@@ -33,6 +33,7 @@ import { resolveCategoryIdByName } from "@/lib/categories";
 import { logDataDiag } from "@/lib/dataDiagnostics";
 import CategoryTilesGrid from "@/components/customer/CategoryTilesGrid";
 import { useLocation } from "@/components/location/LocationProvider";
+import FeedbackSection from "@/components/browse/FeedbackSection";
 
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 function HomeGuardFallback() {
@@ -113,7 +114,7 @@ class CustomerHomeErrorBoundary extends React.Component {
   }
 }
 
-function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) {
+function CustomerHomePageInner({ mode, featuredCategories, featuredCategoriesError, initialListings: _initialListings = [] }) {
   const searchParams = useSearchParams();
   const { user, loadingUser, supabase } = useAuth();
   const { theme, hydrated } = useTheme();
@@ -153,7 +154,8 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
   const [hybridItemsLoading, setHybridItemsLoading] = useState(false);
   const [hybridItemsError, setHybridItemsError] = useState(null);
   const hybridRequestIdRef = useRef(0);
-  const authReady = !loadingUser || !!user;
+  const isPublicMode = mode === "public";
+  const authReady = isPublicMode ? true : !loadingUser || !!user;
   const tileDragState = useRef({
     pointerId: null,
     pointerType: null,
@@ -511,7 +513,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
     };
   }, [search, supabase, logCrashEvent, categoryFilter, hasLocation, location.city]);
 
-  if (loadingUser && !user) {
+  if (!isPublicMode && loadingUser && !user) {
     return (
       <div className={`min-h-screen ${textTone.base} relative px-6 pt-3`}>
         <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -532,7 +534,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
 
   return (
     <section
-      className={`relative w-full min-h-screen ${textTone.base} pb-4 pt-0 md:pt-0 mt-0`}
+      className={`relative w-full min-h-screen ${textTone.base} pt-0 md:pt-0 mt-0`}
       data-clickdiag={clickDiagEnabled ? "home" : undefined}
     >
 
@@ -604,7 +606,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
                       return (
                       <a
                         key={item.id}
-                        href={`/customer/listings/${item.id}`}
+                        href={`${isPublicMode ? "/listings" : "/customer/listings"}/${item.id}`}
                         className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto touch-manipulation"
                         target="_self"
                         data-safe-nav="1"
@@ -688,7 +690,7 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
 
         {!search && (
           <div
-            className="relative z-10 mt-4 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-12"
+            className="relative z-10 mt-4 -mx-3 sm:-mx-4 md:-mx-6 lg:-mx-8"
             data-home-tiles="1"
           >
             <CategoryTilesGrid
@@ -708,25 +710,45 @@ function CustomerHomePageInner({ featuredCategories, featuredCategoriesError }) 
             />
           </div>
         )}
+
       </div>
+      <FeedbackSection mode={mode} className="mt-4" />
     </section>
   );
 }
 
-export default function CustomerHomeClient({ featuredCategories, featuredCategoriesError }) {
+export default function CustomerHomeClient({
+  mode = "customer",
+  featuredCategories,
+  featuredCategoriesError,
+  initialListings = [],
+}) {
   const safeNavFlag = process.env.NEXT_PUBLIC_HOME_BISECT_SAFE_NAV === "1";
+  const isPublicMode = mode === "public";
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
+  const pageContent = (
+    <>
+      <GuaranteedNavCapture />
+      <CustomerHomePageInner
+        mode={mode}
+        featuredCategories={featuredCategories}
+        featuredCategoriesError={featuredCategoriesError}
+        initialListings={initialListings}
+      />
+    </>
+  );
+
   return (
     <CustomerHomeErrorBoundary isLight={isLight}>
       {safeNavFlag ? <SafeNavFallback /> : null}
-      <HomeGuard fallback={<HomeGuardFallback />}>
-        <GuaranteedNavCapture />
-        <CustomerHomePageInner
-          featuredCategories={featuredCategories}
-          featuredCategoriesError={featuredCategoriesError}
-        />
-      </HomeGuard>
+      {isPublicMode ? (
+        pageContent
+      ) : (
+        <HomeGuard fallback={<HomeGuardFallback />}>
+          {pageContent}
+        </HomeGuard>
+      )}
     </CustomerHomeErrorBoundary>
   );
 }

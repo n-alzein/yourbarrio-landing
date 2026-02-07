@@ -36,12 +36,12 @@ export default function BaseModal({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-8"
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4 py-8 bg-transparent"
       data-allow-overlay="1"
       role="presentation"
       onClick={handleBackdropClick}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/60" />
 
       <div
         ref={contentRef}
@@ -49,41 +49,45 @@ export default function BaseModal({
         aria-modal="true"
         aria-label={title}
         className="
-          relative w-full max-w-lg
-          rounded-2xl border border-slate-200
-          bg-white text-slate-900
-          shadow-[0_25px_80px_-12px_rgba(0,0,0,0.25)]
-          overflow-hidden
+          relative z-10 w-full max-w-lg bg-transparent text-slate-900
           max-h-[80vh]
         "
         onClick={handleContentClick}
       >
-        <div className="relative p-6 flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            {title ? (
-              <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-                {title}
-              </h2>
-            ) : null}
-            {description ? (
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {description}
-              </p>
-            ) : null}
+        <div
+          className="
+            rounded-2xl border border-slate-200
+            bg-white shadow-[0_25px_80px_-12px_rgba(0,0,0,0.25)]
+            overflow-hidden
+          "
+        >
+          <div className="relative p-6 flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              {title ? (
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+                  {title}
+                </h2>
+              ) : null}
+              {description ? (
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {description}
+                </p>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-95"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-95"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="relative px-6 pb-6 overflow-y-auto">
-          {children}
+          <div className="relative px-6 pb-6 overflow-y-auto">
+            {children}
+          </div>
         </div>
       </div>
     </div>

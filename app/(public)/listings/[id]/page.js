@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -61,6 +61,28 @@ export default function ListingDetails({ params }) {
   const [heroSrc, setHeroSrc] = useState("/business-placeholder.png");
   const [cartToast, setCartToast] = useState(null);
   const toastTimerRef = useRef(null);
+  const loginHref = useMemo(() => {
+    const currentPath =
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}`
+        : pathname || "/";
+    return `/?modal=customer-login&next=${encodeURIComponent(currentPath || "/")}`;
+  }, [pathname]);
+
+  const requireAuth = useCallback(
+    (actionName, setMessage) => {
+      if (user?.id) return true;
+      const message = actionName
+        ? `Log in to ${actionName}.`
+        : "Please log in to continue.";
+      if (typeof setMessage === "function") {
+        setMessage(message);
+      }
+      router.push(loginHref);
+      return false;
+    },
+    [user?.id, router, loginHref]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -168,6 +190,7 @@ export default function ListingDetails({ params }) {
 
   const handleToggleSave = async () => {
     if (!id) return;
+    if (!requireAuth("save listings", setStatusMessage)) return;
     setSaveLoading(true);
     setStatusMessage("");
     try {
@@ -202,6 +225,7 @@ export default function ListingDetails({ params }) {
       setMessageStatus("Business info unavailable.");
       return;
     }
+    if (!requireAuth("message businesses", setMessageStatus)) return;
 
     setMessageLoading(true);
     setMessageStatus("");
@@ -257,6 +281,7 @@ export default function ListingDetails({ params }) {
 
   const handleAddToCart = async () => {
     if (!listing?.id) return;
+    if (!requireAuth("place orders", setStatusMessage)) return;
     setStatusMessage("");
 
     const attemptAdd = async (options = {}) =>

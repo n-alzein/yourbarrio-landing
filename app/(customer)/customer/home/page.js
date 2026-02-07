@@ -1,28 +1,24 @@
-import StrapiBannersServer from "@/components/banners/StrapiBannersServer";
-import { fetchFeaturedCategories } from "@/lib/strapi";
-import CustomerHomeClient from "./CustomerHomeClient";
+import HomeBrowse from "@/components/browse/HomeBrowse";
+import { getHomeBrowseData } from "@/lib/browse/getHomeBrowseData";
 
 export const revalidate = 300;
 
-export default async function CustomerHomePage() {
-  let featuredCategories = [];
-  let featuredCategoriesError = null;
-  try {
-    featuredCategories = await fetchFeaturedCategories();
-  } catch (error) {
-    console.error("Failed to load featured categories:", error);
-    featuredCategoriesError = "We couldn't load categories right now.";
-  }
+function toSearchParamsObject(value) {
+  if (!value) return {};
+  if (typeof value.then === "function") return value;
+  return value;
+}
 
-  return (
-    <>
-      <div className="mt-0 md:-mt-12 mb-6 md:mb-8 relative z-10">
-        <StrapiBannersServer />
-      </div>
-      <CustomerHomeClient
-        featuredCategories={featuredCategories}
-        featuredCategoriesError={featuredCategoriesError}
-      />
-    </>
-  );
+export default async function CustomerHomePage({ searchParams }) {
+  const resolvedSearchParams = await toSearchParamsObject(searchParams);
+  const city = resolvedSearchParams?.city || null;
+  const zip = resolvedSearchParams?.zip || null;
+
+  const initialData = await getHomeBrowseData({
+    mode: "customer",
+    city,
+    zip,
+  });
+
+  return <HomeBrowse mode="customer" initialData={initialData} />;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { usePathname } from "next/navigation";
 import Footer from "@/components/Footer";
 import ModalMount from "@/components/modals/ModalMount";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -20,6 +21,9 @@ import { LocationProvider } from "@/components/location/LocationProvider";
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 
 export default function AppShell({ children }) {
+  const pathname = usePathname();
+  const flushFooterOnHome = pathname === "/" || pathname === "/customer/home";
+
   return (
     <div className="app-shell-root relative min-h-screen overflow-x-hidden w-full antialiased text-white flex flex-col pt-20">
       <CrashLoggerClient />
@@ -52,7 +56,7 @@ export default function AppShell({ children }) {
                 <CartProvider>
                   <ModalMount>
                     <main className="flex-1 w-full min-h-screen">{children}</main>
-                    <Footer />
+                    <Footer className={flushFooterOnHome ? "mt-0 border-t-0" : undefined} />
                   </ModalMount>
                 </CartProvider>
               </RealtimeProvider>
