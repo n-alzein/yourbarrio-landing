@@ -21,6 +21,11 @@ type AdminContext = {
   strictPermissionBypassUsed: boolean;
 };
 
+type RequireAdminOptions = {
+  unauthenticatedRedirectTo?: string;
+  unauthorizedRedirectTo?: string;
+};
+
 const ROLE_ORDER: Record<AdminRole, number> = {
   admin_readonly: 10,
   admin_support: 20,
@@ -97,12 +102,13 @@ export function isAdminDevAllowlistConfigured() {
   return parseDevAllowEmails().length > 0;
 }
 
-export async function requireAdmin(): Promise<AdminContext> {
+export async function requireAdmin(options: RequireAdminOptions = {}): Promise<AdminContext> {
+  const { unauthenticatedRedirectTo = "/", unauthorizedRedirectTo = "/" } = options;
   const supabase = await getSupabaseServerClient();
-  if (!supabase) redirect("/");
+  if (!supabase) redirect(unauthenticatedRedirectTo);
 
   const { user } = await getUserCached(supabase);
-  if (!user) redirect("/");
+  if (!user) redirect(unauthenticatedRedirectTo);
 
   const email = String(user.email || "").toLowerCase();
   const devAllowlistUsed = parseDevAllowEmails().includes(email);
@@ -120,7 +126,7 @@ export async function requireAdmin(): Promise<AdminContext> {
     resolvedRoles.push("admin_readonly");
   }
 
-  if (!isAdmin) redirect("/");
+  if (!isAdmin) redirect(unauthorizedRedirectTo);
 
   return {
     supabase,

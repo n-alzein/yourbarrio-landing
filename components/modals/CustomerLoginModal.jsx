@@ -10,7 +10,7 @@ import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { withTimeout } from "@/lib/withTimeout";
 import { resolvePostLoginTarget } from "@/lib/auth/redirects";
 
-export default function CustomerLoginModal({ onClose }) {
+export default function CustomerLoginModal({ onClose, next: nextFromModalProps = null }) {
   const {
     supabase,
     loadingUser,
@@ -57,6 +57,9 @@ export default function CustomerLoginModal({ onClose }) {
   }, []);
 
   const getNextParam = useCallback(() => {
+    if (typeof nextFromModalProps === "string" && nextFromModalProps.trim()) {
+      return nextFromModalProps.trim();
+    }
     if (typeof window === "undefined") return null;
     const params =
       searchParams ?? new URLSearchParams(window.location.search || "");
@@ -73,14 +76,16 @@ export default function CustomerLoginModal({ onClose }) {
       }
     }
     return null;
-  }, [searchParams]);
+  }, [nextFromModalProps, searchParams]);
 
   const resolveLoginTarget = useCallback(
-    (roleOverride) => {
-      const origin =
-        typeof window !== "undefined" ? window.location.origin : null;
+    (profileOverride, roleOverride) => {
       const next = getNextParam();
-      return resolvePostLoginTarget({ role: roleOverride, next, origin });
+      return resolvePostLoginTarget({
+        profile: profileOverride || null,
+        role: roleOverride || null,
+        next,
+      });
     },
     [getNextParam]
   );
@@ -103,7 +108,10 @@ export default function CustomerLoginModal({ onClose }) {
       attemptIdRef.current = 0;
     }
     setLoading(false);
-    const target = resolveLoginTarget(role);
+    const target = resolveLoginTarget(
+      { role, is_internal: role === "internal" },
+      role
+    );
     onClose?.();
     router.replace(target);
     router.refresh();
@@ -197,7 +205,7 @@ export default function CustomerLoginModal({ onClose }) {
 
       const profileStart = typeof performance !== "undefined" ? performance.now() : Date.now();
       const profileResult = await withTimeout(
-        client.from("users").select("role").eq("id", user.id).maybeSingle(),
+        client.from("users").select("role,is_internal").eq("id", user.id).maybeSingle(),
         profileTimeoutMs,
         `Profile request timed out after ${Math.round(profileTimeoutMs / 1000)}s`
       );
@@ -222,7 +230,7 @@ export default function CustomerLoginModal({ onClose }) {
         return;
       }
 
-      const dest = resolveLoginTarget(profile?.role);
+      const dest = resolveLoginTarget(profile, profile?.role);
 
       onClose?.();
 

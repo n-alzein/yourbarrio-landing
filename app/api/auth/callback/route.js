@@ -37,7 +37,7 @@ export async function GET(request) {
 
     const { data: profile } = await supabase
       .from("users")
-      .select("role")
+      .select("role,is_internal")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -46,9 +46,9 @@ export async function GET(request) {
       .map((key) => requestUrl.searchParams.get(key))
       .find(Boolean);
     const target = resolvePostLoginTarget({
+      profile: profile || null,
       role,
       next: nextParam,
-      origin: requestUrl.origin,
     });
     response.headers.set("location", new URL(target, request.url).toString());
     return response;

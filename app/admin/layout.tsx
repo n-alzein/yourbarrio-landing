@@ -3,10 +3,16 @@ import AdminNav from "@/app/admin/_components/AdminNav";
 import ImpersonationBanner from "@/app/admin/_components/ImpersonationBanner";
 import { getEffectiveUserId } from "@/lib/admin/impersonation";
 import { isAdminDevAllowlistConfigured, requireAdmin } from "@/lib/admin/permissions";
+import { getRequestPath } from "@/lib/url/getRequestPath";
 import { isAdminBypassRlsEnabled } from "@/lib/supabase/admin";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const admin = await requireAdmin();
+  const requestPath = await getRequestPath("/admin");
+  const signInRedirect = `/signin?modal=signin&next=${encodeURIComponent(requestPath)}`;
+  const admin = await requireAdmin({
+    unauthenticatedRedirectTo: signInRedirect,
+    unauthorizedRedirectTo: "/not-authorized",
+  });
   const { activeImpersonation } = await getEffectiveUserId();
   const showAllowlistBanner = admin.devAllowlistUsed && isAdminDevAllowlistConfigured();
   const showBypassBanner = isAdminBypassRlsEnabled();

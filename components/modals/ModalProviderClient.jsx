@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import CustomerLoginModal from "./CustomerLoginModal";
 import CustomerSignupModal from "./CustomerSignupModal";
+import ModalRouterClient from "@/components/auth/ModalRouterClient";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
 const ModalContext = createContext(null);
@@ -20,6 +21,19 @@ const MODAL_COMPONENTS = {
   "customer-login": CustomerLoginModal,
   "customer-signup": CustomerSignupModal,
 };
+
+const MODAL_ALIASES = {
+  signin: "customer-login",
+  login: "customer-login",
+  signup: "customer-signup",
+};
+
+function resolveModalType(type) {
+  if (!type || typeof type !== "string") return null;
+  const normalized = type.trim().toLowerCase();
+  if (!normalized) return null;
+  return MODAL_ALIASES[normalized] || normalized;
+}
 
 function getModalRoot() {
   if (typeof document === "undefined") return null;
@@ -41,25 +55,10 @@ export default function ModalProviderClient({ children }) {
   }, []);
 
   const openModal = useCallback((type, props = {}) => {
-    if (!MODAL_COMPONENTS[type]) return;
-    setModal({ type, props });
+    const resolvedType = resolveModalType(type);
+    if (!resolvedType || !MODAL_COMPONENTS[resolvedType]) return;
+    setModal({ type: resolvedType, props });
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const modalParam = params.get("modal");
-    if (!modalParam || !MODAL_COMPONENTS[modalParam]) return;
-
-    queueMicrotask(() => {
-      openModal(modalParam);
-    });
-
-    params.delete("modal");
-    const nextSearch = params.toString();
-    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
-    window.history.replaceState({}, "", nextUrl);
-  }, [openModal]);
 
   useEffect(() => {
     if (!modal.type) return undefined;
@@ -103,6 +102,9 @@ export default function ModalProviderClient({ children }) {
   const ModalComponent = modal.type ? MODAL_COMPONENTS[modal.type] : null;
   return (
     <ModalContext.Provider value={value}>
+      <Suspense fallback={null}>
+        <ModalRouterClient openModal={openModal} />
+      </Suspense>
       {children}
       {ModalComponent && modalRoot
         ? createPortal(
