@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AdminFlash from "@/app/admin/_components/AdminFlash";
+import { fetchAdminUsers } from "@/lib/admin/users";
 import { requireAdminRole } from "@/lib/admin/permissions";
 import { getAdminDataClient } from "@/lib/supabase/admin";
 
@@ -7,6 +8,12 @@ const PAGE_SIZE = 20;
 
 function asString(value: string | string[] | undefined, fallback = "") {
   return typeof value === "string" ? value : fallback;
+}
+
+function displayRole(value: string | null | undefined) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "user") return "customer";
+  return normalized;
 }
 
 export default async function AdminUsersPage({
@@ -26,29 +33,39 @@ export default async function AdminUsersPage({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const { client } = await getAdminDataClient();
-  let query = client
-    .from("users")
-    .select(
-      "id, email, full_name, phone, business_name, role, is_internal, city, created_at",
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false });
-
-  if (q) {
-    query = query.or(
-      `full_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,business_name.ilike.%${q}%`
-    );
+  const { client, usingServiceRole } = await getAdminDataClient({ mode: "service" });
+  const includeInternal =
+    isInternal === "true" ? true : isInternal === "false" ? false : undefined;
+  const roleFilter = role === "customer" || role === "business" ? role : "all";
+  const effectiveIncludeInternal =
+    includeInternal === undefined && roleFilter === "customer" ? false : includeInternal;
+  const { rows, count, diag } = await fetchAdminUsers({
+    client,
+    role: roleFilter,
+    includeInternal: effectiveIncludeInternal,
+    q,
+    city,
+    createdFrom,
+    createdTo,
+    from,
+    to,
+  });
+  const diagEnabled =
+    String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1" ||
+    String(process.env.AUTH_GUARD_DIAG || "") === "1";
+  if (diagEnabled) {
+    const [businessVisible, customerVisible] = await Promise.all([
+      client.from("users").select("id", { count: "exact", head: true }).eq("role", "business"),
+      client.from("users").select("id", { count: "exact", head: true }).or("role.is.null,role.neq.business"),
+    ]);
+    console.warn("[admin-users] visibility counts", {
+      usingServiceRole,
+      businessCount: businessVisible.count || 0,
+      customerLikeCount: customerVisible.count || 0,
+      businessErr: businessVisible.error?.code || null,
+      customerErr: customerVisible.error?.code || null,
+    });
   }
-  if (role) query = query.eq("role", role);
-  if (city) query = query.ilike("city", `%${city}%`);
-  if (isInternal === "true" || isInternal === "false") {
-    query = query.eq("is_internal", isInternal === "true");
-  }
-  if (createdFrom) query = query.gte("created_at", `${createdFrom}T00:00:00.000Z`);
-  if (createdTo) query = query.lte("created_at", `${createdTo}T23:59:59.999Z`);
-
-  const { data: rows, count } = await query.range(from, to);
   const totalPages = Math.max(1, Math.ceil((count || 0) / PAGE_SIZE));
 
   const pageParams = new URLSearchParams();
@@ -67,6 +84,17 @@ export default async function AdminUsersPage({
       </header>
 
       <AdminFlash searchParams={params} />
+      {diagEnabled && !rows?.length && diag ? (
+        <div className="rounded-md border border-amber-700 bg-amber-950/70 px-3 py-2 text-xs text-amber-100">
+          Users diagnostics: rpcUsed={String(Boolean(diag.rpcUsed))}
+          {diag.rpcError ? `, rpcError=${diag.rpcError.code || "unknown"}` : ""}
+          {diag.profilesProbeError ? `, profilesProbe=${diag.profilesProbeError.code || "unknown"}` : ""}
+          {diag.profilesQueryError ? `, profilesQuery=${diag.profilesQueryError.code || "unknown"}` : ""}
+          {typeof diag.profilesFirstPageCount === "number"
+            ? `, profilesFirstPage=${diag.profilesFirstPageCount}`
+            : ""}
+        </div>
+      ) : null}
 
       <form className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 md:grid-cols-7">
         <input
@@ -112,7 +140,7 @@ export default async function AdminUsersPage({
                   </Link>
                 </td>
                 <td className="px-3 py-2">{user.email || "-"}</td>
-                <td className="px-3 py-2">{user.role || "-"}</td>
+                <td className="px-3 py-2">{displayRole(user.role)}</td>
                 <td className="px-3 py-2">{String(Boolean(user.is_internal))}</td>
                 <td className="px-3 py-2">{user.city || "-"}</td>
                 <td className="px-3 py-2">{user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}</td>

@@ -62,6 +62,7 @@ const AuthContext = createContext({
   endAuthAttempt: () => false,
   resetAuthUiState: () => {},
   seedAuthState: () => {},
+  supportModeActive: false,
 });
 
 const resolveRole = (profile, user, fallbackRole) => {
@@ -134,6 +135,7 @@ const authStore = {
     authAction: null,
     authAttemptId: 0,
     authActionStartedAt: 0,
+    supportModeActive: false,
   },
   listeners: new Set(),
   supabase: null,
@@ -416,26 +418,61 @@ function getAuthStateSnapshot() {
   return authStore.state;
 }
 
-function seedAuthState({ initialUser, initialProfile, initialRole }) {
-  if (!initialUser && !initialProfile && !initialRole) {
+function seedAuthState({
+  initialUser,
+  initialProfile,
+  initialRole,
+  supportModeActive = false,
+}) {
+  if (!initialUser && !initialProfile && !initialRole && !supportModeActive) {
     return;
   }
 
   const nextState = { ...authStore.state };
   let changed = false;
 
-  if (initialUser && !nextState.user) {
+  if (supportModeActive) {
+    const nextUser = initialUser ?? null;
+    const nextProfile = initialProfile ?? null;
+    const nextRole = resolveRole(nextProfile, nextUser, initialRole ?? "customer");
+    if (
+      nextState.user?.id !== nextUser?.id ||
+      nextState.profile?.id !== nextProfile?.id ||
+      nextState.role !== nextRole ||
+      nextState.authStatus !== (nextUser ? "authenticated" : "unauthenticated") ||
+      nextState.supportModeActive !== true
+    ) {
+      nextState.user = nextUser;
+      nextState.profile = nextProfile;
+      nextState.role = nextRole;
+      nextState.authStatus = nextUser ? "authenticated" : "unauthenticated";
+      nextState.supportModeActive = true;
+      changed = true;
+      if (authDiagEnabled) {
+        console.warn("[auth] init", {
+          supportModeActive: true,
+          effectiveUserId: nextUser?.id ?? null,
+          effectiveEmail: nextUser?.email ?? null,
+        });
+      }
+    }
+  } else if (nextState.supportModeActive) {
+    nextState.supportModeActive = false;
+    changed = true;
+  }
+
+  if (!supportModeActive && initialUser && !nextState.user) {
     nextState.user = initialUser;
     nextState.authStatus = "authenticated";
     changed = true;
   }
 
-  if (initialProfile && !nextState.profile) {
+  if (!supportModeActive && initialProfile && !nextState.profile) {
     nextState.profile = initialProfile;
     changed = true;
   }
 
-  if (initialRole && !nextState.role) {
+  if (!supportModeActive && initialRole && !nextState.role) {
     nextState.role = initialRole;
     changed = true;
   }
@@ -532,6 +569,9 @@ async function getProfileForUser(user) {
 }
 
 async function applyUserUpdate(user) {
+  if (authStore.state.supportModeActive) {
+    return;
+  }
   const currentId = authStore.state.user?.id || null;
   const nextId = user?.id || null;
   const nextStatus = user ? "authenticated" : "unauthenticated";
@@ -662,6 +702,12 @@ function ensureAuthListener() {
     async (event, session) => {
       const user = session?.user ?? null;
       updateAuthState({ session });
+      if (authDiagEnabled) {
+        console.warn("[auth] state-change", {
+          supportModeActive: authStore.state.supportModeActive === true,
+          supabaseUserId: user?.id ?? null,
+        });
+      }
       logAuthDiag("auth:event", {
         event,
         hasUser: Boolean(user),
@@ -691,6 +737,9 @@ function ensureAuthListener() {
         return;
       }
       authStore.loggingOut = false;
+      if (authStore.state.supportModeActive) {
+        return;
+      }
       void applyUserUpdate(user);
     }
   );
@@ -724,6 +773,7 @@ export function AuthProvider({
   initialUser = null,
   initialProfile = null,
   initialRole = null,
+  initialSupportModeActive = false,
 }) {
   const parentAuth = useContext(AuthContext);
   const [isNestedProvider] = useState(() => Boolean(parentAuth?.providerInstanceId));
@@ -810,13 +860,14 @@ export function AuthProvider({
       initialUser,
       initialProfile,
       initialRole,
+      supportModeActive: Boolean(initialSupportModeActive),
     });
 
     if (!isNestedProvider && allowBootstrap) {
       ensureAuthGuardSubscription();
       ensureAuthListener();
 
-      if (!authStore.state.user) {
+      if (!authStore.state.user && !authStore.state.supportModeActive) {
         void bootstrapAuth();
       }
     }
@@ -831,6 +882,7 @@ export function AuthProvider({
   }, [
     initialProfile,
     initialRole,
+    initialSupportModeActive,
     initialUser,
     isNestedProvider,
     supabase,
@@ -858,6 +910,15 @@ export function AuthProvider({
     if (isNestedProvider) return;
     if (!pathname) return;
     emitAuthUiReset("route_change");
+  }, [isNestedProvider, pathname]);
+
+  useEffect(() => {
+    if (isNestedProvider) return;
+    if (!pathname) return;
+    if (!authStore.state.supportModeActive) return;
+    if (pathname.startsWith("/customer")) return;
+    updateAuthState({ supportModeActive: false });
+    void bootstrapAuth();
   }, [isNestedProvider, pathname]);
 
   useEffect(() => {
@@ -1016,6 +1077,7 @@ export function AuthProvider({
       user: authState.user,
       profile: authState.profile,
       role: authState.role,
+      supportModeActive: authState.supportModeActive === true,
       error: authState.error,
       lastAuthEvent: authState.lastAuthEvent,
       lastError: authState.lastError,
@@ -1049,6 +1111,7 @@ export function AuthProvider({
       authState.refreshDisabledReason,
       authState.refreshDisabledUntil,
       authState.role,
+      authState.supportModeActive,
       authState.user,
       authState.lastAuthEvent,
       authState.lastError,

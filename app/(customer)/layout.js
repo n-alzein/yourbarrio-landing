@@ -7,6 +7,7 @@ import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
 import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import { PATHS } from "@/lib/auth/paths";
 import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
+import { getAdminDataClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,9 +39,52 @@ export default async function CustomerLayout({ children }) {
     user,
     profile,
     effectiveProfile,
+    effectiveUserId,
     effectiveRole,
+    supportMode,
     targetRole,
   } = await requireEffectiveRole("customer");
+
+  const resolvedProfile = effectiveProfile || profile || null;
+  const supportModeActive = Boolean(
+    supportMode && effectiveUserId && (targetRole || effectiveRole) === "customer"
+  );
+  let supportTargetUser = null;
+  if (supportModeActive && effectiveUserId) {
+    try {
+      const { client } = await getAdminDataClient({ mode: "service" });
+      const { data } = await client
+        .from("users")
+        .select(
+          "id,email,full_name,profile_photo_url,role,phone,city,address,address_2,state,postal_code"
+        )
+        .eq("id", effectiveUserId)
+        .maybeSingle();
+      supportTargetUser = data || null;
+    } catch {
+      supportTargetUser = null;
+    }
+  }
+  const seededProfile =
+    (supportModeActive ? supportTargetUser : null) || resolvedProfile || null;
+  const seededUser =
+    supportModeActive
+      ? {
+          id: effectiveUserId,
+          email: seededProfile?.email || null,
+          user_metadata: {
+            full_name:
+              seededProfile?.full_name ||
+              null,
+            avatar_url:
+              seededProfile?.profile_photo_url ||
+              null,
+          },
+          app_metadata: {
+            role: seededProfile?.role || targetRole || "customer",
+          },
+        }
+      : user;
 
   return (
     <>
@@ -69,13 +113,22 @@ export default async function CustomerLayout({ children }) {
         />
       ) : null}
       <AuthSeed
-        user={user}
-        profile={effectiveProfile || profile}
-        role={targetRole || effectiveRole || "customer"}
+        user={seededUser}
+        profile={seededProfile}
+        role={seededProfile?.role || targetRole || effectiveRole || "customer"}
+        supportModeActive={supportModeActive}
       />
       <AuthRedirectGuard redirectTo={PATHS.auth.customerLogin}>
         <Suspense fallback={null}>
-          <GlobalHeader surface="customer" />
+          <GlobalHeader
+            surface="customer"
+            forcedAuth={{
+              supportMode: supportModeActive,
+              role: seededProfile?.role || targetRole || effectiveRole || "customer",
+              user: seededUser,
+              profile: seededProfile,
+            }}
+          />
         </Suspense>
         <InactivityLogout />
         <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>

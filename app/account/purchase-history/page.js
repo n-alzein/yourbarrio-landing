@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AccountNavTabs from "@/components/account/AccountNavTabs";
 import { requireRole } from "@/lib/auth/server";
+import { getSupportAwareClient } from "@/lib/support/supportAwareData";
 
 const HISTORY_STATUSES = ["fulfilled"];
 
@@ -11,7 +12,11 @@ const formatMoney = (value) =>
   });
 
 export default async function PurchaseHistoryPage({ searchParams }) {
-  const { supabase, user } = await requireRole("customer");
+  await requireRole("customer");
+  const { client, effectiveUserId } = await getSupportAwareClient({
+    expectedRole: "customer",
+    feature: "purchase-history",
+  });
   const resolvedParams =
     searchParams && typeof searchParams.then === "function"
       ? await searchParams
@@ -21,12 +26,12 @@ export default async function PurchaseHistoryPage({ searchParams }) {
   const from = (page - 1) * limit;
   const to = from + limit;
 
-  const { data: orders, error } = await supabase
+  const { data: orders, error } = await client
     .from("orders")
     .select(
       "id,order_number,created_at,updated_at,fulfilled_at,status,total, vendor:users!orders_vendor_id_fkey (business_name, full_name)"
     )
-    .eq("user_id", user.id)
+    .eq("user_id", effectiveUserId)
     .in("status", HISTORY_STATUSES)
     .order("updated_at", { ascending: false })
     .range(from, to);

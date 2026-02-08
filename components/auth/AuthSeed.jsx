@@ -3,7 +3,12 @@
 import { useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 
-export default function AuthSeed({ user = null, profile = null, role = null }) {
+export default function AuthSeed({
+  user = null,
+  profile = null,
+  role = null,
+  supportModeActive = false,
+}) {
   const { seedAuthState } = useAuth();
 
   useEffect(() => {
@@ -12,8 +17,9 @@ export default function AuthSeed({ user = null, profile = null, role = null }) {
       initialUser: user ?? null,
       initialProfile: profile ?? null,
       initialRole: role ?? null,
+      supportModeActive: Boolean(supportModeActive),
     });
-  }, [seedAuthState, user, profile, role]);
+  }, [seedAuthState, user, profile, role, supportModeActive]);
 
   return null;
 }

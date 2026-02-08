@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { fetchConversationById, fetchConversations } from "@/lib/messages";
+import { getSupportAwareClient } from "@/lib/support/supportAwareData";
 
 export async function GET(request) {
-  const supabase = await getSupabaseServerClient();
-  const { user, error: userError } = await getUserCached(supabase);
-
-  if (userError || !user) {
+  let clientBundle = null;
+  try {
+    clientBundle = await getSupportAwareClient({
+      expectedRole: "customer",
+      feature: "customer-conversations",
+    });
+  } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { client: supabase, effectiveUserId } = clientBundle;
 
   const { searchParams } = new URL(request.url);
   const conversationId = searchParams.get("conversationId");
@@ -24,7 +28,7 @@ export async function GET(request) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
-      if (conversation.customer_id !== user.id) {
+      if (conversation.customer_id !== effectiveUserId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 
@@ -35,7 +39,7 @@ export async function GET(request) {
 
     const conversations = await fetchConversations({
       supabase,
-      userId: user.id,
+      userId: effectiveUserId,
       role: "customer",
     });
     const response = NextResponse.json({ conversations }, { status: 200 });

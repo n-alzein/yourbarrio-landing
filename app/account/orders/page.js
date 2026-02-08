@@ -7,11 +7,16 @@ import {
   getOrderStatusDescription,
 } from "@/lib/orders";
 import { requireRole } from "@/lib/auth/server";
+import { getSupportAwareClient } from "@/lib/support/supportAwareData";
 
 const PENDING_STATUSES = ["requested", "confirmed", "ready", "out_for_delivery"];
 
 export default async function AccountOrdersPage({ searchParams }) {
-  const { supabase, user } = await requireRole("customer");
+  await requireRole("customer");
+  const { client, effectiveUserId } = await getSupportAwareClient({
+    expectedRole: "customer",
+    feature: "orders",
+  });
   const resolvedParams =
     searchParams && typeof searchParams.then === "function"
       ? await searchParams
@@ -21,12 +26,12 @@ export default async function AccountOrdersPage({ searchParams }) {
   const from = (page - 1) * limit;
   const to = from + limit;
 
-  const { data: orders, error } = await supabase
+  const { data: orders, error } = await client
     .from("orders")
     .select(
       "id,order_number,created_at,updated_at,status,fulfillment_type,delivery_time,pickup_time,total, vendor:users!orders_vendor_id_fkey (business_name, full_name)"
     )
-    .eq("user_id", user.id)
+    .eq("user_id", effectiveUserId)
     .in("status", PENDING_STATUSES)
     .order("created_at", { ascending: false })
     .range(from, to);

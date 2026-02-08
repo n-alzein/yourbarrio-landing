@@ -22,6 +22,7 @@ const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
 export default function HeaderAccountWidget({
   surface = "public",
   variant = "desktop",
+  forcedAuth = null,
   mobileMenuOpen = false,
   onCloseMobileMenu,
   mobileDrawerId,
@@ -72,10 +73,16 @@ export default function HeaderAccountWidget({
   const mobileLocationSuggestSpinnerRef = useRef(null);
   const mobileLocationSuggestShownAtRef = useRef(0);
 
-  const accountUser = user;
-  const accountProfile = profile;
-  const isCustomer = !role || role === "customer" || role === "admin" || role === "internal";
-  const isBusiness = role === "business";
+  const supportModeActive = Boolean(forcedAuth?.supportMode);
+  const accountUser = forcedAuth?.user || user;
+  const accountProfile = forcedAuth?.profile || profile;
+  const effectiveRole = forcedAuth?.role || role;
+  const isCustomer =
+    !effectiveRole ||
+    effectiveRole === "customer" ||
+    effectiveRole === "admin" ||
+    effectiveRole === "internal";
+  const isBusiness = effectiveRole === "business";
   const sidebarFeatureEnabled = process.env.NEXT_PUBLIC_ACCOUNT_SIDEBAR !== "0";
   const [useSidebarDesktop, setUseSidebarDesktop] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -614,6 +621,11 @@ export default function HeaderAccountWidget({
                     useNextImage
                   />
                   <div>
+                    {supportModeActive ? (
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">
+                        Viewing as
+                      </p>
+                    ) : null}
                     <p className="text-sm font-semibold">{displayName}</p>
                     {email ? <p className="text-xs yb-dropdown-muted">{email}</p> : null}
                   </div>
@@ -696,6 +708,11 @@ export default function HeaderAccountWidget({
               useNextImage
             />
             <div className="min-w-0">
+              {supportModeActive ? (
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">
+                  Viewing as
+                </p>
+              ) : null}
               <p className="text-sm font-semibold truncate">{displayName}</p>
               {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
             </div>

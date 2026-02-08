@@ -29,14 +29,40 @@ export default async function AdminUserDetailPage({
   const admin = await requireAdminRole("admin_readonly");
   const { id } = await params;
   const resolvedSearch = (await searchParams) || {};
+  const diagEnabled =
+    String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1" ||
+    String(process.env.AUTH_GUARD_DIAG || "") === "1";
 
-  const { client } = await getAdminDataClient();
-  const { data: user } = await client.from("users").select("*").eq("id", id).maybeSingle();
+  const { client, usingServiceRole } = await getAdminDataClient({ mode: "service" });
+  const { data: user, error: userError } = await client.from("users").select("*").eq("id", id).maybeSingle();
+
+  if (diagEnabled) {
+    console.warn("[admin-user-detail] load", {
+      userId: id,
+      usingServiceRole,
+      errorCode: userError?.code || null,
+      errorMessage: userError?.message || null,
+    });
+  }
+
+  if (userError) {
+    return (
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Unable to load account</h2>
+        <p className="text-sm text-neutral-400">
+          There was a problem loading this account. Try again in a moment.
+        </p>
+        <Link href="/admin/users" className="text-sm text-sky-300 hover:text-sky-200">
+          Back to users
+        </Link>
+      </section>
+    );
+  }
 
   if (!user) {
     return (
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">User not found</h2>
+        <h2 className="text-xl font-semibold">Account not found</h2>
         <Link href="/admin/users" className="text-sm text-sky-300 hover:text-sky-200">
           Back to users
         </Link>

@@ -23,7 +23,7 @@ export async function getEffectiveUserId(): Promise<EffectiveUserContext> {
     return { effectiveUserId: admin.user.id, activeImpersonation: null };
   }
 
-  const { client } = await getAdminDataClient();
+  const { client } = await getAdminDataClient({ mode: "service" });
   const { data: targetUser } = await client
     .from("users")
     .select("id, full_name, email")

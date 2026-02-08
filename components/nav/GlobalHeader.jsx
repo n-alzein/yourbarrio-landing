@@ -44,7 +44,11 @@ const getInitialCategory = (params) => {
   return matchedCategory || "All";
 };
 
-export default function GlobalHeader({ surface = "public", showSearch = true }) {
+export default function GlobalHeader({
+  surface = "public",
+  showSearch = true,
+  forcedAuth = null,
+}) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
@@ -799,7 +803,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
 
         <div className="hidden md:flex items-center gap-8">
           <CartNavActionClient />
-          <HeaderAccountWidget surface={surface} variant="desktop" />
+          <HeaderAccountWidget surface={surface} variant="desktop" forcedAuth={forcedAuth} />
         </div>
 
       </div>
@@ -807,6 +811,7 @@ export default function GlobalHeader({ surface = "public", showSearch = true }) 
       <HeaderAccountWidget
         surface={surface}
         variant="mobile"
+        forcedAuth={forcedAuth}
         mobileMenuOpen={mobileMenuOpen}
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
         mobileDrawerId={mobileDrawerId}

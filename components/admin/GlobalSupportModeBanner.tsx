@@ -25,7 +25,7 @@ export default async function GlobalSupportModeBanner() {
 
     let targetLabel = resolved?.targetUserId || cookieState.targetUserId || "unknown user";
     try {
-      const { client } = await getAdminDataClient();
+      const { client } = await getAdminDataClient({ mode: "service" });
       const { data: targetUser } = await client
         .from("users")
         .select("id, full_name, email")
@@ -54,7 +54,9 @@ export default async function GlobalSupportModeBanner() {
             </p>
           ) : (
             <p className="truncate text-amber-950">
-              Support mode cookies detected but session is invalid/expired.
+              {sessionValidation.reason === "wrong-target"
+                ? "Support mode target mismatch detected. Exit and restart support mode."
+                : "Support mode cookies detected but session is invalid/expired."}
             </p>
           )}
           <div className="flex items-center gap-2">

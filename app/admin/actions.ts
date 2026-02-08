@@ -18,7 +18,7 @@ import { clearAllAuthCookies } from "@/lib/auth/clearAuthCookies";
 import { getSafeRedirectPath } from "@/lib/auth/redirects";
 import { requireAdmin, requireAdminRole } from "@/lib/admin/permissions";
 import { shouldUseSecureCookies } from "@/lib/http/cookiesSecurity";
-import { getSupabaseServerClient } from "@/lib/supabaseServer";
+import { getSupabaseServerAuthedClient, getSupabaseServerClient } from "@/lib/supabaseServer";
 import { getAdminDataClient } from "@/lib/supabase/admin";
 
 function withMessage(pathname: string, type: "success" | "error", message: string) {
@@ -339,6 +339,7 @@ const startImpersonationSchema = z.object({
 });
 
 export async function startImpersonationAction(formData: FormData) {
+  const diagEnabled = String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1";
   const admin = await requireAdminRole("admin_support");
   const parsed = startImpersonationSchema.safeParse({
     targetUserId: formData.get("targetUserId"),
@@ -350,14 +351,23 @@ export async function startImpersonationAction(formData: FormData) {
     redirect(withMessage("/admin/impersonation", "error", "Invalid impersonation payload"));
   }
 
-  const { client } = await getAdminDataClient();
-  const { data: targetUser } = await client
-    .from("users")
-    .select("id, role")
-    .eq("id", parsed.data.targetUserId)
-    .maybeSingle();
-  const targetRole = targetUser?.role === "business" ? "business" : "customer";
-  const { data, error } = await client.rpc("create_impersonation_session", {
+  // Reset stale support-mode cookies before starting a new session to avoid mixed targets.
+  await clearSupportModeCookies();
+
+  const authedClient = await getSupabaseServerAuthedClient();
+  if (!authedClient) {
+    redirect(withMessage("/admin/impersonation", "error", "Unable to initialize authenticated session"));
+  }
+
+  if (diagEnabled) {
+    console.warn("[AUTH_DIAG] startImpersonation:rpc_client", {
+      clientType: "authed",
+      actorUserId: admin.user.id,
+      targetUserId: parsed.data.targetUserId,
+    });
+  }
+
+  const { data, error } = await authedClient.rpc("create_impersonation_session", {
     target_user_id: parsed.data.targetUserId,
     minutes: parsed.data.minutes,
     reason: parsed.data.reason,
@@ -366,13 +376,74 @@ export async function startImpersonationAction(formData: FormData) {
       actor_user_id: admin.user.id,
       target_type: "user",
       target_id: parsed.data.targetUserId,
-      target_role: targetRole,
     },
   });
 
+  const createSchemaBehind =
+    String(error?.code || "") === "42703" &&
+    String(error?.message || "").toLowerCase().includes("target_role");
+
   if (error || !data) {
-    redirect(withMessage("/admin/impersonation", "error", error?.message || "Failed to create session"));
+    const message = createSchemaBehind
+      ? "Support mode schema not deployed (missing target_role). Run migrations."
+      : error?.message || "Failed to create session";
+    redirect(withMessage("/admin/impersonation", "error", message));
   }
+
+  const { data: createdSession, error: validationError } = await authedClient.rpc(
+    "get_impersonation_session",
+    {
+      p_session_id: data,
+    }
+  );
+  const createdSessionRow = (Array.isArray(createdSession) ? createdSession[0] : createdSession) as
+    | {
+        session_id?: string | null;
+        target_user_id?: string | null;
+        target_role?: string | null;
+        is_active?: boolean | null;
+      }
+    | null;
+
+  console.warn("[support-mode][start]", {
+    requestedTargetUserId: parsed.data.targetUserId,
+    dbTargetUserId: createdSessionRow?.target_user_id ?? null,
+    sessionId: createdSessionRow?.session_id ?? data ?? null,
+    targetRole: createdSessionRow?.target_role ?? null,
+    actorUserId: admin.user.id,
+  });
+
+  if (diagEnabled) {
+    console.warn("[AUTH_DIAG] startImpersonation:validate_session", {
+      clientType: "authed",
+      actorUserId: admin.user.id,
+      sessionId: data,
+      rpcErrorCode: validationError?.code || null,
+      rpcErrorMessage: validationError?.message || null,
+      rowReturned: Boolean(createdSessionRow),
+      isActive: createdSessionRow?.is_active ?? null,
+      targetRole: createdSessionRow?.target_role ?? null,
+    });
+  }
+
+  const validationSchemaBehind =
+    String(validationError?.code || "") === "42703" &&
+    String(validationError?.message || "").toLowerCase().includes("target_role");
+
+  if (validationError || !createdSessionRow || createdSessionRow.is_active !== true) {
+    await clearSupportModeCookies();
+    redirect(
+      withMessage(
+        "/admin/impersonation",
+        "error",
+        validationSchemaBehind
+          ? "Support mode schema not deployed (missing target_role). Run migrations."
+          : validationError?.message || "Support session could not be validated"
+      )
+    );
+  }
+
+  const targetRole = createdSessionRow?.target_role === "business" ? "business" : "customer";
 
   const secure = await shouldUseSecureCookies();
   const cookieStore = await cookies();
@@ -397,6 +468,14 @@ export async function startImpersonationAction(formData: FormData) {
     secure,
     maxAge: parsed.data.minutes * 60,
   });
+  if (diagEnabled) {
+    const jar = await cookies();
+    console.warn("[support-mode][start][cookies-after-set]", {
+      sessionId: jar.get(IMPERSONATE_SESSION_COOKIE)?.value || null,
+      targetUserId: jar.get(IMPERSONATE_USER_COOKIE)?.value || null,
+      hasTargetRoleCookie: Boolean(jar.get(IMPERSONATE_TARGET_ROLE_COOKIE)?.value),
+    });
+  }
 
   revalidatePath("/admin");
   redirect(withMessage("/admin/impersonation", "success", "Support mode started"));
@@ -456,6 +535,13 @@ export async function goToImpersonatedHomeAction() {
     unauthorizedRedirectTo: "/not-authorized",
   });
   const cookieState = await readSupportModeCookies();
+  const jar = await cookies();
+  if (diagEnabled) {
+    console.warn("[support-mode][go-home][cookie-snapshot]", {
+      sessionId: jar.get(IMPERSONATE_SESSION_COOKIE)?.value || null,
+      targetUserId: jar.get(IMPERSONATE_USER_COOKIE)?.value || null,
+    });
+  }
   const secure = await shouldUseSecureCookies();
   if (diagEnabled) {
     console.warn("[AUTH_DIAG] goToImpersonatedHome:cookies", {
@@ -468,6 +554,18 @@ export async function goToImpersonatedHomeAction() {
 
   const session = await validateSupportModeSession(admin.user.id);
   if (!session.ok) {
+    if (session.reason === "wrong-target") {
+      await clearSupportModeCookies();
+      const reasonParam = diagEnabled ? `&reason=${encodeURIComponent(session.reason)}` : "";
+      redirect(
+        `/admin/impersonation?error=${encodeURIComponent(
+          "Support mode target mismatch (stale cookies). Please start support mode again."
+        )}${reasonParam}`
+      );
+    }
+    if (session.reason === "schema-not-deployed") {
+      redirect("/admin/impersonation?error=Support%20mode%20schema%20not%20deployed%20%28missing%20target_role%29.%20Run%20migrations.");
+    }
     const reasonParam = diagEnabled ? `&reason=${encodeURIComponent(session.reason)}` : "";
     if (diagEnabled) {
       console.warn("[AUTH_DIAG] goToImpersonatedHome:no_support_mode", {
@@ -512,6 +610,8 @@ export async function adminLogoutAction() {
 MANUAL REGRESSION CHECKLIST
 1) Start support mode for customer target, click \"Go to user home\", confirm /customer/home loads.
 2) Start support mode for business target, click \"Go to user home\", confirm /business/dashboard loads.
-3) Click admin logout once, confirm redirect to /?signedout=1 with public navbar and no avatar.
-4) Refresh / and revisit protected routes, confirm session is fully cleared.
+3) Start support mode for User A, then start for User B; confirm new session works and no mixed-cookie wrong-target state.
+4) Manually tamper yb_impersonate_user_id cookie to mismatch DB target; click \"Go to user home\" and confirm cookies clear + restart message.
+5) Click admin logout once, confirm redirect to /?signedout=1 with public navbar and no avatar.
+6) Refresh / and revisit protected routes, confirm session is fully cleared.
 */

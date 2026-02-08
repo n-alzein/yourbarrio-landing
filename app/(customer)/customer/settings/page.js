@@ -20,6 +20,22 @@ export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
   const router = useRouter();
+  const effectiveProfile =
+    profile ||
+    (user
+      ? {
+          id: user.id,
+          email: user.email || null,
+          full_name: user.user_metadata?.full_name || null,
+          profile_photo_url: user.user_metadata?.avatar_url || null,
+          phone: null,
+          city: null,
+          address: null,
+          address_2: null,
+          state: null,
+          postal_code: null,
+        }
+      : null);
 
   /* -----------------------------------------------------------
      HOOKS (always first — no conditional hooks)
@@ -43,7 +59,7 @@ export default function SettingsPage() {
     profile_photo_url: userValue?.profile_photo_url || "",
   });
 
-  const [form, setForm] = useState(() => buildInitialForm(profile));
+  const [form, setForm] = useState(() => buildInitialForm(effectiveProfile));
   const lastUserIdRef = useRef(null);
 
   const showToast = (type, message) => {
@@ -119,13 +135,13 @@ export default function SettingsPage() {
      LOAD PROFILE INTO FORM
   ----------------------------------------------------------- */
   useEffect(() => {
-    if (!profile?.id) return;
-    if (lastUserIdRef.current === profile.id) return;
-    lastUserIdRef.current = profile.id;
+    if (!effectiveProfile?.id) return;
+    if (lastUserIdRef.current === effectiveProfile.id) return;
+    lastUserIdRef.current = effectiveProfile.id;
     queueMicrotask(() => {
-      setForm(buildInitialForm(profile));
+      setForm(buildInitialForm(effectiveProfile));
     });
-  }, [profile]);
+  }, [effectiveProfile]);
 
   useEffect(() => {
     if (loadingUser) return;
@@ -223,9 +239,9 @@ export default function SettingsPage() {
      CHANGE DETECTION
   ----------------------------------------------------------- */
   const hasChanges =
-    profile &&
+    effectiveProfile &&
     JSON.stringify(form) !==
-      JSON.stringify(buildInitialForm(profile));
+      JSON.stringify(buildInitialForm(effectiveProfile));
 
   const primaryProvider = getPrimaryAuthProvider(user);
   const providerLabel = getAuthProviderLabel(user);
@@ -337,7 +353,7 @@ export default function SettingsPage() {
                 <FastImage
                   src={
                     form?.profile_photo_url ||
-                    profile?.profile_photo_url ||
+                    effectiveProfile?.profile_photo_url ||
                     "/customer-placeholder.png"
                   }
                   alt="Profile Photo"
@@ -421,7 +437,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => {
                       setEditMode(false);
-                      setForm(buildInitialForm(profile));
+                      setForm(buildInitialForm(effectiveProfile));
                       setFieldErrors({});
                     }}
                     className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-5 text-sm font-semibold text-white transition hover:bg-white/10"

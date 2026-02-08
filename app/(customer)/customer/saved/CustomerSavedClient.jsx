@@ -20,6 +20,7 @@ export default function CustomerSavedClient({
   initialSaved,
   initialUserId,
   initialError,
+  supportModeActive = false,
 }) {
   const { user, supabase, loadingUser, authStatus } = useAuth();
   const { theme, hydrated } = useTheme();
@@ -204,6 +205,10 @@ export default function CustomerSavedClient({
   }, [resolvedUserId]);
 
   const loadSaved = useCallback(() => {
+    if (supportModeActive) {
+      setLoading(false);
+      return undefined;
+    }
     const client = supabase ?? getSupabaseBrowserClient();
 
     if (!client || !resolvedUserId || typeof resolvedUserId !== "string") {
@@ -362,9 +367,10 @@ export default function CustomerSavedClient({
     return () => {
       inflightRef.current?.abort?.();
     };
-  }, [authDiagEnabled, authStatus, supabase, resolvedUserId, hasLoaded]);
+  }, [authDiagEnabled, authStatus, supabase, resolvedUserId, hasLoaded, supportModeActive]);
 
   useEffect(() => {
+    if (supportModeActive) return;
     if (!isVisible && hasLoaded) return;
     // Wait for auth before refetching so we don't cache empty results.
     if (!resolvedUserId) return;
@@ -380,7 +386,7 @@ export default function CustomerSavedClient({
       if (cleanupRef.current) cleanupRef.current();
       cleanupRef.current = null;
     };
-  }, [loadSaved, isVisible, hasLoaded, resolvedUserId]);
+  }, [loadSaved, isVisible, hasLoaded, resolvedUserId, supportModeActive]);
 
   const totalSaved = saved.length;
   const averagePrice =
