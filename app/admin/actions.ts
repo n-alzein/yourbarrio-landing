@@ -11,6 +11,7 @@ import {
   readSupportModeCookies,
   validateSupportModeSession,
   IMPERSONATE_SESSION_COOKIE,
+  IMPERSONATE_TARGET_ROLE_COOKIE,
   IMPERSONATE_USER_COOKIE,
 } from "@/lib/admin/supportMode";
 import { clearAllAuthCookies } from "@/lib/auth/clearAuthCookies";
@@ -350,6 +351,12 @@ export async function startImpersonationAction(formData: FormData) {
   }
 
   const { client } = await getAdminDataClient();
+  const { data: targetUser } = await client
+    .from("users")
+    .select("id, role")
+    .eq("id", parsed.data.targetUserId)
+    .maybeSingle();
+  const targetRole = targetUser?.role === "business" ? "business" : "customer";
   const { data, error } = await client.rpc("create_impersonation_session", {
     target_user_id: parsed.data.targetUserId,
     minutes: parsed.data.minutes,
@@ -357,6 +364,9 @@ export async function startImpersonationAction(formData: FormData) {
     meta: {
       source: "admin_ui",
       actor_user_id: admin.user.id,
+      target_type: "user",
+      target_id: parsed.data.targetUserId,
+      target_role: targetRole,
     },
   });
 
@@ -374,6 +384,13 @@ export async function startImpersonationAction(formData: FormData) {
     maxAge: parsed.data.minutes * 60,
   });
   cookieStore.set(IMPERSONATE_SESSION_COOKIE, data, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+    maxAge: parsed.data.minutes * 60,
+  });
+  cookieStore.set(IMPERSONATE_TARGET_ROLE_COOKIE, targetRole, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",

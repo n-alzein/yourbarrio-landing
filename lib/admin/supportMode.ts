@@ -8,10 +8,12 @@ import { getSupabaseServerClient } from "@/lib/supabaseServer";
 
 export const IMPERSONATE_USER_COOKIE = "yb_impersonate_user_id";
 export const IMPERSONATE_SESSION_COOKIE = "yb_impersonate_session_id";
+export const IMPERSONATE_TARGET_ROLE_COOKIE = "yb_impersonate_target_role";
 
 export type SupportModeCookieState = {
   sessionId: string | null;
   targetUserId: string | null;
+  targetRole: "customer" | "business" | null;
   hasCookies: boolean;
 };
 
@@ -87,10 +89,13 @@ export async function readSupportModeCookies(): Promise<SupportModeCookieState> 
   const cookieStore = await cookies();
   const sessionRaw = cookieStore.get(IMPERSONATE_SESSION_COOKIE)?.value || "";
   const targetRaw = cookieStore.get(IMPERSONATE_USER_COOKIE)?.value || "";
+  const targetRoleRaw = (cookieStore.get(IMPERSONATE_TARGET_ROLE_COOKIE)?.value || "").trim();
   const sessionId = sessionRaw.trim() || null;
   const targetUserId = targetRaw.trim() || null;
-  const hasCookies = Boolean(sessionId || targetUserId);
-  return { sessionId, targetUserId, hasCookies };
+  const targetRole =
+    targetRoleRaw === "customer" || targetRoleRaw === "business" ? targetRoleRaw : null;
+  const hasCookies = Boolean(sessionId || targetUserId || targetRole);
+  return { sessionId, targetUserId, targetRole, hasCookies };
 }
 
 export async function clearSupportModeCookies() {
@@ -113,6 +118,7 @@ export async function clearSupportModeCookies() {
   try {
     cookieStore?.set(IMPERSONATE_USER_COOKIE, "", clearOptions);
     cookieStore?.set(IMPERSONATE_SESSION_COOKIE, "", clearOptions);
+    cookieStore?.set(IMPERSONATE_TARGET_ROLE_COOKIE, "", clearOptions);
   } catch {
     // Cookie mutation may be unavailable in some contexts.
   }
@@ -299,6 +305,7 @@ export async function getEffectiveActorAndTarget(
   actorUserId?: string | null
 ): Promise<EffectiveActorAndTarget> {
   const validation = await validateSupportModeSession(actorUserId || null);
+  const cookieState = await readSupportModeCookies();
 
   if (!validation.ok) {
     return {
@@ -314,7 +321,7 @@ export async function getEffectiveActorAndTarget(
     };
   }
 
-  let targetRole: "customer" | "business" | null = null;
+  let targetRole: "customer" | "business" | null = cookieState.targetRole;
   try {
     const serviceClient = getSupabaseServiceClient();
     const fallback = await getAdminDataClient();
@@ -333,7 +340,7 @@ export async function getEffectiveActorAndTarget(
       targetRole = rawRole === "business" ? "business" : "customer";
     }
   } catch {
-    targetRole = null;
+    // Keep cookie-derived role fallback if present.
   }
 
   return {
