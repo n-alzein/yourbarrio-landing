@@ -23,7 +23,7 @@ export default function BusinessMarketingFooter() {
             <h4 className="text-lg font-semibold text-white">Navigation</h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/business/about" className="hover:text-white">
+                <Link href="/about" className="hover:text-white">
                   About
                 </Link>
               </li>

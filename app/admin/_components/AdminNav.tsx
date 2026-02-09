@@ -3,8 +3,10 @@ import { adminLogoutAction } from "@/app/admin/actions";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
-  { href: "/admin/users", label: "Users" },
+  { href: "/admin/accounts", label: "Accounts" },
+  { href: "/admin/customers", label: "Customers" },
   { href: "/admin/businesses", label: "Businesses" },
+  { href: "/admin/admins", label: "Admins" },
   { href: "/admin/moderation", label: "Moderation" },
   { href: "/admin/support", label: "Support" },
   { href: "/admin/audit", label: "Audit" },

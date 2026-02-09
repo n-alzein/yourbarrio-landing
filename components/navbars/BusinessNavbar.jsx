@@ -685,7 +685,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
             {/* Logged-out → show About */}
             {!isBusinessAuthed && (
               <NavItem
-                href="/business/about"
+                href="/about"
                 isActive={isActive}
                 closeMenus={closeMenus}
               >
@@ -943,7 +943,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
               Businesses
             </NavItem>
             <NavItem
-              href="/business/about"
+              href="/about"
               isActive={isActive}
               closeMenus={closeMenus}
             >

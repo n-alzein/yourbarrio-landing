@@ -74,8 +74,8 @@ export default function BusinessMarketingNavbar() {
 
               <div className="hidden md:flex items-center gap-x-8">
                 <NavItem
-                  href="/business/about"
-                  active={pathname === "/business/about"}
+                  href="/about"
+                  active={pathname === "/about"}
                   onClick={() => setOpen(false)}
                 >
                   About
@@ -147,8 +147,8 @@ export default function BusinessMarketingNavbar() {
                 <div className="text-xs uppercase tracking-[0.2em] text-white/60 mb-3">Navigate</div>
                 <div className="flex flex-col gap-3 text-lg font-semibold">
                   <NavItem
-                    href="/business/about"
-                    active={pathname === "/business/about"}
+                    href="/about"
+                    active={pathname === "/about"}
                     onClick={() => setOpen(false)}
                     className="text-lg font-semibold"
                   >

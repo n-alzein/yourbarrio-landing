@@ -1,6 +1,6 @@
 import AccountsList from "@/app/admin/_components/AccountsList";
 
-export default async function AdminBusinessesPage({
+export default async function AdminAccountsPage({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -8,11 +8,10 @@ export default async function AdminBusinessesPage({
   const params = (await searchParams) || {};
   return (
     <AccountsList
-      title="Businesses"
-      description="Business accounts only."
-      basePath="/admin/businesses"
+      title="Accounts"
+      description="All platform accounts across customer, business, and admin roles."
+      basePath="/admin/accounts"
       searchParams={params}
-      presetRole="business"
     />
   );
 }

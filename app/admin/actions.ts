@@ -40,7 +40,7 @@ export async function updateUserRoleAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(withMessage("/admin/users", "error", "Invalid role update payload"));
+    redirect(withMessage("/admin/accounts", "error", "Invalid role update payload"));
   }
 
   const { client } = await getAdminDataClient();
@@ -78,7 +78,7 @@ export async function toggleUserInternalAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(withMessage("/admin/users", "error", "Invalid internal toggle payload"));
+    redirect(withMessage("/admin/accounts", "error", "Invalid internal toggle payload"));
   }
 
   const nextValue = parsed.data.isInternal === "true";
@@ -117,7 +117,7 @@ export async function addUserInternalNoteAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(withMessage("/admin/users", "error", "Invalid note payload"));
+    redirect(withMessage("/admin/accounts", "error", "Invalid note payload"));
   }
 
   await audit({

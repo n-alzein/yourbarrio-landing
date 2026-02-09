@@ -52,8 +52,8 @@ export default async function AdminUserDetailPage({
         <p className="text-sm text-neutral-400">
           There was a problem loading this account. Try again in a moment.
         </p>
-        <Link href="/admin/users" className="text-sm text-sky-300 hover:text-sky-200">
-          Back to users
+        <Link href="/admin/accounts" className="text-sm text-sky-300 hover:text-sky-200">
+          Back to accounts
         </Link>
       </section>
     );
@@ -63,8 +63,8 @@ export default async function AdminUserDetailPage({
     return (
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Account not found</h2>
-        <Link href="/admin/users" className="text-sm text-sky-300 hover:text-sky-200">
-          Back to users
+        <Link href="/admin/accounts" className="text-sm text-sky-300 hover:text-sky-200">
+          Back to accounts
         </Link>
       </section>
     );
@@ -78,11 +78,11 @@ export default async function AdminUserDetailPage({
     <section className="space-y-4">
       <header className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">User detail</h2>
+          <h2 className="text-xl font-semibold">Account detail</h2>
           <p className="text-sm text-neutral-400 font-mono">{user.id}</p>
         </div>
-        <Link href="/admin/users" className="text-sm text-sky-300 hover:text-sky-200">
-          Back to users
+        <Link href="/admin/accounts" className="text-sm text-sky-300 hover:text-sky-200">
+          Back to accounts
         </Link>
       </header>
 

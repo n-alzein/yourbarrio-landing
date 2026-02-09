@@ -14,7 +14,7 @@ export default function Footer({ className = "" }) {
   const resolvedRole = role || user?.app_metadata?.role || profile?.role;
   const aboutHref =
     resolvedRole === "business"
-      ? "/business/about"
+      ? "/about"
       : user || profile
         ? "/customer/about"
         : "/about";
