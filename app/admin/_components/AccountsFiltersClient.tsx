@@ -75,7 +75,7 @@ export default function AccountsFiltersClient({
       <input
         value={queryInput}
         onChange={(event) => setQueryInput(event.target.value)}
-        placeholder="Search name, email, phone, business"
+        placeholder="Search ID, name, email, phone, business"
         className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm md:col-span-2"
       />
 

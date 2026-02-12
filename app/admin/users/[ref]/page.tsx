@@ -26,22 +26,32 @@ export default async function AdminUserDetailPage({
     String(process.env.AUTH_GUARD_DIAG || "") === "1";
 
   const { client, usingServiceRole } = await getAdminDataClient({ mode: "service" });
-  const { data: resolvedRefRows, error: resolveError } = await client.rpc("admin_resolve_user_ref", {
-    p_ref: ref,
-  });
-  const resolvedRefRow = Array.isArray(resolvedRefRows) ? resolvedRefRows[0] : null;
-  const resolvedUserId = resolvedRefRow?.id || normalizedRef.id;
-  const { data: user, error: userError } = resolvedUserId
-    ? await client.from("users").select("*").eq("id", resolvedUserId).maybeSingle()
-    : { data: null, error: resolveError };
+  const resolvedUserId = normalizedRef.id;
+  const resolvedPublicId = normalizedRef.public_id;
+  const { data: accountRows, error: userError } = resolvedUserId
+    ? await client.rpc("admin_get_account", { p_user_id: resolvedUserId })
+    : resolvedPublicId
+      ? await client.rpc("admin_get_account_by_public_id", { p_public_id: resolvedPublicId })
+      : { data: null, error: null };
+  const user = Array.isArray(accountRows) ? accountRows[0] || null : null;
+
+  if (userError) {
+    console.error("[admin] admin_get_account failed", {
+      accountId: resolvedUserId || null,
+      accountPublicId: resolvedPublicId || null,
+      message: userError?.message,
+      details: userError?.details,
+      hint: userError?.hint,
+      code: userError?.code,
+    });
+  }
 
   if (diagEnabled) {
     console.warn("[admin-user-detail] load", {
       userRef: ref,
       userId: resolvedUserId || null,
+      userPublicId: resolvedPublicId || null,
       usingServiceRole,
-      resolveErrorCode: resolveError?.code || null,
-      resolveErrorMessage: resolveError?.message || null,
       errorCode: userError?.code || null,
       errorMessage: userError?.message || null,
     });

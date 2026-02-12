@@ -61,6 +61,7 @@ type AdminUsersResult = {
 const adminDiagEnabled =
   String(process.env.AUTH_GUARD_DIAG || "") === "1" ||
   String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1";
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function sanitizeSearchTerm(term: string) {
   return term.replace(/[%(),]/g, " ").trim();
@@ -69,7 +70,17 @@ function sanitizeSearchTerm(term: string) {
 function buildSearchOr(q: string) {
   const safe = sanitizeSearchTerm(q);
   if (!safe) return "";
-  return `full_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%,business_name.ilike.%${safe}%`;
+  const clauses = [
+    `full_name.ilike.%${safe}%`,
+    `email.ilike.%${safe}%`,
+    `phone.ilike.%${safe}%`,
+    `business_name.ilike.%${safe}%`,
+    `public_id.ilike.%${safe}%`,
+  ];
+  if (UUID_REGEX.test(safe)) {
+    clauses.push(`id.eq.${safe.toLowerCase()}`);
+  }
+  return clauses.join(",");
 }
 
 function normalizeRole(value: string | null | undefined) {
