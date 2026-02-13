@@ -2,64 +2,108 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const MIN_PASSWORD_LENGTH = 8;
 
+function parseRecoveryHash(hashValue) {
+  const hash = String(hashValue || "").replace(/^#/, "");
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token") || "";
+  const refreshToken = params.get("refresh_token") || "";
+  const type = params.get("type") || "";
+  return {
+    hasRecoveryTokens: type === "recovery" && Boolean(accessToken) && Boolean(refreshToken),
+    accessToken,
+    refreshToken,
+    type,
+  };
+}
+
+function isPasswordReuseError(message) {
+  const normalized = String(message || "").toLowerCase();
+  return (
+    normalized.includes("reuse") ||
+    normalized.includes("previously used") ||
+    normalized.includes("old password") ||
+    normalized.includes("different from the old password")
+  );
+}
+
 function UpdatePasswordContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
   const errorParam = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
-  const [loadingSession, setLoadingSession] = useState(true);
+
+  const [sessionState, setSessionState] = useState("sessionEstablishing");
+  const [sessionError, setSessionError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [formError, setFormError] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
-  const didExchangeRef = useRef(false);
+  const didInitRef = useRef(false);
 
   useEffect(() => {
     let active = true;
-    const supabase = getSupabaseBrowserClient();
 
-    const finalize = (message, isError = false) => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+
+    const setInvalidSession = (message) => {
       if (!active) return;
-      if (isError) {
-        setErrorMessage(message);
-      } else if (message) {
-        setStatusMessage(message);
-      }
-      setLoadingSession(false);
+      setSessionError(message);
+      setSessionState("sessionInvalid");
     };
 
     const init = async () => {
+      const supabase = getSupabaseBrowserClient();
       if (!supabase) {
-        finalize("Unable to load authentication.", true);
+        setInvalidSession("Unable to load authentication.");
         return;
       }
 
       if (errorParam) {
-        finalize(errorDescription || "Invalid or expired recovery link.", true);
+        setInvalidSession(errorDescription || "Recovery session not found or expired.");
         return;
       }
 
-      if (code && !didExchangeRef.current) {
-        didExchangeRef.current = true;
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+      const { hasRecoveryTokens, accessToken, refreshToken } = parseRecoveryHash(window.location.hash);
+
+      if (hasRecoveryTokens) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
         if (error) {
-          finalize(error.message || "Unable to verify recovery link.", true);
+          setInvalidSession("Recovery session not found or expired.");
           return;
         }
+
+        window.history.replaceState({}, document.title, "/auth/update-password");
+      } else if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setInvalidSession("Recovery session not found or expired.");
+          return;
+        }
+
+        window.history.replaceState({}, document.title, "/auth/update-password");
       }
 
-      const { data } = await supabase.auth.getUser();
-      if (!data?.user) {
-        finalize("Recovery session not found. Request a new reset link.", true);
+      const { data } = await supabase.auth.getSession();
+      if (!data?.session) {
+        setInvalidSession("Recovery session not found or expired.");
         return;
       }
-      finalize("", false);
+
+      if (!active) return;
+      setSessionError("");
+      setSessionState("sessionValid");
     };
 
     init();
@@ -69,130 +113,135 @@ function UpdatePasswordContent() {
     };
   }, [code, errorDescription, errorParam]);
 
-  const handleSubmit = async (event) => {
+  async function handleSubmit(event) {
     event.preventDefault();
-    setErrorMessage("");
+    setFormError("");
     setStatusMessage("");
 
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setErrorMessage(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setFormError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
+
     if (newPassword !== confirmPassword) {
-      setErrorMessage("Passwords must match.");
+      setFormError("Passwords must match.");
       return;
     }
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setErrorMessage("Unable to load authentication.");
+      setFormError("Unable to load authentication.");
       return;
     }
 
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSaving(false);
 
     if (error) {
-      setErrorMessage(error.message || "Failed to update password.");
+      if (isPasswordReuseError(error.message)) {
+        setFormError("You can't reuse your old password. Please choose a new one.");
+      } else {
+        setFormError("We couldn't update your password. Please try again.");
+      }
       return;
     }
 
-    setStatusMessage("Password updated. You can return to your account.");
-  };
+    setStatusMessage("Password updated. Redirecting to sign in...");
+    router.push("/signin?modal=signin");
+  }
 
   return (
-    <div className="min-h-screen bg-[#05010d] text-white flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl">
-        <h1 className="text-2xl font-semibold">Update your password</h1>
-        <p className="mt-2 text-sm text-white/60">
-          Choose a new password for your account.
-        </p>
+    <div className="min-h-screen w-full bg-white !text-slate-900">
+      <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-4 py-12">
+        <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h1 className="text-2xl font-semibold text-slate-900">Update your password</h1>
+          <p className="mt-2 text-sm text-slate-600">Choose a new password for your account.</p>
 
-        {loadingSession ? (
-          <div className="mt-6 flex items-center gap-3 text-sm text-white/70">
-            <div className="h-5 w-5 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
-            Verifying your reset link...
-          </div>
-        ) : null}
+          {sessionState === "sessionEstablishing" ? (
+            <div className="mt-6 flex items-center gap-3 text-sm text-slate-600">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+              Verifying your reset link...
+            </div>
+          ) : null}
 
-        {!loadingSession && !errorMessage ? (
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label
-                htmlFor="new-password"
-                className="block text-sm text-white/70 mb-1.5"
-              >
+          {sessionState === "sessionValid" ? (
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+              <label htmlFor="new-password" className="block text-sm text-slate-700">
                 New password
+                <input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  placeholder={`Minimum ${MIN_PASSWORD_LENGTH} characters`}
+                  autoComplete="new-password"
+                />
               </label>
-              <input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-white/15 bg-black/20 px-3 text-base md:text-sm text-white placeholder:text-white/40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/60 focus-visible:border-pink-400/60"
-                placeholder={`Minimum ${MIN_PASSWORD_LENGTH} characters`}
-                autoComplete="new-password"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="confirm-password"
-                className="block text-sm text-white/70 mb-1.5"
-              >
+
+              <label htmlFor="confirm-password" className="block text-sm text-slate-700">
                 Confirm new password
+                <input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  placeholder="Re-enter your new password"
+                  autoComplete="new-password"
+                />
               </label>
-              <input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-white/15 bg-black/20 px-3 text-base md:text-sm text-white placeholder:text-white/40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/60 focus-visible:border-pink-400/60"
-                placeholder="Re-enter your new password"
-                autoComplete="new-password"
-              />
+
+              <p className="text-xs text-slate-500">Use at least 8 characters.</p>
+
+              {formError ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{formError}</div>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={saving}
+                className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold transition ${
+                  saving ? "cursor-not-allowed bg-slate-200 text-slate-500" : "bg-black !text-white hover:bg-black/90"
+                }`}
+              >
+                {saving ? "Updating..." : "Update password"}
+              </button>
+            </form>
+          ) : null}
+
+          {sessionState === "sessionInvalid" ? (
+            <div className="mt-6 space-y-4">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {sessionError || "Recovery session not found or expired."}
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push("/auth/forgot-password")}
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-black px-5 text-sm font-semibold !text-white hover:bg-black/90"
+              >
+                Request a new reset link
+              </button>
             </div>
-            <button
-              type="submit"
-              disabled={saving}
-              className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold transition ${
-                saving
-                  ? "cursor-not-allowed bg-white/20 text-white/40"
-                  : "bg-white text-black hover:bg-gray-200"
-              }`}
-            >
-              {saving ? "Updating..." : "Update password"}
-            </button>
-          </form>
-        ) : null}
+          ) : null}
 
-        {errorMessage ? (
-          <div className="mt-6 rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {errorMessage}
+          {statusMessage ? (
+            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {statusMessage}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex items-center justify-between text-sm text-slate-600">
+            <Link className="text-indigo-700 hover:text-indigo-600" href="/">
+              Back to home
+            </Link>
+            <Link className="text-indigo-700 hover:text-indigo-600" href="/auth/forgot-password">
+              Forgot password
+            </Link>
           </div>
-        ) : null}
-
-        {statusMessage ? (
-          <div className="mt-6 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            {statusMessage}
-          </div>
-        ) : null}
-
-        <div className="mt-6 flex items-center justify-between text-sm text-white/60">
-          <Link className="text-pink-300 hover:text-pink-200" href="/">
-            Back to home
-          </Link>
-          <Link
-            className="text-pink-300 hover:text-pink-200"
-            href="/auth/reset-password"
-          >
-            Send another reset link
-          </Link>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
@@ -201,15 +250,17 @@ export default function UpdatePasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#05010d] text-white flex items-center justify-center px-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl">
-            <div className="h-6 w-48 rounded bg-white/10 animate-pulse" />
-            <div className="mt-3 h-4 w-56 rounded bg-white/10 animate-pulse" />
-            <div className="mt-6 flex items-center gap-3 text-sm text-white/70">
-              <div className="h-5 w-5 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
-              Verifying your reset link...
-            </div>
-          </div>
+        <div className="min-h-screen w-full bg-white !text-slate-900">
+          <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-4 py-12">
+            <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="h-6 w-48 animate-pulse rounded bg-slate-200" />
+              <div className="mt-3 h-4 w-56 animate-pulse rounded bg-slate-200" />
+              <div className="mt-6 flex items-center gap-3 text-sm text-slate-600">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                Verifying your reset link...
+              </div>
+            </section>
+          </main>
         </div>
       }
     >
