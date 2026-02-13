@@ -5,7 +5,7 @@ export function buildConfirmStartUrl(
   tokenHash: string,
   type: "recovery" | "invite" | "email" | "email_change" = "recovery",
   next = "/set-password",
-  siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
+  siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? "http://localhost:3000"
 ) {
   const safeNext = getSafeRedirectPath(next) || "/set-password";
   const targetUrl = new URL("/set-password", siteUrl);

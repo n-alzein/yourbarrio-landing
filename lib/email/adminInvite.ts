@@ -10,7 +10,7 @@ function getInviteRedirectUrl(siteUrl: string) {
 
 export async function sendAdminInvite(
   email: string,
-  siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "http://localhost:3000"
 ): Promise<{ userId: string; inviteLink: string }> {
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: "invite",

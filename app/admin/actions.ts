@@ -15,6 +15,7 @@ import {
   IMPERSONATE_USER_COOKIE,
 } from "@/lib/admin/supportMode";
 import { clearAllAuthCookies } from "@/lib/auth/clearAuthCookies";
+import { getSiteUrlFromHeaders } from "@/lib/auth/getSiteUrl";
 import { getSafeRedirectPath } from "@/lib/auth/redirects";
 import {
   ADMIN_ROLES,
@@ -679,15 +680,7 @@ export async function upsertAdminAccountAction(formData: FormData) {
   const role = parsed.data.role;
   const serviceClient = getAdminServiceRoleClient();
   const headerStore = await headers();
-  const forwardedProto = String(headerStore.get("x-forwarded-proto") || "")
-    .split(",")[0]
-    .trim();
-  const proto = forwardedProto || "http";
-  const forwardedHost = String(headerStore.get("x-forwarded-host") || "")
-    .split(",")[0]
-    .trim();
-  const host = forwardedHost || String(headerStore.get("host") || "").trim() || "localhost:3000";
-  const requestSiteUrl = `${proto}://${host}`;
+  const requestSiteUrl = getSiteUrlFromHeaders(headerStore);
 
   let targetUserId: string | null = null;
   const { data: existing } = await serviceClient
