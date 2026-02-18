@@ -19,6 +19,7 @@ export default async function AdminAdminsPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const admin = await requireAdminRole("admin_readonly");
+  const actorUserId = admin.user.id;
   const params = (await searchParams) || {};
   const canManageAdmins = admin.strictPermissionBypassUsed || canAdmin(admin.roles, "manage_admins");
 
@@ -76,21 +77,22 @@ export default async function AdminAdminsPage({
     });
   }
 
+  const visibleAdminRows = adminRows.filter((row) => row.user_id !== actorUserId);
+
   return (
     <AdminPage>
-      <AccountsList
-        title="Admins"
-        description="Internal/admin staff accounts."
-        basePath="/admin/admins"
-        searchParams={params}
-        presetRole="admin"
-      />
-
-      {canManageAdmins ? (
-        <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+      {canManageAdmins && (
+        <div
+          className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4"
+          data-testid="admin-management-section"
+          data-actor-user-id={actorUserId}
+        >
           <header>
-            <h3 className="font-semibold">Admin management</h3>
+            <h3 className="font-semibold" data-testid="admin-management-header">
+              Admin management
+            </h3>
             <p className="text-sm text-neutral-400">Create/invite admins, assign role, and disable access.</p>
+            <p className="text-xs text-neutral-500">Your admin account can&apos;t be modified from here.</p>
           </header>
 
           <form action={upsertAdminAccountAction} className="grid gap-2 md:grid-cols-3">
@@ -128,12 +130,18 @@ export default async function AdminAdminsPage({
                 </tr>
               </thead>
               <tbody>
-                {adminRows.map((row) => {
+                {visibleAdminRows.map((row) => {
+                  const isSelf = row.user_id === actorUserId;
                   const role = (ADMIN_ROLES.includes(row.role_key as any)
                     ? row.role_key
                     : "admin_support") as string;
                   return (
-                    <tr key={`${row.user_id}-${row.role_key}`} className="border-t border-neutral-800">
+                    <tr
+                      key={`${row.user_id}-${row.role_key}`}
+                      className="border-t border-neutral-800"
+                      data-testid="admin-row"
+                      data-user-id={row.user_id}
+                    >
                       <td className="px-3 py-2">
                         <div className="font-medium">{row.full_name || row.email || row.user_id}</div>
                         <div className="font-mono text-xs text-neutral-500">{row.user_id}</div>
@@ -143,42 +151,46 @@ export default async function AdminAdminsPage({
                         {row.created_at ? new Date(row.created_at).toLocaleString() : "-"}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-2">
-                          <form action={changeAdminRoleAction} className="flex items-center gap-2">
-                            <input type="hidden" name="userId" value={row.user_id} />
-                            <select
-                              name="role"
-                              defaultValue={role}
-                              className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
-                            >
-                              {ADMIN_ROLES.map((adminRole) => (
-                                <option key={adminRole} value={adminRole}>
-                                  {formatAdminRoleLabel(adminRole)}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="submit"
-                              className="rounded border border-neutral-700 px-2 py-1 text-xs hover:border-neutral-500"
-                            >
-                              Change role
-                            </button>
-                          </form>
-                          <form action={disableAdminAccessAction}>
-                            <input type="hidden" name="userId" value={row.user_id} />
-                            <button
-                              type="submit"
-                              className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-200 hover:border-rose-500"
-                            >
-                              Disable admin
-                            </button>
-                          </form>
-                        </div>
+                        {isSelf ? (
+                          <span className="text-xs text-neutral-500">Self changes are blocked.</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            <form action={changeAdminRoleAction} className="flex items-center gap-2">
+                              <input type="hidden" name="userId" value={row.user_id} />
+                              <select
+                                name="role"
+                                defaultValue={role}
+                                className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
+                              >
+                                {ADMIN_ROLES.map((adminRole) => (
+                                  <option key={adminRole} value={adminRole}>
+                                    {formatAdminRoleLabel(adminRole)}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="submit"
+                                className="rounded border border-neutral-700 px-2 py-1 text-xs hover:border-neutral-500"
+                              >
+                                Change role
+                              </button>
+                            </form>
+                            <form action={disableAdminAccessAction}>
+                              <input type="hidden" name="userId" value={row.user_id} />
+                              <button
+                                type="submit"
+                                className="rounded border border-rose-700 px-2 py-1 text-xs text-rose-200 hover:border-rose-500"
+                              >
+                                Disable admin
+                              </button>
+                            </form>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
-                {!adminRows.length ? (
+                {!visibleAdminRows.length ? (
                   <tr>
                     <td colSpan={4} className="px-3 py-4 text-neutral-400">
                       No admin role members found.
@@ -189,7 +201,15 @@ export default async function AdminAdminsPage({
             </table>
           </div>
         </div>
-      ) : null}
+      )}
+
+      <AccountsList
+        title="Admins"
+        description="Internal/admin staff accounts."
+        basePath="/admin/admins"
+        searchParams={params}
+        presetRole="admin"
+      />
     </AdminPage>
   );
 }

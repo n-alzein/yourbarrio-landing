@@ -9,8 +9,6 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useModal } from "./ModalProvider";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { withTimeout } from "@/lib/withTimeout";
-import { resolvePostLoginTarget } from "@/lib/auth/redirects";
-import { isAdminProfile } from "@/lib/auth/isAdmin";
 
 export default function CustomerLoginModal({ onClose, next: nextFromModalProps = null }) {
   const {
@@ -19,9 +17,6 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
     beginAuthAttempt,
     endAuthAttempt,
     authAttemptId,
-    authStatus,
-    user,
-    role,
   } = useAuth();
   const { openModal } = useModal();
   const router = useRouter();
@@ -80,50 +75,12 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
     return null;
   }, [nextFromModalProps, searchParams]);
 
-  const resolveLoginTarget = useCallback(
-    (profileOverride, roleOverride) => {
-      const next = getNextParam();
-      const profileForRouting = profileOverride || null;
-      const normalizedRole = roleOverride || null;
-      const adminRoleHint = isAdminProfile(profileForRouting, [])
-        ? ["admin_readonly"]
-        : [];
-      return resolvePostLoginTarget({
-        profile: profileForRouting,
-        role: normalizedRole,
-        roles: adminRoleHint,
-        next,
-      });
-    },
-    [getNextParam]
-  );
-
   useEffect(() => {
     if (!attemptIdRef.current) return;
     if (authAttemptId === attemptIdRef.current) return;
     attemptIdRef.current = 0;
     setLoading(false);
   }, [authAttemptId]);
-
-  useEffect(() => {
-    if (authStatus !== "authenticated" || !user?.id) return;
-    if (refreshControllerRef.current) {
-      refreshControllerRef.current.abort();
-      refreshControllerRef.current = null;
-    }
-    if (attemptIdRef.current) {
-      endAuthAttempt(attemptIdRef.current, "session");
-      attemptIdRef.current = 0;
-    }
-    setLoading(false);
-    const target = resolveLoginTarget(
-      { role, is_internal: role === "internal" },
-      role
-    );
-    onClose?.();
-    router.replace(target);
-    router.refresh();
-  }, [authStatus, endAuthAttempt, onClose, resolveLoginTarget, role, router, user?.id]);
 
   useEffect(() => {
     return () => {
@@ -200,20 +157,21 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
       const { data, error: signInError } = signInResult;
 
       if (isStale()) return;
-      if (signInError) {
-        setError(signInError.message);
+      if (signInError) throw signInError;
+
+      const session = data?.session;
+      if (!session) {
+        setError("Login succeeded but no session was returned. Try again.");
         return;
       }
 
-      const user = data?.user;
-      if (!user) {
-        setError("Login succeeded but no user was returned. Try again.");
-        return;
-      }
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData?.session) throw new Error("No session after login.");
 
       const profileStart = typeof performance !== "undefined" ? performance.now() : Date.now();
       const profileResult = await withTimeout(
-        client.from("users").select("role,is_internal").eq("id", user.id).maybeSingle(),
+        client.from("users").select("role,is_internal").eq("id", session.user.id).single(),
         profileTimeoutMs,
         `Profile request timed out after ${Math.round(profileTimeoutMs / 1000)}s`
       );
@@ -230,31 +188,53 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
         status: profileResult?.error?.status ?? null,
         error: profileResult?.error?.message ?? null,
       });
-      const { data: profile, error: profileError } = profileResult;
+      const { data: profile, error: profileError, status: profileStatus } = profileResult;
 
       if (isStale()) return;
-      if (profileError) {
-        setError("Logged in, but could not load your profile. Try again.");
-        return;
+      if (profileError && profileStatus !== 406) {
+        console.warn("Customer login role lookup failed", profileError);
       }
 
-      const dest = resolveLoginTarget(profile, profile?.role);
+      let isAdmin = profile?.is_internal === true;
+      const normalizedRole =
+        typeof profile?.role === "string" ? profile.role.trim().toLowerCase() : "";
+      if (normalizedRole.startsWith("admin")) {
+        isAdmin = true;
+      }
+
+      if (!isAdmin) {
+        const adminRoleResult = await withTimeout(
+          client
+            .from("admin_role_members")
+            .select("role_key")
+            .eq("user_id", session.user.id)
+            .limit(1),
+          profileTimeoutMs,
+          `Admin role lookup timed out after ${Math.round(profileTimeoutMs / 1000)}s`
+        );
+        if (!adminRoleResult?.error && (adminRoleResult?.data?.length || 0) > 0) {
+          isAdmin = true;
+        }
+      }
+
+      let dest = "/customer/home";
+      if (isAdmin) {
+        dest = "/admin";
+      } else if (normalizedRole === "business") {
+        dest = "/business";
+      }
       if (authDiagEnabled) {
         console.log("[AUTH_DIAG] customer-login:redirect:resolved", {
-          role: profile?.role ?? role ?? null,
+          role: normalizedRole || null,
           isInternal: profile?.is_internal === true,
           next: getNextParam(),
           dest,
         });
       }
 
-      onClose?.();
-
       const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
 
       try {
-        const session = data?.session;
-
         if (debugAuth) {
           console.log("[customer-login] refreshing cookies with tokens");
         }
@@ -322,8 +302,12 @@ export default function CustomerLoginModal({ onClose, next: nextFromModalProps =
         return;
       }
 
+      onClose?.();
+      if (isAdmin) {
+        window.location.replace("/admin");
+        return;
+      }
       router.replace(dest);
-      router.refresh();
     } catch (err) {
       if (isStale()) return;
       console.error("Customer login failed", err);

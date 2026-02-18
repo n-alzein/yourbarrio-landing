@@ -2,7 +2,7 @@ import Link from "next/link";
 import AdminPage from "@/app/admin/_components/AdminPage";
 import VerificationFilters from "@/app/admin/verification/_components/VerificationFilters";
 import VerificationQueueTableClient from "@/app/admin/verification/_components/VerificationQueueTableClient";
-import { hasExactAdminRole, requireAdminRole } from "@/lib/admin/permissions";
+import { hasAnyAdminRole, requireAdminRole } from "@/lib/admin/permissions";
 import {
   getCachedPendingBusinessVerificationsCount,
   listPendingBusinessVerifications,
@@ -79,7 +79,7 @@ export default async function AdminVerificationPage({
     }),
     getCachedPendingBusinessVerificationsCount(),
   ]);
-  const canManage = hasExactAdminRole(admin.roles, "admin_super");
+  const canManage = hasAnyAdminRole(admin.roles, ["admin_ops", "admin_super"]);
   const totalPages = Math.max(1, Math.ceil(total_count / PAGE_SIZE));
   const pageBase = new URLSearchParams();
   if (status !== "pending") pageBase.set("status", status);
@@ -102,7 +102,7 @@ export default async function AdminVerificationPage({
         <p>
           Showing {rows.length} of {total_count} records ({statusLabel(status)}).
         </p>
-        {canManage ? null : <p>Read-only mode. `admin_super` required for actions.</p>}
+        {canManage ? null : <p>Read-only mode. `admin_super` or `admin_ops` required for actions.</p>}
       </div>
 
       <VerificationQueueTableClient initialRows={rows} activeStatus={status} canManage={canManage} />

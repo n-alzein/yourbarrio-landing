@@ -24,6 +24,23 @@ type RecentAuditActivityProps = {
   pageSize: number;
 };
 
+const auditTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  timeZone: "UTC",
+});
+
+function formatAuditTimestamp(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "-";
+  return `${auditTimeFormatter.format(date)} UTC`;
+}
+
 export default function RecentAuditActivity({
   initialRows,
   initialHasMore,
@@ -81,7 +98,7 @@ export default function RecentAuditActivity({
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-neutral-800">
-                <td className="py-2 pr-3">{new Date(row.created_at).toLocaleString()}</td>
+                <td className="py-2 pr-3">{formatAuditTimestamp(row.created_at)}</td>
                 <td className="py-2 pr-3">{row.action || "-"}</td>
                 <td className="py-2 pr-3">
                   {row.target_type || "-"}:{row.target_id || "-"}

@@ -49,7 +49,7 @@ export default function BusinessVerificationActionsClient({
   const [isPending, startTransition] = useTransition();
 
   if (!canManage) {
-    return <span className="text-xs text-neutral-500">admin_super required</span>;
+    return <span className="text-xs text-neutral-500">admin_super or admin_ops required</span>;
   }
 
   function runAction(action: "approve" | "suspend" | "reset") {

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 type AdminMobileSidebarDrawerProps = {
@@ -15,6 +15,12 @@ export default function AdminMobileSidebarDrawer({
   onOpenChange,
   children,
 }: AdminMobileSidebarDrawerProps) {
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -36,7 +42,7 @@ export default function AdminMobileSidebarDrawer({
     };
   }, [open]);
 
-  if (typeof document === "undefined") return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div

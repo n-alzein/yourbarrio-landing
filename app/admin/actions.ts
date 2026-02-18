@@ -234,17 +234,22 @@ export async function addUserInternalNoteAction(formData: FormData) {
 
   const { client } = await getAdminDataClient({ mode: "service" });
   const targetPath = await resolveAdminUserPath(client, parsed.data.userId);
+  const authedClient = await getSupabaseServerAuthedClient();
+  if (!authedClient) {
+    redirect(withMessage(targetPath, "error", "Authentication client unavailable"));
+  }
 
-  await audit({
-    action: "user_internal_note_added",
-    targetType: "user",
-    targetId: parsed.data.userId,
-    actorUserId: admin.user.id,
-    meta: { note: parsed.data.note },
+  const { error } = await authedClient.rpc("admin_add_user_note", {
+    p_target_user_id: parsed.data.userId,
+    p_note: parsed.data.note,
   });
 
+  if (error) {
+    redirect(withMessage(targetPath, "error", error.message || "Failed to add note"));
+  }
+
   revalidatePath(targetPath);
-  redirect(withMessage(targetPath, "success", "Note logged in audit trail"));
+  redirect(withMessage(targetPath, "success", "Note added"));
 }
 
 const updateUserProfileFieldsSchema = z.object({
@@ -830,6 +835,10 @@ export async function changeAdminRoleAction(formData: FormData) {
     redirect(withMessage("/admin/admins", "error", "Invalid admin role payload"));
   }
 
+  if (parsed.data.userId === admin.user.id) {
+    redirect(withMessage("/admin/admins", "error", "Cannot modify your own admin account"));
+  }
+
   const serviceClient = getAdminServiceRoleClient();
   const currentRole = await getSingleRoleForUser(serviceClient, parsed.data.userId);
   const nextRole = parsed.data.role;
@@ -875,6 +884,10 @@ export async function disableAdminAccessAction(formData: FormData) {
 
   if (!parsed.success) {
     redirect(withMessage("/admin/admins", "error", "Invalid disable payload"));
+  }
+
+  if (parsed.data.userId === admin.user.id) {
+    redirect(withMessage("/admin/admins", "error", "Cannot modify your own admin account"));
   }
 
   const serviceClient = getAdminServiceRoleClient();

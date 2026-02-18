@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  addUserInternalNoteAction,
   startImpersonationAction,
   toggleUserInternalAction,
 } from "@/app/admin/actions";
@@ -10,6 +9,7 @@ import AdminFlash from "@/app/admin/_components/AdminFlash";
 import BusinessVerificationActionsClient from "@/app/admin/verification/_components/BusinessVerificationActionsClient";
 import AdminUserDetailLayout from "@/app/admin/users/[id]/_components/AdminUserDetailLayout";
 import AdminUserHeaderBar from "@/app/admin/users/[id]/_components/AdminUserHeaderBar";
+import AdminUserNotesPanel from "@/app/admin/users/[id]/_components/AdminUserNotesPanel";
 import AdminUserProfileEditor from "@/app/admin/users/[id]/_components/AdminUserProfileEditor";
 import AdminUserRoleEditor from "@/app/admin/users/[id]/_components/AdminUserRoleEditor";
 import AdminUserSecurityActions from "@/app/admin/users/[id]/_components/AdminUserSecurityActions";
@@ -107,10 +107,14 @@ export default async function AdminUserDetailPage({
     .eq("id", user.id)
     .maybeSingle();
 
-  const business = await getBusinessByUserId({
-    client,
-    userId: user.id,
-  });
+  const viewedRole = String(userDetail?.role ?? user?.role ?? "").trim().toLowerCase();
+  const isBusinessAccount = viewedRole === "business";
+  const business = isBusinessAccount
+    ? await getBusinessByUserId({
+        client,
+        userId: user.id,
+      })
+    : null;
 
   mergedUser = {
     ...user,
@@ -134,17 +138,42 @@ export default async function AdminUserDetailPage({
       : {}),
   };
 
-  const canSupport = admin.strictPermissionBypassUsed || canAdmin(admin.roles, "add_internal_note");
   const canImpersonate = admin.strictPermissionBypassUsed || canAdmin(admin.roles, "impersonate");
   const canOps = admin.strictPermissionBypassUsed || canAdmin(admin.roles, "toggle_internal_user");
   const canRoleFixes = admin.strictPermissionBypassUsed || canAdmin(admin.roles, "update_app_role");
   const canSuper = actorRoleKeys.includes("admin_super");
+  const canAddUserNotes = admin.strictPermissionBypassUsed || actorRoleKeys.some((role) =>
+    role === "admin_support" || role === "admin_ops" || role === "admin_super"
+  );
+  const canSeePermissionsTab = actorRoleKeys.includes("admin_super") || actorRoleKeys.includes("admin_ops");
+  const canVerificationManage = actorRoleKeys.includes("admin_super") || actorRoleKeys.includes("admin_ops");
+  const { data: notesRows, error: notesError } = authedClient
+    ? await authedClient.rpc("admin_list_user_notes", {
+        p_target_user_id: user.id,
+        p_limit: 50,
+        p_offset: 0,
+      })
+    : { data: [], error: null };
+
+  if (notesError && diagEnabled) {
+    console.warn("[admin] admin_list_user_notes failed", {
+      userId: user.id,
+      message: notesError?.message,
+      details: notesError?.details,
+      hint: notesError?.hint,
+      code: notesError?.code,
+    });
+  }
+
+  const initialNotes = Array.isArray(notesRows) ? notesRows : [];
 
   return (
     <AdminUserDetailLayout
       header={<AdminUserHeaderBar user={mergedUser} />}
       flash={<AdminFlash searchParams={resolvedSearch} />}
       aside={<AdminUserAside user={mergedUser} canImpersonate={canImpersonate} />}
+      canSeePermissionsTab={canSeePermissionsTab}
+      canSeeSecurityTab={canSuper}
     >
         <div className="space-y-3">
           <SectionCard title="Key properties">
@@ -170,8 +199,9 @@ export default async function AdminUserDetailPage({
             </dl>
           </SectionCard>
 
-          {business ? (
-            <SectionCard title="Business Verification">
+          {isBusinessAccount && business ? (
+            <div data-testid="business-verification-section">
+              <SectionCard title="Business Verification">
               <div className="space-y-3 text-sm">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Field label="Business" value={business.business_name || "-"} />
@@ -194,10 +224,11 @@ export default async function AdminUserDetailPage({
                 <BusinessVerificationActionsClient
                   ownerUserId={user.id}
                   currentStatus={business.verification_status}
-                  canManage={canSuper}
+                  canManage={canVerificationManage}
                 />
               </div>
-            </SectionCard>
+              </SectionCard>
+            </div>
           ) : null}
 
           {canRoleFixes ? (
@@ -320,30 +351,11 @@ export default async function AdminUserDetailPage({
         </div>
 
         <div className="space-y-3">
-          {canSupport ? (
-            <form action={addUserInternalNoteAction} className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-              <h3 className="mb-2 font-medium">Add internal note (audit log)</h3>
-              <input type="hidden" name="userId" value={user.id} />
-              <textarea
-                name="note"
-                required
-                rows={4}
-                className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
-                placeholder="Internal note (saved in admin_audit_log.meta.note)"
-              />
-              <button type="submit" className="mt-2 rounded bg-sky-600 px-3 py-2 text-sm hover:bg-sky-500">
-                Log note
-              </button>
-            </form>
+          {notesError ? (
+            <PlaceholderMessage message="Notes are temporarily unavailable. Apply the latest database migrations and refresh." />
           ) : (
-            <PlaceholderMessage message="You do not have permission to add internal notes." />
+            <AdminUserNotesPanel userId={user.id} canAddNote={canAddUserNotes} initialNotes={initialNotes} />
           )}
-
-          <SectionCard title="Notes roadmap">
-            <p className="text-sm text-neutral-400">
-              Shared admin notes with edit history can be added to this tab in a future iteration.
-            </p>
-          </SectionCard>
         </div>
     </AdminUserDetailLayout>
   );

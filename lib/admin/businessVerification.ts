@@ -2,7 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { logAdminAction } from "@/lib/admin/audit";
-import { requireAdminRole } from "@/lib/admin/permissions";
+import { requireAdminAnyRole, requireAdminRole } from "@/lib/admin/permissions";
 import { getAdminDataClient } from "@/lib/supabase/admin";
 
 export type BusinessVerificationStatus =
@@ -202,7 +202,7 @@ export async function setBusinessVerificationStatus({
   owner_user_id,
   next_status,
 }: SetBusinessVerificationStatusParams): Promise<PendingBusinessVerificationRow> {
-  const admin = await requireAdminRole("admin_super");
+  const admin = await requireAdminAnyRole(["admin_ops", "admin_super"]);
   const { client } = await getAdminDataClient({ mode: "service" });
   const ownerUserId = String(owner_user_id || "").trim();
   if (!ownerUserId) {
