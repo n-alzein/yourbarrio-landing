@@ -145,6 +145,7 @@ export default async function AdminUserDetailPage({
   const canAddUserNotes = admin.strictPermissionBypassUsed || actorRoleKeys.some((role) =>
     role === "admin_support" || role === "admin_ops" || role === "admin_super"
   );
+  const canDeleteAnyUserNotes = admin.strictPermissionBypassUsed || actorRoleKeys.includes("admin_super");
   const canSeePermissionsTab = actorRoleKeys.includes("admin_super") || actorRoleKeys.includes("admin_ops");
   const canVerificationManage = actorRoleKeys.includes("admin_super") || actorRoleKeys.includes("admin_ops");
   const { data: notesRows, error: notesError } = authedClient
@@ -354,7 +355,13 @@ export default async function AdminUserDetailPage({
           {notesError ? (
             <PlaceholderMessage message="Notes are temporarily unavailable. Apply the latest database migrations and refresh." />
           ) : (
-            <AdminUserNotesPanel userId={user.id} canAddNote={canAddUserNotes} initialNotes={initialNotes} />
+            <AdminUserNotesPanel
+              userId={user.id}
+              canWriteNotes={canAddUserNotes}
+              canDeleteAnyNote={canDeleteAnyUserNotes}
+              currentAdminUserId={actorUser?.id || null}
+              initialNotes={initialNotes}
+            />
           )}
         </div>
     </AdminUserDetailLayout>
