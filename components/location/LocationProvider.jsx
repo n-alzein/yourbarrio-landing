@@ -16,8 +16,11 @@ const LocationContext = createContext(null);
 export const LOCATION_CHANGED_EVENT = "yb:location-changed";
 
 export function LocationProvider({ children }) {
-  const [location, setLocationState] = useState(() => normalizeLocation({}));
-  const [hydrated, setHydrated] = useState(false);
+  const [location, setLocationState] = useState(() => {
+    const stored = readLocationClient();
+    return stored ? normalizeLocation(stored) : normalizeLocation({});
+  });
+  const hydrated = true;
   const locationRef = useRef(location);
 
   useEffect(() => {
@@ -54,11 +57,9 @@ export function LocationProvider({ children }) {
   useEffect(() => {
     const stored = readLocationClient();
     if (stored) {
-      applyLocation(stored);
       setLocationCookieClient(stored);
     }
-    setHydrated(true);
-  }, [applyLocation]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;

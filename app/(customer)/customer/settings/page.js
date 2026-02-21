@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import FastImage from "@/components/FastImage";
 import { useRouter } from "next/navigation";
@@ -20,22 +20,25 @@ export default function SettingsPage() {
   const { user, profile, supabase, loadingUser, logout, refreshProfile } =
     useAuth();
   const router = useRouter();
-  const effectiveProfile =
-    profile ||
-    (user
-      ? {
-          id: user.id,
-          email: user.email || null,
-          full_name: user.user_metadata?.full_name || null,
-          profile_photo_url: user.user_metadata?.avatar_url || null,
-          phone: null,
-          city: null,
-          address: null,
-          address_2: null,
-          state: null,
-          postal_code: null,
-        }
-      : null);
+  const effectiveProfile = useMemo(
+    () =>
+      profile ||
+      (user
+        ? {
+            id: user.id,
+            email: user.email || null,
+            full_name: user.user_metadata?.full_name || null,
+            profile_photo_url: user.user_metadata?.avatar_url || null,
+            phone: null,
+            city: null,
+            address: null,
+            address_2: null,
+            state: null,
+            postal_code: null,
+          }
+        : null),
+    [profile, user]
+  );
 
   /* -----------------------------------------------------------
      HOOKS (always first — no conditional hooks)
