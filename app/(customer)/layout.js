@@ -9,6 +9,9 @@ import { PATHS } from "@/lib/auth/paths";
 import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
 import { getAdminDataClient } from "@/lib/supabase/admin";
 import { isRscPrefetchRequest } from "@/lib/next/isRscPrefetchRequest";
+import { getRequestPath } from "@/lib/url/getRequestPath";
+import { getFeatureFlag, CUSTOMER_NEARBY_PUBLIC_FLAG_KEY } from "@/lib/featureFlags";
+import { getServerAuth } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,6 +48,13 @@ export default async function CustomerLayout({ children }) {
   if (isRsc) {
     return <>{children}</>;
   }
+  const requestPath = await getRequestPath("/customer/home");
+  const isNearbyRoute =
+    requestPath === "/customer/nearby" || requestPath.startsWith("/customer/nearby/");
+  const isNearbyPublicEnabled = isNearbyRoute
+    ? await getFeatureFlag(CUSTOMER_NEARBY_PUBLIC_FLAG_KEY)
+    : false;
+  const nearbyAuth = isNearbyPublicEnabled ? await getServerAuth() : null;
 
   const headerList = await headers();
   const userAgent = headerList.get("user-agent") || "";
@@ -55,6 +65,36 @@ export default async function CustomerLayout({ children }) {
     !userAgent.includes("Edg") &&
     !userAgent.includes("OPR");
   const perfCookie = (await cookies()).get("yb-perf")?.value === "1";
+
+  if (isNearbyPublicEnabled && !nearbyAuth?.user) {
+    return (
+      <>
+        <AuthSeed
+          user={null}
+          profile={null}
+          role="customer"
+          supportModeActive={false}
+        />
+        <Suspense fallback={null}>
+          <GlobalHeader surface="customer" />
+        </Suspense>
+        <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>
+          <Suspense
+            fallback={
+              <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)] bg-[var(--yb-bg)]">
+                <div className="max-w-5xl mx-auto rounded-2xl border border-[var(--yb-border)] bg-white p-8">
+                  Loading nearby businesses...
+                </div>
+              </div>
+            }
+          >
+            {children}
+          </Suspense>
+        </CustomerRouteShell>
+      </>
+    );
+  }
+
   const {
     user,
     profile,

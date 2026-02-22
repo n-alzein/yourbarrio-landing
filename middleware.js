@@ -7,6 +7,34 @@ import { getRoleLandingPath } from "@/lib/auth/redirects";
 const IMPERSONATE_USER_COOKIE = "yb_impersonate_user_id";
 const IMPERSONATE_SESSION_COOKIE = "yb_impersonate_session_id";
 const IMPERSONATE_TARGET_ROLE_COOKIE = "yb_impersonate_target_role";
+const CUSTOMER_NEARBY_PUBLIC_FLAG_PATH = "/api/flags/customer-nearby-public";
+const NEARBY_PUBLIC_COOKIE_NAME = "yb_nearby_public";
+
+function isCustomerNearbyPath(pathname) {
+  return pathname === "/customer/nearby" || pathname.startsWith("/customer/nearby/");
+}
+
+async function fetchCustomerNearbyPublicFlag(request) {
+  // Dev verify: inspect /customer/nearby response headers x-nearby-mw + x-nearby-public-decision.
+  try {
+    const url = new URL(CUSTOMER_NEARBY_PUBLIC_FLAG_PATH, request.url);
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) return { enabled: false, fetchFailed: true };
+    const payload = await response.json().catch(() => null);
+    if (typeof payload?.enabled !== "boolean") {
+      return { enabled: false, fetchFailed: true };
+    }
+    return { enabled: payload.enabled === true, fetchFailed: false };
+  } catch {
+    return { enabled: false, fetchFailed: true };
+  }
+}
 
 function isUuid(value) {
   return (
@@ -94,6 +122,7 @@ async function resolveSupportModeState({ supabase, request, shouldLogRole, pathn
 
 export async function middleware(request) {
   const pathname = request.nextUrl.pathname;
+  const isNearbyRoute = isCustomerNearbyPath(pathname);
   if (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/_vercel/") ||
@@ -182,6 +211,45 @@ export async function middleware(request) {
       targetResponse.cookies.set(name, value);
     });
     return attachDebugHeaders(targetResponse, options);
+  };
+  const withNearbyHeaders = (
+    targetResponse,
+    {
+      enabled = false,
+      decision = "restrict",
+      flagFetchFailed = false,
+      nearbyCookie = null,
+    } = {}
+  ) => {
+    if (!isNearbyRoute) return targetResponse;
+    targetResponse.headers.set("x-nearby-mw", "hit");
+    targetResponse.headers.set("x-nearby-public-enabled", enabled ? "1" : "0");
+    targetResponse.headers.set("x-nearby-public-decision", decision);
+    if (nearbyCookie) {
+      targetResponse.headers.set("x-nearby-cookie", nearbyCookie);
+    }
+    if (flagFetchFailed) {
+      targetResponse.headers.set("x-nearby-flag-fetch", "fail");
+    }
+    return targetResponse;
+  };
+  const setNearbyPublicCookie = (targetResponse) => {
+    targetResponse.cookies.set(NEARBY_PUBLIC_COOKIE_NAME, "1", {
+      path: "/customer/nearby",
+      maxAge: 120,
+      sameSite: "lax",
+      secure: isProd,
+    });
+    return targetResponse;
+  };
+  const clearNearbyPublicCookie = (targetResponse) => {
+    targetResponse.cookies.set(NEARBY_PUBLIC_COOKIE_NAME, "", {
+      path: "/customer/nearby",
+      maxAge: 0,
+      sameSite: "lax",
+      secure: isProd,
+    });
+    return targetResponse;
   };
 
   const redirectSafely = (targetPath) => {
@@ -306,6 +374,95 @@ export async function middleware(request) {
   }
 
   if (pathname.startsWith("/customer")) {
+    if (isNearbyRoute) {
+      const nearbyFlag = await fetchCustomerNearbyPublicFlag(request);
+      if (!user && nearbyFlag.enabled) {
+        const redirectedUrl = request.nextUrl.clone();
+        redirectedUrl.pathname = redirectedUrl.pathname.replace(
+          /^\/customer\/nearby/,
+          "/nearby"
+        );
+        const redirectedResponse = NextResponse.redirect(redirectedUrl, 307);
+        return withNearbyHeaders(
+          setNearbyPublicCookie(withSupabaseCookies(redirectedResponse)),
+          {
+          enabled: true,
+          decision: "allow",
+          flagFetchFailed: nearbyFlag.fetchFailed,
+            nearbyCookie: "set",
+          }
+        );
+      }
+
+      if (!user) {
+        const signinUrl = new URL("/signin", request.url);
+        signinUrl.searchParams.set("modal", "signin");
+        signinUrl.searchParams.set("next", pathname);
+        return withNearbyHeaders(
+          clearNearbyPublicCookie(withSupabaseCookies(NextResponse.redirect(signinUrl))),
+          {
+            enabled: nearbyFlag.enabled,
+            decision: "restrict",
+            flagFetchFailed: nearbyFlag.fetchFailed,
+            nearbyCookie: "cleared",
+          }
+        );
+      }
+
+      if (role !== "customer") {
+        if (role === "business") {
+          return withNearbyHeaders(
+            clearNearbyPublicCookie(withSupabaseCookies(
+              NextResponse.redirect(new URL("/business/dashboard", request.url))
+            )),
+            {
+              enabled: nearbyFlag.enabled,
+              decision: "restrict",
+              flagFetchFailed: nearbyFlag.fetchFailed,
+              nearbyCookie: "cleared",
+            }
+          );
+        }
+        if (role === "admin") {
+          if (supportMode.supportModeActive && supportMode.targetRole === "customer") {
+            return withNearbyHeaders(withSupabaseCookies(response), {
+              enabled: nearbyFlag.enabled,
+              decision: "allow",
+              flagFetchFailed: nearbyFlag.fetchFailed,
+            });
+          }
+          return withNearbyHeaders(
+            clearNearbyPublicCookie(
+              withSupabaseCookies(NextResponse.redirect(new URL("/admin", request.url)))
+            ),
+            {
+              enabled: nearbyFlag.enabled,
+              decision: "restrict",
+              flagFetchFailed: nearbyFlag.fetchFailed,
+              nearbyCookie: "cleared",
+            }
+          );
+        }
+        return withNearbyHeaders(
+          clearNearbyPublicCookie(
+            withSupabaseCookies(new NextResponse("Forbidden", { status: 403 }))
+          ),
+          {
+            enabled: nearbyFlag.enabled,
+            decision: "restrict",
+            flagFetchFailed: nearbyFlag.fetchFailed,
+            nearbyCookie: "cleared",
+          }
+        );
+      }
+
+      return withNearbyHeaders(withSupabaseCookies(response), {
+        enabled: nearbyFlag.enabled,
+        decision: "allow",
+        flagFetchFailed: nearbyFlag.fetchFailed,
+      });
+    }
+
     if (!user) {
       const signinUrl = new URL("/signin", request.url);
       signinUrl.searchParams.set("modal", "signin");

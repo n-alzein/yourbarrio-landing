@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { isCustomerNearbyPublicAllowed } from "@/lib/routes/isCustomerNearbyPublic";
 
 const MODAL_ALIASES: Record<string, string> = {
   signin: "customer-login",
@@ -14,6 +15,13 @@ function resolveModalType(modalParam: string | null) {
   const normalized = modalParam.trim().toLowerCase();
   if (!normalized) return null;
   return MODAL_ALIASES[normalized] || normalized;
+}
+
+function readNearbyPublicCookie() {
+  if (typeof document === "undefined") return false;
+  return document.cookie
+    .split(";")
+    .some((cookie) => cookie.trim() === "yb_nearby_public=1");
 }
 
 export default function ModalRouterClient({
@@ -31,10 +39,16 @@ export default function ModalRouterClient({
 
   useEffect(() => {
     if (!resolvedModalType) return;
+    const isNearbyPublic = isCustomerNearbyPublicAllowed(
+      pathname || "",
+      readNearbyPublicCookie()
+    );
 
-    openModal(resolvedModalType, {
-      ...(next ? { next } : {}),
-    });
+    if (!isNearbyPublic) {
+      openModal(resolvedModalType, {
+        ...(next ? { next } : {}),
+      });
+    }
 
     const params = new URLSearchParams(searchParams.toString());
     params.delete("modal");

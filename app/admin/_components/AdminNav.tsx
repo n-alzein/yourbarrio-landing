@@ -34,6 +34,9 @@ export default function AdminNav({
     { href: "/admin/businesses", label: "Businesses", icon: "businesses" },
     { href: "/admin/verification", label: "Verification", icon: "verification", badgeCount: pendingVerificationCount },
     { href: "/admin/admins", label: canManageAdmins ? "Admin Management" : "Admins", icon: "admins" },
+    ...(canManageAdmins
+      ? [{ href: "/admin/settings/features", label: "Settings", icon: "settings" as const }]
+      : []),
     ...(canModerate ? [{ href: "/admin/moderation", label: "Moderation", icon: "moderation" as const }] : []),
     { href: "/admin/audit", label: "Audit", icon: "audit" },
     ...(canImpersonate
@@ -110,6 +113,7 @@ type NavIconName =
   | "businesses"
   | "verification"
   | "admins"
+  | "settings"
   | "moderation"
   | "audit"
   | "impersonation"
@@ -161,6 +165,13 @@ function NavIcon({ name }: { name: NavIconName }) {
         <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7z" />
           <path d="M9.5 12.5 11 14l3.5-3.5" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 1 1-4 0v-.1a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 1 1 0-4h.1a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2h.1a1 1 0 0 0 .6-.9V4a2 2 0 1 1 4 0v.1a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1v.1a1 1 0 0 0 .9.6H20a2 2 0 1 1 0 4h-.1a1 1 0 0 0-.9.6z" />
         </svg>
       );
     case "moderation":

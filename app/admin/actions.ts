@@ -30,6 +30,7 @@ import { shouldUseSecureCookies } from "@/lib/http/cookiesSecurity";
 import { getSupabaseServerAuthedClient, getSupabaseServerClient } from "@/lib/supabaseServer";
 import { getAdminDataClient, getAdminServiceRoleClient } from "@/lib/supabase/admin";
 import { sendAdminInvite } from "@/lib/email/adminInvite";
+import { setFeatureFlag } from "@/lib/featureFlags";
 
 function withMessage(pathname: string, type: "success" | "error" | "ok" | "err", message: string) {
   const normalizedPath = getSafeRedirectPath(pathname || "") || "/admin";
@@ -711,6 +712,12 @@ const disableAdminSchema = z.object({
   userId: z.string().uuid(),
 });
 
+const setFeatureFlagSchema = z.object({
+  key: z.literal("customer_nearby_public"),
+  enabled: z.enum(["true", "false"]),
+  returnTo: z.string().optional(),
+});
+
 async function getSingleRoleForUser(client: any, userId: string): Promise<AdminRole | null> {
   const { data } = await client
     .from("admin_role_members")
@@ -939,6 +946,43 @@ export async function disableAdminAccessAction(formData: FormData) {
   revalidatePath("/admin/admins");
   revalidatePath(`/admin/users/${parsed.data.userId}`);
   redirect(withMessage("/admin/admins", "success", "Admin access disabled"));
+}
+
+export async function setCustomerNearbyPublicFlagAction(formData: FormData) {
+  const admin = await requireAdminAnyRole(["admin_super"]);
+  const parsed = setFeatureFlagSchema.safeParse({
+    key: formData.get("key"),
+    enabled: formData.get("enabled"),
+    returnTo: (formData.get("returnTo") || "").toString() || undefined,
+  });
+
+  const returnTo = getSafeRedirectPath(parsed.success ? parsed.data.returnTo || "" : "") || "/admin/settings/features";
+  if (!parsed.success) {
+    redirect(withMessage(returnTo, "error", "Invalid feature flag payload"));
+  }
+
+  const enabled = parsed.data.enabled === "true";
+
+  try {
+    await setFeatureFlag(parsed.data.key, enabled, admin.user.id);
+  } catch (error: any) {
+    redirect(withMessage(returnTo, "error", error?.message || "Failed to update feature flag"));
+  }
+
+  await audit({
+    action: "feature_flag_update",
+    targetType: "feature_flag",
+    targetId: parsed.data.key,
+    actorUserId: admin.user.id,
+    meta: {
+      key: parsed.data.key,
+      enabled,
+    },
+  });
+
+  revalidatePath("/admin/settings/features");
+  revalidatePath("/api/flags/customer-nearby-public");
+  redirect(withMessage(returnTo, "success", enabled ? "Nearby page is now public" : "Nearby page is now restricted"));
 }
 
 const startImpersonationSchema = z.object({

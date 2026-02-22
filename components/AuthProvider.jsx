@@ -25,6 +25,7 @@ import {
   clearVerifiedUserCache,
 } from "@/lib/auth/verifiedUserClient";
 import { PATHS } from "@/lib/auth/paths";
+import { isCustomerNearbyPublicAllowed } from "@/lib/routes/isCustomerNearbyPublic";
 import AuthStateDebug from "@/components/debug/AuthStateDebug";
 import { stopRealtime } from "@/lib/realtimeManager";
 import {
@@ -917,6 +918,13 @@ function redirectWithGuard(target) {
   window.location.replace(nextPath);
 }
 
+function readNearbyPublicCookie() {
+  if (typeof document === "undefined") return false;
+  return document.cookie
+    .split(";")
+    .some((cookie) => cookie.trim() === "yb_nearby_public=1");
+}
+
 export function AuthProvider({
   children,
   initialUser = null,
@@ -1078,6 +1086,7 @@ export function AuthProvider({
     if (authState.lastAuthEvent !== "SIGNED_OUT") return;
     if (!pathname) return;
     if (!isProtectedPath(pathname)) return;
+    if (isCustomerNearbyPublicAllowed(pathname, readNearbyPublicCookie())) return;
     const target = pathname.startsWith("/business")
       ? PATHS.auth.businessLogin
       : PATHS.auth.customerLogin;
@@ -1520,6 +1529,7 @@ export function AuthProvider({
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
     if (!pathname) return;
     if (!isProtectedPath(pathname)) return;
+    if (isCustomerNearbyPublicAllowed(pathname, readNearbyPublicCookie())) return;
     if (pathname.startsWith("/business-auth")) return;
 
     const target = pathname.startsWith("/business/")
