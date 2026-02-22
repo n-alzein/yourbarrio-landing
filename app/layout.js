@@ -6,7 +6,7 @@ import AppShell from "@/components/AppShell";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
-  title: "YourBarrio – Find What You Need Nearby",
+  title: "YourBarrio - Shop Local",
   description: "YourBarrio neighborhood discovery landing page",
   other: {
     "yb-shell-root": "root",
