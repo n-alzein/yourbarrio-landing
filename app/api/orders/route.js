@@ -10,7 +10,7 @@ function buildOrderNumber() {
   return `YB-${fragment}`;
 }
 
-async function getActiveCart(supabase, userId, cartId) {
+async function getActiveCart(supabase, userId, { cartId, businessId } = {}) {
   const query = supabase
     .from("carts")
     .select("*, cart_items(*)")
@@ -19,6 +19,9 @@ async function getActiveCart(supabase, userId, cartId) {
 
   if (cartId) {
     query.eq("id", cartId);
+  }
+  if (businessId) {
+    query.eq("vendor_id", businessId);
   }
 
   const { data, error } = await query
@@ -46,6 +49,7 @@ export async function POST(request) {
   }
 
   const cartId = body?.cart_id || null;
+  const businessId = body?.business_id || null;
   const contactName = (body?.contact_name || "").trim();
   const contactPhone = (body?.contact_phone || "").trim();
   const contactEmail = (body?.contact_email || "").trim() || null;
@@ -64,13 +68,16 @@ export async function POST(request) {
 
   let activeCart;
   try {
-    activeCart = await getActiveCart(supabase, user.id, cartId);
+    activeCart = await getActiveCart(supabase, user.id, { cartId, businessId });
   } catch (err) {
     return jsonError(err?.message || "Failed to load cart", 500);
   }
 
   if (!activeCart) {
     return jsonError("Cart not found", 404);
+  }
+  if (businessId && activeCart.vendor_id !== businessId) {
+    return jsonError("Cart business mismatch", 400);
   }
 
   const items = Array.isArray(activeCart.cart_items)

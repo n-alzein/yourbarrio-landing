@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -23,8 +23,24 @@ const TIME_OPTIONS = [
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, profile } = useAuth();
-  const { cart, vendor, items, loading, refreshCart, setFulfillmentType } = useCart();
+  const { loading, refreshCart, setFulfillmentType, vendorGroups } = useCart();
+  const businessIdParam = (searchParams.get("business_id") || "").trim();
+
+  const selectedGroup = useMemo(() => {
+    if (businessIdParam) {
+      return vendorGroups.find((group) => group.business_id === businessIdParam) || null;
+    }
+    if (vendorGroups.length === 1) {
+      return vendorGroups[0];
+    }
+    return null;
+  }, [businessIdParam, vendorGroups]);
+
+  const vendor = selectedGroup?.vendor || null;
+  const items = useMemo(() => selectedGroup?.items || [], [selectedGroup?.items]);
+
   const [form, setForm] = useState({
     contact_name: "",
     contact_phone: "",
@@ -50,15 +66,21 @@ export default function CheckoutPage() {
   const total = subtotal + fees;
 
   useEffect(() => {
-    if (cart?.fulfillment_type && !fulfillmentType) {
-      setFulfillmentTypeState(cart.fulfillment_type);
+    if (selectedGroup?.fulfillment_type) {
+      setFulfillmentTypeState(selectedGroup.fulfillment_type);
+      return;
     }
-  }, [cart?.fulfillment_type, fulfillmentType]);
+    setFulfillmentTypeState("");
+  }, [selectedGroup?.fulfillment_type, selectedGroup?.cart_id]);
 
   const handleFulfillmentSelect = async (nextType) => {
+    if (!selectedGroup) return;
     setError(null);
     setFulfillmentTypeState(nextType);
-    const result = await setFulfillmentType(nextType);
+    const result = await setFulfillmentType(nextType, {
+      cartId: selectedGroup.cart_id,
+      businessId: selectedGroup.business_id,
+    });
     if (result?.error) {
       setError(result.error);
     }
@@ -98,7 +120,7 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!cart) return;
+    if (!selectedGroup) return;
     if (!fulfillmentType) {
       setError("Select delivery or pickup to continue.");
       return;
@@ -112,7 +134,8 @@ export default function CheckoutPage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cart_id: cart.id,
+          cart_id: selectedGroup.cart_id,
+          business_id: selectedGroup.business_id,
           fulfillment_type: fulfillmentType,
           ...form,
         }),
@@ -140,7 +163,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!cart || items.length === 0) {
+  if (!vendorGroups.length) {
     return (
       <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
         <div className="max-w-4xl mx-auto rounded-3xl p-8 text-center" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -158,17 +181,44 @@ export default function CheckoutPage() {
     );
   }
 
+  if (!selectedGroup) {
+    return (
+      <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+        <div className="max-w-4xl mx-auto rounded-3xl p-8" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <p className="text-xs uppercase tracking-[0.2em] opacity-70">Checkout</p>
+          <h1 className="text-2xl font-semibold mt-2">Choose a vendor to checkout</h1>
+          <p className="mt-2 text-sm opacity-80">Each vendor is checked out separately.</p>
+          <div className="mt-6 space-y-3">
+            {vendorGroups.map((group) => {
+              const businessName = group.business_name || "Local vendor";
+              const href = group.business_id ? `/checkout?business_id=${encodeURIComponent(group.business_id)}` : "/cart";
+              return (
+                <Link
+                  key={group.business_id || businessName}
+                  href={href}
+                  className="flex items-center justify-between rounded-2xl px-4 py-3"
+                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                >
+                  <span className="text-sm font-semibold">{businessName}</span>
+                  <span className="text-xs opacity-80">${formatMoney(group.subtotal)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
       <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Checkout</p>
           <h1 className="text-3xl font-semibold">Submit your order request</h1>
-          {vendor ? (
-            <p className="mt-2 mb-4 text-sm opacity-80">
-              Vendor: {vendor.business_name || vendor.full_name || "Local vendor"}
-            </p>
-          ) : null}
+          <p className="mt-2 mb-4 text-sm opacity-80">
+            Vendor: {vendor?.business_name || vendor?.full_name || selectedGroup.business_name || "Local vendor"}
+          </p>
         </div>
 
         <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6">

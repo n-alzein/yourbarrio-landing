@@ -15,16 +15,16 @@ const formatMoney = (value) => {
 };
 
 export default function CartPage() {
-  const { cart, vendor, items, loading, error, updateItem, removeItem, setFulfillmentType } = useCart();
+  const { items, vendorGroups, loading, error, updateItem, removeItem, setFulfillmentType } = useCart();
   const [updatingItem, setUpdatingItem] = useState(null);
-  const [fulfillmentError, setFulfillmentError] = useState(null);
+  const [fulfillmentErrors, setFulfillmentErrors] = useState({});
 
-  const subtotal = useMemo(
+  const allItemsSubtotal = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 0), 0),
     [items]
   );
   const fees = 0;
-  const total = subtotal + fees;
+  const total = allItemsSubtotal + fees;
 
   const handleQuantityChange = async (item, delta) => {
     const nextQuantity = Number(item.quantity || 0) + delta;
@@ -37,11 +37,15 @@ export default function CartPage() {
     setUpdatingItem(null);
   };
 
-  const handleFulfillmentChange = async (mode) => {
-    setFulfillmentError(null);
-    const result = await setFulfillmentType(mode);
+  const handleFulfillmentChange = async (group, mode) => {
+    const groupKey = group.business_id || "unknown";
+    setFulfillmentErrors((prev) => ({ ...prev, [groupKey]: null }));
+    const result = await setFulfillmentType(mode, {
+      cartId: group.cart_id,
+      businessId: group.business_id,
+    });
     if (result?.error) {
-      setFulfillmentError(result.error);
+      setFulfillmentErrors((prev) => ({ ...prev, [groupKey]: result.error }));
     }
   };
 
@@ -56,7 +60,7 @@ export default function CartPage() {
     );
   }
 
-  if (!cart || items.length === 0) {
+  if (vendorGroups.length === 0) {
     return (
       <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
         <div className="max-w-4xl mx-auto rounded-3xl p-8 text-center" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -79,116 +83,148 @@ export default function CartPage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex flex-col gap-2">
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Cart</p>
-          <h1 className="text-3xl font-semibold">Review your order</h1>
-          {vendor ? (
-            <p className="text-sm opacity-80">Vendor: {vendor.business_name || vendor.full_name || "Local vendor"}</p>
-          ) : null}
+          <h1 className="text-3xl font-semibold">Review your cart</h1>
           {error ? (
             <p className="text-sm text-rose-300">{error}</p>
           ) : null}
         </div>
 
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-          <div className="space-y-4">
-            <div className="rounded-3xl p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Fulfillment</p>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleFulfillmentChange("delivery")}
-                  className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                    cart.fulfillment_type === "delivery" ? "ring-2 ring-indigo-500/40" : ""
-                  }`}
-                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Truck className="h-4 w-4" /> Delivery
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleFulfillmentChange("pickup")}
-                  className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                    cart.fulfillment_type === "pickup" ? "ring-2 ring-indigo-500/40" : ""
-                  }`}
-                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <ShoppingBag className="h-4 w-4" /> Pickup
-                  </span>
-                </button>
-              </div>
-              {fulfillmentError ? (
-                <p className="mt-3 text-xs text-rose-200">{fulfillmentError}</p>
-              ) : null}
-            </div>
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+          <div className="space-y-6">
+            {vendorGroups.map((group) => {
+              const businessName = group.business_name || "Local vendor";
+              const groupKey = group.business_id || "unknown";
+              const checkoutHref = group.business_id
+                ? `/checkout?business_id=${encodeURIComponent(group.business_id)}`
+                : "/checkout";
 
-            <div className="space-y-3">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-3xl p-4 flex flex-col gap-4 sm:flex-row sm:items-center"
+              return (
+                <section
+                  key={groupKey}
+                  className="rounded-3xl p-5 space-y-4"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
                 >
-                  <div className="flex items-center gap-4 flex-1">
-                    <SafeImage
-                      src={item.image_url || "/business-placeholder.png"}
-                      alt={item.title}
-                      width={96}
-                      height={96}
-                      className="h-20 w-20 rounded-2xl object-cover"
-                      useNextImage
-                    />
+                  <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold">{item.title}</p>
-                      <p className="text-xs opacity-70">${formatMoney(item.unit_price)}</p>
+                      <p className="text-sm font-semibold">{businessName}</p>
+                      <p className="text-xs opacity-75">
+                        {group.item_count} {group.item_count === 1 ? "item" : "items"}
+                      </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 rounded-full px-2 py-1" style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleQuantityChange(item, -1)}
-                        disabled={updatingItem === item.id}
-                        className="p-1"
-                        aria-label="Decrease quantity"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <span className="min-w-[24px] text-center text-sm font-semibold">{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleQuantityChange(item, 1)}
-                        disabled={updatingItem === item.id}
-                        className="p-1"
-                        aria-label="Increase quantity"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.id)}
-                      className="rounded-full p-2 text-rose-200 hover:text-rose-100"
-                      aria-label="Remove item"
+                    <Link
+                      href={checkoutHref}
+                      className="inline-flex items-center justify-center rounded-full px-4 py-2 text-xs font-semibold"
+                      style={{ background: "var(--text)", color: "var(--background)" }}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      Checkout with {businessName}
+                    </Link>
                   </div>
-                </div>
-              ))}
-            </div>
+
+                  <div>
+                    <p className="text-sm font-semibold">Fulfillment</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleFulfillmentChange(group, "delivery")}
+                        className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                          group.fulfillment_type === "delivery" ? "ring-2 ring-indigo-500/40" : ""
+                        }`}
+                        style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                      >
+                        <span className="flex items-center justify-center gap-2">
+                          <Truck className="h-4 w-4" /> Delivery
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFulfillmentChange(group, "pickup")}
+                        className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                          group.fulfillment_type === "pickup" ? "ring-2 ring-indigo-500/40" : ""
+                        }`}
+                        style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                      >
+                        <span className="flex items-center justify-center gap-2">
+                          <ShoppingBag className="h-4 w-4" /> Pickup
+                        </span>
+                      </button>
+                    </div>
+                    {fulfillmentErrors[groupKey] ? (
+                      <p className="mt-3 text-xs text-rose-200">{fulfillmentErrors[groupKey]}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3">
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-3xl p-4 flex flex-col gap-4 sm:flex-row sm:items-center"
+                        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <SafeImage
+                            src={item.image_url || "/business-placeholder.png"}
+                            alt={item.title}
+                            width={96}
+                            height={96}
+                            className="h-20 w-20 rounded-2xl object-cover"
+                            useNextImage
+                          />
+                          <div>
+                            <p className="text-sm font-semibold">{item.title}</p>
+                            <p className="text-xs opacity-70">${formatMoney(item.unit_price)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 rounded-full px-2 py-1" style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleQuantityChange(item, -1)}
+                              disabled={updatingItem === item.id}
+                              className="p-1"
+                              aria-label="Decrease quantity"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <span className="min-w-[24px] text-center text-sm font-semibold">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleQuantityChange(item, 1)}
+                              disabled={updatingItem === item.id}
+                              className="p-1"
+                              aria-label="Increase quantity"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item.id)}
+                            className="rounded-full p-2 text-rose-200 hover:text-rose-100"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                    <span className="font-semibold">Vendor subtotal</span>
+                    <span className="font-semibold">${formatMoney(group.subtotal)}</span>
+                  </div>
+                </section>
+              );
+            })}
           </div>
 
-          <div className="space-y-4">
+          <aside className="space-y-4 sticky top-24">
             <div className="rounded-3xl p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-              <p className="text-sm font-semibold">Order summary</p>
+              <p className="text-sm font-semibold">All items total</p>
               <div className="mt-4 space-y-2 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="opacity-80">Subtotal</span>
-                  <span>${formatMoney(subtotal)}</span>
+                  <span>${formatMoney(allItemsSubtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="opacity-80">Fees</span>
@@ -199,16 +235,9 @@ export default function CartPage() {
                   <span className="text-sm font-semibold">${formatMoney(total)}</span>
                 </div>
               </div>
-              <Link
-                href="/checkout"
-                className="mt-5 inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold"
-                style={{ background: "var(--text)", color: "var(--background)" }}
-              >
-                Checkout
-              </Link>
               <p className="mt-3 text-xs opacity-70">Payment collected at pickup/delivery.</p>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>

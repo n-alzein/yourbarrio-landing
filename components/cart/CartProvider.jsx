@@ -2,12 +2,16 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { groupCartItemsByBusiness } from "@/lib/cart/groupCartItemsByBusiness";
 
 /** @typedef {import("@/lib/types/cart").CartResponse} CartResponse */
 
 const CartContext = createContext({
   cart: null,
   vendor: null,
+  carts: [],
+  vendors: {},
+  vendorGroups: [],
   items: [],
   itemCount: 0,
   loading: false,
@@ -71,6 +75,8 @@ export function CartProvider({ children }) {
   const { user, authStatus } = useAuth();
   const [cart, setCart] = useState(null);
   const [vendor, setVendor] = useState(null);
+  const [carts, setCarts] = useState([]);
+  const [vendors, setVendors] = useState({});
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -81,9 +87,22 @@ export function CartProvider({ children }) {
   const mountStartedAtRef = useRef(0);
 
   const syncCart = useCallback((payload) => {
-    setCart(payload?.cart || null);
-    setVendor(payload?.vendor || null);
-    setItems(payload?.cart?.cart_items || []);
+    const nextCarts = Array.isArray(payload?.carts)
+      ? payload.carts
+      : payload?.cart
+        ? [payload.cart]
+        : [];
+    const nextVendors = payload?.vendors || {};
+    const nextPrimaryCart = payload?.cart || nextCarts[0] || null;
+    const nextPrimaryVendor =
+      payload?.vendor ||
+      (nextPrimaryCart?.vendor_id ? nextVendors[nextPrimaryCart.vendor_id] || null : null);
+
+    setCarts(nextCarts);
+    setVendors(nextVendors);
+    setCart(nextPrimaryCart);
+    setVendor(nextPrimaryVendor);
+    setItems(nextCarts.flatMap((cartRow) => cartRow?.cart_items || []));
   }, []);
 
   const refreshCart = useCallback(
@@ -91,6 +110,8 @@ export function CartProvider({ children }) {
       if (!user?.id || authStatus !== "authenticated") {
         setCart(null);
         setVendor(null);
+        setCarts([]);
+        setVendors({});
         setItems([]);
         setLoading(false);
         setError(null);
@@ -324,9 +345,6 @@ export function CartProvider({ children }) {
 
       const payload = await parseResponse(response);
       if (!response.ok) {
-        if (response.status === 409) {
-          return { conflict: true, ...payload };
-        }
         return { error: payload?.error || "Failed to add to cart" };
       }
 
@@ -366,16 +384,20 @@ export function CartProvider({ children }) {
   );
 
   const setFulfillmentType = useCallback(
-    async (fulfillmentType) => {
+    async (fulfillmentType, { cartId = null, businessId = null } = {}) => {
       if (!user?.id) {
         return { error: "Please log in." };
       }
+
+      const body = { fulfillment_type: fulfillmentType };
+      if (cartId) body.cart_id = cartId;
+      if (businessId) body.business_id = businessId;
 
       const response = await fetch("/api/cart", {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fulfillment_type: fulfillmentType }),
+        body: JSON.stringify(body),
       });
 
       const payload = await parseResponse(response);
@@ -413,10 +435,27 @@ export function CartProvider({ children }) {
     [items]
   );
 
+  const vendorGroups = useMemo(() => {
+    const cartsByVendorId = carts.reduce((acc, cartRow) => {
+      if (cartRow?.vendor_id) {
+        acc[cartRow.vendor_id] = cartRow;
+      }
+      return acc;
+    }, {});
+
+    return groupCartItemsByBusiness(items, {
+      vendorsById: vendors,
+      cartsByVendorId,
+    });
+  }, [carts, items, vendors]);
+
   const value = useMemo(
     () => ({
       cart,
       vendor,
+      carts,
+      vendors,
+      vendorGroups,
       items,
       itemCount,
       loading,
@@ -431,6 +470,9 @@ export function CartProvider({ children }) {
     [
       cart,
       vendor,
+      carts,
+      vendors,
+      vendorGroups,
       items,
       itemCount,
       loading,

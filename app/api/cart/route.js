@@ -2,26 +2,51 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
-async function getActiveCart(supabase, userId) {
+async function getActiveCarts(supabase, userId) {
   const { data, error } = await supabase
     .from("carts")
     .select("*, cart_items(*)")
     .eq("user_id", userId)
     .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
-  if (!data) return null;
+  return Array.isArray(data) ? data : [];
+}
 
-  const { data: vendor } = await supabase
+async function getVendorsById(supabase, vendorIds) {
+  if (!vendorIds.length) return {};
+
+  const { data, error } = await supabase
     .from("users")
     .select("id,business_name,full_name,profile_photo_url,city,address")
-    .eq("id", data.vendor_id)
-    .maybeSingle();
+    .in("id", vendorIds);
 
-  return { cart: data, vendor: vendor || null };
+  if (error) throw error;
+
+  return (data || []).reduce((acc, vendor) => {
+    acc[vendor.id] = vendor;
+    return acc;
+  }, {});
+}
+
+function buildCartPayload(carts, vendorsById) {
+  const primaryCart = carts[0] || null;
+  const primaryVendor = primaryCart ? vendorsById[primaryCart.vendor_id] || null : null;
+
+  return {
+    cart: primaryCart,
+    vendor: primaryVendor,
+    carts,
+    vendors: vendorsById,
+  };
+}
+
+async function getCartPayload(supabase, userId) {
+  const carts = await getActiveCarts(supabase, userId);
+  const vendorIds = [...new Set(carts.map((cart) => cart.vendor_id).filter(Boolean))];
+  const vendors = await getVendorsById(supabase, vendorIds);
+  return buildCartPayload(carts, vendors);
 }
 
 function jsonError(message, status = 400, extra = {}) {
@@ -37,8 +62,8 @@ export async function GET() {
   }
 
   try {
-    const payload = await getActiveCart(supabase, user.id);
-    return NextResponse.json(payload || { cart: null, vendor: null }, {
+    const payload = await getCartPayload(supabase, user.id);
+    return NextResponse.json(payload || { cart: null, vendor: null, carts: [], vendors: {} }, {
       status: 200,
       headers: { "Cache-Control": "no-store" },
     });
@@ -64,7 +89,6 @@ export async function POST(request) {
 
   const listingId = body?.listing_id;
   const quantity = Number(body?.quantity || 1);
-  const clearExisting = Boolean(body?.clear_existing);
 
   if (!listingId) {
     return jsonError("Missing listing_id", 400);
@@ -88,30 +112,15 @@ export async function POST(request) {
     return jsonError("Listing not found", 404);
   }
 
-  let activePayload;
+  let cartPayload;
   try {
-    activePayload = await getActiveCart(supabase, user.id);
+    cartPayload = await getCartPayload(supabase, user.id);
   } catch (err) {
     return jsonError(err?.message || "Failed to load cart", 500);
   }
 
-  let activeCart = activePayload?.cart || null;
-
-  if (activeCart && activeCart.vendor_id !== listing.business_id) {
-    if (!clearExisting) {
-      return jsonError("Cart vendor mismatch", 409, {
-        code: "vendor_mismatch",
-        cart_vendor_id: activeCart.vendor_id,
-      });
-    }
-
-    await supabase
-      .from("carts")
-      .update({ status: "abandoned", updated_at: new Date().toISOString() })
-      .eq("id", activeCart.id);
-
-    activeCart = null;
-  }
+  let activeCart =
+    (cartPayload?.carts || []).find((cartRow) => cartRow.vendor_id === listing.business_id) || null;
 
   if (!activeCart) {
     const { data: newCart, error: cartError } = await supabase
@@ -174,8 +183,8 @@ export async function POST(request) {
   }
 
   try {
-    const payload = await getActiveCart(supabase, user.id);
-    return NextResponse.json(payload || { cart: null, vendor: null }, {
+    const payload = await getCartPayload(supabase, user.id);
+    return NextResponse.json(payload || { cart: null, vendor: null, carts: [], vendors: {} }, {
       status: 200,
       headers: { "Cache-Control": "no-store" },
     });
@@ -203,27 +212,44 @@ export async function PATCH(request) {
   const quantity = body?.quantity != null ? Number(body.quantity) : null;
   const hasFulfillmentType = Object.prototype.hasOwnProperty.call(body, "fulfillment_type");
   const fulfillmentType = hasFulfillmentType ? body?.fulfillment_type ?? null : null;
+  const cartId = body?.cart_id || null;
+  const businessId = body?.business_id || null;
 
-  let activePayload;
+  let cartPayload;
   try {
-    activePayload = await getActiveCart(supabase, user.id);
+    cartPayload = await getCartPayload(supabase, user.id);
   } catch (err) {
     return jsonError(err?.message || "Failed to load cart", 500);
   }
 
-  const activeCart = activePayload?.cart || null;
-  if (!activeCart) {
+  const activeCarts = cartPayload?.carts || [];
+  if (!activeCarts.length) {
     return jsonError("Cart not found", 404);
   }
 
-  if (hasFulfillmentType && fulfillmentType !== activeCart.fulfillment_type) {
+  let fulfillmentCart = null;
+  if (hasFulfillmentType) {
+    if (cartId) {
+      fulfillmentCart = activeCarts.find((cartRow) => cartRow.id === cartId) || null;
+    } else if (businessId) {
+      fulfillmentCart = activeCarts.find((cartRow) => cartRow.vendor_id === businessId) || null;
+    } else if (activeCarts.length === 1) {
+      fulfillmentCart = activeCarts[0];
+    }
+
+    if (!fulfillmentCart) {
+      return jsonError("Cart scope required for fulfillment update", 400);
+    }
+  }
+
+  if (hasFulfillmentType && fulfillmentType !== fulfillmentCart.fulfillment_type) {
     const { error: updateError } = await supabase
       .from("carts")
       .update({
         fulfillment_type: fulfillmentType,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", activeCart.id);
+      .eq("id", fulfillmentCart.id);
 
     if (updateError) {
       return jsonError(updateError.message || "Failed to update cart", 500);
@@ -235,11 +261,14 @@ export async function PATCH(request) {
       return jsonError("Invalid quantity", 400);
     }
 
+    const activeCartIds = activeCarts.map((cartRow) => cartRow.id);
+
     if (quantity === 0) {
       const { error: deleteError } = await supabase
         .from("cart_items")
         .delete()
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .in("cart_id", activeCartIds);
 
       if (deleteError) {
         return jsonError(deleteError.message || "Failed to remove item", 500);
@@ -248,7 +277,8 @@ export async function PATCH(request) {
       const { error: updateItemError } = await supabase
         .from("cart_items")
         .update({ quantity, updated_at: new Date().toISOString() })
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .in("cart_id", activeCartIds);
 
       if (updateItemError) {
         return jsonError(updateItemError.message || "Failed to update item", 500);
@@ -257,8 +287,8 @@ export async function PATCH(request) {
   }
 
   try {
-    const payload = await getActiveCart(supabase, user.id);
-    return NextResponse.json(payload || { cart: null, vendor: null }, {
+    const payload = await getCartPayload(supabase, user.id);
+    return NextResponse.json(payload || { cart: null, vendor: null, carts: [], vendors: {} }, {
       status: 200,
       headers: { "Cache-Control": "no-store" },
     });
@@ -275,31 +305,33 @@ export async function DELETE() {
     return jsonError("Unauthorized", 401);
   }
 
-  let activePayload;
+  let cartPayload;
   try {
-    activePayload = await getActiveCart(supabase, user.id);
+    cartPayload = await getCartPayload(supabase, user.id);
   } catch (err) {
     return jsonError(err?.message || "Failed to load cart", 500);
   }
 
-  const activeCart = activePayload?.cart || null;
-  if (!activeCart) {
-    return NextResponse.json({ cart: null, vendor: null }, { status: 200 });
+  const activeCarts = cartPayload?.carts || [];
+  if (!activeCarts.length) {
+    return NextResponse.json({ cart: null, vendor: null, carts: [], vendors: {} }, { status: 200 });
   }
+
+  const cartIds = activeCarts.map((cartRow) => cartRow.id);
 
   await supabase
     .from("cart_items")
     .delete()
-    .eq("cart_id", activeCart.id);
+    .in("cart_id", cartIds);
 
   const { error: updateError } = await supabase
     .from("carts")
     .update({ status: "abandoned", updated_at: new Date().toISOString() })
-    .eq("id", activeCart.id);
+    .in("id", cartIds);
 
   if (updateError) {
     return jsonError(updateError.message || "Failed to clear cart", 500);
   }
 
-  return NextResponse.json({ cart: null, vendor: null }, { status: 200 });
+  return NextResponse.json({ cart: null, vendor: null, carts: [], vendors: {} }, { status: 200 });
 }

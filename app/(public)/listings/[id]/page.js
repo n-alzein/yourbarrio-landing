@@ -329,25 +329,10 @@ export default function ListingDetails({ params }) {
     if (!requireAuth("place orders", setStatusMessage)) return;
     setStatusMessage("");
 
-    const attemptAdd = async (options = {}) =>
-      addItem({
-        listingId: listing.id,
-        quantity,
-        ...options,
-      });
-
-    let result = await attemptAdd();
-
-    if (result?.conflict?.code === "vendor_mismatch") {
-      const proceed = window.confirm(
-        "Your cart has items from another vendor. Clear the cart and add this item?"
-      );
-      if (!proceed) {
-        setStatusMessage("Your cart still has items from another vendor.");
-        return;
-      }
-      result = await attemptAdd({ clearExisting: true });
-    }
+    const result = await addItem({
+      listingId: listing.id,
+      quantity,
+    });
 
     if (result?.error) {
       setStatusMessage(result.error);
@@ -359,7 +344,15 @@ export default function ListingDetails({ params }) {
       message: "Added to cart",
       actions: [
         { label: "View cart", onClick: () => router.push("/cart") },
-        { label: "Checkout", onClick: () => router.push("/checkout") },
+        {
+          label: "Checkout",
+          onClick: () =>
+            router.push(
+              listing.business_id
+                ? `/checkout?business_id=${encodeURIComponent(listing.business_id)}`
+                : "/checkout"
+            ),
+        },
       ],
     });
   };

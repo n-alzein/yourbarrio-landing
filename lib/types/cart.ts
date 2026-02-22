@@ -37,4 +37,6 @@ export type VendorSummary = {
 export type CartResponse = {
   cart: Cart | null;
   vendor: VendorSummary | null;
+  carts?: Cart[];
+  vendors?: Record<string, VendorSummary>;
 };
