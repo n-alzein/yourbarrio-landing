@@ -15,6 +15,7 @@ import ViewerContextEnhancer from "@/components/public/ViewerContextEnhancer";
 
 const PUBLIC_CACHE_SECONDS = 300;
 const PERF_ENV_FLAG = "YB_PROFILE_PERF";
+const LOOKUP_DEBUG_ENV_FLAG = "YB_PROFILE_LOOKUP_DEBUG";
 const UUID_ANY_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,24 +75,60 @@ async function fetchPublicProfile(id) {
   return profile;
 }
 
-async function resolveBusinessRef(ref) {
-  const trimmedRef = String(ref || "").trim();
-  if (!trimmedRef) return null;
+async function resolveBusinessRef(idOrPublicId) {
+  const normalizedRef = String(idOrPublicId || "").trim();
+  if (!normalizedRef) return null;
+
+  const isUuidLookup = UUID_ANY_RE.test(normalizedRef);
   const supabase = getPublicSupabaseServerClient();
-  const { data, error } = await supabase.rpc("resolve_business_ref", {
-    p_ref: trimmedRef,
-  });
+  const logEnabled =
+    process.env.NODE_ENV !== "production" &&
+    process.env[LOOKUP_DEBUG_ENV_FLAG] === "1";
+  let lookupKey = isUuidLookup ? "id" : "public_id";
+
+  let { data, error } = await supabase
+    .from("businesses")
+    .select("id,owner_user_id,public_id")
+    .eq(lookupKey, normalizedRef)
+    .maybeSingle();
+
+  // Backward compatibility for older UUID links that may have used owner_user_id.
+  if (!data && !error && isUuidLookup) {
+    lookupKey = "owner_user_id";
+    const ownerLookup = await supabase
+      .from("businesses")
+      .select("id,owner_user_id,public_id")
+      .eq("owner_user_id", normalizedRef)
+      .maybeSingle();
+    data = ownerLookup.data;
+    error = ownerLookup.error;
+  }
+
+  if (logEnabled) {
+    console.log("[public business] route lookup", {
+      idOrPublicId: normalizedRef,
+      key: lookupKey,
+      found: Boolean(data && !error),
+    });
+  }
+
   if (error) {
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[public business] resolve_business_ref failed", {
-        ref: trimmedRef,
+      console.warn("[public business] business ref lookup failed", {
+        idOrPublicId: normalizedRef,
+        key: lookupKey,
         code: error.code || null,
         message: error.message || null,
       });
     }
     return null;
   }
-  return Array.isArray(data) && data.length > 0 ? data[0] : null;
+
+  if (!data?.owner_user_id) return null;
+  return {
+    id: data.owner_user_id,
+    public_id: data.public_id || null,
+  };
 }
 
 function buildListingsQuery(supabase, businessId, limit, filters) {
@@ -295,8 +332,8 @@ function createPerfLogger({ enabled, label, businessId }) {
 
 export async function generateMetadata({ params }) {
   const resolvedParams = await Promise.resolve(params);
-  const ref = resolvedParams?.id;
-  const resolvedRef = await resolveBusinessRef(ref);
+  const idOrPublicId = resolvedParams?.id;
+  const resolvedRef = await resolveBusinessRef(idOrPublicId);
   const businessId = resolvedRef?.id || null;
   const businessPublicId = resolvedRef?.public_id || null;
   const profile = businessId ? await getPublicProfileCached(businessId) : null;
@@ -343,13 +380,13 @@ export default async function PublicBusinessProfilePage({
 }) {
   const resolvedParams = await Promise.resolve(params);
   const resolvedSearch = await Promise.resolve(searchParams);
-  const ref = String(resolvedParams?.id || "").trim();
-  if (!ref) notFound();
-  const resolvedRef = await resolveBusinessRef(ref);
+  const idOrPublicId = String(resolvedParams?.id || "").trim();
+  if (!idOrPublicId) notFound();
+  const resolvedRef = await resolveBusinessRef(idOrPublicId);
   if (!resolvedRef?.id) notFound();
   const businessId = resolvedRef.id;
   const businessPublicId = String(resolvedRef.public_id || "").trim();
-  if (UUID_ANY_RE.test(ref) && businessPublicId) {
+  if (UUID_ANY_RE.test(idOrPublicId) && businessPublicId) {
     permanentRedirect(`/customer/b/${encodeURIComponent(businessPublicId)}`);
   }
   const publicPath = `/customer/b/${encodeURIComponent(businessPublicId || businessId)}`;

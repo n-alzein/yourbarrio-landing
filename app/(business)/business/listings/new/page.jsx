@@ -218,7 +218,8 @@ export default function NewListingPage() {
       const selectedCategory = categories.find(
         (category) => category.id === form.categoryId
       );
-      const insertQuery = client.from("listings").insert({
+      const listingPayload = {
+        // public_id is intentionally omitted; DB default/trigger generates it.
         business_id: accountId,
         title: form.title,
         description: form.description,
@@ -239,7 +240,8 @@ export default function NewListingPage() {
         inventory_last_updated_at: new Date().toISOString(),
         city: business?.city || null,
         photo_url: photo_urls.length ? JSON.stringify(photo_urls) : null,
-      });
+      };
+      const insertQuery = client.from("listings").insert(listingPayload);
       const { error } = await withTimeout(
         insertQuery,
         PUBLISH_TIMEOUT_MS,
