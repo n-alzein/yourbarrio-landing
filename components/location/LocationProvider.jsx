@@ -96,7 +96,6 @@ const setUserSetFlagClient = (enabled) => {
 
 const logBootstrap = (...args) => {
   if (!DEBUG_LOCATION_BOOTSTRAP) return;
-  // eslint-disable-next-line no-console
   console.info("[LocationProvider/bootstrap]", ...args);
 };
 

@@ -1,9 +1,41 @@
 import { ArrowRight } from "lucide-react";
+import { redirect } from "next/navigation";
 import BusinessAuthPopupLink from "@/components/business/BusinessAuthPopupLink";
+import BusinessMarketingHeader from "@/components/headers/BusinessMarketingHeader";
+import { getSupabaseServerAuthedClient } from "@/lib/supabaseServer";
+import { resolveCurrentUserRoleFromClient } from "@/lib/auth/getCurrentUserRole";
+import { PATHS } from "@/lib/auth/paths";
+import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 
-export default function BusinessHome() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function BusinessHome() {
+  const supabase = await getSupabaseServerAuthedClient();
+
+  if (supabase) {
+    const { user, role } = await resolveCurrentUserRoleFromClient(supabase);
+
+    if (user?.id && role === "business") {
+      const { data: businessRow } = await supabase
+        .from("businesses")
+        .select("business_name,category,address,city,state,postal_code")
+        .eq("owner_user_id", user.id)
+        .maybeSingle();
+
+      if (!isBusinessOnboardingComplete(businessRow)) {
+        redirect(PATHS.business.onboarding);
+      }
+
+      redirect(PATHS.business.dashboard);
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-white text-slate-900 pt-12 px-6 pb-24">
+    <>
+      <BusinessMarketingHeader />
+      <div className="h-16" aria-hidden="true" />
+      <div className="min-h-screen bg-white text-slate-900 pt-12 px-6 pb-24">
       <section className="max-w-6xl mx-auto text-center py-12 sm:py-16">
         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900">
           YourBarrio <span className="text-[var(--color-primary)]">for Business</span>
@@ -113,6 +145,7 @@ export default function BusinessHome() {
           Get Started <ArrowRight className="h-5 w-5" />
         </BusinessAuthPopupLink>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

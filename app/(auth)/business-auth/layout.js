@@ -45,7 +45,6 @@ export default async function BusinessAuthLayout({ children }) {
           padding-top: 0 !important;
         }
         footer {
-          background: var(--yb-surface) !important;
           margin-top: 0 !important;
         }
       `}</style>

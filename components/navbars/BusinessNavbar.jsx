@@ -22,6 +22,7 @@ import BusinessAccountMenuItems from "@/components/nav/BusinessAccountMenuItems"
 import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
+import { getBusinessDisplayName } from "@/lib/auth/displayName";
 import SafeImage from "@/components/SafeImage";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
@@ -41,6 +42,7 @@ function NavItem({
   return (
     <Link
       href={href}
+      prefetch={href === "/business" ? false : undefined}
       onClick={(e) => {
         if (disabled) {
           e.preventDefault();
@@ -74,6 +76,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
   const {
     user,
     profile,
+    business,
     role,
     loadingUser,
     supabase,
@@ -101,14 +104,14 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
   const notificationsRef = useRef(null);
   const resolvedUser = forcedAuth?.user ?? user;
   const resolvedProfile = forcedAuth?.profile ?? profile;
+  const resolvedBusiness = forcedAuth?.business ?? business;
   const resolvedRole = forcedAuth?.role ?? role;
   const supportModeActive = Boolean(forcedAuth?.supportMode);
-  const displayName =
-    resolvedProfile?.business_name ||
-    resolvedProfile?.full_name ||
-    resolvedUser?.user_metadata?.full_name ||
-    resolvedUser?.user_metadata?.name ||
-    "Account";
+  const displayName = getBusinessDisplayName({
+    business: resolvedBusiness,
+    profile: resolvedProfile,
+    user: resolvedUser,
+  });
 
   const badgeReady = !loadingUser;
 
@@ -628,7 +631,10 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
             </svg>
           </button>
 
-          <Link href={isBusinessAuthed ? "/go/dashboard" : "/business"}>
+          <Link
+            href={isBusinessAuthed ? "/go/dashboard" : "/business"}
+            prefetch={isBusinessAuthed ? undefined : false}
+          >
             <span className="relative block h-32 w-32">
               <Image
                 src="/logo.png"
@@ -651,7 +657,10 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
         <div className="hidden md:flex items-center gap-10">
           {/* Logo */}
           <div className="relative flex items-center">
-            <Link href={isBusinessAuthed ? "/go/dashboard" : "/business"}>
+            <Link
+              href={isBusinessAuthed ? "/go/dashboard" : "/business"}
+              prefetch={isBusinessAuthed ? undefined : false}
+            >
               <span className="relative block h-32 w-32">
                 <Image
                   src="/logo.png"

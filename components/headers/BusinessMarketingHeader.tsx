@@ -71,7 +71,7 @@ export default function BusinessMarketingHeader() {
         <div className="yb-navbar yb-navbar-bordered">
           <HeaderShell>
             <div className="flex items-center gap-4">
-              <Link href="/business" className="flex items-center gap-3">
+              <Link href="/business" prefetch={false} className="flex items-center gap-3">
                 <span className="relative h-9 w-9 scale-[3] origin-left">
                   <Image
                     src="/logo.png"

@@ -292,11 +292,40 @@ export default function SettingsPage() {
 
     if (!error) {
       supabase.storage.from("business-photos").getPublicUrl(fileName);
+      const photoUrl = `business-photos/${fileName}`;
+
+      const { error: userPhotoError } = await supabase
+        .from("users")
+        .update({ profile_photo_url: photoUrl })
+        .eq("id", user.id);
+
+      const { error: businessPhotoError } = await supabase
+        .from("businesses")
+        .update({ profile_photo_url: photoUrl })
+        .eq("owner_user_id", user.id);
+
+      if (userPhotoError) {
+        showToast("error", userPhotoError.message || "Failed to save photo.");
+        setPhotoUploading(false);
+        return;
+      }
 
       setForm((prev) => ({
         ...prev,
-        profile_photo_url: `business-photos/${fileName}`,
+        profile_photo_url: photoUrl,
       }));
+      refreshProfile?.();
+
+      if (businessPhotoError) {
+        showToast(
+          "error",
+          businessPhotoError.message || "Photo uploaded, but business sync failed."
+        );
+      } else {
+        showToast("success", "Photo uploaded.");
+      }
+    } else {
+      showToast("error", error.message || "Failed to upload photo.");
     }
 
     setPhotoUploading(false);

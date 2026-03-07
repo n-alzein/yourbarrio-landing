@@ -784,6 +784,11 @@ export async function upsertAdminAccountAction(formData: FormData) {
     targetUserId = existing.id;
   } else {
     try {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[invite-flow] PATH=ADMIN_ACTION upsertAdminAccountAction calling sendAdminInvite", {
+          email,
+        });
+      }
       const inviteResult = await sendAdminInvite(email, requestSiteUrl);
       targetUserId = inviteResult.userId;
     } catch (error: any) {

@@ -1,5 +1,3 @@
-import BusinessMarketingHeader from "@/components/headers/BusinessMarketingHeader";
-
 function BusinessRouteShell({ children = null }) {
   return (
     <div className="yb-business-marketing min-h-screen">
@@ -9,11 +7,5 @@ function BusinessRouteShell({ children = null }) {
 }
 
 export default function BusinessLayout({ children }) {
-  return (
-    <>
-      <BusinessMarketingHeader />
-      <div className="h-16" aria-hidden="true" />
-      <BusinessRouteShell>{children}</BusinessRouteShell>
-    </>
-  );
+  return <BusinessRouteShell>{children}</BusinessRouteShell>;
 }

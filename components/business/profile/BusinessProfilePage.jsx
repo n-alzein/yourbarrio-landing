@@ -249,6 +249,20 @@ export default function BusinessProfilePage({
         showToast("error", error.message || "Failed to save photo.");
         return;
       }
+
+      const { error: businessPhotoError } = await client
+        .from("businesses")
+        .update(filteredPayload)
+        .eq("owner_user_id", businessId);
+
+      if (businessPhotoError) {
+        showToast(
+          "error",
+          businessPhotoError.message || "Photo uploaded, but business sync failed."
+        );
+        return;
+      }
+
       refreshProfile?.();
       showToast("success", "Photo uploaded.");
     } catch (err) {

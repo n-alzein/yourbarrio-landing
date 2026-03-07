@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
+import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 
 function normalizeWebsite(value) {
   const trimmed = (value || "").trim();
@@ -55,6 +56,20 @@ export async function POST(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { error: roleError } = await supabase.rpc("set_my_role_business");
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[AUTH_REDIRECT_TRACE] onboarding_role_flip", {
+        code: roleError?.code || null,
+        message: roleError?.message || null,
+      });
+    }
+    if (roleError) {
+      return NextResponse.json(
+        { error: roleError.message || "Failed to set business role for this account" },
+        { status: 400 }
+      );
+    }
+
     const body = await req.json();
     const {
       name,
@@ -95,38 +110,83 @@ export async function POST(req) {
         : null;
     const geo = prefilledGeo || (await geocodeAddress(addressForGeocode));
 
-    const rpcPayload = {
-      name: trimmedName,
+    const { data: existingUser, error: userReadError } = await supabase
+      .from("users")
+      .select("public_id,is_internal")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (userReadError) {
+      console.warn("business onboarding users read failed", {
+        code: userReadError.code || null,
+        message: userReadError.message || null,
+      });
+    }
+
+    const businessesPayload = {
+      owner_user_id: user.id,
+      public_id: existingUser?.public_id || null,
+      business_name: trimmedName,
       category: trimmedCategory,
       description: description || "",
+      website: normalizedWebsite || "",
+      phone: phone || "",
       address: address || "",
       address_2: address_2 || "",
       city: city || "",
       state: state || "",
       postal_code: postal_code || "",
-      phone: phone || "",
-      website: normalizedWebsite || "",
       latitude: geo?.lat ?? null,
       longitude: geo?.lng ?? null,
+      is_internal: existingUser?.is_internal === true,
+      verification_status: "pending",
+      updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabase.rpc("create_business_from_onboarding", {
-      p_payload: rpcPayload,
-    });
+    const { data: businessRow, error: businessUpsertError } = await supabase
+      .from("businesses")
+      .upsert(businessesPayload, {
+        onConflict: "owner_user_id",
+        ignoreDuplicates: false,
+      })
+      .select(
+        "id,owner_user_id,public_id,business_name,category,address,city,state,postal_code,verification_status"
+      )
+      .single();
 
-    if (error) {
-      console.error("create_business_from_onboarding failed", error);
+    if (businessUpsertError) {
+      console.error("business onboarding businesses upsert failed", {
+        code: businessUpsertError.code || null,
+        message: businessUpsertError.message || null,
+      });
       return NextResponse.json(
-        { error: error.message || "Failed to create business profile" },
+        { error: businessUpsertError.message || "Failed to save business profile" },
         { status: 400 }
       );
     }
 
-    const row = Array.isArray(data) ? data[0] : data;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[AUTH_REDIRECT_TRACE] onboarding_upsert_result", {
+        businessKeys: Object.keys(businessRow || {}),
+      });
+    }
+
+    if (!isBusinessOnboardingComplete(businessRow)) {
+      console.error("business onboarding saved row is incomplete", {
+        owner_user_id: businessRow?.owner_user_id || null,
+      });
+      return NextResponse.json(
+        { error: "Business profile is incomplete after save." },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
-        id: row?.business_id || null,
-        public_id: row?.public_id || null,
+        id: businessRow?.id || null,
+        owner_user_id: businessRow?.owner_user_id || null,
+        public_id: businessRow?.public_id || null,
+        row: businessRow || null,
         geo,
       },
       { status: 200 }

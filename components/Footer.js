@@ -59,6 +59,7 @@ export default function Footer({ className = "" }) {
             <div className="mt-4">
               <Link
                 href="/business"
+                prefetch={false}
                 className={isBusinessAppRoute ? "hover:text-white" : "hover:text-indigo-600"}
               >
                 YourBarrio for Business

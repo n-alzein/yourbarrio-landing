@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { getCookieBaseOptions } from "@/lib/authCookies";
 import { resolveCurrentUserRoleFromClient } from "@/lib/auth/getCurrentUserRole";
 import { getRoleLandingPath } from "@/lib/auth/redirects";
+import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 
 const IMPERSONATE_USER_COOKIE = "yb_impersonate_user_id";
 const IMPERSONATE_SESSION_COOKIE = "yb_impersonate_session_id";
@@ -146,7 +147,13 @@ export async function middleware(request) {
     nextUrlHeader.includes("_rsc=") ||
     nextUrlString.includes("_rsc=");
   const canRedirect = isDocumentNavigation && !isRscQuery;
+  const isBusinessLandingRoute = pathname === "/business" || pathname === "/business/";
   const isDebugRsc = process.env.DEBUG_RSC === "1";
+  const businessLandingGuardMeta = {
+    hit: false,
+    role: "unknown",
+    destination: "pass",
+  };
   const requestHeaders = new Headers(request.headers);
   const shouldSetFlightHeaders =
     request.method === "GET" &&
@@ -210,6 +217,20 @@ export async function middleware(request) {
     cookies.forEach(({ name, value }) => {
       targetResponse.cookies.set(name, value);
     });
+    if (process.env.NODE_ENV !== "production" && isBusinessLandingRoute) {
+      targetResponse.headers.set(
+        "x-yb-business-landing-guard",
+        businessLandingGuardMeta.hit ? "middleware-hit" : "none"
+      );
+      targetResponse.headers.set(
+        "x-yb-business-landing-role",
+        businessLandingGuardMeta.role
+      );
+      targetResponse.headers.set(
+        "x-yb-business-landing-destination",
+        businessLandingGuardMeta.destination
+      );
+    }
     return attachDebugHeaders(targetResponse, options);
   };
   const withNearbyHeaders = (
@@ -257,6 +278,13 @@ export async function middleware(request) {
       return withSupabaseCookies(response);
     }
     if (process.env.NODE_ENV !== "production") {
+      if (targetPath === "/" && pathname.startsWith("/onboarding")) {
+        console.info("[ONBOARDING_REDIRECT_TRACE] source=middleware_redirectSafely", {
+          from: pathname,
+          to: targetPath,
+          role,
+        });
+      }
       console.info("[AUTH_MW_REDIRECT]", {
         from: pathname,
         to: targetPath,
@@ -265,8 +293,9 @@ export async function middleware(request) {
     return withSupabaseCookies(NextResponse.redirect(new URL(targetPath, request.url)));
   };
 
-  // Redirect chokepoint: suppress redirects for non-document and _rsc requests.
-  if (!canRedirect) {
+  // Redirect chokepoint: suppress redirects for non-document and _rsc requests,
+  // except /business where we enforce early business landing redirects.
+  if (!canRedirect && !isBusinessLandingRoute) {
     return withSupabaseCookies(response, { redirectSuppressed: true });
   }
 
@@ -302,6 +331,33 @@ export async function middleware(request) {
     log: shouldLogRole,
   });
 
+  if (isBusinessLandingRoute && user?.id && role === "business") {
+    businessLandingGuardMeta.hit = true;
+    businessLandingGuardMeta.role = "business";
+    const { data: businessRow } = await supabase
+      .from("businesses")
+      .select("business_name,category,address,city,state,postal_code")
+      .eq("owner_user_id", user.id)
+      .maybeSingle();
+
+    if (!isBusinessOnboardingComplete(businessRow)) {
+      businessLandingGuardMeta.destination = "/onboarding";
+      return withSupabaseCookies(
+        NextResponse.redirect(new URL("/onboarding", request.url), 307)
+      );
+    }
+
+    businessLandingGuardMeta.destination = "/business/dashboard";
+    return withSupabaseCookies(
+      NextResponse.redirect(new URL("/business/dashboard", request.url), 307)
+    );
+  }
+
+  if (isBusinessLandingRoute) {
+    businessLandingGuardMeta.hit = true;
+    businessLandingGuardMeta.role = role || "anon";
+  }
+
   const supportMode = user?.id
     ? await resolveSupportModeState({
         supabase,
@@ -330,6 +386,7 @@ export async function middleware(request) {
 
   if (
     pathname.startsWith("/api/auth/callback") ||
+    pathname.startsWith("/oauth/callback") ||
     pathname.startsWith("/signin") ||
     pathname.startsWith("/auth")
   ) {
@@ -341,7 +398,9 @@ export async function middleware(request) {
   }
 
   if (isBusinessOnboardingRoute) {
-    return redirectSafely("/onboarding");
+    return withSupabaseCookies(
+      NextResponse.redirect(new URL("/onboarding", request.url), 307)
+    );
   }
 
   if (pathname.startsWith("/admin")) {
@@ -489,24 +548,23 @@ export async function middleware(request) {
   if (isCanonicalOnboardingRoute) {
     if (!user?.id) {
       return redirectSafely(
-        `/signin?modal=signin&next=${encodeURIComponent(pathname)}`
+        `/business-auth/login?next=${encodeURIComponent("/onboarding")}`
       );
     }
 
-    const effectiveRole = supportMode.supportModeActive ? supportMode.targetRole : role;
-    if (effectiveRole !== "business") {
-      if (effectiveRole === "customer") return redirectSafely("/customer/home");
-      if (effectiveRole === "admin") return redirectSafely("/admin");
-      return withSupabaseCookies(new NextResponse("Forbidden", { status: 403 }));
+    // Onboarding is a bootstrap route. Users may not be "business" yet.
+    if (supportMode.supportModeActive) {
+      return withSupabaseCookies(response);
     }
 
+    // Do NOT restrict /onboarding by role; onboarding flow flips role as needed.
     return withSupabaseCookies(response);
   }
 
   if (isBusinessAppRoute) {
     if (!user?.id) {
       return redirectSafely(
-        `/signin?modal=signin&next=${encodeURIComponent(pathname)}`
+        `/business-auth/login?next=${encodeURIComponent(pathname)}`
       );
     }
 
@@ -515,20 +573,19 @@ export async function middleware(request) {
     }
 
     if (role !== "business") {
-      if (role === "customer") return redirectSafely("/customer/home");
-      if (role === "admin") return redirectSafely("/admin");
-      return withSupabaseCookies(new NextResponse("Forbidden", { status: 403 }));
+      return redirectSafely("/");
     }
 
     const { data: businessRow, error: businessError } = await supabase
       .from("businesses")
-      .select("owner_user_id")
+      .select("owner_user_id,business_name,category,address,city,state,postal_code")
       .eq("owner_user_id", user.id)
       .maybeSingle();
 
     const hasBusiness = !businessError && Boolean(businessRow?.owner_user_id);
+    const onboardingComplete = hasBusiness && isBusinessOnboardingComplete(businessRow);
 
-    if (!hasBusiness) {
+    if (!hasBusiness || !onboardingComplete) {
       return redirectSafely("/onboarding");
     }
 
@@ -544,6 +601,7 @@ export const config = {
     "/customer/:path*",
     "/business/:path*",
     "/onboarding/:path*",
+    "/business/onboarding/:path*",
     { source: "/:path*", has: [{ type: "query", key: "_rsc" }] },
   ],
 };

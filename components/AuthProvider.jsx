@@ -33,16 +33,19 @@ import {
   performLogout,
   resolveLogoutRedirect,
 } from "@/lib/auth/logout";
+import { normalizeNextPath } from "@/lib/auth/normalizeNextPath";
 import { getPostLoginRedirect } from "@/lib/auth/redirects";
 import { clearClientRedirectState, readClientRedirectState } from "@/lib/auth/clientRedirectState";
 
 const AuthContext = createContext({
   supabase: null,
   authStatus: "loading",
+  authInitialized: false,
   session: null,
   status: "loading",
   user: null,
   profile: null,
+  business: null,
   role: null,
   error: null,
   lastAuthEvent: null,
@@ -59,6 +62,7 @@ const AuthContext = createContext({
   authActionStartedAt: 0,
   providerInstanceId: null,
   refreshProfile: async () => {},
+  refreshBusinessProfile: async () => {},
   logout: async (_options = {}) => {},
   beginAuthAttempt: () => 0,
   endAuthAttempt: () => false,
@@ -92,19 +96,40 @@ const isProtectedPath = (pathname) => {
   return false;
 };
 
+const isBootstrapOnboardingPath = (pathname) => {
+  if (!pathname) return false;
+  return pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+};
+
+const isAuthCallbackPath = (pathname) => {
+  if (!pathname) return false;
+  return (
+    pathname === "/auth/callback" ||
+    pathname.startsWith("/auth/callback/") ||
+    pathname === "/auth/confirm" ||
+    pathname.startsWith("/auth/confirm/") ||
+    pathname === "/auth/verify" ||
+    pathname.startsWith("/auth/verify/") ||
+    pathname === "/business-auth" ||
+    pathname.startsWith("/business-auth/")
+  );
+};
+
 const buildSignedOutState = () => ({
   authStatus: "unauthenticated",
   session: null,
   user: null,
   profile: null,
+  business: null,
   role: null,
   error: null,
 });
 
-const buildSignedInState = ({ user, profile }) => ({
+const buildSignedInState = ({ user, profile, business }) => ({
   authStatus: "authenticated",
   user: user ?? null,
   profile: profile ?? null,
+  business: business ?? null,
   role: resolveRole(profile, user, null),
   error: null,
 });
@@ -120,9 +145,11 @@ const withGuardState = (base) => ({
 const authStore = {
   state: {
     authStatus: "loading",
+    authInitialized: false,
     session: null,
     user: null,
     profile: null,
+    business: null,
     role: null,
     error: null,
     lastAuthEvent: null,
@@ -144,6 +171,8 @@ const authStore = {
   bootstrapPromise: null,
   profilePromise: null,
   profileUserId: null,
+  businessPromise: null,
+  businessUserId: null,
   providerCount: 0,
   guardSubscribed: false,
   authUnsubscribe: null,
@@ -168,6 +197,28 @@ const AUTO_REFRESH_MAX_ATTEMPTS = 2;
 const AUTO_REFRESH_COOLDOWN_MS = 30_000;
 const AUTO_REFRESH_MIN_INTERVAL_MS = 2_500;
 const PROFILE_RETRY_WINDOW_MS = 10_000;
+const CLIENT_REDIRECT_STORAGE_KEYS = [
+  "returnTo",
+  "next",
+  "callbackUrl",
+  "postLoginRedirect",
+  "yb:returnTo",
+  "yb:postLoginRedirect",
+  "business_auth_redirect",
+  "business_auth_success",
+  "yb_post_auth_redirect",
+  "yb_auth_flow",
+];
+const CLIENT_REDIRECT_QUERY_KEYS = [
+  "next",
+  "returnUrl",
+  "callbackUrl",
+  "returnTo",
+  "continue",
+  "fromPath",
+  "afterLogin",
+  "postLogin",
+];
 const PROFILE_MAX_FAILURES = 2;
 const PROFILE_COOLDOWN_MS = 30_000;
 
@@ -332,6 +383,58 @@ function clearSupabaseCookiesClient() {
   clearClientRedirectState();
 }
 
+function normalizeClientRedirectStateInPlace() {
+  if (typeof window === "undefined") return;
+  const rewrites = [];
+
+  const normalizeStorage = (storage, storageLabel) => {
+    CLIENT_REDIRECT_STORAGE_KEYS.forEach((key) => {
+      try {
+        const current = storage.getItem(key);
+        if (typeof current !== "string" || !current) return;
+        const normalized = normalizeNextPath(current);
+        if (!normalized || normalized === current) return;
+        storage.setItem(key, normalized);
+        rewrites.push({ from: current, to: normalized, source: `${storageLabel}.${key}` });
+      } catch {
+        // best effort
+      }
+    });
+  };
+
+  normalizeStorage(window.localStorage, "localStorage");
+  normalizeStorage(window.sessionStorage, "sessionStorage");
+
+  try {
+    const url = new URL(window.location.href);
+    let changed = false;
+    CLIENT_REDIRECT_QUERY_KEYS.forEach((key) => {
+      const current = url.searchParams.get(key);
+      if (typeof current !== "string" || !current) return;
+      const normalized = normalizeNextPath(current);
+      if (!normalized || normalized === current) return;
+      url.searchParams.set(key, normalized);
+      rewrites.push({ from: current, to: normalized, source: `query.${key}` });
+      changed = true;
+    });
+    if (changed) {
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  } catch {
+    // best effort
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    rewrites.forEach(({ from, to, source }) => {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=normalizeNextPath_rewrite", {
+        from,
+        to,
+        storage: source,
+      });
+    });
+  }
+}
+
 function describeNode(node) {
   if (!node || !node.tagName) return null;
   const id = node.id ? `#${node.id}` : "";
@@ -427,6 +530,8 @@ function applySignedOutState(reason = "signed_out", options = {}) {
   authStore.bootstrapPromise = null;
   authStore.profilePromise = null;
   authStore.profileUserId = null;
+  authStore.businessPromise = null;
+  authStore.businessUserId = null;
 
   if (clearAuthSuppression) {
     authStore.loggingOut = false;
@@ -518,10 +623,17 @@ function getAuthStateSnapshot() {
 function seedAuthState({
   initialUser,
   initialProfile,
+  initialBusiness = null,
   initialRole,
   supportModeActive = false,
 }) {
-  if (!initialUser && !initialProfile && !initialRole && !supportModeActive) {
+  if (
+    !initialUser &&
+    !initialProfile &&
+    !initialBusiness &&
+    !initialRole &&
+    !supportModeActive
+  ) {
     return;
   }
 
@@ -531,16 +643,20 @@ function seedAuthState({
   if (supportModeActive) {
     const nextUser = initialUser ?? null;
     const nextProfile = initialProfile ?? null;
+    const nextBusiness = initialBusiness ?? null;
     const nextRole = resolveRole(nextProfile, nextUser, initialRole ?? "customer");
     if (
       nextState.user?.id !== nextUser?.id ||
       nextState.profile?.id !== nextProfile?.id ||
+      nextState.business?.owner_user_id !== nextBusiness?.owner_user_id ||
+      nextState.business?.business_name !== nextBusiness?.business_name ||
       nextState.role !== nextRole ||
       nextState.authStatus !== (nextUser ? "authenticated" : "unauthenticated") ||
       nextState.supportModeActive !== true
     ) {
       nextState.user = nextUser;
       nextState.profile = nextProfile;
+      nextState.business = nextBusiness;
       nextState.role = nextRole;
       nextState.authStatus = nextUser ? "authenticated" : "unauthenticated";
       nextState.supportModeActive = true;
@@ -566,6 +682,11 @@ function seedAuthState({
 
   if (!supportModeActive && initialProfile && !nextState.profile) {
     nextState.profile = initialProfile;
+    changed = true;
+  }
+
+  if (!supportModeActive && initialBusiness && !nextState.business) {
+    nextState.business = initialBusiness;
     changed = true;
   }
 
@@ -701,6 +822,41 @@ async function fetchProfile(user) {
   return profileFetchInFlight;
 }
 
+async function fetchBusiness(user) {
+  if (!user?.id) {
+    return { business: null, error: null };
+  }
+  if (!authStore.supabase) {
+    return { business: null, error: null };
+  }
+  try {
+    const { data, error } = await authStore.supabase
+      .from("businesses")
+      .select("business_name,owner_user_id")
+      .eq("owner_user_id", user.id)
+      .maybeSingle();
+    if (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[AUTH_GUARD_DIAG] auth_provider:business_fetch_failed", {
+          userId: user.id,
+          message: error.message || null,
+          code: error.code || null,
+        });
+      }
+      return { business: null, error };
+    }
+    return { business: data ?? null, error: null };
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[AUTH_GUARD_DIAG] auth_provider:business_fetch_error", {
+        userId: user.id,
+        message: error?.message || String(error),
+      });
+    }
+    return { business: null, error };
+  }
+}
+
 async function getProfileForUser(user) {
   if (!user?.id) return { profile: null, error: null };
   if (authStore.profilePromise && authStore.profileUserId === user.id) {
@@ -716,6 +872,22 @@ async function getProfileForUser(user) {
       authStore.profilePromise = null;
     });
   return authStore.profilePromise;
+}
+
+async function getBusinessForUser(user) {
+  if (!user?.id) return { business: null, error: null };
+  if (authStore.businessPromise && authStore.businessUserId === user.id) {
+    return authStore.businessPromise;
+  }
+  if (authStore.businessUserId === user.id && authStore.state.business) {
+    return { business: authStore.state.business, error: null };
+  }
+
+  authStore.businessUserId = user.id;
+  authStore.businessPromise = fetchBusiness(user).finally(() => {
+    authStore.businessPromise = null;
+  });
+  return authStore.businessPromise;
 }
 
 async function applyUserUpdate(user) {
@@ -742,19 +914,36 @@ async function applyUserUpdate(user) {
     return;
   }
 
+  if (currentId !== nextId) {
+    authStore.businessPromise = null;
+    authStore.businessUserId = null;
+  }
+
   if (currentId !== nextId || statusChanged) {
     updateAuthState({
       ...withGuardState(buildSignedInState({ user })),
       profile: authStore.state.profile,
+      business: currentId === nextId ? authStore.state.business : null,
       role: resolveRole(authStore.state.profile, user, authStore.state.role),
     });
   }
 
   const { profile } = await getProfileForUser(user);
   if (authStore.state.user?.id !== user.id) return;
+  const nextRole = resolveRole(profile, user, authStore.state.role);
+  let business = null;
+  if (nextRole === "business") {
+    const { business: businessRow } = await getBusinessForUser(user);
+    if (authStore.state.user?.id !== user.id) return;
+    business = businessRow ?? null;
+  } else {
+    authStore.businessPromise = null;
+    authStore.businessUserId = null;
+  }
   updateAuthState({
     profile,
-    role: resolveRole(profile, user, authStore.state.role),
+    business,
+    role: nextRole,
   });
 }
 
@@ -817,6 +1006,7 @@ async function bootstrapAuth() {
           resetGuardState: false,
           clearAuthSuppression: true,
         });
+        updateAuthState({ authInitialized: true });
         return;
       }
     }
@@ -831,9 +1021,20 @@ async function bootstrapAuth() {
         resetGuardState: false,
         clearAuthSuppression: true,
       });
+      updateAuthState({ authInitialized: true });
       return;
     }
-    await applyUserUpdate(user);
+    try {
+      await applyUserUpdate(user);
+    } catch (error) {
+      setAuthError(error);
+      applySignedOutState("bootstrap:error", {
+        resetGuardState: false,
+        clearAuthSuppression: true,
+      });
+    } finally {
+      updateAuthState({ authInitialized: true });
+    }
   })().finally(() => {
     if (authStore.bootstrapAbortController === abortController) {
       authStore.bootstrapAbortController = null;
@@ -851,7 +1052,7 @@ function ensureAuthListener() {
   const { data } = authStore.supabase.auth.onAuthStateChange(
     async (event, session) => {
       const user = session?.user ?? null;
-      updateAuthState({ session });
+      updateAuthState({ session, authInitialized: true });
       if (authDiagEnabled) {
         console.warn("[auth] state-change", {
           supportModeActive: authStore.state.supportModeActive === true,
@@ -914,6 +1115,19 @@ function redirectWithGuard(target) {
   if (`${current.pathname}${current.search}` === nextPath) {
     return;
   }
+  const currentPath = window.location.pathname;
+  if (currentPath && isBootstrapOnboardingPath(currentPath) && nextPath === "/") {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=redirectWithGuard_suppressed", {
+        from: currentPath,
+        to: nextPath,
+        reason: "suppress_onboarding_to_home_redirect",
+        role: authStore.state.profile?.role ?? authStore.state.role ?? null,
+        userId: authStore.state.user?.id ?? null,
+      });
+    }
+    return;
+  }
 
   window.location.replace(nextPath);
 }
@@ -961,6 +1175,7 @@ export function AuthProvider({
 
   const mountedRef = useRef(true);
   const fetchWrappedRef = useRef(false);
+  const redirectStateNormalizedRef = useRef(false);
   const reactId = useId();
   const providerInstanceId = useMemo(
     () => `auth-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
@@ -1083,17 +1298,55 @@ export function AuthProvider({
   useEffect(() => {
     if (isNestedProvider) return;
     if (isAuthNavigationSuppressed()) return;
+    if (!authState.authInitialized) return;
     if (authState.lastAuthEvent !== "SIGNED_OUT") return;
     if (!pathname) return;
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+    if (isAuthCallbackPath(pathname) || isAuthCallbackPath(currentPath)) return;
+    if (isBootstrapOnboardingPath(currentPath)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_allow", {
+          pathname: currentPath,
+          reason: "signed_out_event_guard",
+          role: authState.profile?.role ?? authState.role ?? null,
+          userId: authState.user?.id ?? null,
+        });
+      }
+      return;
+    }
     if (!isProtectedPath(pathname)) return;
     if (isCustomerNearbyPublicAllowed(pathname, readNearbyPublicCookie())) return;
     const target = pathname.startsWith("/business")
       ? PATHS.auth.businessLogin
       : PATHS.auth.customerLogin;
     if (pathname === target || pathname === `${target}/`) return;
-    logAuthDiag("route_guard:signed_out_redirect", { from: pathname, to: target });
-    redirectWithGuard(target);
-  }, [authState.lastAuthEvent, isNestedProvider, pathname]);
+    const normalizedTarget = normalizeNextPath(target) || target;
+    if (process.env.NODE_ENV !== "production" && normalizedTarget !== target) {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=normalizeNextPath_rewrite", {
+        from: target,
+        to: normalizedTarget,
+      });
+    }
+    logAuthDiag("route_guard:signed_out_redirect", { from: pathname, to: normalizedTarget });
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
+        from: currentPath,
+        to: normalizedTarget,
+        role: authState.profile?.role ?? authState.role ?? null,
+        userId: authState.user?.id ?? null,
+        reason: "signed_out_protected_route",
+      });
+    }
+    redirectWithGuard(normalizedTarget);
+  }, [
+    authState.authInitialized,
+    authState.lastAuthEvent,
+    authState.profile?.role,
+    authState.role,
+    authState.user?.id,
+    isNestedProvider,
+    pathname,
+  ]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1117,6 +1370,11 @@ export function AuthProvider({
       initialRole,
       supportModeActive: Boolean(initialSupportModeActive),
     });
+
+    if (!isNestedProvider && !redirectStateNormalizedRef.current) {
+      redirectStateNormalizedRef.current = true;
+      normalizeClientRedirectStateInPlace();
+    }
 
     if (!isNestedProvider && allowBootstrap) {
       ensureAuthGuardSubscription();
@@ -1287,9 +1545,37 @@ export function AuthProvider({
         authStore.state.role === "business"
           ? PATHS.auth.businessLogin
           : PATHS.auth.customerLogin;
-      redirectWithGuard(target);
+      const normalizedTarget = normalizeNextPath(target) || target;
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+      if (isBootstrapOnboardingPath(currentPath)) {
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_allow", {
+            pathname: currentPath,
+            reason: "token_invalid_guard",
+            role: authStore.state.profile?.role ?? authStore.state.role ?? null,
+            userId: authStore.state.user?.id ?? null,
+          });
+        }
+        return;
+      }
+      if (process.env.NODE_ENV !== "production" && normalizedTarget !== target) {
+        console.info("[ONBOARDING_REDIRECT_TRACE] source=normalizeNextPath_rewrite", {
+          from: target,
+          to: normalizedTarget,
+        });
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
+          from: currentPath,
+          to: normalizedTarget,
+          role: authStore.state.role ?? null,
+          userId: authStore.state.user?.id ?? null,
+          reason: "token_invalid",
+        });
+      }
+      redirectWithGuard(normalizedTarget);
     })();
-  }, [authState.tokenInvalidAt, isNestedProvider]);
+  }, [authState.tokenInvalidAt, isNestedProvider, pathname]);
 
   const refreshProfile = useCallback(async () => {
     if (!mountedRef.current || !authStore.supabase || !authState.user?.id) {
@@ -1297,9 +1583,22 @@ export function AuthProvider({
     }
     const { profile, error } = await fetchProfile(authState.user);
     if (error || !mountedRef.current) return;
+    const nextRole = resolveRole(profile, authState.user, authState.role);
+    let business = null;
+    if (nextRole === "business") {
+      const { business: businessRow } = await fetchBusiness(authState.user);
+      if (!mountedRef.current) return;
+      business = businessRow ?? null;
+      authStore.businessUserId = authState.user.id;
+      authStore.businessPromise = null;
+    } else {
+      authStore.businessPromise = null;
+      authStore.businessUserId = null;
+    }
     updateAuthState({
       profile,
-      role: resolveRole(profile, authState.user, authState.role),
+      business,
+      role: nextRole,
     });
   }, [authState.role, authState.user]);
 
@@ -1366,6 +1665,7 @@ export function AuthProvider({
     () => ({
       supabase: authStore.supabase ?? supabase,
       authStatus: authState.authStatus,
+      authInitialized: authState.authInitialized,
       session: authState.session,
       status:
         authState.authStatus === "authenticated"
@@ -1375,6 +1675,7 @@ export function AuthProvider({
             : "loading",
       user: authState.user,
       profile: authState.profile,
+      business: authState.business,
       role: authState.role,
       supportModeActive: authState.supportModeActive === true,
       error: authState.error,
@@ -1393,6 +1694,7 @@ export function AuthProvider({
       authActionStartedAt: authState.authActionStartedAt,
       providerInstanceId,
       refreshProfile,
+      refreshBusinessProfile: refreshProfile,
       logout,
       beginAuthAttempt,
       endAuthAttempt,
@@ -1401,6 +1703,8 @@ export function AuthProvider({
     }),
     [
       authState.authStatus,
+      authState.authInitialized,
+      authState.business,
       authState.session,
       authState.error,
       authState.profile,
@@ -1526,8 +1830,22 @@ export function AuthProvider({
     if (isNestedProvider) return;
     if (typeof window === "undefined") return;
     if (isAuthNavigationSuppressed()) return;
+    if (!authState.authInitialized) return;
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
     if (!pathname) return;
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+    if (isAuthCallbackPath(pathname) || isAuthCallbackPath(currentPath)) return;
+    if (isBootstrapOnboardingPath(currentPath)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_allow", {
+          pathname: currentPath,
+          reason: "unauthenticated_guard",
+          role: authState.profile?.role ?? authState.role ?? null,
+          userId: authState.user?.id ?? null,
+        });
+      }
+      return;
+    }
     if (!isProtectedPath(pathname)) return;
     if (isCustomerNearbyPublicAllowed(pathname, readNearbyPublicCookie())) return;
     if (pathname.startsWith("/business-auth")) return;
@@ -1538,10 +1856,17 @@ export function AuthProvider({
         ? PATHS.public.businessLanding
         : PATHS.auth.customerLogin;
     if (pathname === target || pathname === `${target}/`) return;
+    const normalizedTarget = normalizeNextPath(target) || target;
+    if (process.env.NODE_ENV !== "production" && normalizedTarget !== target) {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=normalizeNextPath_rewrite", {
+        from: target,
+        to: normalizedTarget,
+      });
+    }
 
     logAuthDiag("route_guard:client_redirect", {
       from: pathname,
-      to: target,
+      to: normalizedTarget,
       role: lastKnownRoleRef.current,
     });
     if (process.env.NODE_ENV !== "production") {
@@ -1550,11 +1875,28 @@ export function AuthProvider({
         role: lastKnownRoleRef.current ?? null,
         hasSession: Boolean(authState.session),
         hasUser: Boolean(authState.user),
-        destination: target,
+        destination: normalizedTarget,
+      });
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
+        from: currentPath,
+        to: normalizedTarget,
+        role: authState.profile?.role ?? authState.role ?? null,
+        userId: authState.user?.id ?? null,
+        reason: "unauthenticated_protected_route",
       });
     }
-    redirectWithGuard(target);
-  }, [authState.authStatus, authState.session, authState.user, isNestedProvider, pathname]);
+    redirectWithGuard(normalizedTarget);
+  }, [
+    authState.authInitialized,
+    authState.authStatus,
+    authState.profile?.role,
+    authState.role,
+    authState.session,
+    authState.user,
+    authState.user?.id,
+    isNestedProvider,
+    pathname,
+  ]);
 
   useEffect(() => {
     if (isNestedProvider) return;
@@ -1562,6 +1904,18 @@ export function AuthProvider({
     if (isAuthNavigationSuppressed()) return;
     if (authState.authStatus !== "authenticated" || !authState.user) return;
     if (!pathname) return;
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+    if (isBootstrapOnboardingPath(currentPath)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_allow", {
+          pathname: currentPath,
+          reason: "authenticated_business_auth_redirect_guard",
+          role: authState.profile?.role ?? authState.role ?? null,
+          userId: authState.user?.id ?? null,
+        });
+      }
+      return;
+    }
     if (!pathname.startsWith("/business-auth")) return;
     const resolvedRole = authState.profile?.role ?? authState.role;
     if (!resolvedRole) {
@@ -1581,40 +1935,74 @@ export function AuthProvider({
       searchParams?.get("returnUrl") ||
       searchParams?.get("callbackUrl") ||
       null;
+    const normalizedRequestedPath = normalizeNextPath(requestedPath) || requestedPath;
+    if (
+      process.env.NODE_ENV !== "production" &&
+      normalizedRequestedPath &&
+      normalizedRequestedPath !== requestedPath
+    ) {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=normalizeNextPath_rewrite", {
+        from: requestedPath,
+        to: normalizedRequestedPath,
+      });
+    }
     const target = getPostLoginRedirect({
       role: resolvedRole,
-      requestedPath,
+      requestedPath: normalizedRequestedPath,
       fallbackPath:
         resolvedRole === "business" ? PATHS.business.dashboard : PATHS.customer.home,
     });
+    const normalizedTarget = normalizeNextPath(target) || target;
+    if (process.env.NODE_ENV !== "production" && normalizedTarget !== target) {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=normalizeNextPath_rewrite", {
+        from: target,
+        to: normalizedTarget,
+      });
+    }
     const redirectState = authRouteRedirectRef.current;
     const sameRedirect =
       redirectState.userId === authState.user.id &&
-      redirectState.target === target &&
+      redirectState.target === normalizedTarget &&
       redirectState.fromPath === pathname;
     if (sameRedirect) return;
-    if (pathname === target || pathname === `${target}/`) return;
+    if (pathname === normalizedTarget || pathname === `${normalizedTarget}/`) return;
 
     logAuthDiag("route_guard:auth_redirect", {
       from: pathname,
-      to: target,
+      to: normalizedTarget,
       role: authState.role,
     });
     if (process.env.NODE_ENV !== "production") {
       console.info("[AUTH_REDIRECT_TRACE] auth_provider_redirect_effect", {
         role: authState.profile?.role ?? authState.role ?? null,
         requestedPath,
-        chosenDestination: target,
+        chosenDestination: normalizedTarget,
         persistedRedirectState: readClientRedirectState(),
         hasSession: Boolean(authState.session),
+      });
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
+        from: currentPath,
+        to: normalizedTarget,
+        role: authState.profile?.role ?? authState.role ?? null,
+        userId: authState.user?.id ?? null,
+        reason: "authenticated_business_auth_route",
       });
     }
     authRouteRedirectRef.current = {
       userId: authState.user.id,
-      target,
+      target: normalizedTarget,
       fromPath: pathname,
     };
-    router.replace(target);
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
+        from: currentPath,
+        to: normalizedTarget,
+        role: authState.profile?.role ?? authState.role ?? null,
+        userId: authState.user?.id ?? null,
+        reason: "authenticated_business_auth_route_router_replace",
+      });
+    }
+    router.replace(normalizedTarget);
   }, [
     authState.authStatus,
     authState.profile?.is_internal,

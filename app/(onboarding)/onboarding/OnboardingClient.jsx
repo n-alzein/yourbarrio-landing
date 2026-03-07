@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { BUSINESS_CATEGORIES } from "@/lib/businessCategories";
+import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const PLACES_DISABLED =
@@ -115,7 +116,7 @@ function resolveStateCode(region) {
 // MAIN COMPONENT (only ONE export default)
 // ------------------------------
 export default function BusinessOnboardingPage() {
-  const { user, loadingUser } = useAuth();
+  const { user, loadingUser, refreshProfile } = useAuth();
   const router = useRouter();
 
   const [form, dispatch] = useReducer(formReducer, initialForm);
@@ -124,6 +125,14 @@ export default function BusinessOnboardingPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const pickedLocationRef = useRef(null); // stores { lat, lng } from address lookup
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[AUTH_REDIRECT_TRACE] onboarding_mount", {
+        pathname: window.location.pathname,
+      });
+    }
+  }, []);
 
   function updateField(field, value, options = {}) {
     dispatch({ field, value });
@@ -299,13 +308,34 @@ export default function BusinessOnboardingPage() {
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[onboarding] business save failed", {
+            status: res.status,
+            code: errBody?.code || null,
+            message: errBody?.error || "Failed to save business",
+          });
+        }
         throw new Error(errBody.error || "Failed to save business");
       }
 
-      await res.json();
+      const payload = await res.json();
+      const savedRow = payload?.row || null;
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[AUTH_REDIRECT_TRACE] onboarding_submit_saved_row", {
+          keys: Object.keys(savedRow || {}),
+        });
+      }
+
+      if (!savedRow || !isBusinessOnboardingComplete(savedRow)) {
+        setMessage("Business profile save was incomplete. Please try again.");
+        setLoading(false);
+        return;
+      }
 
       // 3) Redirect to business workspace
-      router.push(`/business/dashboard`);
+      await refreshProfile();
+      router.replace("/business/dashboard");
+      router.refresh();
     } catch (err) {
       console.error("Onboarding submit failed", err);
       setMessage(err?.message || "Something went wrong. Please try again.");
@@ -373,7 +403,7 @@ export default function BusinessOnboardingPage() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-semibold">Business details</h2>
-                  <p className="text-sm text-slate-900">
+                  <p className="text-sm text-slate-200">
                     Tell us about your business and where customers can find you.
                   </p>
                 </div>
@@ -576,6 +606,13 @@ function FormField({
   maxLength,
 }) {
   const hasError = Boolean(error);
+  const inputClassName = [
+    "w-full px-4 py-3 rounded-xl bg-white/5 border text-sm",
+    "text-white placeholder-white/40 focus:ring-2 focus:border-transparent outline-none",
+    hasError
+      ? "border-rose-400/80 focus:ring-rose-400/40"
+      : "border-white/20 focus:ring-emerald-400/40",
+  ].join(" ");
   return (
     <div>
       <label className="block text-sm font-medium mb-1">
@@ -590,13 +627,7 @@ function FormField({
         list={listId}
         required={required}
         maxLength={maxLength}
-        className={`w-full px-4 py-3 rounded-xl bg-white/5 border text-sm
-          text-white placeholder-white/40 focus:ring-2 focus:border-transparent outline-none
-          ${
-            hasError
-              ? "border-rose-400/80 focus:ring-rose-400/40"
-              : "border-white/20 focus:ring-emerald-400/40"
-          }`}
+        className={inputClassName}
       />
       {helper && !hasError ? (
         <p className="mt-2 text-xs text-white/50">{helper}</p>
@@ -616,6 +647,11 @@ function FormTextArea({
   rows = 3,
   required = false,
 }) {
+  const textareaClassName = [
+    "w-full px-4 py-3 rounded-xl bg-white/5 border border-white/20",
+    "text-white text-sm placeholder-white/40 focus:ring-2 focus:ring-emerald-400/40",
+    "focus:border-transparent outline-none",
+  ].join(" ");
   return (
     <div>
       <label className="block text-sm font-medium mb-1">
@@ -628,9 +664,7 @@ function FormTextArea({
         placeholder={placeholder}
         rows={rows}
         required={required}
-        className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/20
-          text-white text-sm placeholder-white/40 focus:ring-2 focus:ring-emerald-400/40
-          focus:border-transparent outline-none"
+        className={textareaClassName}
       />
     </div>
   );

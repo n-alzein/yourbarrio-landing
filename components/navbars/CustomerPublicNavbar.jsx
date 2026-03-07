@@ -8,15 +8,17 @@ import { useModal } from "../modals/ModalProvider";
 import { useAuth } from "@/components/AuthProvider";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 
-function NavItem({ href, children, active, onClick, className }) {
+function NavItem({ href, children, active, onClick, className, ...rest }) {
   return (
     <Link
       href={href}
+      prefetch={href === "/business" ? false : undefined}
       className={`relative text-sm md:text-base font-medium transition-all ${
         active ? "text-white" : "text-white/70 hover:text-white"
       } ${className || ""}`}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
+      {...rest}
     >
       {children}
     </Link>
@@ -121,6 +123,7 @@ export default function CustomerPublicNavbar() {
             <div className="hidden md:flex items-center gap-x-6">
               <Link
                 href="/business"
+                prefetch={false}
                 className="px-4 py-2 rounded-lg text-sm font-semibold text-white/90 border border-white/20 hover:bg-white/10 transition"
               >
                 For Business
@@ -187,6 +190,7 @@ export default function CustomerPublicNavbar() {
           <div className="flex flex-col gap-3">
             <Link
               href="/business"
+              prefetch={false}
               className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
               onClick={() => setOpen(false)}
             >

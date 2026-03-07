@@ -13,7 +13,7 @@ export default function BusinessMarketingFooter() {
               Grow your local presence with tools built for small businesses.
             </p>
             <div className="mt-4">
-              <Link href="/business" className="hover:text-white">
+              <Link href="/business" prefetch={false} className="hover:text-white">
                 YourBarrio for Business
               </Link>
             </div>

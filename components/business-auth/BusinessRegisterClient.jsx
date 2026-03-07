@@ -1,82 +1,24 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { getSupabaseAuthCookieName } from "@/lib/supabase/cookieName";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { PATHS } from "@/lib/auth/paths";
 
-function BusinessRegisterInner({ isPopup }) {
+function BusinessRegisterInner() {
   const supabaseRef = useRef(null);
+  const emailInputRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
-  const redirectingRef = useRef(false);
-  const sessionRef = useRef(null);
-
-  const [businessName, setBusinessName] = useState("");
+  const [step, setStep] = useState("email");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
 
-  const waitForAuthCookie = useCallback(async (timeoutMs = 2500) => {
-    if (typeof document === "undefined") return false;
-    const cookieName = getSupabaseAuthCookieName();
-    if (!cookieName) return false;
-
-    const hasAuthCookie = () => {
-      const names = document.cookie
-        .split(";")
-        .map((entry) => entry.trim().split("=")[0])
-        .filter(Boolean);
-      return names.some(
-        (name) => name === cookieName || name.startsWith(`${cookieName}.`)
-      );
-    };
-
-    if (hasAuthCookie()) return true;
-
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      if (hasAuthCookie()) return true;
-    }
-
-    return false;
-  }, []);
-
-  const finishBusinessAuth = useCallback(() => {
-    if (redirectingRef.current) return;
-    redirectingRef.current = true;
-
-    const target = PATHS.business.onboarding || "/onboarding";
-
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("business_auth_redirect", target);
-        localStorage.setItem("business_auth_success", Date.now().toString());
-      } catch (err) {
-        console.warn("Could not broadcast business auth success", err);
-      }
-
-      if (isPopup) {
-        window.close();
-
-        setTimeout(() => {
-          if (!window.closed) {
-            window.location.replace(target);
-          }
-        }, 150);
-
-        return;
-      }
-    }
-
-    window.location.replace(target);
-  }, [isPopup]);
-
-  const redirectToOnboarding = useCallback(async () => {
-    if (redirectingRef.current) return;
-    await waitForAuthCookie();
-    finishBusinessAuth();
-  }, [finishBusinessAuth, waitForAuthCookie]);
-
+  const googleTarget = PATHS.business.onboarding || "/onboarding";
+  const postAuthTarget = "/onboarding";
+  const googleRedirectUrl = useMemo(() => {
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+    return `${origin}/api/auth/callback?next=${encodeURIComponent(googleTarget)}`;
+  }, [googleTarget]);
   const getSupabase = useCallback(async () => {
     if (!supabaseRef.current) {
       const { getSupabaseBrowserClient } = await import("@/lib/supabase/browser");
@@ -85,82 +27,86 @@ function BusinessRegisterInner({ isPopup }) {
     return supabaseRef.current;
   }, []);
 
-  async function handleRegister(e) {
-    e.preventDefault();
-    setLoading(true);
-    let supabase = null;
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+
+  const isRateLimitError = (message) =>
+    /rate|too many|throttl|retry/i.test(String(message || ""));
+
+  async function sendMagicLink(emailValue) {
     try {
-      supabase = await getSupabase();
-    } catch {
-      alert("Auth client not ready. Please refresh and try again.");
-      setLoading(false);
-      return;
-    }
+      try {
+        localStorage.setItem("yb_post_auth_redirect", postAuthTarget);
+        localStorage.setItem("yb_auth_flow", "business-register");
+      } catch {}
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: businessName,
-        },
-      },
-    });
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[invite-flow] PATH=BUSINESS_REGISTER_CLIENT calling /api/auth/business-magic-link");
+      }
 
-    if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
-
-    const user = data.user;
-    sessionRef.current = data?.session ?? null;
-    if (!user) {
-      alert("Sign up failed. Try again.");
-      setLoading(false);
-      return;
-    }
-
-    const profilePayload = {
-      id: user.id,
-      role: "business",
-      email,
-      full_name: businessName,
-      business_name: businessName,
-      category: "",
-      description: "",
-      website: "",
-      address: "",
-      city: "",
-      profile_photo_url: "",
-    };
-
-    const { error: insertError } = await supabase
-      .from("users")
-      .insert(profilePayload);
-
-    if (insertError) {
-      console.error("Profile insert error:", insertError);
-      alert("Failed to create business profile.");
-      setLoading(false);
-      return;
-    }
-
-    const session = sessionRef.current;
-    if (session?.access_token && session?.refresh_token) {
-      await fetch("/api/auth/refresh", {
+      const response = await fetch("/api/auth/business-magic-link", {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
+          email: emailValue,
         }),
       });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        const message = String(payload?.error || "");
+        if (response.status === 429 || isRateLimitError(message)) {
+          setAuthError("Too many attempts. Please wait a minute and try again.");
+          return "rate_limit";
+        }
+        setAuthError("Unable to continue right now. Please try again.");
+        return "hard_error";
+      }
+      return "sent";
+    } catch {
+      setAuthError("Unable to continue right now. Please try again.");
+      return "hard_error";
+    }
+  }
+
+  async function handleContinue(e) {
+    e.preventDefault();
+    setAuthError("");
+    const normalizedEmail = email.trim();
+    if (!isValidEmail(normalizedEmail)) {
+      setAuthError("Enter a valid email address.");
+      return;
     }
 
-    await redirectToOnboarding();
+    setLoading(true);
+    const result = await sendMagicLink(normalizedEmail);
+    if (result === "sent") {
+      setStep("sent");
+    }
     setLoading(false);
+  }
+
+  async function handleResend() {
+    setAuthError("");
+    const normalizedEmail = email.trim();
+    if (!isValidEmail(normalizedEmail)) {
+      setAuthError("Enter a valid email address.");
+      setStep("email");
+      return;
+    }
+
+    setLoading(true);
+    await sendMagicLink(normalizedEmail);
+    setLoading(false);
+  }
+
+  function handleChangeEmail() {
+    setAuthError("");
+    setStep("email");
+    requestAnimationFrame(() => {
+      emailInputRef.current?.focus();
+    });
   }
 
   async function handleGoogle() {
@@ -173,19 +119,15 @@ function BusinessRegisterInner({ isPopup }) {
       setLoading(false);
       return;
     }
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const target = PATHS.business.onboarding || "/onboarding";
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${origin}/api/auth/callback?next=${encodeURIComponent(target)}`,
+        redirectTo: googleRedirectUrl,
       },
     });
 
     if (error) {
-      alert(error.message);
+      setAuthError("Unable to continue with Google right now. Please try again.");
     }
 
     setLoading(false);
@@ -203,81 +145,97 @@ function BusinessRegisterInner({ isPopup }) {
           Start reaching local customers today
         </p>
 
-        <button
-          onClick={handleGoogle}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <img src="/google-icon.svg" alt="" className="w-5 h-5" />
-          Sign up with Google
-        </button>
-
-        <div className="my-6 flex items-center gap-4">
-          <div className="h-px flex-1 bg-[var(--yb-border)]" />
-          <span className="text-xs text-slate-500">
-            or
-          </span>
-          <div className="h-px flex-1 bg-[var(--yb-border)]" />
-        </div>
-
-        <form onSubmit={handleRegister} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-900" htmlFor="business-name">
-              Business name
-            </label>
-            <input
-              id="business-name"
-              type="text"
-              placeholder="Your business"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
-              required
-            />
+        {authError ? (
+          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {authError}
           </div>
+        ) : null}
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-900" htmlFor="business-email">
-              Email
-            </label>
-            <input
-              id="business-email"
-              type="email"
-              placeholder="you@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
-              required
-            />
+        {step === "email" ? (
+          <>
+            <form onSubmit={handleContinue} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-900" htmlFor="business-email">
+                  Email
+                </label>
+                <input
+                  id="business-email"
+                  ref={emailInputRef}
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (authError) setAuthError("");
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                  required
+                  autoComplete="email"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-2 w-full py-3 rounded-xl font-semibold bg-[#6E34FF] text-white transition hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? "Sending..." : "Continue"}
+              </button>
+            </form>
+
+            <p className="mt-3 text-center text-sm text-slate-500">
+              We&apos;ll email you a link to verify and continue.
+            </p>
+
+            <div className="my-6 flex items-center gap-4">
+              <div className="h-px flex-1 bg-[var(--yb-border)]" />
+              <span className="text-xs text-slate-500">
+                or
+              </span>
+              <div className="h-px flex-1 bg-[var(--yb-border)]" />
+            </div>
+
+            <button
+              onClick={handleGoogle}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <img src="/google-icon.svg" alt="" className="w-5 h-5" />
+              Continue with Google
+            </button>
+          </>
+        ) : (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-slate-900">Check your email</h2>
+            <div className="rounded-xl border border-[var(--yb-border)] bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              We sent a verification link to <span className="font-semibold">{email.trim()}</span>.
+              {" "}Open it to finish creating your business account.
+            </div>
+            <p className="text-sm text-slate-500">
+              Didn&apos;t get it? Check spam or resend.
+            </p>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={loading}
+              className="w-full py-3 rounded-xl font-semibold bg-[#6E34FF] text-white transition hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? "Sending..." : "Resend email"}
+            </button>
+            <button
+              type="button"
+              onClick={handleChangeEmail}
+              disabled={loading}
+              className="w-full py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Change email
+            </button>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-900" htmlFor="business-password">
-              Password
-            </label>
-            <input
-              id="business-password"
-              type="password"
-              placeholder="Create a password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-2 w-full py-3 rounded-xl font-semibold bg-[#6E34FF] text-white transition hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {loading ? "Creating..." : "Create account"}
-          </button>
-        </form>
+        )}
     </div>
   );
 }
 
-export default function BusinessRegisterClient({ isPopup = false }) {
-  return <BusinessRegisterInner isPopup={isPopup} />;
+export default function BusinessRegisterClient() {
+  return <BusinessRegisterInner />;
 }

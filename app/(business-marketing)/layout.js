@@ -1,5 +1,3 @@
-import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
-
 export const metadata = {
   other: {
     "yb-shell": "business-marketing",
@@ -7,10 +5,5 @@ export const metadata = {
 };
 
 export default function BusinessMarketingLayout({ children }) {
-  return (
-    <>
-      <BusinessAuthRedirector />
-      {children}
-    </>
-  );
+  return children;
 }

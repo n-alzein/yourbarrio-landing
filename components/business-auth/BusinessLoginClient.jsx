@@ -12,7 +12,7 @@ import {
   readClientRedirectState,
 } from "@/lib/auth/clientRedirectState";
 
-function BusinessLoginInner({ isPopup }) {
+function BusinessLoginInner({ isPopup, callbackError = "" }) {
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
   const authTimeoutMs = 30000;
@@ -576,6 +576,17 @@ function BusinessLoginInner({ isPopup }) {
             Sign in to manage your business
           </p>
 
+          {callbackError === "magic_link_expired" ? (
+            <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              This sign-in link has expired. Please request a new magic link below.
+            </div>
+          ) : null}
+          {callbackError === "auth_callback_failed" ? (
+            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              We couldn&apos;t complete sign-in from that link. Please try again.
+            </div>
+          ) : null}
+
           <form onSubmit={handleLogin} className="space-y-4">
             {authError ? (
               <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -668,6 +679,6 @@ function BusinessLoginInner({ isPopup }) {
   );
 }
 
-export default function BusinessLoginClient({ isPopup = false }) {
-  return <BusinessLoginInner isPopup={isPopup} />;
+export default function BusinessLoginClient({ isPopup = false, callbackError = "" }) {
+  return <BusinessLoginInner isPopup={isPopup} callbackError={callbackError} />;
 }
