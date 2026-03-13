@@ -130,6 +130,14 @@ const isPublicLoginSurfacePath = (pathname) => {
   );
 };
 
+const isBusinessCreatePasswordPath = (pathname) => {
+  if (!pathname) return false;
+  return (
+    pathname === PATHS.auth.businessCreatePassword ||
+    pathname.startsWith(`${PATHS.auth.businessCreatePassword}/`)
+  );
+};
+
 const buildSignedOutState = () => ({
   authStatus: "unauthenticated",
   session: null,
@@ -1991,6 +1999,19 @@ export function AuthProvider({
           userId: authState.user?.id ?? null,
         });
       }
+      return;
+    }
+    if (isBusinessCreatePasswordPath(pathname) || isBusinessCreatePasswordPath(currentPath)) {
+      console.info("[BUSINESS_REDIRECT_TRACE] auth_provider_create_password_allow", {
+        pathname: currentPath,
+        userId: authState.user?.id ?? null,
+        role: authState.profile?.role ?? authState.role ?? null,
+        sessionExists: Boolean(authState.session),
+        password_set: null,
+        onboardingState: null,
+        redirectDestination: null,
+        redirectReason: "allow_authenticated_create_password_route",
+      });
       return;
     }
     if (!pathname.startsWith("/business-auth")) return;

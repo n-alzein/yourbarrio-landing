@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import BusinessCreatePasswordClient from "@/components/business-auth/BusinessCreatePasswordClient";
 import {
   BUSINESS_CREATE_PASSWORD_PATH,
+  getBusinessCreatePasswordAccessDecision,
   getBusinessPasswordGateState,
-  getBusinessRedirectDestination,
+  logBusinessRedirectTrace,
 } from "@/lib/auth/businessPasswordGate";
 import { ensureBusinessProvisionedForUser } from "@/lib/auth/ensureBusinessProvisioning";
 import { getSupabaseServerAuthedClient } from "@/lib/supabaseServer";
@@ -13,9 +14,23 @@ export const revalidate = 0;
 
 export default async function BusinessCreatePasswordPage() {
   const supabase = await getSupabaseServerAuthedClient();
+  const pathname = BUSINESS_CREATE_PASSWORD_PATH;
 
   if (!supabase) {
-    redirect(`/business-auth/login?next=${encodeURIComponent(BUSINESS_CREATE_PASSWORD_PATH)}`);
+    const decision = getBusinessCreatePasswordAccessDecision({
+      hasSession: false,
+    });
+    logBusinessRedirectTrace("create_password_page", {
+      pathname,
+      userId: null,
+      role: null,
+      sessionExists: false,
+      password_set: null,
+      onboardingState: null,
+      redirectDestination: decision.destination,
+      redirectReason: decision.reason,
+    });
+    redirect(decision.destination);
   }
 
   const {
@@ -23,7 +38,20 @@ export default async function BusinessCreatePasswordPage() {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirect(`/business-auth/login?next=${encodeURIComponent(BUSINESS_CREATE_PASSWORD_PATH)}`);
+    const decision = getBusinessCreatePasswordAccessDecision({
+      hasSession: false,
+    });
+    logBusinessRedirectTrace("create_password_page", {
+      pathname,
+      userId: null,
+      role: null,
+      sessionExists: false,
+      password_set: null,
+      onboardingState: null,
+      redirectDestination: decision.destination,
+      redirectReason: decision.reason,
+    });
+    redirect(decision.destination);
   }
 
   const fallbackRole =
@@ -43,18 +71,39 @@ export default async function BusinessCreatePasswordPage() {
     fallbackRole,
   });
 
-  if (businessGate.role !== "business") {
-    redirect("/");
+  const decision = getBusinessCreatePasswordAccessDecision({
+    hasSession: true,
+    role: businessGate.role,
+    passwordSet: businessGate.passwordSet,
+    onboardingComplete: businessGate.onboardingComplete,
+  });
+
+  if (decision.action === "redirect") {
+    logBusinessRedirectTrace("create_password_page", {
+      pathname,
+      userId: user.id,
+      role: businessGate.role,
+      sessionExists: true,
+      password_set: businessGate.passwordSet,
+      onboardingState: businessGate.onboardingComplete,
+      redirectDestination: decision.destination,
+      redirectReason: decision.reason,
+      accountStatus: businessGate.accountStatus,
+    });
+    redirect(decision.destination);
   }
 
-  if (businessGate.passwordSet) {
-    redirect(
-      getBusinessRedirectDestination({
-        passwordSet: businessGate.passwordSet,
-        onboardingComplete: businessGate.onboardingComplete,
-      })
-    );
-  }
+  logBusinessRedirectTrace("create_password_page", {
+    pathname,
+    userId: user.id,
+    role: businessGate.role,
+    sessionExists: true,
+    password_set: businessGate.passwordSet,
+    onboardingState: businessGate.onboardingComplete,
+    redirectDestination: null,
+    redirectReason: decision.reason,
+    accountStatus: businessGate.accountStatus,
+  });
 
   return <BusinessCreatePasswordClient />;
 }

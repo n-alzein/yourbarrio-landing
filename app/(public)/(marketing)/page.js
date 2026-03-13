@@ -8,10 +8,46 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const { role } = await getCurrentUserRole();
-  if (role === "customer") await redirectIfAllowed("/customer/home");
-  if (role === "business") await redirectIfAllowed("/go/dashboard");
-  if (role === "admin") await redirectIfAllowed("/admin");
+  const { user, role } = await getCurrentUserRole();
+  if (role === "customer") {
+    console.warn("[BUSINESS_REDIRECT_TRACE] homepage", {
+      pathname: "/",
+      userId: user?.id || null,
+      role,
+      sessionExists: Boolean(user?.id),
+      password_set: null,
+      onboardingState: null,
+      redirectDestination: "/customer/home",
+      redirectReason: "homepage_customer_redirect",
+    });
+    await redirectIfAllowed("/customer/home");
+  }
+  if (role === "business") {
+    console.warn("[BUSINESS_REDIRECT_TRACE] homepage", {
+      pathname: "/",
+      userId: user?.id || null,
+      role,
+      sessionExists: Boolean(user?.id),
+      password_set: null,
+      onboardingState: null,
+      redirectDestination: "/go/dashboard",
+      redirectReason: "homepage_business_redirect",
+    });
+    await redirectIfAllowed("/go/dashboard");
+  }
+  if (role === "admin") {
+    console.warn("[BUSINESS_REDIRECT_TRACE] homepage", {
+      pathname: "/",
+      userId: user?.id || null,
+      role,
+      sessionExists: Boolean(user?.id),
+      password_set: null,
+      onboardingState: null,
+      redirectDestination: "/admin",
+      redirectReason: "homepage_admin_redirect",
+    });
+    await redirectIfAllowed("/admin");
+  }
   // Deny-by-default for unknown role: keep public marketing surface.
 
   const location = await getLocationFromCookies();

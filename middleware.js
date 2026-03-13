@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getCookieBaseOptions } from "@/lib/authCookies";
 import { resolveCurrentUserRoleFromClient } from "@/lib/auth/getCurrentUserRole";
-import { BUSINESS_CREATE_PASSWORD_PATH } from "@/lib/auth/businessPasswordGate";
+import {
+  BUSINESS_CREATE_PASSWORD_PATH,
+  logBusinessRedirectTrace,
+} from "@/lib/auth/businessPasswordGate";
 import { getRoleLandingPath } from "@/lib/auth/redirects";
 import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 import {
@@ -352,6 +355,17 @@ export async function middleware(request) {
       businessLandingGuardMeta.hit = true;
       businessLandingGuardMeta.role = "business";
       businessLandingGuardMeta.destination = BUSINESS_CREATE_PASSWORD_PATH;
+      logBusinessRedirectTrace("middleware_business_landing", {
+        pathname,
+        userId: user.id,
+        role,
+        sessionExists: true,
+        password_set: passwordSet,
+        onboardingState: null,
+        redirectDestination: BUSINESS_CREATE_PASSWORD_PATH,
+        redirectReason: "business_landing_password_setup_required",
+        accountStatus,
+      });
       return withSupabaseCookies(
         NextResponse.redirect(new URL(BUSINESS_CREATE_PASSWORD_PATH, request.url), 307)
       );
@@ -367,12 +381,34 @@ export async function middleware(request) {
 
     if (!isBusinessOnboardingComplete(businessRow)) {
       businessLandingGuardMeta.destination = "/onboarding";
+      logBusinessRedirectTrace("middleware_business_landing", {
+        pathname,
+        userId: user.id,
+        role,
+        sessionExists: true,
+        password_set: passwordSet,
+        onboardingState: false,
+        redirectDestination: "/onboarding",
+        redirectReason: "business_landing_onboarding_required",
+        accountStatus,
+      });
       return withSupabaseCookies(
         NextResponse.redirect(new URL("/onboarding", request.url), 307)
       );
     }
 
     businessLandingGuardMeta.destination = "/business/dashboard";
+    logBusinessRedirectTrace("middleware_business_landing", {
+      pathname,
+      userId: user.id,
+      role,
+      sessionExists: true,
+      password_set: passwordSet,
+      onboardingState: true,
+      redirectDestination: "/business/dashboard",
+      redirectReason: "business_landing_dashboard_ready",
+      accountStatus,
+    });
     return withSupabaseCookies(
       NextResponse.redirect(new URL("/business/dashboard", request.url), 307)
     );
