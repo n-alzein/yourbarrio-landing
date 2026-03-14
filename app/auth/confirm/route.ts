@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSafeRedirectPath } from "@/lib/auth/redirects";
 import { ensureBusinessProvisionedForUser } from "@/lib/auth/ensureBusinessProvisioning";
 import {
+  BUSINESS_POST_CONFIRM_PATH,
   getBusinessPasswordGateState,
   getBusinessRedirectDestination,
   logBusinessRedirectTrace,
@@ -126,7 +127,7 @@ async function tryRedirectAuthenticatedBusiness({
   return buildRedirectResponseWithCookies({
     request,
     cookieSource,
-    destination,
+    destination: BUSINESS_POST_CONFIRM_PATH,
     logPayload: {
       host: request.headers.get("host") || new URL(request.url).host,
       pathname: new URL(request.url).pathname,
@@ -135,6 +136,7 @@ async function tryRedirectAuthenticatedBusiness({
       userId: user.id,
       password_set: businessGate.passwordSet,
       onboardingState: businessGate.onboardingComplete,
+      resolvedBusinessDestination: destination,
       redirectReason: "verify_otp_failed_existing_session_reused",
     },
   });
@@ -280,11 +282,12 @@ export async function GET(request: NextRequest) {
       userId: user.id,
       fallbackRole: "business",
     });
-    destination = getBusinessRedirectDestination({
+    const resolvedBusinessDestination = getBusinessRedirectDestination({
       passwordSet: businessGate.passwordSet,
       onboardingComplete: businessGate.onboardingComplete,
       safeNext: targetPath,
     });
+    destination = BUSINESS_POST_CONFIRM_PATH;
 
     return buildRedirectResponseWithCookies({
       request,
@@ -300,6 +303,7 @@ export async function GET(request: NextRequest) {
         userId: user.id,
         password_set: businessGate.passwordSet,
         onboardingState: businessGate.onboardingComplete,
+        resolvedBusinessDestination,
         redirectReason: "business_post_confirm_redirect",
       },
     });
