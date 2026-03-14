@@ -3,12 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PATHS } from "@/lib/auth/paths";
-import { getRoleLandingPath, normalizeAppRole } from "@/lib/auth/redirects";
-import {
-  BUSINESS_PROFILE_SELECT,
-  getBusinessRedirectDestination,
-} from "@/lib/auth/businessPasswordGate";
-import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 
 const MAX_WAIT_MS = 10_000;
 const RETRY_DELAY_MS = 500;
@@ -58,38 +52,7 @@ export default function BusinessPostConfirmClient() {
           await sleep(RETRY_DELAY_MS);
           continue;
         }
-
-        const fallbackRole =
-          normalizeAppRole(user.app_metadata?.role) ||
-          normalizeAppRole(user.user_metadata?.role);
-
-        const { data: userRow } = await supabase
-          .from("users")
-          .select("role,is_internal,password_set")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        const role =
-          userRow?.is_internal === true
-            ? "admin"
-            : normalizeAppRole(userRow?.role) || fallbackRole;
-
-        let destination = PATHS.auth.businessLogin;
-
-        if (role === "business") {
-          const { data: businessRow } = await supabase
-            .from("businesses")
-            .select(BUSINESS_PROFILE_SELECT)
-            .eq("owner_user_id", user.id)
-            .maybeSingle();
-
-          destination = getBusinessRedirectDestination({
-            passwordSet: userRow?.password_set === true,
-            onboardingComplete: isBusinessOnboardingComplete(businessRow),
-          });
-        } else if (role) {
-          destination = getRoleLandingPath(role);
-        }
+        const destination = PATHS.auth.businessCreatePassword;
 
         console.warn("[BUSINESS_REDIRECT_TRACE] post_confirm_attempt", {
           pathname: PATHS.auth.businessPostConfirm,
