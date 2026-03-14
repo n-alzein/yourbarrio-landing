@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import BusinessCreatePasswordClient from "@/components/business-auth/BusinessCreatePasswordClient";
 import {
   BUSINESS_CREATE_PASSWORD_PATH,
+  getBusinessAuthCookieNames,
   getBusinessCreatePasswordAccessDecision,
   getBusinessPasswordGateState,
   logBusinessRedirectTrace,
@@ -19,7 +20,8 @@ export default async function BusinessCreatePasswordPage() {
   const supabase = await getSupabaseServerAuthedClient();
   const host = headerList.get("host") || null;
   const pathname = BUSINESS_CREATE_PASSWORD_PATH;
-  const rawCookieNames = cookieStore.getAll().map((cookie) => cookie.name);
+  const authCookieNames = getBusinessAuthCookieNames(cookieStore.getAll());
+  const hasAuthCookies = authCookieNames.length > 0;
 
   if (!supabase) {
     const decision = getBusinessCreatePasswordAccessDecision({
@@ -28,7 +30,7 @@ export default async function BusinessCreatePasswordPage() {
     logBusinessRedirectTrace("create_password_page", {
       host,
       pathname,
-      rawCookieNames,
+      authCookieNames,
       userId: null,
       role: null,
       serverCanReadSession: false,
@@ -38,6 +40,7 @@ export default async function BusinessCreatePasswordPage() {
       getUserReturnedUser: false,
       password_set: null,
       onboardingState: null,
+      shouldAwaitBrowserSession: false,
       redirectDestination: decision.destination,
       redirectReason: decision.reason,
     });
@@ -53,13 +56,20 @@ export default async function BusinessCreatePasswordPage() {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    const decision = getBusinessCreatePasswordAccessDecision({
-      hasSession: false,
-    });
+    const shouldAwaitBrowserSession = hasAuthCookies;
+    const decision = shouldAwaitBrowserSession
+      ? {
+          action: "render",
+          destination: null,
+          reason: "await_browser_session_resolution",
+        }
+      : getBusinessCreatePasswordAccessDecision({
+          hasSession: false,
+        });
     logBusinessRedirectTrace("create_password_page", {
       host,
       pathname,
-      rawCookieNames,
+      authCookieNames,
       userId: null,
       role: null,
       serverCanReadSession: Boolean(session),
@@ -69,10 +79,15 @@ export default async function BusinessCreatePasswordPage() {
       getUserReturnedUser: false,
       password_set: null,
       onboardingState: null,
+      shouldAwaitBrowserSession,
       redirectDestination: decision.destination,
       redirectReason: decision.reason,
     });
-    redirect(decision.destination);
+    if (decision.action === "redirect") {
+      redirect(decision.destination);
+    }
+
+    return <BusinessCreatePasswordClient awaitSessionResolution />;
   }
 
   const fallbackRole =
@@ -103,7 +118,7 @@ export default async function BusinessCreatePasswordPage() {
     logBusinessRedirectTrace("create_password_page", {
       host,
       pathname,
-      rawCookieNames,
+      authCookieNames,
       userId: user.id,
       role: businessGate.role,
       serverCanReadSession: Boolean(session),
@@ -113,6 +128,7 @@ export default async function BusinessCreatePasswordPage() {
       getUserReturnedUser: true,
       password_set: businessGate.passwordSet,
       onboardingState: businessGate.onboardingComplete,
+      shouldAwaitBrowserSession: false,
       redirectDestination: decision.destination,
       redirectReason: decision.reason,
       accountStatus: businessGate.accountStatus,
@@ -123,7 +139,7 @@ export default async function BusinessCreatePasswordPage() {
   logBusinessRedirectTrace("create_password_page", {
     host,
     pathname,
-    rawCookieNames,
+    authCookieNames,
     userId: user.id,
     role: businessGate.role,
     serverCanReadSession: Boolean(session),
@@ -133,10 +149,11 @@ export default async function BusinessCreatePasswordPage() {
     getUserReturnedUser: true,
     password_set: businessGate.passwordSet,
     onboardingState: businessGate.onboardingComplete,
+    shouldAwaitBrowserSession: false,
     redirectDestination: null,
     redirectReason: decision.reason,
     accountStatus: businessGate.accountStatus,
   });
 
-  return <BusinessCreatePasswordClient />;
+  return <BusinessCreatePasswordClient awaitSessionResolution={false} />;
 }

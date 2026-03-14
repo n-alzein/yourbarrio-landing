@@ -3,6 +3,7 @@ import { getSafeRedirectPath } from "@/lib/auth/redirects";
 import { ensureBusinessProvisionedForUser } from "@/lib/auth/ensureBusinessProvisioning";
 import {
   BUSINESS_POST_CONFIRM_PATH,
+  getBusinessAuthCookieNames,
   getBusinessPasswordGateState,
   getBusinessRedirectDestination,
   logBusinessRedirectTrace,
@@ -65,6 +66,7 @@ function getResponseCookieSnapshot(response: NextResponse) {
   return {
     setCookieCount: cookies.length,
     setCookieNames: cookies.map((cookie) => cookie.name),
+    authCookieNames: getBusinessAuthCookieNames(cookies),
   };
 }
 
@@ -157,9 +159,11 @@ export async function GET(request: NextRequest) {
   const type = normalizeOtpType(requestUrl.searchParams.get("type") || "");
   const businessIntent = isBusinessIntentPath(targetPath);
   const fallbackPath = getFallbackPath(requestUrl, targetPath, businessIntent);
+  const requestAuthCookieNames = getBusinessAuthCookieNames(request.cookies.getAll());
   logBusinessRedirectTrace("auth_confirm_enter", {
     host,
     pathname: requestUrl.pathname,
+    requestAuthCookieNames,
     query: {
       hasCode: Boolean(code),
       hasTokenHash: Boolean(tokenHash),
@@ -191,6 +195,7 @@ export async function GET(request: NextRequest) {
       logBusinessRedirectTrace("auth_confirm_exit", {
         host,
         pathname: requestUrl.pathname,
+        requestAuthCookieNames,
         verificationMethod,
         authMethodPath: verificationMethod,
         authCallReturnedError: true,
@@ -234,6 +239,7 @@ export async function GET(request: NextRequest) {
       logBusinessRedirectTrace("auth_confirm_exit", {
         host,
         pathname: requestUrl.pathname,
+        requestAuthCookieNames,
         verificationMethod,
         authMethodPath: verificationMethod,
         authCallReturnedError: true,
@@ -255,6 +261,7 @@ export async function GET(request: NextRequest) {
     logBusinessRedirectTrace("auth_confirm_exit", {
       host,
       pathname: requestUrl.pathname,
+      requestAuthCookieNames,
       verificationMethod,
       authMethodPath: verificationMethod,
       authCallReturnedError: false,
@@ -286,6 +293,7 @@ export async function GET(request: NextRequest) {
       logBusinessRedirectTrace("auth_confirm_exit", {
         host,
         pathname: requestUrl.pathname,
+        requestAuthCookieNames,
         verificationMethod,
         authMethodPath: verificationMethod,
         authCallReturnedError: false,
@@ -338,6 +346,7 @@ export async function GET(request: NextRequest) {
       logPayload: {
         host,
         pathname: requestUrl.pathname,
+        requestAuthCookieNames,
         verificationMethod,
         verificationSucceeded,
         verificationSessionExists,
@@ -361,6 +370,7 @@ export async function GET(request: NextRequest) {
     logPayload: {
       host,
       pathname: requestUrl.pathname,
+      requestAuthCookieNames,
       verificationMethod,
       verificationSucceeded,
       verificationSessionExists,

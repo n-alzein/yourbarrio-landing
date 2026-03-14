@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BUSINESS_PASSWORD_MIN_LENGTH } from "@/lib/auth/businessPasswordGate";
+import { PATHS } from "@/lib/auth/paths";
+
+const SESSION_WAIT_MS = 10_000;
+const SESSION_RETRY_MS = 500;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function EyeIcon({ open }) {
   return open ? (
@@ -20,18 +28,95 @@ function EyeIcon({ open }) {
   );
 }
 
-export default function BusinessCreatePasswordClient() {
+export default function BusinessCreatePasswordClient({
+  awaitSessionResolution = false,
+}) {
   const router = useRouter();
+  const resolvedRef = useRef(!awaitSessionResolution);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [ready, setReady] = useState(!awaitSessionResolution);
+
+  useEffect(() => {
+    if (!awaitSessionResolution) return undefined;
+
+    let cancelled = false;
+
+    async function resolveSession() {
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+      const supabase = getSupabaseBrowserClient();
+      const startedAt = Date.now();
+      const pathname =
+        typeof window !== "undefined"
+          ? window.location.pathname
+          : PATHS.auth.businessCreatePassword;
+      const host = typeof window !== "undefined" ? window.location.host : null;
+      let attempt = 0;
+
+      while (!cancelled && !resolvedRef.current && Date.now() - startedAt < SESSION_WAIT_MS) {
+        attempt += 1;
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        console.warn("[BUSINESS_REDIRECT_TRACE] create_password_client_session_check", {
+          host,
+          pathname,
+          attempt,
+          sessionExists: Boolean(session),
+          userExists: Boolean(user?.id),
+          chosenDestination: user?.id ? null : null,
+          timeoutFallback: false,
+        });
+
+        if (session && user?.id) {
+          resolvedRef.current = true;
+          setReady(true);
+          return;
+        }
+
+        await sleep(SESSION_RETRY_MS);
+      }
+
+      if (cancelled || resolvedRef.current) return;
+
+      const destination = `${PATHS.auth.businessLogin}?next=${encodeURIComponent(
+        PATHS.auth.businessCreatePassword
+      )}`;
+      console.warn("[BUSINESS_REDIRECT_TRACE] create_password_client_session_check", {
+        host,
+        pathname,
+        attempt,
+        sessionExists: false,
+        userExists: false,
+        chosenDestination: destination,
+        timeoutFallback: true,
+      });
+      resolvedRef.current = true;
+      window.location.replace(destination);
+    }
+
+    void resolveSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [awaitSessionResolution]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     setErrorMessage("");
+
+    if (!ready) {
+      return;
+    }
 
     if (password.length < BUSINESS_PASSWORD_MIN_LENGTH) {
       setErrorMessage(
@@ -88,7 +173,9 @@ export default function BusinessCreatePasswordClient() {
         Create your password
       </h1>
       <p className="mt-3 text-sm leading-6 text-slate-600">
-        Your email has been verified. Create a password to finish setting up your business account.
+        {ready
+          ? "Your email has been verified. Create a password to finish setting up your business account."
+          : "Finalizing your verified session before password setup..."}
       </p>
 
       <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
@@ -104,14 +191,14 @@ export default function BusinessCreatePasswordClient() {
             className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
             placeholder={`Minimum ${BUSINESS_PASSWORD_MIN_LENGTH} characters`}
             autoComplete="new-password"
-            disabled={submitting}
+            disabled={submitting || !ready}
           />
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
             className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-slate-700"
             aria-label={showPassword ? "Hide password" : "Show password"}
-            disabled={submitting}
+            disabled={submitting || !ready}
           >
             <EyeIcon open={showPassword} />
           </button>
@@ -132,14 +219,14 @@ export default function BusinessCreatePasswordClient() {
             className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
             placeholder="Re-enter your password"
             autoComplete="new-password"
-            disabled={submitting}
+            disabled={submitting || !ready}
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword((value) => !value)}
             className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-slate-700"
             aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-            disabled={submitting}
+            disabled={submitting || !ready}
           >
             <EyeIcon open={showConfirmPassword} />
           </button>
@@ -157,10 +244,10 @@ export default function BusinessCreatePasswordClient() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !ready}
           className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#6E34FF] px-4 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? "Saving..." : "Create password"}
+          {!ready ? "Finalizing session..." : submitting ? "Saving..." : "Create password"}
         </button>
       </form>
     </div>

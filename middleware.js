@@ -4,6 +4,7 @@ import { getCookieBaseOptions } from "@/lib/authCookies";
 import { resolveCurrentUserRoleFromClient } from "@/lib/auth/getCurrentUserRole";
 import {
   BUSINESS_CREATE_PASSWORD_PATH,
+  getBusinessAuthCookieNames,
   logBusinessRedirectTrace,
 } from "@/lib/auth/businessPasswordGate";
 import { getRoleLandingPath } from "@/lib/auth/redirects";
@@ -33,11 +34,9 @@ function shouldTraceAuthFlow(pathname) {
 
 function logMiddlewareAuthTrace(request, payload = {}) {
   const pathname = request?.nextUrl?.pathname || "";
-  if (!shouldTraceAuthFlow(pathname)) return;
-  const authCookieNames = request.cookies
-    .getAll()
-    .map((cookie) => cookie?.name)
-    .filter((name) => typeof name === "string" && name.startsWith("sb-"));
+  const isBusinessAuthPath = pathname.startsWith("/business-auth/");
+  if (!shouldTraceAuthFlow(pathname) && !isBusinessAuthPath) return;
+  const authCookieNames = getBusinessAuthCookieNames(request.cookies.getAll());
   console.warn("[BUSINESS_REDIRECT_TRACE] middleware_auth", {
     host: request.headers.get("host") || request.nextUrl.host,
     pathname,
@@ -387,6 +386,30 @@ export async function middleware(request) {
   const { user, role } = await resolveCurrentUserRoleFromClient(supabase, {
     log: shouldLogRole,
   });
+
+  if (pathname.startsWith("/business-auth/")) {
+    logBusinessRedirectTrace("middleware_business_auth", {
+      host: request.headers.get("host") || request.nextUrl.host,
+      pathname,
+      authCookieNames: getBusinessAuthCookieNames(request.cookies.getAll()),
+      requestIncludesAuthCookies:
+        getBusinessAuthCookieNames(request.cookies.getAll()).length > 0,
+      middlewareCanReadUser: Boolean(user?.id),
+      userId: user?.id || null,
+      role,
+      redirectDestination: null,
+      redirectReason: "business_auth_passthrough",
+    });
+    logMiddlewareAuthTrace(request, {
+      middlewareCanReadUser: Boolean(user?.id),
+      userId: user?.id || null,
+      role,
+      redirectDestination: null,
+      redirectReason: "business_auth_passthrough",
+    });
+    return withSupabaseCookies(response);
+  }
+
   logMiddlewareAuthTrace(request, {
     middlewareCanReadUser: Boolean(user?.id),
     userId: user?.id || null,
@@ -770,6 +793,7 @@ export const config = {
     "/admin/:path*",
     "/customer/:path*",
     "/business/:path*",
+    "/business-auth/:path*",
     "/onboarding/:path*",
     "/business/onboarding/:path*",
     { source: "/:path*", has: [{ type: "query", key: "_rsc" }] },
