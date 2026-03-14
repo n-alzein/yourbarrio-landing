@@ -4,6 +4,7 @@ import { ensureBusinessProvisionedForUser } from "@/lib/auth/ensureBusinessProvi
 import {
   getBusinessPasswordGateState,
   getBusinessRedirectDestination,
+  logBusinessRedirectTrace,
 } from "@/lib/auth/businessPasswordGate";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
 
@@ -55,10 +56,12 @@ async function tryRedirectAuthenticatedBusiness({
   supabase,
   request,
   targetPath,
+  cookieSource,
 }: {
   supabase: ReturnType<typeof createSupabaseRouteHandlerClient>;
   request: NextRequest;
   targetPath: string;
+  cookieSource?: NextResponse;
 }) {
   const {
     data: { user },
@@ -84,7 +87,7 @@ async function tryRedirectAuthenticatedBusiness({
 
   if (businessGate.role !== "business") return null;
 
-  return NextResponse.redirect(
+  const redirectResponse = NextResponse.redirect(
     new URL(
       getBusinessRedirectDestination({
         passwordSet: businessGate.passwordSet,
@@ -94,58 +97,72 @@ async function tryRedirectAuthenticatedBusiness({
       request.url
     )
   );
+
+  if (cookieSource) {
+    cookieSource.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+  }
+
+  return redirectResponse;
 }
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
+  const host = request.headers.get("host") || requestUrl.host;
   const code = requestUrl.searchParams.get("code") || "";
   const targetPath = getTargetPath(requestUrl);
   const tokenHash = requestUrl.searchParams.get("token_hash") || "";
   const type = normalizeOtpType(requestUrl.searchParams.get("type") || "");
   const businessIntent = isBusinessIntentPath(targetPath);
   const fallbackPath = getFallbackPath(requestUrl, targetPath, businessIntent);
-
-  if (process.env.NODE_ENV !== "production") {
-    console.info("[AUTH_CALLBACK_TRACE] confirm_params", {
+  logBusinessRedirectTrace("auth_confirm_enter", {
+    host,
+    pathname: requestUrl.pathname,
+    query: {
       hasCode: Boolean(code),
       hasTokenHash: Boolean(tokenHash),
       type: type || null,
       next: targetPath,
-      businessIntent,
-    });
-  }
+    },
+    sessionExists: null,
+    userExists: null,
+    redirectDestination: null,
+    redirectReason: "entered_confirm_route",
+  });
 
   const response = NextResponse.redirect(new URL(fallbackPath, request.url));
   const supabase = createSupabaseRouteHandlerClient(request, response);
+  let verificationSucceeded = false;
+  let verificationMethod: "code_exchange" | "token_hash_verify" | "invalid" = "invalid";
 
   if (code) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[AUTH_CALLBACK_TRACE] confirm_path", {
-        path: "code_exchange",
-        businessIntent,
-      });
-    }
+    verificationMethod = "code_exchange";
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[AUTH_CALLBACK_TRACE] confirm_fallback", {
-          reason: "exchange_code_failed",
-          destination: fallbackPath,
-          code: error.code || null,
-          message: error.message || null,
-        });
-      }
+      logBusinessRedirectTrace("auth_confirm_exit", {
+        host,
+        pathname: requestUrl.pathname,
+        query: {
+          hasCode: true,
+          hasTokenHash: Boolean(tokenHash),
+          type: type || null,
+          next: targetPath,
+        },
+        verificationMethod,
+        verificationSucceeded: false,
+        sessionExists: null,
+        userExists: null,
+        redirectDestination: fallbackPath,
+        redirectReason: "exchange_code_failed",
+        errorCode: error.code || null,
+        errorMessage: error.message || null,
+      });
       return response;
     }
   } else if (tokenHash && type) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[AUTH_CALLBACK_TRACE] confirm_path", {
-        path: "token_hash_verify",
-        type,
-        businessIntent,
-      });
-    }
+    verificationMethod = "token_hash_verify";
 
     const { error } = await supabase.auth.verifyOtp({
       type: type as "email" | "recovery" | "invite" | "email_change",
@@ -158,55 +175,98 @@ export async function GET(request: NextRequest) {
           supabase,
           request,
           targetPath,
+          cookieSource: response,
         });
         if (authenticatedRedirect) {
+          logBusinessRedirectTrace("auth_confirm_exit", {
+            host,
+            pathname: requestUrl.pathname,
+            query: {
+              hasCode: false,
+              hasTokenHash: true,
+              type,
+              next: targetPath,
+            },
+            verificationMethod,
+            verificationSucceeded: false,
+            sessionExists: true,
+            userExists: true,
+            redirectDestination: authenticatedRedirect.headers.get("location"),
+            redirectReason: "verify_otp_failed_existing_session_reused",
+            errorCode: error.code || null,
+            errorMessage: error.message || null,
+          });
           return authenticatedRedirect;
         }
       }
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[AUTH_CALLBACK_TRACE] confirm_fallback", {
-          reason: "verify_otp_failed",
-          destination: fallbackPath,
-          code: error.code || null,
-          message: error.message || null,
-        });
-      }
+      logBusinessRedirectTrace("auth_confirm_exit", {
+        host,
+        pathname: requestUrl.pathname,
+        query: {
+          hasCode: false,
+          hasTokenHash: true,
+          type,
+          next: targetPath,
+        },
+        verificationMethod,
+        verificationSucceeded: false,
+        sessionExists: null,
+        userExists: null,
+        redirectDestination: fallbackPath,
+        redirectReason: "verify_otp_failed",
+        errorCode: error.code || null,
+        errorMessage: error.message || null,
+      });
       return response;
     }
   } else {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[AUTH_CALLBACK_TRACE] confirm_path", {
-        path: "invalid_fallback",
-        businessIntent,
-      });
-      console.warn("[AUTH_CALLBACK_TRACE] confirm_fallback", {
-        reason: "missing_or_invalid_params",
-        destination: fallbackPath,
-      });
-    }
+    logBusinessRedirectTrace("auth_confirm_exit", {
+      host,
+      pathname: requestUrl.pathname,
+      query: {
+        hasCode: Boolean(code),
+        hasTokenHash: Boolean(tokenHash),
+        type: type || null,
+        next: targetPath,
+      },
+      verificationMethod,
+      verificationSucceeded: false,
+      sessionExists: null,
+      userExists: null,
+      redirectDestination: fallbackPath,
+      redirectReason: "missing_or_invalid_params",
+    });
     return response;
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    console.info("[AUTH_CALLBACK_TRACE] confirm_verified", {
-      destination: targetPath,
-      verificationMethod: code ? "code_exchange" : "token_hash_verify",
-      type: type || null,
-      businessIntent,
-    });
-  }
+  verificationSucceeded = true;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let destination = targetPath;
 
   if (businessIntent) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     if (!user?.id) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[AUTH_CALLBACK_TRACE] confirm_fallback", {
-          reason: "verify_succeeded_but_user_missing",
-          destination: fallbackPath,
-        });
-      }
+      logBusinessRedirectTrace("auth_confirm_exit", {
+        host,
+        pathname: requestUrl.pathname,
+        query: {
+          hasCode: Boolean(code),
+          hasTokenHash: Boolean(tokenHash),
+          type: type || null,
+          next: targetPath,
+        },
+        verificationMethod,
+        verificationSucceeded,
+        sessionExists: Boolean(session),
+        userExists: false,
+        redirectDestination: fallbackPath,
+        redirectReason: "verify_succeeded_but_user_missing",
+      });
       return response;
     }
     try {
@@ -233,20 +293,54 @@ export async function GET(request: NextRequest) {
       fallbackRole: "business",
     });
 
-    response.headers.set(
-      "location",
-      new URL(
-        getBusinessRedirectDestination({
-          passwordSet: businessGate.passwordSet,
-          onboardingComplete: businessGate.onboardingComplete,
-          safeNext: targetPath,
-        }),
-        request.url
-      ).toString()
-    );
+    destination = getBusinessRedirectDestination({
+      passwordSet: businessGate.passwordSet,
+      onboardingComplete: businessGate.onboardingComplete,
+      safeNext: targetPath,
+    });
+
+    logBusinessRedirectTrace("auth_confirm_exit", {
+      host,
+      pathname: requestUrl.pathname,
+      query: {
+        hasCode: Boolean(code),
+        hasTokenHash: Boolean(tokenHash),
+        type: type || null,
+        next: targetPath,
+      },
+      verificationMethod,
+      verificationSucceeded,
+      sessionExists: Boolean(session),
+      userExists: true,
+      userId: user.id,
+      password_set: businessGate.passwordSet,
+      onboardingState: businessGate.onboardingComplete,
+      redirectDestination: destination,
+      redirectReason: "business_post_confirm_redirect",
+    });
+
+    response.headers.set("location", new URL(destination, request.url).toString());
     return response;
   }
 
-  response.headers.set("location", new URL(targetPath, request.url).toString());
+  logBusinessRedirectTrace("auth_confirm_exit", {
+    host,
+    pathname: requestUrl.pathname,
+    query: {
+      hasCode: Boolean(code),
+      hasTokenHash: Boolean(tokenHash),
+      type: type || null,
+      next: targetPath,
+    },
+    verificationMethod,
+    verificationSucceeded,
+    sessionExists: Boolean(session),
+    userExists: Boolean(user?.id),
+    userId: user?.id || null,
+    redirectDestination: destination,
+    redirectReason: "non_business_post_confirm_redirect",
+  });
+
+  response.headers.set("location", new URL(destination, request.url).toString());
   return response;
 }
