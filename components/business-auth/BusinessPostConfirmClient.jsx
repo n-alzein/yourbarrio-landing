@@ -10,8 +10,8 @@ import {
 } from "@/lib/auth/businessPasswordGate";
 import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 
-const SESSION_RETRY_ATTEMPTS = 8;
-const SESSION_RETRY_DELAY_MS = 500;
+const MAX_WAIT_MS = 10_000;
+const RETRY_DELAY_MS = 500;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,29 +19,30 @@ function sleep(ms) {
 
 export default function BusinessPostConfirmClient() {
   const router = useRouter();
-  const [statusMessage, setStatusMessage] = useState("Finalizing your account...");
   const redirectedRef = useRef(false);
+  const [statusMessage, setStatusMessage] = useState("Finalizing your account...");
 
   useEffect(() => {
     let cancelled = false;
 
-    async function resolveDestination() {
+    async function resolveBusinessDestination() {
       const { getSupabaseBrowserClient } = await import("@/lib/supabase/browser");
       const supabase = getSupabaseBrowserClient();
+      const startedAt = Date.now();
+      let attempt = 0;
 
-      for (let attempt = 1; attempt <= SESSION_RETRY_ATTEMPTS; attempt += 1) {
-        if (cancelled || redirectedRef.current) return;
-
-        if (attempt > 1) {
-          setStatusMessage("Still securing your session...");
-        }
+      while (!cancelled && !redirectedRef.current && Date.now() - startedAt < MAX_WAIT_MS) {
+        attempt += 1;
 
         const {
-          data: { session },
+          data: sessionData,
         } = await supabase.auth.getSession();
         const {
-          data: { user },
+          data: userData,
         } = await supabase.auth.getUser();
+
+        const session = sessionData?.session ?? null;
+        const user = userData?.user ?? null;
 
         console.warn("[BUSINESS_REDIRECT_TRACE] post_confirm_attempt", {
           pathname: PATHS.auth.businessPostConfirm,
@@ -49,19 +50,13 @@ export default function BusinessPostConfirmClient() {
           sessionExists: Boolean(session),
           userExists: Boolean(user?.id),
           userId: user?.id || null,
+          destinationChosen: null,
         });
 
         if (!session || !user?.id) {
-          if (attempt < SESSION_RETRY_ATTEMPTS) {
-            await sleep(SESSION_RETRY_DELAY_MS);
-            continue;
-          }
-
-          redirectedRef.current = true;
-          router.replace(
-            `${PATHS.auth.businessLogin}?next=${encodeURIComponent(PATHS.auth.businessPostConfirm)}`
-          );
-          return;
+          setStatusMessage("Still securing your session...");
+          await sleep(RETRY_DELAY_MS);
+          continue;
         }
 
         const fallbackRole =
@@ -79,35 +74,30 @@ export default function BusinessPostConfirmClient() {
             ? "admin"
             : normalizeAppRole(userRow?.role) || fallbackRole;
 
-        if (role !== "business") {
-          redirectedRef.current = true;
-          router.replace(role ? getRoleLandingPath(role) : PATHS.public.root);
-          return;
+        let destination = PATHS.auth.businessLogin;
+
+        if (role === "business") {
+          const { data: businessRow } = await supabase
+            .from("businesses")
+            .select(BUSINESS_PROFILE_SELECT)
+            .eq("owner_user_id", user.id)
+            .maybeSingle();
+
+          destination = getBusinessRedirectDestination({
+            passwordSet: userRow?.password_set === true,
+            onboardingComplete: isBusinessOnboardingComplete(businessRow),
+          });
+        } else if (role) {
+          destination = getRoleLandingPath(role);
         }
 
-        const { data: businessRow } = await supabase
-          .from("businesses")
-          .select(BUSINESS_PROFILE_SELECT)
-          .eq("owner_user_id", user.id)
-          .maybeSingle();
-
-        const passwordSet = userRow?.password_set === true;
-        const onboardingComplete = isBusinessOnboardingComplete(businessRow);
-        const destination = getBusinessRedirectDestination({
-          passwordSet,
-          onboardingComplete,
-        });
-
-        console.warn("[BUSINESS_REDIRECT_TRACE] post_confirm_resolved", {
+        console.warn("[BUSINESS_REDIRECT_TRACE] post_confirm_attempt", {
           pathname: PATHS.auth.businessPostConfirm,
+          attempt,
           sessionExists: true,
           userExists: true,
           userId: user.id,
-          role,
-          password_set: passwordSet,
-          onboardingState: onboardingComplete,
-          redirectDestination: destination,
-          redirectReason: "post_confirm_client_resolution",
+          destinationChosen: destination,
         });
 
         redirectedRef.current = true;
@@ -115,9 +105,22 @@ export default function BusinessPostConfirmClient() {
         router.refresh();
         return;
       }
+
+      console.warn("[BUSINESS_REDIRECT_TRACE] post_confirm_timeout", {
+        pathname: PATHS.auth.businessPostConfirm,
+        elapsedMs: Date.now() - startedAt,
+        sessionExists: false,
+        userExists: false,
+        destinationChosen: `${PATHS.auth.businessLogin}?next=${encodeURIComponent(PATHS.auth.businessCreatePassword)}`,
+      });
+
+      redirectedRef.current = true;
+      router.replace(
+        `${PATHS.auth.businessLogin}?next=${encodeURIComponent(PATHS.auth.businessCreatePassword)}`
+      );
     }
 
-    void resolveDestination();
+    void resolveBusinessDestination();
 
     return () => {
       cancelled = true;

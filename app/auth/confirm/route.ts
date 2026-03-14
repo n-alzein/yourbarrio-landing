@@ -167,17 +167,26 @@ export async function GET(request: NextRequest) {
   const supabase = createSupabaseRouteHandlerClient(request, response);
   let verificationMethod: "code_exchange" | "token_hash_verify" | "invalid" = "invalid";
   let verificationSucceeded = false;
+  let verificationSessionExists = false;
+  let verificationUserExists = false;
+  let verificationUserId = null;
 
   if (code) {
     verificationMethod = "code_exchange";
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    verificationSessionExists = Boolean(data?.session);
+    verificationUserExists = Boolean(data?.user?.id);
+    verificationUserId = data?.user?.id || null;
     if (error) {
       logBusinessRedirectTrace("auth_confirm_exit", {
         host,
         pathname: requestUrl.pathname,
         verificationMethod,
         verificationSucceeded: false,
+        verificationSessionExists,
+        verificationUserExists,
+        verificationUserId,
         sessionExists: null,
         userExists: null,
         redirectDestination: fallbackPath,
@@ -190,10 +199,13 @@ export async function GET(request: NextRequest) {
   } else if (tokenHash && type) {
     verificationMethod = "token_hash_verify";
 
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       type: type as "email" | "recovery" | "invite" | "email_change",
       token_hash: tokenHash,
     });
+    verificationSessionExists = Boolean(data?.session);
+    verificationUserExists = Boolean(data?.user?.id);
+    verificationUserId = data?.user?.id || null;
 
     if (error) {
       if (businessIntent) {
@@ -212,6 +224,9 @@ export async function GET(request: NextRequest) {
         pathname: requestUrl.pathname,
         verificationMethod,
         verificationSucceeded: false,
+        verificationSessionExists,
+        verificationUserExists,
+        verificationUserId,
         sessionExists: null,
         userExists: null,
         redirectDestination: fallbackPath,
@@ -227,6 +242,9 @@ export async function GET(request: NextRequest) {
       pathname: requestUrl.pathname,
       verificationMethod,
       verificationSucceeded: false,
+      verificationSessionExists,
+      verificationUserExists,
+      verificationUserId,
       sessionExists: null,
       userExists: null,
       redirectDestination: fallbackPath,
@@ -252,6 +270,9 @@ export async function GET(request: NextRequest) {
         pathname: requestUrl.pathname,
         verificationMethod,
         verificationSucceeded,
+        verificationSessionExists,
+        verificationUserExists,
+        verificationUserId,
         sessionExists: Boolean(session),
         userExists: false,
         redirectDestination: fallbackPath,
@@ -298,6 +319,9 @@ export async function GET(request: NextRequest) {
         pathname: requestUrl.pathname,
         verificationMethod,
         verificationSucceeded,
+        verificationSessionExists,
+        verificationUserExists,
+        verificationUserId,
         sessionExists: Boolean(session),
         userExists: true,
         userId: user.id,
@@ -318,6 +342,9 @@ export async function GET(request: NextRequest) {
       pathname: requestUrl.pathname,
       verificationMethod,
       verificationSucceeded,
+      verificationSessionExists,
+      verificationUserExists,
+      verificationUserId,
       sessionExists: Boolean(session),
       userExists: Boolean(user?.id),
       userId: user?.id || null,
