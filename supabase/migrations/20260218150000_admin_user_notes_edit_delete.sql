@@ -140,13 +140,13 @@ BEGIN
   RETURNING n.* INTO v_row;
 
   PERFORM public.log_admin_action(
-    'user_internal_note_updated',
-    'user',
-    v_row.target_user_id::text,
-    jsonb_build_object(
+    p_action => 'user_internal_note_updated',
+    p_target_type => 'user',
+    p_target_id => v_row.target_user_id::text,
+    p_meta => jsonb_build_object(
       'admin_user_note_id', v_row.id
     ),
-    v_actor_id
+    p_actor_user_id => v_actor_id
   );
 
   RETURN QUERY
@@ -205,14 +205,14 @@ BEGIN
   WHERE n.id = p_note_id;
 
   PERFORM public.log_admin_action(
-    'user_internal_note_deleted',
-    'user',
-    v_row.target_user_id::text,
-    jsonb_build_object(
+    p_action => 'user_internal_note_deleted',
+    p_target_type => 'user',
+    p_target_id => v_row.target_user_id::text,
+    p_meta => jsonb_build_object(
       'admin_user_note_id', v_row.id,
       'deleted_by_super', v_is_super AND (v_row.actor_user_id <> v_actor_id)
     ),
-    v_actor_id
+    p_actor_user_id => v_actor_id
   );
 
   RETURN QUERY

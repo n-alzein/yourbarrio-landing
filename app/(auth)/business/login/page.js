@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+import BusinessLoginClient from "@/components/business-auth/BusinessLoginClient";
 
-export default function BusinessLoginAliasPage() {
-  redirect("/business-auth/login?popup=1");
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function BusinessLoginPage({ searchParams }) {
+  const resolvedSearchParams = await searchParams;
+  const callbackError =
+    resolvedSearchParams?.error || resolvedSearchParams?.auth || "";
+  return <BusinessLoginClient isPopup={false} callbackError={callbackError} />;
 }

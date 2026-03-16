@@ -12,7 +12,7 @@ describe("getBusinessCreatePasswordAccessDecision", () => {
       })
     ).toEqual({
       action: "redirect",
-      destination: `/business-auth/login?next=${encodeURIComponent(BUSINESS_CREATE_PASSWORD_PATH)}`,
+      destination: `/business/login?next=${encodeURIComponent(BUSINESS_CREATE_PASSWORD_PATH)}`,
       reason: "no_session",
     });
   });

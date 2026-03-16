@@ -142,14 +142,14 @@ BEGIN
   RETURNING * INTO v_inserted;
 
   PERFORM public.log_admin_action(
-    'user_internal_note_added',
-    'user',
-    p_target_user_id::text,
-    jsonb_build_object(
+    p_action => 'user_internal_note_added',
+    p_target_type => 'user',
+    p_target_id => p_target_user_id::text,
+    p_meta => jsonb_build_object(
       'note', v_note,
       'admin_user_note_id', v_inserted.id
     ),
-    v_actor_id
+    p_actor_user_id => v_actor_id
   );
 
   RETURN QUERY

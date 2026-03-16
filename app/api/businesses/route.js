@@ -123,6 +123,43 @@ export async function POST(req) {
       });
     }
 
+    const usersPayload = {
+      id: user.id,
+      role: "business",
+      public_id: existingUser?.public_id || null,
+      full_name: trimmedName,
+      business_name: trimmedName,
+      category: trimmedCategory,
+      description: description || "",
+      website: normalizedWebsite || "",
+      phone: phone || "",
+      address: address || "",
+      address_2: address_2 || "",
+      city: city || "",
+      state: state || "",
+      postal_code: postal_code || "",
+      latitude: geo?.lat ?? null,
+      longitude: geo?.lng ?? null,
+      is_internal: existingUser?.is_internal === true,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: userUpsertError } = await supabase.from("users").upsert(usersPayload, {
+      onConflict: "id",
+      ignoreDuplicates: false,
+    });
+
+    if (userUpsertError) {
+      console.error("business onboarding users upsert failed", {
+        code: userUpsertError.code || null,
+        message: userUpsertError.message || null,
+      });
+      return NextResponse.json(
+        { error: userUpsertError.message || "Failed to save business account" },
+        { status: 400 }
+      );
+    }
+
     const businessesPayload = {
       owner_user_id: user.id,
       public_id: existingUser?.public_id || null,

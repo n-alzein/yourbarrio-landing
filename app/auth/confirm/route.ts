@@ -46,7 +46,7 @@ function isBusinessIntentPath(path: string) {
 function getFallbackPath(requestUrl: URL, targetPath: string, businessIntent: boolean) {
   if (businessIntent) {
     const fallbackNext = targetPath || "/onboarding";
-    const login = new URL("/business-auth/login", requestUrl);
+    const login = new URL("/business/login", requestUrl);
     login.searchParams.set("next", fallbackNext);
     login.searchParams.set("auth", "invalid_link");
     return `${login.pathname}${login.search}`;

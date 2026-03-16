@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import OnboardingClient from "@/app/(onboarding)/onboarding/OnboardingClient";
+import AuthSeed from "@/components/auth/AuthSeed";
+import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginPrompt";
 import { getSupabaseServerAuthedClient } from "@/lib/supabaseServer";
 import { resolveCurrentUserRoleFromClient } from "@/lib/auth/getCurrentUserRole";
 import { BUSINESS_CREATE_PASSWORD_PATH } from "@/lib/auth/businessPasswordGate";
@@ -14,24 +16,33 @@ export default async function OnboardingPage() {
   const supabase = await getSupabaseServerAuthedClient();
 
   if (!supabase) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[ONBOARDING_REDIRECT_TRACE] source=onboarding_page_no_supabase", {
-        pathname: NEXT_ONBOARDING,
-      });
-    }
-    redirect(`/business-auth/login?next=${encodeURIComponent(NEXT_ONBOARDING)}`);
+    return (
+      <>
+        <AuthSeed user={null} profile={null} role={null} />
+        <div className="min-h-screen w-full bg-[var(--yb-surface)] px-4 py-10 text-[var(--yb-text)]">
+          <div className="mx-auto max-w-3xl rounded-2xl border border-[var(--yb-border)] bg-white p-8">
+            Loading onboarding...
+          </div>
+        </div>
+        <ProtectedRouteLoginPrompt role="business" redirectTo={NEXT_ONBOARDING} />
+      </>
+    );
   }
 
   const { user, role } = await resolveCurrentUserRoleFromClient(supabase);
 
   if (!user) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[ONBOARDING_REDIRECT_TRACE] source=onboarding_page_unauthenticated", {
-        pathname: NEXT_ONBOARDING,
-        role: role || null,
-      });
-    }
-    redirect(`/business-auth/login?next=${encodeURIComponent(NEXT_ONBOARDING)}`);
+    return (
+      <>
+        <AuthSeed user={null} profile={null} role={null} />
+        <div className="min-h-screen w-full bg-[var(--yb-surface)] px-4 py-10 text-[var(--yb-text)]">
+          <div className="mx-auto max-w-3xl rounded-2xl border border-[var(--yb-border)] bg-white p-8">
+            Loading onboarding...
+          </div>
+        </div>
+        <ProtectedRouteLoginPrompt role="business" redirectTo={NEXT_ONBOARDING} />
+      </>
+    );
   }
 
   if (role === "business") {

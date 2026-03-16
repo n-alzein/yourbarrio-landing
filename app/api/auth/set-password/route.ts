@@ -73,6 +73,6 @@ export async function POST(request: NextRequest) {
 
   return withSupabaseCookies(
     cookieCarrier,
-    jsonResponse({ ok: true, redirectTo: "/signin?reset=success" })
+    jsonResponse({ ok: true, redirectTo: "/login?reset=success" })
   );
 }

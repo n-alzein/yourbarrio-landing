@@ -13,6 +13,7 @@ import {
   Truck,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
 import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
@@ -31,6 +32,7 @@ import { getCustomerBusinessUrl, getListingUrl } from "@/lib/ids/publicRefs";
 
 export default function ListingDetails({ params }) {
   const { supabase, user, role } = useAuth();
+  const gateBusinessProfileAccess = useBusinessProfileAccessGate();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
@@ -613,6 +615,11 @@ export default function ListingDetails({ params }) {
                   {business?.id ? (
                     <Link
                       href={getCustomerBusinessUrl(business)}
+                      onClick={(event) => {
+                        if (!gateBusinessProfileAccess(event, getCustomerBusinessUrl(business))) {
+                          return;
+                        }
+                      }}
                       className="w-full inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition border bg-transparent hover:bg-white/10"
                       style={{ borderColor: "var(--border)" }}
                     >

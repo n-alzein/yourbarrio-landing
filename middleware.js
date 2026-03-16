@@ -386,6 +386,7 @@ export async function middleware(request) {
   const { user, role } = await resolveCurrentUserRoleFromClient(supabase, {
     log: shouldLogRole,
   });
+  const hasAuthCookies = getBusinessAuthCookieNames(request.cookies.getAll()).length > 0;
 
   if (pathname.startsWith("/business-auth/")) {
     let businessRowFound = null;
@@ -570,6 +571,7 @@ export async function middleware(request) {
     pathname.startsWith("/api/auth/callback") ||
     pathname.startsWith("/oauth/callback") ||
     pathname.startsWith("/signin") ||
+    pathname.startsWith("/login") ||
     pathname.startsWith("/auth")
   ) {
     return withSupabaseCookies(response);
@@ -612,8 +614,7 @@ export async function middleware(request) {
 
   if (pathname.startsWith("/admin")) {
     if (!user) {
-      const signinUrl = new URL("/signin", request.url);
-      signinUrl.searchParams.set("modal", "signin");
+      const signinUrl = new URL("/login", request.url);
       signinUrl.searchParams.set("next", pathname);
       if (process.env.NODE_ENV !== "production") {
         console.info("[AUTH_MW_REDIRECT]", {
@@ -661,18 +662,26 @@ export async function middleware(request) {
       }
 
       if (!user) {
-        const signinUrl = new URL("/signin", request.url);
-        signinUrl.searchParams.set("modal", "signin");
-        signinUrl.searchParams.set("next", pathname);
-        return withNearbyHeaders(
-          clearNearbyPublicCookie(withSupabaseCookies(NextResponse.redirect(signinUrl))),
-          {
-            enabled: nearbyFlag.enabled,
-            decision: "restrict",
-            flagFetchFailed: nearbyFlag.fetchFailed,
-            nearbyCookie: "cleared",
-          }
-        );
+        if (hasAuthCookies) {
+          return withNearbyHeaders(
+            clearNearbyPublicCookie(
+              withSupabaseCookies(NextResponse.redirect(new URL("/", request.url)))
+            ),
+            {
+              enabled: nearbyFlag.enabled,
+              decision: "restrict",
+              flagFetchFailed: nearbyFlag.fetchFailed,
+              nearbyCookie: "cleared",
+            }
+          );
+        }
+
+        return withNearbyHeaders(clearNearbyPublicCookie(withSupabaseCookies(response)), {
+          enabled: nearbyFlag.enabled,
+          decision: "restrict",
+          flagFetchFailed: nearbyFlag.fetchFailed,
+          nearbyCookie: "cleared",
+        });
       }
 
       if (role !== "customer") {
@@ -730,10 +739,10 @@ export async function middleware(request) {
     }
 
     if (!user) {
-      const signinUrl = new URL("/signin", request.url);
-      signinUrl.searchParams.set("modal", "signin");
-      signinUrl.searchParams.set("next", pathname);
-      return withSupabaseCookies(NextResponse.redirect(signinUrl));
+      if (hasAuthCookies) {
+        return withSupabaseCookies(NextResponse.redirect(new URL("/", request.url)));
+      }
+      return withSupabaseCookies(response);
     }
     if (role !== "customer") {
       if (role === "business") {
@@ -754,9 +763,10 @@ export async function middleware(request) {
 
   if (isCanonicalOnboardingRoute) {
     if (!user?.id) {
-      return redirectSafely(
-        `/business-auth/login?next=${encodeURIComponent("/onboarding")}`
-      );
+      if (hasAuthCookies) {
+        return redirectSafely("/business");
+      }
+      return withSupabaseCookies(response);
     }
 
     // Onboarding is a bootstrap route. Users may not be "business" yet.
@@ -774,9 +784,10 @@ export async function middleware(request) {
 
   if (isBusinessAppRoute) {
     if (!user?.id) {
-      return redirectSafely(
-        `/business-auth/login?next=${encodeURIComponent(pathname)}`
-      );
+      if (hasAuthCookies) {
+        return redirectSafely("/business");
+      }
+      return withSupabaseCookies(response);
     }
 
     if (supportMode.supportModeActive) {

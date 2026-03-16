@@ -126,7 +126,9 @@ const isPublicLoginSurfacePath = (pathname) => {
   return (
     pathname === "/" ||
     pathname === "/signin" ||
-    pathname.startsWith("/business-auth")
+    pathname === "/login" ||
+    pathname.startsWith("/business-auth") ||
+    pathname.startsWith("/business/login")
   );
 };
 

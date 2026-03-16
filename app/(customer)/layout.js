@@ -4,6 +4,7 @@ import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
+import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginPrompt";
 import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import { PATHS } from "@/lib/auth/paths";
 import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
@@ -54,7 +55,8 @@ export default async function CustomerLayout({ children }) {
   const isNearbyPublicEnabled = isNearbyRoute
     ? await getFeatureFlag(CUSTOMER_NEARBY_PUBLIC_FLAG_KEY)
     : false;
-  const nearbyAuth = isNearbyPublicEnabled ? await getServerAuth() : null;
+  const serverAuth = await getServerAuth();
+  const nearbyAuth = isNearbyPublicEnabled ? serverAuth : null;
 
   const headerList = await headers();
   const userAgent = headerList.get("user-agent") || "";
@@ -90,6 +92,30 @@ export default async function CustomerLayout({ children }) {
           >
             {children}
           </Suspense>
+        </CustomerRouteShell>
+      </>
+    );
+  }
+
+  if (!serverAuth?.user && !isNearbyPublicEnabled) {
+    return (
+      <>
+        <AuthSeed
+          user={null}
+          profile={null}
+          role={null}
+          supportModeActive={false}
+        />
+        <Suspense fallback={null}>
+          <GlobalHeader surface="customer" />
+        </Suspense>
+        <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>
+          <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)] bg-[var(--yb-bg)]">
+            <div className="max-w-5xl mx-auto rounded-2xl border border-[var(--yb-border)] bg-white p-8">
+              Loading your account...
+            </div>
+          </div>
+          <ProtectedRouteLoginPrompt role="customer" redirectTo={requestPath} />
         </CustomerRouteShell>
       </>
     );

@@ -309,16 +309,16 @@ BEGIN
   RETURNING id INTO inserted_id;
 
   PERFORM public.log_admin_action(
-    'impersonation_start',
-    'user',
-    target_user_id::text,
-    jsonb_build_object(
+    p_action => 'impersonation_start',
+    p_target_type => 'user',
+    p_target_id => target_user_id::text,
+    p_meta => jsonb_build_object(
       'session_id', inserted_id,
       'minutes', ttl_minutes,
       'reason', reason,
       'meta', COALESCE(meta, '{}'::jsonb)
     ),
-    actor_id
+    p_actor_user_id => actor_id
   );
 
   RETURN inserted_id;

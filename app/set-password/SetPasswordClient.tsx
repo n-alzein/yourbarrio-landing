@@ -62,7 +62,7 @@ export default function SetPasswordClient() {
       const redirectTo =
         typeof payload?.redirectTo === "string" && payload.redirectTo.startsWith("/")
           ? payload.redirectTo
-          : "/signin?reset=success";
+          : "/login?reset=success";
       window.location.assign(redirectTo);
     } catch {
       setErrorMessage("Unable to update password. Please try again.");

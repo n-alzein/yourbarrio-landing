@@ -11,7 +11,7 @@ import {
 } from "@/lib/auth/businessPasswordGate";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
 
-const LOGIN_PATH = "/signin?modal=signin&next=%2Fgo%2Fdashboard";
+const LOGIN_PATH = "/business/login?next=%2Fgo%2Fdashboard";
 const HOME_PATH = "/";
 const ONBOARDING_PATH = "/onboarding";
 const DASHBOARD_PATH = "/business/dashboard";

@@ -1189,7 +1189,7 @@ export async function stopImpersonationAction(formData?: FormData) {
 export async function goToImpersonatedHomeAction() {
   const diagEnabled = String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1";
   const admin = await requireAdmin({
-    unauthenticatedRedirectTo: "/signin?modal=signin&next=/admin",
+    unauthenticatedRedirectTo: "/login?next=/admin",
     unauthorizedRedirectTo: "/not-authorized",
   });
   const cookieState = await readSupportModeCookies();

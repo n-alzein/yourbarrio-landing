@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import CustomerLoginModal from "./CustomerLoginModal";
 import CustomerSignupModal from "./CustomerSignupModal";
+import BusinessLoginModal from "./BusinessLoginModal";
 import ModalRouterClient from "@/components/auth/ModalRouterClient";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 import { shouldSuppressAuthUiReset } from "@/lib/auth/loginErrors";
@@ -21,6 +22,7 @@ const ModalContext = createContext(null);
 const MODAL_COMPONENTS = {
   "customer-login": CustomerLoginModal,
   "customer-signup": CustomerSignupModal,
+  "business-login": BusinessLoginModal,
 };
 
 const MODAL_ALIASES = {

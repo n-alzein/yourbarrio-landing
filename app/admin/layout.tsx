@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     String(process.env.AUTH_GUARD_DIAG || "") === "1" ||
     String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1";
   const requestPath = await getRequestPath("/admin");
-  const signInRedirect = `/signin?modal=signin&next=${encodeURIComponent(requestPath)}`;
+  const signInRedirect = `/login?next=${encodeURIComponent(requestPath)}`;
   if (guardDiagEnabled) {
     console.warn("[AUTH_GUARD_DIAG] admin_layout:entry", {
       requestPath,

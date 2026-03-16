@@ -13,7 +13,7 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children, auth, businessAuth }) {
   const imageHosts = (() => {
     const hosts = new Set();
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -47,7 +47,11 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-screen w-full overflow-x-hidden antialiased text-[var(--yb-text)]">
         <GlobalSupportModeBanner />
-        <AppShell>{children}</AppShell>
+        <AppShell>
+          {children}
+          {auth}
+          {businessAuth}
+        </AppShell>
         {/* Vercel Web Analytics: global passive tracking; keep at root and avoid page-level duplicates. */}
         <Analytics />
       </body>

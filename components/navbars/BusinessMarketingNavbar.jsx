@@ -96,7 +96,7 @@ export default function BusinessMarketingNavbar() {
 
               <Link
                 href="/business/login"
-                onClick={(e) => handlePopup(e, "/business-auth/login")}
+                onClick={(e) => handlePopup(e, "/business/login")}
                 className="relative text-sm md:text-base font-medium transition-all text-white/70 hover:text-white"
               >
                 Business Login
@@ -174,7 +174,7 @@ export default function BusinessMarketingNavbar() {
                   className="w-full text-center px-4 py-3 rounded-xl font-semibold bg-white/5 border border-white/15"
                   onClick={(e) => {
                     setOpen(false);
-                    handlePopup(e, "/business-auth/login");
+                    handlePopup(e, "/business/login");
                   }}
                 >
                   Business Login

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
 import { useLocation } from "@/components/location/LocationProvider";
 import CustomerMap from "@/components/customer/CustomerMap";
 import { getCustomerBusinessUrl } from "@/lib/ids/publicRefs";
@@ -52,6 +53,7 @@ const getBusinessSelection = (business) => {
 export default function NearbyBusinessesClient() {
   const router = useRouter();
   const { user, loadingUser } = useAuth();
+  const gateBusinessProfileAccess = useBusinessProfileAccessGate();
   const searchParams = useSearchParams();
   const { location, hydrated: locationHydrated, requestGpsLocation } = useLocation();
 
@@ -343,7 +345,9 @@ export default function NearbyBusinessesClient() {
   const onCardClick = useCallback(
     (business) => {
       if (isMobile) {
-        router.push(getCustomerBusinessUrl(business));
+        const target = getCustomerBusinessUrl(business);
+        if (!gateBusinessProfileAccess(undefined, target)) return;
+        router.push(target);
         return;
       }
       if (!business?.id) return;
@@ -354,7 +358,7 @@ export default function NearbyBusinessesClient() {
         mapControls.focusBusiness(business);
       }
     },
-    [isMobile, mapControls, router]
+    [gateBusinessProfileAccess, isMobile, mapControls, router]
   );
 
   const onMarkerClick = useCallback((businessId) => {

@@ -15,12 +15,13 @@ vi.mock("@supabase/ssr", () => ({
   createServerClient: createServerClientMock,
 }));
 
-function makeRequest(pathname: string) {
+function makeRequest(pathname: string, cookie = "") {
   return new NextRequest(`http://localhost:3000${pathname}`, {
     headers: {
       "sec-fetch-mode": "navigate",
       "sec-fetch-dest": "document",
       "sec-fetch-user": "?1",
+      ...(cookie ? { cookie } : {}),
     },
   });
 }
@@ -76,12 +77,32 @@ describe("middleware business onboarding routing", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3000/onboarding");
   });
 
-  it("redirects unauthenticated /onboarding to business login with next", async () => {
+  it("allows guest /onboarding to load so the business login modal can open on the same URL", async () => {
     const response = await middleware(makeRequest("/onboarding"));
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/business-auth/login?next=%2Fonboarding"
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("redirects stale unauthenticated /onboarding traffic to /business", async () => {
+    const response = await middleware(
+      makeRequest("/onboarding", "sb-test-auth-token=fake-session")
     );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/business");
+  });
+
+  it("allows guest /business/dashboard to load so the business login modal can open", async () => {
+    const response = await middleware(makeRequest("/business/dashboard"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("redirects stale unauthenticated /business/dashboard traffic to /business", async () => {
+    const response = await middleware(
+      makeRequest("/business/dashboard", "sb-test-auth-token=fake-session")
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/business");
   });
 
   it("redirects incomplete business from /business/dashboard to /onboarding", async () => {

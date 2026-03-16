@@ -94,6 +94,7 @@ function isAllowedNextPath(value) {
     path.startsWith("/go/") ||
     path.startsWith("/admin/") ||
     path.startsWith("/signin") ||
+    path.startsWith("/login") ||
     path.startsWith("/auth/")
   );
 }
@@ -224,12 +225,9 @@ export async function GET(request) {
   };
 
   const buildLoginRedirectResponse = ({ reason, authError = "invalid_link" }) => {
-    const destination = businessIntent ? "/business-auth/login" : "/signin";
+    const destination = businessIntent ? "/business/login" : "/login";
     const fallbackNext = safeNext || (businessIntent ? "/onboarding" : "/");
     const redirectUrl = new URL(destination, request.url);
-    if (!businessIntent) {
-      redirectUrl.searchParams.set("modal", "signin");
-    }
     redirectUrl.searchParams.set("next", fallbackNext);
     if (authError) {
       redirectUrl.searchParams.set("auth", authError);

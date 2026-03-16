@@ -3,10 +3,12 @@ import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
+import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginPrompt";
 import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import { PATHS } from "@/lib/auth/paths";
 import { isRscPrefetchRequest } from "@/lib/next/isRscPrefetchRequest";
 import { requireBusinessRowOrOnboarding } from "@/lib/business/requireBusinessRow";
+import { getServerAuth } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,6 +40,23 @@ export default async function BusinessLayout({ children }) {
   const isRsc = await isRscPrefetchRequest();
   if (isRsc) {
     return <>{children}</>;
+  }
+
+  const { user: sessionUser } = await getServerAuth();
+  if (!sessionUser) {
+    return (
+      <>
+        <AuthSeed user={null} profile={null} role={null} />
+        <BusinessRouteShell>
+          <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)]">
+            <div className="mx-auto max-w-5xl rounded-2xl border border-[var(--yb-border)] bg-white p-8">
+              Loading business workspace...
+            </div>
+          </div>
+          <ProtectedRouteLoginPrompt role="business" />
+        </BusinessRouteShell>
+      </>
+    );
   }
 
   const businessContext = await requireEffectiveRole("business");

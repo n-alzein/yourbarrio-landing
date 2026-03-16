@@ -714,9 +714,9 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
           {!isBusinessAuthed && (
             <>
               <NavItem
-                href="/business-auth/login"
+                href="/business/login"
                 onClick={(e) =>
-                  handleBusinessAuthClick(e, "/business-auth/login")
+                  handleBusinessAuthClick(e, "/business/login")
                 }
                 isActive={isActive}
                 closeMenus={closeMenus}
@@ -973,9 +973,9 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
         {!isBusinessAuthed ? (
           <>
             <NavItem
-              href="/business-auth/login"
+              href="/business/login"
               onClick={(e) =>
-                handleBusinessAuthClick(e, "/business-auth/login")
+                handleBusinessAuthClick(e, "/business/login")
               }
               isActive={isActive}
               closeMenus={closeMenus}

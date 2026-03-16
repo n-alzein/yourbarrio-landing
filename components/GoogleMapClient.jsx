@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { getCustomerBusinessUrl } from "@/lib/ids/publicRefs";
@@ -144,6 +145,7 @@ export default function GoogleMapClient({
   recenterButtonTestId = "recenter-map",
   markerClickBehavior = "navigate",
 }) {
+  const gateBusinessProfileAccess = useBusinessProfileAccessGate();
   // DEBUG_CLICK_DIAG
   const clickDiagEnabled = process.env.NEXT_PUBLIC_CLICK_DIAG === "1";
   const mapRef = useRef(null);
@@ -500,13 +502,17 @@ export default function GoogleMapClient({
       wrapper.setAttribute("aria-label", `View ${safeText(biz.name || "business")} profile`);
       wrapper.addEventListener("click", (event) => {
         if (event.target?.closest?.("a")) return;
-        window.location.assign(getCustomerBusinessUrl(biz));
+        const url = getCustomerBusinessUrl(biz);
+        if (!gateBusinessProfileAccess(event, url)) return;
+        window.location.assign(url);
       });
       wrapper.addEventListener("keydown", (event) => {
         if (event.target?.closest?.("a")) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          window.location.assign(getCustomerBusinessUrl(biz));
+          const url = getCustomerBusinessUrl(biz);
+          if (!gateBusinessProfileAccess(event, url)) return;
+          window.location.assign(url);
         }
       });
     }
@@ -663,6 +669,7 @@ export default function GoogleMapClient({
         }
         if (biz?.id) {
           const url = getCustomerBusinessUrl(biz);
+          if (!gateBusinessProfileAccess(event, url)) return;
           if (event?.metaKey || event?.ctrlKey) {
             window.open(url, "_blank", "noopener");
           } else {

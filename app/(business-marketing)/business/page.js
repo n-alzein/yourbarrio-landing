@@ -66,7 +66,7 @@ export default async function BusinessHome() {
           </BusinessAuthPopupLink>
 
           <BusinessAuthPopupLink
-            href="/business-auth/login"
+            href="/business/login"
             className="px-8 py-4 border border-[var(--yb-border)] rounded-xl text-lg font-bold text-slate-900 hover:bg-slate-50 transition"
           >
             Business Login

@@ -7,6 +7,7 @@ import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { withTimeout } from "@/lib/withTimeout";
 import { signOutLocalSession } from "@/lib/auth/logout";
 import { getPostLoginRedirect } from "@/lib/auth/redirects";
+import { clearAuthIntent, consumeAuthIntent } from "@/lib/auth/authIntent";
 import { isBlockedAccountStatus, normalizeAccountStatus } from "@/lib/accountDeletion/status";
 import {
   createBlockedLoginError,
@@ -146,15 +147,20 @@ function BusinessLoginInner({ isPopup, callbackError = "" }) {
 
   const resolvePostLoginTarget = useCallback(() => {
     const requestedPath = getRequestedPathFromCurrentUrl();
+    const intentPath = consumeAuthIntent({
+      role: "business",
+      fallbackPath: requestedPath || "/go/dashboard",
+    });
     const target = getPostLoginRedirect({
       role: "business",
-      requestedPath,
+      requestedPath: intentPath || requestedPath,
       fallbackPath: "/go/dashboard",
     });
     if (process.env.NODE_ENV !== "production") {
       console.info("[AUTH_REDIRECT_TRACE] business_login_submit", {
         role: "business",
         requestedPath,
+        intentPath,
         chosenDestination: target,
         persistedRedirectState: readClientRedirectState(),
       });
@@ -511,6 +517,7 @@ function BusinessLoginInner({ isPopup, callbackError = "" }) {
 
       if (error) {
         console.error("Google login error:", error);
+        clearAuthIntent();
         alert("Failed to sign in with Google.");
         if (mountedRef.current) {
           setAuthError("Failed to sign in with Google.");

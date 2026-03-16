@@ -4,7 +4,8 @@ import GlobalHeader from "@/components/nav/GlobalHeader";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AccountNavPerf from "@/components/debug/AccountNavPerf";
-import { requireRole } from "@/lib/auth/server";
+import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginPrompt";
+import { getServerAuth, requireRole } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,6 +41,23 @@ export default async function AccountLayout({ children }) {
     !userAgent.includes("Edg") &&
     !userAgent.includes("OPR");
   const perfCookie = (await cookies()).get("yb-perf")?.value === "1";
+  const serverAuth = await getServerAuth();
+  if (!serverAuth?.user) {
+    return (
+      <>
+        <AuthSeed user={null} profile={null} role={null} />
+        <Suspense fallback={null}>
+          <GlobalHeader surface="customer" />
+        </Suspense>
+        <AccountShell className={`account-shell${isSafari ? " yb-safari" : ""}`}>
+          <div className="mx-auto max-w-5xl rounded-2xl border border-[var(--yb-border)] bg-white p-8">
+            Loading your account...
+          </div>
+          <ProtectedRouteLoginPrompt role="customer" />
+        </AccountShell>
+      </>
+    );
+  }
   const { user, profile } = await requireRole("customer");
 
   return (

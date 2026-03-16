@@ -148,7 +148,7 @@ function UpdatePasswordContent() {
     }
 
     setStatusMessage("Password updated. Redirecting to sign in...");
-    router.push("/signin?modal=signin");
+    router.push("/login");
   }
 
   return (

@@ -30,6 +30,7 @@ function createSupabaseMock({
   rpcError = null,
   businessRowOverride = {},
   businessUpsertError = null,
+  userUpsertError = null,
 } = {}) {
   const businessRow = {
     id: "biz-1",
@@ -46,6 +47,9 @@ function createSupabaseMock({
   };
 
   const usersTable = {
+    upsert: vi.fn().mockResolvedValue({
+      error: userUpsertError,
+    }),
     select: vi.fn(() => ({
       eq: vi.fn(() => ({
         maybeSingle: vi.fn().mockResolvedValue({
@@ -124,6 +128,28 @@ describe("POST /api/businesses", () => {
     expect(supabase.rpc).toHaveBeenCalledWith("set_my_role_business");
   });
 
+  it("syncs users.full_name and users.business_name to the submitted business name", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ name: "Pan Dulce Market" }));
+    expect(response.status).toBe(200);
+
+    expect(supabase.from).toHaveBeenCalledWith("users");
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "11111111-1111-4111-8111-111111111111",
+        role: "business",
+        full_name: "Pan Dulce Market",
+        business_name: "Pan Dulce Market",
+      }),
+      {
+        onConflict: "id",
+        ignoreDuplicates: false,
+      }
+    );
+  });
+
   it("returns success only when RPC succeeds and business row is complete", async () => {
     const supabase = createSupabaseMock();
     createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
@@ -136,4 +162,3 @@ describe("POST /api/businesses", () => {
     expect(supabase.rpc).toHaveBeenCalledWith("set_my_role_business");
   });
 });
-

@@ -152,16 +152,16 @@ BEGIN
   );
 
   PERFORM public.log_admin_action(
-    'moderation_hide_listing',
-    'listing',
-    p_listing_id::text,
-    jsonb_build_object(
+    p_action => 'moderation_hide_listing',
+    p_target_type => 'listing',
+    p_target_id => p_listing_id::text,
+    p_meta => jsonb_build_object(
       'flag_id', p_flag_id,
       'listing_id', p_listing_id,
       'listing_hidden', v_hidden,
       'notes', NULLIF(trim(COALESCE(p_notes, '')), '')
     ),
-    v_actor_id
+    p_actor_user_id => v_actor_id
   );
 END;
 $$;
@@ -293,16 +293,16 @@ BEGIN
   );
 
   PERFORM public.log_admin_action(
-    'moderation_hide_review',
-    'review',
-    p_review_id::text,
-    jsonb_build_object(
+    p_action => 'moderation_hide_review',
+    p_target_type => 'review',
+    p_target_id => p_review_id::text,
+    p_meta => jsonb_build_object(
       'flag_id', p_flag_id,
       'review_id', p_review_id,
       'review_hidden', v_hidden,
       'notes', NULLIF(trim(COALESCE(p_notes, '')), '')
     ),
-    v_actor_id
+    p_actor_user_id => v_actor_id
   );
 END;
 $$;
