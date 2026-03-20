@@ -20,9 +20,12 @@ type StrapiFetchOptions = {
   revalidate?: number;
   init?: RequestInit;
   retries?: number;
-  retryBaseDelayMs?: number;
   dedupe?: boolean;
+  timeoutMs?: number;
 };
+
+const STRAPI_TIMEOUT_MS = 1500;
+const STRAPI_MAX_RETRIES = 1;
 
 function buildBodySnippet(rawBody: string, maxLength = 140) {
   if (!rawBody) return "";
@@ -82,24 +85,41 @@ export async function strapiFetch<T>(
     process.env.NODE_ENV === "development" || process.env.DEBUG_STRAPI_FETCH === "true";
   const requestId = debugEnabled ? getStrapiRequestId() : 0;
   const method = (options.init?.method ?? "GET").toUpperCase();
-  const retries = Math.max(0, options.retries ?? 2);
-  const retryBaseDelayMs = Math.max(50, options.retryBaseDelayMs ?? 200);
+  const retries = Math.max(0, options.retries ?? STRAPI_MAX_RETRIES);
+  const timeoutMs = Math.max(1, options.timeoutMs ?? STRAPI_TIMEOUT_MS);
   const dedupe = options.dedupe !== false && method === "GET";
+
+  const fetchWithTimeout = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options.init,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(options.init?.headers ?? {}),
+        },
+        signal: controller.signal,
+        next: { revalidate: options.revalidate ?? 60 },
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === "AbortError") {
+        throw new Error("STRAPI_TIMEOUT");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
 
   const runFetch = async () => {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       let response: Response | null = null;
       try {
-        response = await fetch(url, {
-          ...options.init,
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-            ...(options.init?.headers ?? {}),
-          },
-          next: { revalidate: options.revalidate ?? 60 },
-        });
+        response = await fetchWithTimeout();
 
         if (debugEnabled) {
           const stack = getStrapiDebugStack();
@@ -126,12 +146,7 @@ export async function strapiFetch<T>(
           throw new Error(`Strapi request failed (${response.status}): ${message}${bodySnippet}`);
         }
 
-        if (attempt < retries) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, retryBaseDelayMs * Math.pow(2, attempt)),
-          );
-          continue;
-        }
+        if (attempt < retries) continue;
 
         const rawBody = await response.text().catch(() => "");
         const bodySnippet = buildBodySnippet(rawBody);
@@ -147,9 +162,6 @@ export async function strapiFetch<T>(
           );
         }
         if (attempt >= retries) break;
-        await new Promise((resolve) =>
-          setTimeout(resolve, retryBaseDelayMs * Math.pow(2, attempt)),
-        );
       }
     }
     throw lastError ?? new Error("Strapi request failed.");
@@ -202,11 +214,15 @@ export async function strapiFetch<T>(
 
 export async function fetchStrapiBanners() {
   try {
-    return await strapiFetch<any[]>("/api/banners?populate=*", { revalidate: 60 });
+    const banners = await strapiFetch<any[]>("/api/banners?populate=*", { revalidate: 60 });
+    cachedBanners = Array.isArray(banners) ? banners : [];
+    return cachedBanners;
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[fetchStrapiBanners] unavailable, returning empty array:", error);
+    if (cachedBanners) {
+      console.warn("[Strapi] banners failed -> using cached banners", error);
+      return cachedBanners;
     }
+    console.warn("[Strapi] banners failed -> empty fallback", error);
     return [];
   }
 }
@@ -247,6 +263,9 @@ export type FeaturedCategory = {
   tileImageFormats: Record<string, { url?: string | null }> | null;
   tileColor: string | null;
 };
+
+let cachedFeaturedCategories: FeaturedCategory[] | null = null;
+let cachedBanners: any[] | null = null;
 
 function isStrapiEntity<T extends object>(
   value: StrapiEntity<T> | T | null | undefined,
@@ -350,14 +369,22 @@ export async function fetchFeaturedCategories() {
   try {
     data = await strapiFetch<CategoryEntity[]>(path, { revalidate: 60 });
   } catch (error) {
-    if (!isStrapiNotFound(error)) {
-      console.warn("[fetchFeaturedCategories] falling back to local categories:", error);
+    if (cachedFeaturedCategories) {
+      console.warn("[Strapi] categories failed -> using cached categories", error);
+      return cachedFeaturedCategories;
     }
-    return getFallbackCategories();
+    if (!isStrapiNotFound(error)) {
+      console.warn("[Strapi] categories failed -> using fallback", error);
+    }
+    const fallbackCategories = getFallbackCategories();
+    cachedFeaturedCategories = fallbackCategories;
+    return fallbackCategories;
   }
-  return (data ?? [])
+  const normalizedCategories = (data ?? [])
     .map((entity) => normalizeCategoryEntity(entity))
     .filter((entry): entry is FeaturedCategory => Boolean(entry));
+  cachedFeaturedCategories = normalizedCategories;
+  return normalizedCategories;
 }
 
 export async function fetchCategoryBySlug(slug: string) {

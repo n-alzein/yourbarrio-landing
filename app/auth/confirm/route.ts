@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSafeRedirectPath } from "@/lib/auth/redirects";
 import { ensureBusinessProvisionedForUser } from "@/lib/auth/ensureBusinessProvisioning";
 import {
-  BUSINESS_POST_CONFIRM_PATH,
   getBusinessAuthCookieNames,
   getBusinessPasswordGateState,
-  getBusinessRedirectDestination,
+  isBusinessIntentPath,
   logBusinessRedirectTrace,
+  resolvePostAuthDestination,
 } from "@/lib/auth/businessPasswordGate";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
 
@@ -32,20 +32,9 @@ function getTargetPath(requestUrl: URL) {
   return safeNext || "/set-password";
 }
 
-function isBusinessIntentPath(path: string) {
-  const normalized = String(path || "").trim().toLowerCase();
-  if (!normalized) return false;
-  return (
-    normalized === "/onboarding" ||
-    normalized.startsWith("/onboarding/") ||
-    normalized.includes("onboarding") ||
-    normalized.includes("business")
-  );
-}
-
 function getFallbackPath(requestUrl: URL, targetPath: string, businessIntent: boolean) {
   if (businessIntent) {
-    const fallbackNext = targetPath || "/onboarding";
+    const fallbackNext = targetPath || "/go/dashboard";
     const login = new URL("/business/login", requestUrl);
     login.searchParams.set("next", fallbackNext);
     login.searchParams.set("auth", "invalid_link");
@@ -126,7 +115,12 @@ async function tryRedirectAuthenticatedBusiness({
 
   if (businessGate.role !== "business") return null;
 
-  const destination = getBusinessRedirectDestination({
+  const destination = resolvePostAuthDestination({
+    role: businessGate.role,
+    hasSession: true,
+    hasUser: true,
+    userRow: businessGate.userRow,
+    businessRow: businessGate.businessRow,
     passwordSet: businessGate.passwordSet,
     onboardingComplete: businessGate.onboardingComplete,
     safeNext: targetPath,
@@ -135,7 +129,7 @@ async function tryRedirectAuthenticatedBusiness({
   return buildRedirectResponseWithCookies({
     request,
     cookieSource,
-    destination: BUSINESS_POST_CONFIRM_PATH,
+    destination,
     logPayload: {
       host: request.headers.get("host") || new URL(request.url).host,
       pathname: new URL(request.url).pathname,
@@ -152,6 +146,7 @@ async function tryRedirectAuthenticatedBusiness({
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
+  const authDiagServer = process.env.AUTH_DIAG_SERVER === "1";
   const host = request.headers.get("host") || requestUrl.host;
   const code = requestUrl.searchParams.get("code") || "";
   const targetPath = getTargetPath(requestUrl);
@@ -332,12 +327,31 @@ export async function GET(request: NextRequest) {
       userId: user.id,
       fallbackRole: "business",
     });
-    const resolvedBusinessDestination = getBusinessRedirectDestination({
+    const resolvedBusinessDestination = resolvePostAuthDestination({
+      role: businessGate.role,
+      hasSession: Boolean(session),
+      hasUser: true,
+      userRow: businessGate.userRow,
+      businessRow: businessGate.businessRow,
       passwordSet: businessGate.passwordSet,
       onboardingComplete: businessGate.onboardingComplete,
       safeNext: targetPath,
     });
-    destination = BUSINESS_POST_CONFIRM_PATH;
+    destination = resolvedBusinessDestination;
+    if (authDiagServer) {
+      console.info("[AUTH_DIAG_SERVER] confirm:destination", {
+        pathname: requestUrl.pathname,
+        targetPath,
+        sessionExists: Boolean(session),
+        userExists: true,
+        userRowExists: Boolean(businessGate.userRow),
+        businessRowExists: Boolean(businessGate.businessRow?.owner_user_id),
+        passwordSet: businessGate.passwordSet,
+        onboardingComplete: businessGate.onboardingComplete,
+        destination,
+        cookieMutations: response.cookies.getAll().map((cookie) => cookie.name),
+      });
+    }
 
     return buildRedirectResponseWithCookies({
       request,

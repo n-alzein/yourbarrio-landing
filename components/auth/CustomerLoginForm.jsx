@@ -299,9 +299,7 @@ export default function CustomerLoginForm({
         const refreshed = res.headers.get("x-auth-refresh-user") === "1";
         if (!refreshed) {
           refreshControllerRef.current = null;
-          setError(
-            "Login succeeded but session could not be persisted in Safari. Please try again."
-          );
+          setError("We couldn't finish signing you in. Please try again.");
           return;
         }
         refreshControllerRef.current = null;
@@ -311,7 +309,7 @@ export default function CustomerLoginForm({
         setError(
           isTimeoutError(err)
             ? "Session persistence timed out. Please check your connection and try again."
-            : "Login succeeded but session could not be persisted. Please try again."
+            : "We couldn't finish signing you in. Please try again."
         );
         return;
       }

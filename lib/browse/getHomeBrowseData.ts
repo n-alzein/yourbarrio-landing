@@ -151,14 +151,16 @@ export async function getHomeBrowseData({
 
   let featuredCategories: FeaturedCategory[] = [];
   let featuredCategoriesError: string | null = null;
-  try {
-    featuredCategories = await fetchFeaturedCategories();
-  } catch (error) {
-    console.error("Failed to load featured categories:", error);
-    featuredCategoriesError = "We couldn't load categories right now.";
-  }
-
-  const [listings, banners] = await Promise.all([
+  const [categoriesResult, listings, banners] = await Promise.all([
+    fetchFeaturedCategories()
+      .then((data) => ({ data, error: null as string | null }))
+      .catch((error) => {
+        console.error("Failed to load featured categories:", error);
+        return {
+          data: [] as FeaturedCategory[],
+          error: "We couldn't load categories right now.",
+        };
+      }),
     loadPublicSafeListings({
       city: safeCity,
       zip: safeZip,
@@ -166,6 +168,9 @@ export async function getHomeBrowseData({
     }),
     fetchStrapiBanners().catch(() => []),
   ]);
+
+  featuredCategories = categoriesResult.data;
+  featuredCategoriesError = categoriesResult.error;
 
   return {
     featuredCategories,

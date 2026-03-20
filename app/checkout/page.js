@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  getPurchaseRestrictionHelpText,
+  getPurchaseRestrictionMessage,
+  isPurchaseRestrictedRole,
+} from "@/lib/auth/purchaseAccess";
 
 const formatMoney = (value) => {
   const amount = Number(value || 0);
@@ -24,9 +29,15 @@ const TIME_OPTIONS = [
 export default function CheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, profile } = useAuth();
+  const { user, profile, role, authStatus } = useAuth();
   const { loading, refreshCart, setFulfillmentType, vendorGroups } = useCart();
   const businessIdParam = (searchParams.get("business_id") || "").trim();
+  const purchaseRestricted =
+    authStatus === "authenticated" &&
+    isPurchaseRestrictedRole({
+      role,
+      isInternal: profile?.is_internal === true,
+    });
 
   const selectedGroup = useMemo(() => {
     if (businessIdParam) {
@@ -159,6 +170,24 @@ export default function CheckoutPage() {
     return (
       <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
         <div className="max-w-5xl mx-auto h-64 rounded-3xl animate-pulse" style={{ background: "var(--surface)" }} />
+      </div>
+    );
+  }
+
+  if (purchaseRestricted) {
+    return (
+      <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+        <div className="max-w-4xl mx-auto rounded-3xl p-8 text-center" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <h1 className="text-2xl font-semibold">{getPurchaseRestrictionMessage()}</h1>
+          <p className="mt-3 text-sm opacity-80">{getPurchaseRestrictionHelpText()}</p>
+          <Link
+            href="/customer/home"
+            className="mt-6 inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold"
+            style={{ background: "var(--text)", color: "var(--background)" }}
+          >
+            Browse listings
+          </Link>
+        </div>
       </div>
     );
   }

@@ -27,11 +27,16 @@ import { useCart } from "@/components/cart/CartProvider";
 import ReportModal from "@/components/moderation/ReportModal";
 import ListingDescription from "@/components/listings/ListingDescription";
 import { isUuid } from "@/lib/ids/isUuid";
+import {
+  getPurchaseRestrictionHelpText,
+  getPurchaseRestrictionMessage,
+  isPurchaseRestrictedRole,
+} from "@/lib/auth/purchaseAccess";
 import { descriptionSnippet } from "@/lib/listingDescription";
 import { getCustomerBusinessUrl, getListingUrl } from "@/lib/ids/publicRefs";
 
 export default function ListingDetails({ params }) {
-  const { supabase, user, role } = useAuth();
+  const { supabase, user, role, profile } = useAuth();
   const gateBusinessProfileAccess = useBusinessProfileAccessGate();
   const router = useRouter();
   const { theme, hydrated } = useTheme();
@@ -330,6 +335,15 @@ export default function ListingDetails({ params }) {
 
   const handleAddToCart = async () => {
     if (!listing?.id) return;
+    if (
+      isPurchaseRestrictedRole({
+        role,
+        isInternal: profile?.is_internal === true,
+      })
+    ) {
+      setStatusMessage(getPurchaseRestrictionMessage());
+      return;
+    }
     if (!requireAuth("place orders", setStatusMessage)) return;
     setStatusMessage("");
 
@@ -438,6 +452,10 @@ export default function ListingDetails({ params }) {
     listing?.category ||
     "Local listing";
   const showMessage = role !== "business";
+  const purchaseRestricted = isPurchaseRestrictedRole({
+    role,
+    isInternal: profile?.is_internal === true,
+  });
   const galleryPhotos = extractPhotoUrls(listing.photo_url);
   const inventory = normalizeInventory(listing);
   const badgeStyle = getAvailabilityBadgeStyle(inventory.availability, isLight);
@@ -746,7 +764,7 @@ export default function ListingDetails({ params }) {
                 <select
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
-                  disabled={isOutOfStock}
+                  disabled={isOutOfStock || purchaseRestricted}
                   className="w-full rounded-xl px-3 py-2 text-base md:text-sm font-semibold"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
@@ -757,15 +775,34 @@ export default function ListingDetails({ params }) {
                   ))}
                 </select>
 
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  disabled={isOutOfStock}
-                  className="mt-2 w-full rounded-xl px-3 py-3 text-sm font-semibold transition border"
-                  style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-                >
-                  Add to cart
-                </button>
+                {purchaseRestricted ? (
+                  <div
+                    className="mt-2 rounded-2xl border px-4 py-3"
+                    style={{ background: "var(--overlay)", borderColor: "var(--border)" }}
+                  >
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full rounded-xl px-3 py-3 text-sm font-semibold opacity-70"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                    >
+                      Customer accounts only
+                    </button>
+                    <p className="mt-2 text-xs opacity-80">
+                      {getPurchaseRestrictionHelpText()}
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={isOutOfStock}
+                    className="mt-2 w-full rounded-xl px-3 py-3 text-sm font-semibold transition border"
+                    style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                  >
+                    Add to cart
+                  </button>
+                )}
 
                 {isOutOfStock ? (
                   <div
@@ -780,6 +817,10 @@ export default function ListingDetails({ params }) {
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   >
                     {statusMessage}
+                  </div>
+                ) : purchaseRestricted ? (
+                  <div className="mt-2 text-xs opacity-80">
+                    Browse listings with your business account, but switch to a customer account to place orders.
                   </div>
                 ) : (
                   <div className="mt-2 text-xs opacity-80">

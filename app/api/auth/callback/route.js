@@ -8,7 +8,8 @@ import { getCookieBaseOptions } from "@/lib/authCookies";
 import { ensureBusinessProvisionedForUser } from "@/lib/auth/ensureBusinessProvisioning";
 import {
   getBusinessPasswordGateState,
-  getBusinessRedirectDestination,
+  isBusinessIntentPath,
+  resolvePostAuthDestination,
 } from "@/lib/auth/businessPasswordGate";
 import {
   isBlockedAccountStatus,
@@ -99,18 +100,6 @@ function isAllowedNextPath(value) {
   );
 }
 
-function isBusinessIntentPath(path) {
-  if (typeof path !== "string") return false;
-  const normalized = path.trim().toLowerCase();
-  if (!normalized) return false;
-  return (
-    normalized === "/onboarding" ||
-    normalized.startsWith("/onboarding/") ||
-    normalized.includes("onboarding") ||
-    normalized.includes("business")
-  );
-}
-
 async function ensureBusinessProvisioned({ user, debug }) {
   await ensureBusinessProvisionedForUser({
     userId: user?.id,
@@ -123,6 +112,7 @@ async function ensureBusinessProvisioned({ user, debug }) {
 export async function GET(request) {
   const requestUrl = new URL(request.url);
   const debug = requestUrl.searchParams.get("debug") === "1";
+  const authDiagServer = process.env.AUTH_DIAG_SERVER === "1";
   const code = requestUrl.searchParams.get("code");
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const tokenType = normalizeOtpType(requestUrl.searchParams.get("type"));
@@ -226,7 +216,7 @@ export async function GET(request) {
 
   const buildLoginRedirectResponse = ({ reason, authError = "invalid_link" }) => {
     const destination = businessIntent ? "/business/login" : "/login";
-    const fallbackNext = safeNext || (businessIntent ? "/onboarding" : "/");
+    const fallbackNext = safeNext || (businessIntent ? "/go/dashboard" : "/");
     const redirectUrl = new URL(destination, request.url);
     redirectUrl.searchParams.set("next", fallbackNext);
     if (authError) {
@@ -394,14 +384,31 @@ export async function GET(request) {
         authError: "invalid_credentials",
       });
     }
-    const destination =
-      resolvedRole === "business"
-        ? getBusinessRedirectDestination({
-            passwordSet: businessGate.passwordSet,
-            onboardingComplete: businessGate.onboardingComplete,
-            safeNext,
-          })
-        : safeNext ?? "/onboarding";
+    const destination = resolvePostAuthDestination({
+      role: resolvedRole,
+      hasSession: true,
+      hasUser: true,
+      userRow: businessGate.userRow,
+      businessRow: businessGate.businessRow,
+      passwordSet: businessGate.passwordSet,
+      onboardingComplete: businessGate.onboardingComplete,
+      safeNext,
+    });
+    if (authDiagServer) {
+      console.info("[AUTH_DIAG_SERVER] callback:destination", {
+        pathname: requestUrl.pathname,
+        role: resolvedRole || null,
+        sessionExists: true,
+        userExists: true,
+        userRowExists: Boolean(businessGate.userRow),
+        businessRowExists: Boolean(businessGate.businessRow?.owner_user_id),
+        passwordSet: businessGate.passwordSet,
+        onboardingComplete: businessGate.onboardingComplete,
+        safeNext,
+        destination,
+        cookieMutations: cookiesSetDuringAuth.map((cookie) => cookie.name),
+      });
+    }
 
     if (debug || process.env.NODE_ENV !== "production") {
       console.info("[AUTH_CALLBACK_TRACE]", {

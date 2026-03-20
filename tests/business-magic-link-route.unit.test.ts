@@ -60,7 +60,7 @@ describe("POST /api/auth/business-magic-link", () => {
       type: "magiclink",
       email: "biz@example.com",
       options: {
-        redirectTo: "https://localhost:3000/auth/confirm?next=%2Fbusiness-auth%2Fpost-confirm",
+        redirectTo: "https://localhost:3000/auth/confirm?next=%2Fgo%2Fdashboard",
       },
     });
     expect(resendSendMock).toHaveBeenCalledWith({
@@ -71,7 +71,7 @@ describe("POST /api/auth/business-magic-link", () => {
         id: "business-account-invitation",
         variables: {
           magicLink:
-            "https://localhost:3000/auth/confirm?next=%2Fbusiness-auth%2Fpost-confirm&token_hash=hashed_abc&type=email",
+            "https://localhost:3000/auth/confirm?next=%2Fgo%2Fdashboard&token_hash=hashed_abc&type=email",
           supportEmail: "support@yourbarrio.com",
         },
       },

@@ -23,6 +23,16 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function isBusinessAuthPath(pathname: string | null) {
+  if (!pathname) return false;
+  return (
+    pathname === "/business/login" ||
+    pathname.startsWith("/business/login/") ||
+    pathname === "/business-auth" ||
+    pathname.startsWith("/business-auth/")
+  );
+}
+
 export default function BusinessMarketingHeader() {
   const pathname = usePathname();
   const [hidden, setHidden] = useState(false);
@@ -31,7 +41,9 @@ export default function BusinessMarketingHeader() {
   const ticking = useRef(false);
   const firstMobileLinkRef = useRef<HTMLAnchorElement>(null);
   const isBusinessLanding = pathname === "/business";
-  const showPrimaryNav = !isBusinessLanding;
+  const isBusinessAuth = isBusinessAuthPath(pathname);
+  const useLandingNav = isBusinessLanding || isBusinessAuth;
+  const showPrimaryNav = !useLandingNav;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -82,7 +94,7 @@ export default function BusinessMarketingHeader() {
                     priority
                   />
                 </span>
-                {!isBusinessLanding && (
+                {!useLandingNav && (
                   <span className="text-base font-semibold text-white tracking-tight">
                     YourBarrio
                   </span>

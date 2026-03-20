@@ -438,6 +438,9 @@ function BusinessLoginInner({ isPopup, callbackError = "" }) {
         if (!response.ok) {
           throw new Error("Session refresh failed. Please try again.");
         }
+        if (response.headers.get("x-auth-refresh-user") !== "1") {
+          throw new Error("We couldn't finish signing you in. Please try again.");
+        }
       }
 
       didCompleteRef.current = true;

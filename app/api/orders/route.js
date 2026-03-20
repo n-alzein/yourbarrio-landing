@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getProfileCached, getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getPurchaseRestrictionMessage, isPurchaseRestrictedRole } from "@/lib/auth/purchaseAccess";
 
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
@@ -39,6 +40,17 @@ export async function POST(request) {
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);
+  }
+
+  const profile = await getProfileCached(user.id, supabase);
+  const purchaseRestricted = isPurchaseRestrictedRole({
+    role: profile?.role ?? null,
+    isInternal: profile?.is_internal === true,
+  });
+  if (purchaseRestricted) {
+    return jsonError(getPurchaseRestrictionMessage(), 403, {
+      code: "CUSTOMER_ACCOUNT_REQUIRED",
+    });
   }
 
   let body = {};

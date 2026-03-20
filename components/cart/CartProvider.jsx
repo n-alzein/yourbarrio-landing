@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { getPurchaseRestrictionMessage, isPurchaseRestrictedRole } from "@/lib/auth/purchaseAccess";
 import { groupCartItemsByBusiness } from "@/lib/cart/groupCartItemsByBusiness";
 
 /** @typedef {import("@/lib/types/cart").CartResponse} CartResponse */
@@ -72,7 +73,7 @@ const getPerfDebug = () => {
 };
 
 export function CartProvider({ children }) {
-  const { user, authStatus } = useAuth();
+  const { user, authStatus, role, profile } = useAuth();
   const [cart, setCart] = useState(null);
   const [vendor, setVendor] = useState(null);
   const [carts, setCarts] = useState([]);
@@ -85,6 +86,10 @@ export function CartProvider({ children }) {
   const didRunMountRefreshRef = useRef(false);
   const perfDebug = getPerfDebug();
   const mountStartedAtRef = useRef(0);
+  const purchaseRestricted = isPurchaseRestrictedRole({
+    role,
+    isInternal: profile?.is_internal === true,
+  });
 
   const syncCart = useCallback((payload) => {
     const nextCarts = Array.isArray(payload?.carts)
@@ -107,14 +112,14 @@ export function CartProvider({ children }) {
 
   const refreshCart = useCallback(
     async ({ reason } = {}) => {
-      if (!user?.id || authStatus !== "authenticated") {
+      if (!user?.id || authStatus !== "authenticated" || purchaseRestricted) {
         setCart(null);
         setVendor(null);
         setCarts([]);
         setVendors({});
         setItems([]);
         setLoading(false);
-        setError(null);
+        setError(purchaseRestricted ? getPurchaseRestrictionMessage() : null);
         return { cart: null };
       }
 
@@ -271,11 +276,11 @@ export function CartProvider({ children }) {
 
       return globalRefreshInFlight;
     },
-    [authStatus, perfDebug, syncCart, user?.id]
+    [authStatus, perfDebug, purchaseRestricted, syncCart, user?.id]
   );
 
   useEffect(() => {
-    if (!user?.id || authStatus !== "authenticated") return undefined;
+    if (!user?.id || authStatus !== "authenticated" || purchaseRestricted) return undefined;
     if (perfDebug) {
       if (typeof window !== "undefined") {
         globalMountCount += 1;
@@ -318,17 +323,29 @@ export function CartProvider({ children }) {
         console.log("[cart] mounted_for_ms", mountedForMs);
       }
     };
-  }, [authStatus, refreshCart, syncCart, user?.id, perfDebug]);
+  }, [authStatus, purchaseRestricted, refreshCart, syncCart, user?.id, perfDebug]);
 
   useEffect(() => {
     didRunMountRefreshRef.current = false;
     lastRefreshKeyRef.current = null;
   }, [user?.id, authStatus]);
 
+  useEffect(() => {
+    if (!purchaseRestricted) return;
+    setCart(null);
+    setVendor(null);
+    setCarts([]);
+    setVendors({});
+    setItems([]);
+  }, [purchaseRestricted]);
+
   const addItem = useCallback(
     async ({ listingId, quantity = 1, clearExisting }) => {
       if (!user?.id) {
         return { error: "Please log in to add items." };
+      }
+      if (purchaseRestricted) {
+        return { error: getPurchaseRestrictionMessage() };
       }
 
       setError(null);
@@ -351,13 +368,16 @@ export function CartProvider({ children }) {
       syncCart(payload);
       return { cart: payload?.cart || null, vendor: payload?.vendor || null };
     },
-    [syncCart, user?.id]
+    [purchaseRestricted, syncCart, user?.id]
   );
 
   const updateItem = useCallback(
     async ({ itemId, quantity }) => {
       if (!user?.id) {
         return { error: "Please log in." };
+      }
+      if (purchaseRestricted) {
+        return { error: getPurchaseRestrictionMessage() };
       }
 
       const response = await fetch("/api/cart", {
@@ -375,7 +395,7 @@ export function CartProvider({ children }) {
       syncCart(payload);
       return payload;
     },
-    [syncCart, user?.id]
+    [purchaseRestricted, syncCart, user?.id]
   );
 
   const removeItem = useCallback(
@@ -387,6 +407,9 @@ export function CartProvider({ children }) {
     async (fulfillmentType, { cartId = null, businessId = null } = {}) => {
       if (!user?.id) {
         return { error: "Please log in." };
+      }
+      if (purchaseRestricted) {
+        return { error: getPurchaseRestrictionMessage() };
       }
 
       const body = { fulfillment_type: fulfillmentType };
@@ -408,12 +431,15 @@ export function CartProvider({ children }) {
       syncCart(payload);
       return payload;
     },
-    [syncCart, user?.id]
+    [purchaseRestricted, syncCart, user?.id]
   );
 
   const clearCart = useCallback(async () => {
     if (!user?.id) {
       return { error: "Please log in." };
+    }
+    if (purchaseRestricted) {
+      return { error: getPurchaseRestrictionMessage() };
     }
 
     const response = await fetch("/api/cart", {
@@ -428,7 +454,7 @@ export function CartProvider({ children }) {
 
     syncCart(payload);
     return payload;
-  }, [syncCart, user?.id]);
+  }, [purchaseRestricted, syncCart, user?.id]);
 
   const itemCount = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),

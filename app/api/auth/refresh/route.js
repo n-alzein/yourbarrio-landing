@@ -3,13 +3,13 @@
 import { NextResponse } from "next/server";
 import {
   createSupabaseRouteHandlerClient,
-  getUserCached,
   isRefreshTokenAlreadyUsedError,
 } from "@/lib/supabaseServer";
 import { clearSupabaseCookies } from "@/lib/authCookies";
 
 export async function POST(request) {
   const debugAuth = process.env.DEBUG_AUTH === "true";
+  const authDiagServer = process.env.AUTH_DIAG_SERVER === "1";
   const startedAt = Date.now();
   const requestUrl = request.url;
   const response = NextResponse.json({ ok: true }, { status: 200 });
@@ -37,6 +37,14 @@ export async function POST(request) {
         access_token: accessToken,
         refresh_token: refreshToken,
       });
+      if (authDiagServer) {
+        console.info("[AUTH_DIAG_SERVER] refresh:set_session", {
+          pathname: new URL(request.url).pathname,
+          hadAccessToken: Boolean(accessToken),
+          hadRefreshToken: Boolean(refreshToken),
+          setSessionError: setSessionError?.message ?? null,
+        });
+      }
       if (setSessionError && isRefreshTokenAlreadyUsedError(setSessionError)) {
         const reset = NextResponse.json(
           { ok: false, error: "session_out_of_sync" },
@@ -53,7 +61,14 @@ export async function POST(request) {
       }
     }
 
-    const { user, error } = await getUserCached(supabase);
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
     if (error && isRefreshTokenAlreadyUsedError(error)) {
       const reset = NextResponse.json(
         { ok: false, error: "session_out_of_sync" },
@@ -71,6 +86,16 @@ export async function POST(request) {
 
     if (debug) {
       console.log("[auth/refresh] user after refresh", Boolean(user), error);
+    }
+    if (authDiagServer) {
+      console.info("[AUTH_DIAG_SERVER] refresh:result", {
+        pathname: new URL(request.url).pathname,
+        sessionExists: Boolean(session),
+        sessionError: sessionError?.message ?? null,
+        userExists: Boolean(user),
+        userError: error?.message ?? null,
+        cookieMutations: response.cookies.getAll().map((cookie) => cookie.name),
+      });
     }
 
     response.headers.set("x-auth-refresh-user", user ? "1" : "0");

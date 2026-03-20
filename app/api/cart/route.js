@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getProfileCached, getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
+import { getPurchaseRestrictionMessage, isPurchaseRestrictedRole } from "@/lib/auth/purchaseAccess";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 
 async function getActiveCarts(supabase, userId) {
@@ -53,6 +54,18 @@ function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
 }
 
+async function getPurchaseRestrictionError(supabase, userId) {
+  const profile = await getProfileCached(userId, supabase);
+  const purchaseRestricted = isPurchaseRestrictedRole({
+    role: profile?.role ?? null,
+    isInternal: profile?.is_internal === true,
+  });
+  if (!purchaseRestricted) return null;
+  return jsonError(getPurchaseRestrictionMessage(), 403, {
+    code: "CUSTOMER_ACCOUNT_REQUIRED",
+  });
+}
+
 export async function GET() {
   const supabase = await getSupabaseServerClient();
   const { user, error: userError } = await getUserCached(supabase);
@@ -78,6 +91,11 @@ export async function POST(request) {
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);
+  }
+
+  const purchaseRestrictionError = await getPurchaseRestrictionError(supabase, user.id);
+  if (purchaseRestrictionError) {
+    return purchaseRestrictionError;
   }
 
   let body = {};
@@ -201,6 +219,11 @@ export async function PATCH(request) {
     return jsonError("Unauthorized", 401);
   }
 
+  const purchaseRestrictionError = await getPurchaseRestrictionError(supabase, user.id);
+  if (purchaseRestrictionError) {
+    return purchaseRestrictionError;
+  }
+
   let body = {};
   try {
     body = await request.json();
@@ -303,6 +326,11 @@ export async function DELETE() {
 
   if (userError || !user) {
     return jsonError("Unauthorized", 401);
+  }
+
+  const purchaseRestrictionError = await getPurchaseRestrictionError(supabase, user.id);
+  if (purchaseRestrictionError) {
+    return purchaseRestrictionError;
   }
 
   let cartPayload;

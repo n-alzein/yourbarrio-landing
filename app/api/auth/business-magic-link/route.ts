@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { BUSINESS_POST_CONFIRM_PATH } from "@/lib/auth/businessPasswordGate";
+import { BUSINESS_GO_DASHBOARD_PATH } from "@/lib/auth/businessPasswordGate";
 import { getSiteUrlFromRequest } from "@/lib/auth/getSiteUrl";
 import { supabaseAdmin } from "@/lib/auth/supabaseAdmin";
 import { resend } from "@/lib/email/resendClient";
@@ -10,7 +10,7 @@ const requestSchema = z.object({
 });
 
 function getBusinessRedirectTo(siteUrl: string) {
-  return `${siteUrl}/auth/confirm?next=${encodeURIComponent(BUSINESS_POST_CONFIRM_PATH)}`;
+  return `${siteUrl}/auth/confirm?next=${encodeURIComponent(BUSINESS_GO_DASHBOARD_PATH)}`;
 }
 
 function normalizeVerifyType(input: string) {
@@ -21,7 +21,7 @@ function normalizeVerifyType(input: string) {
 
 function buildTokenHashConfirmLink(siteUrl: string, tokenHash: string, type = "email") {
   const link = new URL("/auth/confirm", siteUrl);
-  link.searchParams.set("next", BUSINESS_POST_CONFIRM_PATH);
+  link.searchParams.set("next", BUSINESS_GO_DASHBOARD_PATH);
   link.searchParams.set("token_hash", tokenHash);
   link.searchParams.set("type", normalizeVerifyType(type));
   return link.toString();
