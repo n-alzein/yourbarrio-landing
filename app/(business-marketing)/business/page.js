@@ -73,14 +73,14 @@ function BusinessPreviewPanel() {
 
 function BusinessValueCard({ title, description, image, alt, objectPosition }) {
   return (
-    <article className="group yb-business-polish-transition flex max-w-[23.5rem] flex-col group-hover:-translate-y-0.5">
-      <div className="overflow-hidden rounded-[26px] bg-[#f3ede6] shadow-[var(--yb-business-shadow-soft)] yb-business-polish-transition group-hover:shadow-[var(--yb-business-shadow-hover)]">
-        <div className="relative aspect-[4/3] min-h-[17.5rem] overflow-hidden md:min-h-[18.5rem]">
+    <article className="group yb-business-polish-transition mx-auto flex w-full max-w-[23.5rem] flex-col group-hover:-translate-y-0.5 md:mx-0">
+      <div className="mx-auto w-full overflow-hidden rounded-[26px] bg-[#f3ede6] shadow-[var(--yb-business-shadow-soft)] yb-business-polish-transition group-hover:shadow-[var(--yb-business-shadow-hover)]">
+        <div className="relative aspect-[4/3] overflow-hidden md:min-h-[18.5rem]">
           <Image
             src={image}
             alt={alt}
             fill
-            className={`object-cover ${objectPosition} yb-business-polish-transition group-hover:scale-[1.02]`}
+            className={`h-full w-full object-cover ${objectPosition} yb-business-polish-transition group-hover:scale-[1.02]`}
             sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 360px"
           />
         </div>
