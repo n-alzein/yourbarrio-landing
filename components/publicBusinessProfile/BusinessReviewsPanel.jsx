@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Star } from "lucide-react";
+import { MessageSquareQuote, Star } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { logMutation } from "@/lib/auth/requireSession";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
@@ -605,26 +605,37 @@ export default function BusinessReviewsPanel({
   return (
     <section
       id="reviews"
-      className={`scroll-mt-40 rounded-[28px] border border-slate-200/80 bg-white/92 p-5 shadow-[0_24px_60px_-48px_rgba(15,23,42,0.28)] backdrop-blur md:p-6 ${className}`}
+      className={`scroll-mt-40 border-t border-slate-100 pt-8 md:pt-10 ${className}`}
     >
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-[1.4rem] font-semibold tracking-[-0.02em] text-slate-950">Reviews</h2>
-          <p className="text-sm text-slate-600">What customers are saying.</p>
+          <h2 className="text-[1.28rem] font-semibold tracking-[-0.03em] text-slate-950">Reviews</h2>
+          <p className="mt-1 text-sm text-slate-600">What customers are saying about this business.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Star className="h-5 w-5 text-amber-500" fill="currentColor" />
-          <span className="text-2xl font-semibold text-slate-950">
-            {averageRating ? averageRating.toFixed(1) : "0.0"}
-          </span>
-          <span className="text-sm text-slate-500">
-            ({totalReviews} total)
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-[14px] border border-slate-100 bg-white px-3 py-2 shadow-sm">
+            <Star className="h-5 w-5 text-amber-500" fill="currentColor" />
+            <div>
+              <div className="text-base font-semibold text-slate-950">
+                {averageRating ? averageRating.toFixed(1) : "0.0"}
+              </div>
+              <div className="text-xs text-slate-500">
+                {totalReviews <= 1
+                  ? `${totalReviews || 0} review`
+                  : `${totalReviews} reviews`}
+              </div>
+            </div>
+          </div>
+          <p className="text-sm text-slate-500">
+            {totalReviews > 1
+              ? "Average across all submitted reviews."
+              : "A fuller rating picture will appear as more reviews come in."}
+          </p>
         </div>
       </div>
 
       {shouldShowDistribution ? (
-        <div className="mt-4 grid gap-2">
+        <div className="mt-3 grid gap-2">
           {ratingRows.map((row) => (
             <div key={row.value} className="flex items-center gap-3 text-sm">
               <span className="w-8 text-slate-500">{row.value}★</span>
@@ -643,7 +654,7 @@ export default function BusinessReviewsPanel({
       {showReviewForm ? (
         <form
           onSubmit={handleSubmitReview}
-          className="mt-4 rounded-[20px] bg-slate-50/75 p-4 space-y-3"
+          className="mt-4 space-y-3 rounded-[16px] border border-slate-100 bg-white p-3.5 shadow-sm"
         >
           <div>
             <p className="text-sm font-semibold text-slate-950">Leave a review</p>
@@ -701,7 +712,7 @@ export default function BusinessReviewsPanel({
       ) : null}
 
       {!showReviewForm && showLoginPrompt ? (
-        <div className="mt-4 rounded-[20px] bg-slate-50/75 p-4">
+        <div className="mt-4 rounded-[16px] border border-slate-100 bg-white p-3.5 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-950">
@@ -723,7 +734,7 @@ export default function BusinessReviewsPanel({
       ) : null}
 
       {!showReviewForm && showBusinessNote ? (
-        <div className="mt-4 rounded-[20px] bg-slate-50/75 p-4 text-xs text-slate-500">
+        <div className="mt-4 rounded-[16px] border border-slate-100 bg-white p-3.5 text-xs text-slate-500 shadow-sm">
           {isOwnBusiness
             ? "Business owners can’t review their own business."
             : "Business accounts can’t leave reviews."}
@@ -731,8 +742,20 @@ export default function BusinessReviewsPanel({
       ) : null}
 
       {!reviews.length && !loading ? (
-        <div className="mt-4 rounded-[20px] border border-dashed border-slate-200/90 bg-slate-50/70 p-4 text-sm text-slate-500">
-          No reviews yet.
+        <div className="mt-4">
+          <div className="rounded-[16px] border border-slate-100 bg-white p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-slate-50 p-2 text-[#6a3df0]">
+                <MessageSquareQuote className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-900">No reviews yet</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Customer feedback will appear here once someone shares their experience.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -741,7 +764,7 @@ export default function BusinessReviewsPanel({
           {Array.from({ length: 2 }).map((_, idx) => (
             <div
               key={idx}
-              className="rounded-[20px] bg-slate-50/75 p-4"
+              className="rounded-[16px] border border-slate-100 bg-white p-4 shadow-sm"
             >
               <div className="h-4 w-32 rounded bg-slate-200" />
               <div className="mt-3 h-3 w-24 rounded bg-slate-200" />
@@ -755,7 +778,7 @@ export default function BusinessReviewsPanel({
           {orderedReviews.map((review) => (
             <div
               key={review.id}
-              className="rounded-[20px] bg-slate-50/75 p-4"
+              className="rounded-[16px] border border-slate-100 bg-white p-4 shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -849,13 +872,13 @@ export default function BusinessReviewsPanel({
               ) : (
                 <>
                   {review.body ? (
-                    <p className="mt-2.5 text-sm leading-6 text-slate-600">
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
                       {review.body}
                     </p>
                   ) : null}
                   {review.business_reply ? (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    <div className="mt-3 rounded-[14px] border border-slate-100 bg-slate-50/80 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                         Reply from business
                       </p>
                       {review.business_reply_at ? (

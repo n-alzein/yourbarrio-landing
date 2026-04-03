@@ -12,6 +12,7 @@ import BusinessReviewsPanel from "@/components/publicBusinessProfile/BusinessRev
 import PublicBusinessPreviewClient from "@/components/publicBusinessProfile/PublicBusinessPreviewClient";
 import ProfileViewTracker from "@/components/publicBusinessProfile/ProfileViewTracker";
 import ViewerContextEnhancer from "@/components/public/ViewerContextEnhancer";
+import { ProfileSectionNav } from "@/components/business/profile-system/ProfileSystem";
 
 const PUBLIC_CACHE_SECONDS = 300;
 const PERF_ENV_FLAG = "YB_PROFILE_PERF";
@@ -464,17 +465,13 @@ export default async function PublicBusinessProfilePage({
   const isCustomerShell = shell === "customer";
   const wrapperClassName =
     isCustomerShell
-      ? "min-h-screen text-white -mt-28 md:-mt-20"
-      : "min-h-screen text-white -mt-20";
+      ? "min-h-screen bg-[#f8fafc] text-white -mt-28 md:-mt-20"
+      : "min-h-screen bg-[#f8fafc] text-white -mt-20";
   const contentShellPadding = isCustomerShell
-    ? "mx-auto max-w-6xl px-0 sm:px-6 md:px-10 pb-16 space-y-8"
-    : "mx-auto max-w-6xl px-6 md:px-10 pb-16 space-y-8";
-  const sectionShellClassName = isCustomerShell
-    ? "rounded-none border-0 sm:border sm:border-white/10"
-    : "rounded-none";
-  const reviewsShellClassName = isCustomerShell
-    ? "rounded-none border-0 sm:rounded-b-3xl sm:rounded-t-none sm:border sm:border-white/10"
-    : "rounded-b-3xl rounded-t-none";
+    ? "mx-auto max-w-[1180px] px-0 sm:px-6 md:px-8 pb-14"
+    : "mx-auto max-w-[1180px] px-4 sm:px-6 md:px-8 pb-14";
+  const sectionShellClassName = "rounded-none";
+  const reviewsShellClassName = "rounded-none";
 
   return (
     <div className={wrapperClassName}>
@@ -487,22 +484,34 @@ export default async function PublicBusinessProfilePage({
       />
 
       <div className={contentShellPadding}>
-        <BusinessAbout profile={profile} className={sectionShellClassName} />
-        <BusinessAnnouncementsPreview
-          announcements={announcements}
-          className={sectionShellClassName}
+        <ProfileSectionNav
+          items={[
+            { id: "about", label: "About" },
+            { id: "listings", label: "Listings" },
+            { id: "reviews", label: "Reviews" },
+            { id: "updates", label: "Updates" },
+            { id: "gallery", label: "Gallery" },
+          ]}
         />
-        <BusinessGalleryGrid photos={gallery} className={sectionShellClassName} />
-        <BusinessListingsGrid listings={listings} className={sectionShellClassName} />
-        <ViewerContextEnhancer>
-          <BusinessReviewsPanel
-            businessId={businessId}
-            initialReviews={reviews}
-            ratingSummary={ratingSummary}
-            reviewCount={ratingSummary?.count || reviews?.length || 0}
-            className={reviewsShellClassName}
+
+        <div className="space-y-8">
+          <BusinessAbout profile={profile} className={sectionShellClassName} />
+          <BusinessListingsGrid listings={listings} className={sectionShellClassName} />
+          <ViewerContextEnhancer>
+            <BusinessReviewsPanel
+              businessId={businessId}
+              initialReviews={reviews}
+              ratingSummary={ratingSummary}
+              reviewCount={ratingSummary?.count || reviews?.length || 0}
+              className={reviewsShellClassName}
+            />
+          </ViewerContextEnhancer>
+          <BusinessAnnouncementsPreview
+            announcements={announcements}
+            className={sectionShellClassName}
           />
-        </ViewerContextEnhancer>
+          <BusinessGalleryGrid photos={gallery} className={sectionShellClassName} />
+        </div>
       </div>
     </div>
   );

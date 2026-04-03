@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FastImage from "@/components/FastImage";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   ProfileEmptyState,
   ProfileSection,
@@ -45,8 +45,10 @@ export default function BusinessGalleryGrid({
     >
       {!photos?.length ? (
         <ProfileEmptyState
-          title="No gallery photos yet"
-          detail="Photos will appear here once the business adds them."
+          title="Gallery coming soon"
+          detail="Photos will appear here when available."
+          icon={Camera}
+          className="py-4"
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -55,7 +57,7 @@ export default function BusinessGalleryGrid({
               key={photo.id || index}
               type="button"
               onClick={() => setActiveIndex(index)}
-              className="group relative aspect-[4/3] overflow-hidden rounded-[24px] bg-slate-100"
+              className="group relative aspect-[4/3] overflow-hidden rounded-[16px] border border-slate-100 bg-slate-100 shadow-sm"
             >
               <FastImage
                 src={photo.photo_url || "/business-placeholder.png"}
@@ -65,7 +67,7 @@ export default function BusinessGalleryGrid({
                 sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
                 decoding="async"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
             </button>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import {
-  Clock,
+  BadgeCheck,
   Facebook,
   Globe,
   Instagram,
@@ -10,11 +10,12 @@ import {
   Twitter,
   Youtube,
 } from "lucide-react";
+import BusinessHoursSummaryCard from "@/components/publicBusinessProfile/BusinessHoursSummaryCard";
 import {
   ProfileEmptyState,
   ProfileSection,
 } from "@/components/business/profile-system/ProfileSystem";
-import { normalizeUrl, parseHours, toObject } from "@/lib/business/profileUtils";
+import { normalizeUrl, toObject } from "@/lib/business/profileUtils";
 
 const SOCIAL_FIELDS = [
   { key: "instagram", label: "Instagram", icon: Instagram },
@@ -27,9 +28,9 @@ const SOCIAL_FIELDS = [
 
 function EssentialsItem({ icon: Icon, label, value, href }) {
   return (
-    <div className="rounded-[20px] bg-slate-50/75 px-4 py-3">
+    <div className="rounded-[16px] border border-slate-100 bg-white px-3.5 py-3 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-xl bg-white p-2 text-[#6a3df0] shadow-sm">
+        <div className="mt-0.5 rounded-xl bg-slate-50 p-2 text-[#6a3df0]">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
@@ -55,7 +56,6 @@ function EssentialsItem({ icon: Icon, label, value, href }) {
 }
 
 export default function BusinessAbout({ profile, className = "" }) {
-  const hours = parseHours(profile?.hours_json);
   const address = [profile?.address, profile?.city, profile?.state]
     .filter(Boolean)
     .join(", ");
@@ -70,15 +70,18 @@ export default function BusinessAbout({ profile, className = "" }) {
     <ProfileSection
       id="about"
       title="About"
-      description="Business story, contact details, and practical essentials."
+      description="A quick overview, contact details, and practical information."
       className={className}
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
         <div className="space-y-4">
-          <div className="max-w-[44rem]">
-            <p className="text-[1rem] leading-7 text-slate-700">
+          <div>
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#6a3df0]">
+              Overview
+            </p>
+            <p className="mt-3 max-w-[44rem] text-[0.98rem] leading-7 text-slate-700">
               {profile?.description ||
-                "This business has not shared a full description yet."}
+                "This business has not added a full description yet."}
             </p>
           </div>
 
@@ -121,35 +124,24 @@ export default function BusinessAbout({ profile, className = "" }) {
                 href={website}
               />
             ) : null}
+            {profile?.category ? (
+              <EssentialsItem
+                icon={BadgeCheck}
+                label="Category"
+                value={profile.category}
+              />
+            ) : null}
           </div>
 
-          <div className="rounded-[20px] bg-slate-50/75 px-4 py-3">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="rounded-xl bg-white p-2 text-[#6a3df0] shadow-sm">
-                <Clock className="h-4 w-4" />
-              </div>
-              <p className="text-sm font-medium text-slate-900">Hours</p>
-            </div>
-            {hours.length ? (
-              <div className="space-y-2">
-                {hours.map((entry) => (
-                  <div
-                    key={entry.key}
-                    className="flex items-center justify-between gap-4 rounded-2xl bg-white px-3 py-2 text-sm"
-                  >
-                    <span className="font-medium text-slate-700">{entry.label}</span>
-                    <span className="text-slate-500">{entry.value}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ProfileEmptyState
-                title="Hours not listed"
-                detail="Business hours will appear here once they are added."
-                className="border-0 bg-white px-4 py-3"
-              />
-            )}
-          </div>
+          {profile?.hours_json ? (
+            <BusinessHoursSummaryCard hoursJson={profile.hours_json} />
+          ) : (
+            <ProfileEmptyState
+              title="Hours not listed"
+              detail="Hours will appear here when available."
+              className="px-4 py-4"
+            />
+          )}
         </div>
       </div>
     </ProfileSection>

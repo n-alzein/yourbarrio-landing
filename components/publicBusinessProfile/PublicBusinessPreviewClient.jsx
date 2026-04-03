@@ -354,25 +354,20 @@ export default function PublicBusinessPreviewClient({
       <ProfileSectionNav
         items={[
           { id: "about", label: "About" },
-          { id: "gallery", label: "Gallery" },
           { id: "listings", label: "Listings" },
           { id: "reviews", label: "Reviews" },
           { id: "updates", label: "Updates" },
+          { id: "gallery", label: "Gallery" },
         ]}
       />
 
-      <div className="space-y-14">
+      <div className="space-y-8">
         <BusinessAbout profile={profile} className="rounded-none" />
 
         {loading ? (
           <PreviewSkeleton withContainer={false} />
         ) : (
           <>
-            <BusinessAnnouncementsPreview
-              announcements={announcements}
-              className="rounded-none"
-            />
-            <BusinessGalleryGrid photos={gallery} className="rounded-none" />
             <BusinessListingsGrid listings={listings} className="rounded-none" />
             <ViewerContextEnhancer>
               <BusinessReviewsPanel
@@ -381,9 +376,14 @@ export default function PublicBusinessPreviewClient({
                 ratingSummary={ratingSummary}
                 reviewCount={ratingSummary?.count || reviews?.length || 0}
                 loading={loading}
-                className="rounded-b-3xl rounded-t-none"
+                className="rounded-none"
               />
             </ViewerContextEnhancer>
+            <BusinessAnnouncementsPreview
+              announcements={announcements}
+              className="rounded-none"
+            />
+            <BusinessGalleryGrid photos={gallery} className="rounded-none" />
           </>
         )}
       </div>

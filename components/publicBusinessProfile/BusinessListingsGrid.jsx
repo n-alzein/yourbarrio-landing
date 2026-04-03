@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import FastImage from "@/components/FastImage";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, MapPin, Tag } from "lucide-react";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
-import { descriptionSnippet } from "@/lib/listingDescription";
 import { getListingUrl } from "@/lib/ids/publicRefs";
 import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
@@ -28,9 +27,6 @@ export default function BusinessListingsGrid({
   headerAction = null,
   itemHrefResolver = getListingUrl,
 }) {
-  const gridClassName =
-    "grid justify-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(208px,208px))] max-sm:[grid-template-columns:repeat(auto-fill,minmax(168px,168px))]";
-
   return (
     <ProfileSection
       id="listings"
@@ -42,19 +38,21 @@ export default function BusinessListingsGrid({
       {!listings?.length ? (
         <ProfileEmptyState
           title="No listings yet"
-          detail="Current inventory and featured offers will show up here."
+          detail="Available products and services will appear here."
+          icon={Tag}
         />
       ) : (
-        <div className={gridClassName}>
+        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {listings.map((item) => {
             const cover = primaryPhotoUrl(item.photo_url);
+            const categoryLabel = getListingCategoryLabel(item, "Listing");
             return (
               <Link
                 key={item.id}
                 href={itemHrefResolver(item)}
-                className="group flex h-full min-h-[258px] flex-col overflow-hidden rounded-[20px] border border-slate-200/80 bg-white transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_18px_40px_-30px_rgba(15,23,42,0.28)] max-sm:min-h-[236px]"
+                className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md"
               >
-                <div className="relative aspect-[1.08/1] overflow-hidden bg-slate-100">
+                <div className="relative aspect-square overflow-hidden bg-slate-100">
                   <FastImage
                     src={cover || getListingCategoryPlaceholder(item)}
                     alt={item.title || "Listing"}
@@ -64,34 +62,40 @@ export default function BusinessListingsGrid({
                     decoding="async"
                   />
                 </div>
-                <div className="flex flex-1 flex-col gap-2 p-3">
+                <div className="flex flex-1 flex-col gap-2.5 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                      {getListingCategoryLabel(item, "Listing")}
-                    </p>
-                    <span className="text-xs font-medium text-slate-400">
-                      {item.city || ""}
+                    <span className="inline-flex rounded-full border border-[#e5dcff] bg-[#f6f1ff] px-2.5 py-1 text-[11px] font-medium text-[#5b37d6]">
+                      {categoryLabel}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">
+                      {formatPrice(item.price)}
                     </span>
                   </div>
 
                   <div>
-                    <h3 className="text-[0.98rem] font-semibold tracking-[-0.02em] text-slate-950 line-clamp-2">
+                    <h3 className="text-sm font-semibold tracking-[-0.02em] text-slate-950 line-clamp-2 sm:text-[0.95rem]">
                       {item.title || "Untitled listing"}
                     </h3>
-                    {item.description ? (
-                      <p className="mt-1 text-[13px] leading-5 text-slate-600 line-clamp-2">
-                        {descriptionSnippet(item.description, 120)}
-                      </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 text-xs text-slate-500">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1">
+                      <Tag className="h-3 w-3 text-[#6a3df0]" />
+                      {categoryLabel}
+                    </span>
+                    {item.city ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1">
+                        <MapPin className="h-3 w-3 text-[#6a3df0]" />
+                        {item.city}
+                      </span>
                     ) : null}
                   </div>
 
                   <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-                    <span className="text-base font-semibold text-slate-950">
-                      {formatPrice(item.price)}
-                    </span>
+                    <span className="text-xs text-slate-400">View details</span>
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-[#5b37d6]">
-                      View
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                      Open
+                      <ArrowUpRight className="h-3 w-3" />
                     </span>
                   </div>
                 </div>
