@@ -37,12 +37,13 @@ function NavItem({
   closeMenus,
   badgeCount,
   disabled = false,
+  prefetch,
   ...rest
 }) {
   return (
     <Link
       href={href}
-      prefetch={href === "/business" ? false : undefined}
+      prefetch={prefetch ?? (href === "/business" ? false : undefined)}
       onClick={(e) => {
         if (disabled) {
           e.preventDefault();
@@ -230,6 +231,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
       description: "Reply to customer inquiries",
       icon: MessageSquare,
       showBadge: true,
+      prefetch: true,
     },
     {
       href: "/business/listings",

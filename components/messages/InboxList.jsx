@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import SafeAvatar from "@/components/SafeAvatar";
 import { getAvatarUrl, getDisplayName, getUnreadCount } from "@/lib/messages";
 
 function formatPreviewTime(value) {
@@ -21,10 +23,49 @@ export default function InboxList({
   basePath,
   loading,
 }) {
+  const router = useRouter();
+
+  const prefetchConversation = (conversationId) => {
+    if (!conversationId) return;
+    router.prefetch(`${basePath}/${conversationId}`);
+  };
+
+  const primeConversationIdentity = (conversation) => {
+    if (typeof window === "undefined" || !conversation?.id) return;
+    const otherProfile =
+      role === "business" ? conversation.customer : conversation.business;
+    const payload = {
+      name: getDisplayName(otherProfile),
+      avatarUrl: getAvatarUrl(otherProfile),
+    };
+    window.sessionStorage.setItem(
+      `yb-conversation-header:${conversation.id}`,
+      JSON.stringify(payload)
+    );
+  };
+
   if (loading) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/70">
-        Loading messages...
+      <div className="rounded-[28px] border border-white/10 bg-white/5 p-1.5 md:p-2">
+        <div className="space-y-2 p-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="rounded-[24px] border border-white/5 bg-white/5 px-4 py-3 md:px-5 md:py-4"
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-white/10" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="h-4 w-36 rounded-full bg-white/10" />
+                    <div className="h-3 w-20 rounded-full bg-white/10" />
+                  </div>
+                  <div className="mt-3 h-3 w-2/3 rounded-full bg-white/10" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -52,13 +93,32 @@ export default function InboxList({
             <Link
               key={conversation.id}
               href={`${basePath}/${conversation.id}`}
+              prefetch
+              onMouseEnter={() => {
+                prefetchConversation(conversation.id);
+                primeConversationIdentity(conversation);
+              }}
+              onFocus={() => {
+                prefetchConversation(conversation.id);
+                primeConversationIdentity(conversation);
+              }}
+              onMouseDown={() => {
+                prefetchConversation(conversation.id);
+                primeConversationIdentity(conversation);
+              }}
+              onTouchStart={() => {
+                prefetchConversation(conversation.id);
+                primeConversationIdentity(conversation);
+              }}
               className="group block rounded-[24px] border border-transparent bg-white/0 px-4 py-3 transition hover:border-white/10 hover:bg-white/10 md:px-5 md:py-4"
             >
               <div className="flex items-center gap-4">
-                <img
+                <SafeAvatar
                   src={getAvatarUrl(otherProfile)}
+                  name={displayName}
                   alt={displayName}
                   className="h-12 w-12 rounded-2xl object-cover border border-white/10"
+                  initialsClassName="text-[13px]"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-3">

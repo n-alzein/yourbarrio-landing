@@ -37,10 +37,12 @@ export async function fetchConversations({
   supabase,
   userId,
   role,
+  onTiming = null,
 }: {
   supabase?: any;
   userId: string;
   role: "customer" | "business";
+  onTiming?: ((payload: Record<string, unknown>) => void | Promise<void>) | null;
 }) {
   const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return [];
@@ -51,7 +53,7 @@ export async function fetchConversations({
   const startTime = diagEnabled ? Date.now() : 0;
 
   const idField = role === "business" ? "business_id" : "customer_id";
-  // Avoid embedded joins to reduce RLS overhead and slow query plans.
+  const queryStart = typeof performance !== "undefined" ? performance.now() : Date.now();
   const { data, error } = await client
     .from("conversations")
     .select(
@@ -68,18 +70,31 @@ export async function fetchConversations({
     .eq(idField, userId)
     .order("last_message_at", { ascending: false })
     .limit(CONVERSATION_PAGE_SIZE);
+  const queryMs =
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+    queryStart;
 
   if (error) throw error;
   const rows = Array.isArray(data) ? data : [];
+  const profileIds =
+    role === "business"
+      ? rows.map((row) => row.customer_id)
+      : rows.map((row) => row.business_id);
+  const profileStart = typeof performance !== "undefined" ? performance.now() : Date.now();
   const profiles = await fetchProfilesByIds({
     supabase: client,
-    ids: rows.flatMap((row) => [row.customer_id, row.business_id]),
+    ids: profileIds,
   });
+  const profileMs =
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+    profileStart;
 
   const conversations = rows.map((row) => ({
     ...row,
-    customer: profiles[row.customer_id] ?? null,
-    business: profiles[row.business_id] ?? null,
+    customer:
+      role === "business" ? profiles[row.customer_id] ?? null : null,
+    business:
+      role === "customer" ? profiles[row.business_id] ?? null : null,
   }));
 
   if (diagEnabled && typeof window !== "undefined") {
@@ -93,6 +108,16 @@ export async function fetchConversations({
     });
   }
 
+  if (typeof onTiming === "function") {
+    await onTiming({
+      role,
+      conversationCount: conversations.length,
+      queryMs: Math.round(queryMs),
+      profileMs: Math.round(profileMs),
+      totalMs: Math.round(queryMs + profileMs),
+    });
+  }
+
   return conversations;
 }
 
@@ -103,10 +128,104 @@ export async function fetchConversationById({
   supabase?: any;
   conversationId: string;
 }) {
+  const data = await fetchConversationBaseById({
+    supabase,
+    conversationId,
+  });
+  if (!data) return null;
+
+  return hydrateConversationProfiles({
+    supabase,
+    conversation: data,
+  });
+}
+
+export async function fetchConversationWithMessages({
+  supabase,
+  conversationId,
+  limit = MESSAGE_PAGE_SIZE,
+  profileRole = null,
+  onTiming = null,
+}: {
+  supabase?: any;
+  conversationId: string;
+  limit?: number;
+  profileRole?: "customer" | "business" | null;
+  onTiming?: ((payload: Record<string, unknown>) => void | Promise<void>) | null;
+}) {
+  const client = supabase ?? getSupabaseBrowserClient();
+  if (!client) return { conversation: null, messages: [] };
+
+  const conversationStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const conversation = await fetchConversationBaseById({
+    supabase: client,
+    conversationId,
+  });
+  const conversationLookupMs =
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+    conversationStart;
+
+  if (!conversation) {
+    if (typeof onTiming === "function") {
+      await onTiming({
+        outcome: "not_found",
+        conversationLookupMs: Math.round(conversationLookupMs),
+        totalMs: Math.round(conversationLookupMs),
+      });
+    }
+    return { conversation: null, messages: [] };
+  }
+
+  const hydrateStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const messageStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const [hydratedConversation, messages] = await Promise.all([
+    hydrateConversationProfiles({
+      supabase: client,
+      conversation,
+      profileRole,
+    }),
+    fetchMessages({
+      supabase: client,
+      conversationId,
+      limit,
+    }),
+  ]);
+  const profileHydrationMs =
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+    hydrateStart;
+  const messagesQueryMs =
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+    messageStart;
+
+  if (typeof onTiming === "function") {
+    await onTiming({
+      profileRole,
+      conversationLookupMs: Math.round(conversationLookupMs),
+      profileHydrationMs: Math.round(profileHydrationMs),
+      messagesQueryMs: Math.round(messagesQueryMs),
+      messageCount: messages.length,
+      totalMs: Math.round(
+        conversationLookupMs + Math.max(profileHydrationMs, messagesQueryMs)
+      ),
+    });
+  }
+
+  return {
+    conversation: hydratedConversation,
+    messages,
+  };
+}
+
+async function fetchConversationBaseById({
+  supabase,
+  conversationId,
+}: {
+  supabase?: any;
+  conversationId: string;
+}) {
   const client = supabase ?? getSupabaseBrowserClient();
   if (!client) return null;
 
-  // Avoid embedded joins to reduce RLS overhead and slow query plans.
   const { data, error } = await client
     .from("conversations")
     .select(
@@ -124,18 +243,56 @@ export async function fetchConversationById({
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) return null;
+  return data ?? null;
+}
+
+async function hydrateConversationProfiles({
+  supabase,
+  conversation,
+  profileRole = null,
+}: {
+  supabase?: any;
+  conversation: any;
+  profileRole?: "customer" | "business" | null;
+}) {
+  const client = supabase ?? getSupabaseBrowserClient();
+  if (!client || !conversation) return conversation ?? null;
+  const ids =
+    profileRole === "business"
+      ? [conversation.business_id]
+      : profileRole === "customer"
+        ? [conversation.customer_id]
+        : [conversation.customer_id, conversation.business_id];
 
   const profiles = await fetchProfilesByIds({
     supabase: client,
-    ids: [data.customer_id, data.business_id],
+    ids,
   });
 
   return {
-    ...data,
-    customer: profiles[data.customer_id] ?? null,
-    business: profiles[data.business_id] ?? null,
+    ...conversation,
+    customer:
+      profileRole && profileRole !== "customer"
+        ? null
+        : profiles[conversation.customer_id] ?? null,
+    business:
+      profileRole && profileRole !== "business"
+        ? null
+        : profiles[conversation.business_id] ?? null,
   };
+}
+
+export function getOtherConversationProfile({
+  conversation,
+  currentUserId,
+}: {
+  conversation?: any;
+  currentUserId?: string | null;
+}) {
+  if (!conversation) return null;
+  return conversation.customer_id === currentUserId
+    ? conversation.business ?? null
+    : conversation.customer ?? null;
 }
 
 export async function fetchMessages({

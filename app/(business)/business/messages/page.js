@@ -1,146 +1,52 @@
-"use client";
+import BusinessMessagesInboxClient from "@/components/messages/BusinessMessagesInboxClient";
+import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
+import { fetchConversations } from "@/lib/messages";
+import { createServerTiming, logServerTiming, perfTimingEnabled } from "@/lib/serverTiming";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
-import { retry } from "@/lib/retry";
-import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
-import InboxList from "@/components/messages/InboxList";
-import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
+export default async function BusinessMessagesPage() {
+  const timing = createServerTiming("biz_msg_page_");
+  const totalStart = timing.start();
+  let initialConversations = [];
+  let initialError = null;
+  let initialUserId = null;
 
-export default function BusinessMessagesPage() {
-  const { user, supabase, loadingUser, authStatus } = useAuth();
-  const userId = user?.id || null;
-
-  const [hydrated, setHydrated] = useState(false);
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const requestIdRef = useRef(0);
-  const hasLoadedRef = useRef(false);
-  const [isVisible, setIsVisible] = useState(
-    typeof document === "undefined" ? true : !document.hidden
-  );
-  const applyLocalRead = useCallback((rows = []) => {
-    if (typeof window === "undefined") return rows;
-    const lastOpenedId = window.sessionStorage.getItem(
-      "yb-last-opened-conversation"
-    );
-    if (!lastOpenedId) return rows;
-    const nextRows = rows.map((row) =>
-      row?.id === lastOpenedId
-        ? { ...row, business_unread_count: 0 }
-        : row
-    );
-    window.sessionStorage.removeItem("yb-last-opened-conversation");
-    return nextRows;
-  }, []);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    hasLoadedRef.current = false;
-    setHasLoaded(false);
-  }, [userId]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const handleVisibility = () => setIsVisible(!document.hidden);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, []);
-
-  const loadConversations = useCallback(async () => {
-    if (!userId || authStatus !== "authenticated") return;
-    const requestId = ++requestIdRef.current;
-    // Only show loading if we haven't loaded conversations yet
-    setLoading((prev) => (hasLoadedRef.current ? prev : true));
-    setError(null);
-    try {
-      // AuthProvider handles session management, we just fetch data
-      const response = await retry(
-        () =>
-          fetchWithTimeout("/api/business/conversations", {
-            method: "GET",
-            credentials: "include",
-            timeoutMs: 12000,
-          }),
-        { retries: 1, delayMs: 600 }
-      );
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to load conversations");
-      }
-
-      const payload = await response.json();
-      const data = Array.isArray(payload?.conversations)
-        ? payload.conversations
-        : [];
-      if (requestId !== requestIdRef.current) return;
-      setConversations(applyLocalRead(data));
-      setHasLoaded(true);
-      hasLoadedRef.current = true;
-    } catch (err) {
-      console.error("Failed to load conversations", err);
-
-      if (requestId === requestIdRef.current) {
-        setError("We couldn't load your messages. Please try again.");
-      }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [applyLocalRead, authStatus, userId]);
-
-  useEffect(() => {
-    // Wait until auth is fully loaded and we have a userId
-    if (!hydrated || (!userId && loadingUser)) return;
-    if (authStatus !== "authenticated") return;
-    if (!isVisible && hasLoadedRef.current) return;
-    loadConversations();
-  }, [authStatus, hydrated, loadingUser, userId, loadConversations, isVisible]);
-
-  const buildConversationsChannel = useCallback(
-    (activeClient) =>
-      activeClient
-        .channel(`conversations-business-${userId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "conversations",
-            filter: `business_id=eq.${userId}`,
-          },
-          () => {
-            loadConversations();
-          }
-        ),
-    [userId, loadConversations]
-  );
-
-  useRealtimeChannel({
-    supabase,
-    enabled:
-      hydrated &&
-      !loadingUser &&
-      authStatus === "authenticated" &&
-      Boolean(userId),
-    buildChannel: buildConversationsChannel,
-    diagLabel: "business-conversations",
+  const access = await getBusinessDataClientForRequest({
+    includeEffectiveProfile: false,
+    ensureVendorMembership: false,
+    timingLabel: "business-messages-access",
   });
 
-  const intro = useMemo(
-    () =>
-      "Stay connected with customers, confirm orders, and follow up on leads from your inbox.",
-    []
-  );
+  if (!access.ok) {
+    initialError = "We couldn't load your messages. Please try again.";
+  } else {
+    initialUserId = access.effectiveUserId;
+    try {
+      initialConversations = await fetchConversations({
+        supabase: access.client,
+        userId: access.effectiveUserId,
+        role: "business",
+        onTiming: async (payload) => {
+          if (!(await perfTimingEnabled())) return;
+          await logServerTiming("business-messages-inbox-data", payload);
+        },
+      });
+    } catch (err) {
+      console.error("Failed to load business conversations on the server", err);
+      initialError = "We couldn't load your messages. Please try again.";
+    }
+  }
 
-  const conversationCount = conversations.length;
+  const intro =
+    "Stay connected with customers, confirm orders, and follow up on leads from your inbox.";
+
+  if (await perfTimingEnabled()) {
+    const totalRenderMs = timing.end("total", totalStart);
+    await logServerTiming("business-messages-page", {
+      conversationCount: initialConversations.length,
+      totalRenderMs: Math.round(totalRenderMs),
+      timing: timing.header(),
+    });
+  }
 
   return (
     <section className="relative w-full min-h-screen pt-6 md:pt-8 text-white overflow-hidden -mt-8 md:-mt-12 pb-12 md:pb-16">
@@ -151,45 +57,13 @@ export default function BusinessMessagesPage() {
       </div>
 
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
-        <div className="max-w-5xl mx-auto space-y-8">
-          <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 md:p-8 backdrop-blur">
-            <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">
-              Inbox
-            </p>
-            <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="text-3xl md:text-4xl font-semibold text-white">
-                  Messages
-                </h1>
-                <p className="text-sm text-white/60 mt-2 max-w-2xl">{intro}</p>
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
-                {conversationCount} chats
-              </div>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
-              <span>{error}</span>
-              <button
-                type="button"
-                onClick={loadConversations}
-                className="rounded-full border border-rose-200/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-rose-100 hover:text-white"
-              >
-                Try again
-              </button>
-            </div>
-          ) : null}
-
-          <div className="mt-4 md:mt-6">
-            <InboxList
-              conversations={conversations}
-              role="business"
-              basePath="/business/messages"
-              loading={loading}
-            />
-          </div>
+        <div className="max-w-5xl mx-auto">
+          <BusinessMessagesInboxClient
+            initialConversations={initialConversations}
+            initialError={initialError}
+            initialUserId={initialUserId}
+            intro={intro}
+          />
         </div>
       </div>
     </section>

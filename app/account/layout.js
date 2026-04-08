@@ -5,6 +5,7 @@ import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AccountNavPerf from "@/components/debug/AccountNavPerf";
 import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginPrompt";
+import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
 import { getServerAuth, requireRole } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
@@ -93,7 +94,9 @@ export default async function AccountLayout({ children }) {
       <InactivityLogout />
       <AccountNavPerf />
       <AccountShell className={`account-shell${isSafari ? " yb-safari" : ""}`}>
-        <Suspense fallback={null}>{children}</Suspense>
+        <Suspense fallback={null}>
+          <CustomerRealtimeProvider>{children}</CustomerRealtimeProvider>
+        </Suspense>
       </AccountShell>
     </>
   );

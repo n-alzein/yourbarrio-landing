@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Landmark, Loader2, PackagePlus, ShoppingBag } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import DateRangeControls from "@/components/DateRangeControls";
 import TopProductsTable from "@/components/TopProductsTable";
 import RecentOrders from "@/components/RecentOrders";
@@ -30,12 +30,26 @@ const ProfileViewsChart = dynamic(
   }
 );
 
-type DashboardStatus = "loading" | "ready" | "error";
 type StripeConnectStatus = BusinessStripeStatus;
+type DashboardFetchState = "idle" | "loading" | "refreshing" | "error";
+type SetupItem = {
+  id: string;
+  label: string;
+  complete: boolean;
+};
 
 const DEFAULT_FILTERS: DashboardFilters = {
   categories: [],
 };
+const DASHBOARD_CACHE_KEY = "yb:business-dashboard:v1";
+const DASHBOARD_SKELETON_DELAY_MS = 200;
+const DEFAULT_SETUP_ITEMS: SetupItem[] = [
+  { id: "profile", label: "Profile complete", complete: false },
+  { id: "product", label: "First product", complete: false },
+  { id: "profile_visibility", label: "Profile ready", complete: false },
+];
+
+let dashboardMemoryCache: DashboardData | null = null;
 
 const startOfLocalDay = (date: Date) =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
@@ -104,6 +118,46 @@ const DashboardErrorState = ({ onRetry }: { onRetry: () => void }) => (
   </div>
 );
 
+const readDashboardCache = () => {
+  if (dashboardMemoryCache) return dashboardMemoryCache;
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DashboardData;
+    dashboardMemoryCache = parsed;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeDashboardCache = (nextData: DashboardData) => {
+  dashboardMemoryCache = nextData;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(nextData));
+  } catch {
+    // Ignore storage failures and keep the in-memory cache.
+  }
+};
+
+function useDelayedVisibility(active: boolean, delayMs = DASHBOARD_SKELETON_DELAY_MS) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!active) {
+      const resetTimeout = window.setTimeout(() => setVisible(false), 0);
+      return () => window.clearTimeout(resetTimeout);
+    }
+
+    const timeout = window.setTimeout(() => setVisible(true), delayMs);
+    return () => window.clearTimeout(timeout);
+  }, [active, delayMs]);
+
+  return active && visible;
+}
+
 function PanelSkeleton({ className = "" }: { className?: string }) {
   return (
     <div
@@ -112,6 +166,51 @@ function PanelSkeleton({ className = "" }: { className?: string }) {
       <div className="h-3 w-24 animate-pulse rounded-md bg-slate-200" />
       <div className="mt-3 h-8 w-40 animate-pulse rounded-md bg-slate-100" />
       <div className="mt-5 h-32 animate-pulse rounded-[18px] bg-slate-100" />
+    </div>
+  );
+}
+
+function SectionShell({
+  className = "",
+  showSkeleton = false,
+  lines = 3,
+}: {
+  className?: string;
+  showSkeleton?: boolean;
+  lines?: number;
+}) {
+  return (
+    <div className={`dashboard-panel p-5 sm:p-6 ${className}`}>
+      <div className="h-3 w-24 rounded-md bg-slate-200/70" />
+      <div className="mt-3 h-8 w-40 rounded-md bg-slate-100/80" />
+      <div className="mt-5 space-y-3">
+        {Array.from({ length: lines }).map((_, index) => (
+          <div
+            key={index}
+            className={`h-10 rounded-[14px] bg-slate-100/85 ${
+              showSkeleton ? "animate-pulse" : ""
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContentFade({
+  ready,
+  children,
+}: {
+  ready: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`transition-opacity duration-200 ${
+        ready ? "opacity-100" : "opacity-80"
+      }`}
+    >
+      {children}
     </div>
   );
 }
@@ -179,27 +278,6 @@ function InsightCard({
           <ArrowRight className="h-4 w-4" />
         </Link>
       ) : null}
-    </div>
-  );
-}
-
-function DashboardLoadingState() {
-  return (
-    <div className="space-y-6">
-      <PanelSkeleton className="h-[220px]" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PanelSkeleton className="h-[92px]" />
-        <PanelSkeleton className="h-[92px]" />
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <PanelSkeleton className="h-[174px]" />
-        <PanelSkeleton className="h-[174px]" />
-        <PanelSkeleton className="h-[174px]" />
-      </div>
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <PanelSkeleton className="h-[360px]" />
-        <PanelSkeleton className="h-[360px]" />
-      </div>
     </div>
   );
 }
@@ -292,9 +370,11 @@ function StripeStatusCard({
 }
 
 const DashboardPage = () => {
-  const [status, setStatus] = useState<DashboardStatus>("loading");
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [data, setData] = useState<DashboardData | null>(() => dashboardMemoryCache);
+  const [fetchState, setFetchState] = useState<DashboardFetchState>(() =>
+    dashboardMemoryCache ? "refreshing" : "loading"
+  );
+  const [loadError, setLoadError] = useState("");
   const [dateRange, setDateRange] = useState<DateRangeKey>("30d");
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
   const [reloadKey, setReloadKey] = useState(0);
@@ -302,13 +382,28 @@ const DashboardPage = () => {
   const [stripeLoading, setStripeLoading] = useState(true);
   const [stripeError, setStripeError] = useState("");
   const [stripeActionLoading, setStripeActionLoading] = useState(false);
+  const hasDataRef = useRef(Boolean(data));
+  const showSectionSkeletons = useDelayedVisibility(!data && fetchState === "loading");
+
+  useEffect(() => {
+    hasDataRef.current = Boolean(data);
+  }, [data]);
+
+  useEffect(() => {
+    if (data) return;
+    const cachedData = readDashboardCache();
+    if (!cachedData) return;
+    setData(cachedData);
+    setFetchState("refreshing");
+  }, [data]);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadDashboard = async () => {
       if (!cancelled) {
-        setStatus((current) => (current === "ready" ? "ready" : "loading"));
+        setFetchState(hasDataRef.current ? "refreshing" : "loading");
+        setLoadError("");
       }
       const { from, to } = resolveDateRange(dateRange);
       const query = new URLSearchParams({
@@ -329,12 +424,13 @@ const DashboardPage = () => {
         const payload = (await response.json()) as DashboardData;
         if (cancelled) return;
         setData(payload);
-        setCategories(payload.categories ?? []);
-        setStatus("ready");
+        writeDashboardCache(payload);
+        setFetchState("idle");
       } catch (err) {
         if (cancelled) return;
         console.error("Dashboard load failed", err);
-        setStatus("error");
+        setLoadError("We could not load your dashboard.");
+        setFetchState(hasDataRef.current ? "idle" : "error");
       }
     };
 
@@ -399,20 +495,23 @@ const DashboardPage = () => {
   };
 
   const dashboardState = useMemo(() => {
-    if (!data) return null;
+    const source = data;
+    const totalSales = source ? sumSeries(source.salesTimeSeries) : 0;
+    const totalViews = source
+      ? typeof source.viewCount === "number"
+        ? source.viewCount
+        : sumSeries(source.profileViewsTimeSeries)
+      : 0;
+    const totalOrders = source ? source.orderCount ?? source.recentOrders.length : 0;
+    const listingCount = source?.listingCount ?? 0;
 
-    const totalSales = sumSeries(data.salesTimeSeries);
-    const totalViews = typeof data.viewCount === "number" ? data.viewCount : sumSeries(data.profileViewsTimeSeries);
-    const totalOrders = data.orderCount ?? data.recentOrders.length;
-    const listingCount = data.listingCount ?? 0;
-
-    const salesHasChart = hasMeaningfulSeries(data.salesTimeSeries);
-    const viewsHasChart = hasMeaningfulSeries(data.profileViewsTimeSeries);
+    const salesHasChart = source ? hasMeaningfulSeries(source.salesTimeSeries) : false;
+    const viewsHasChart = source ? hasMeaningfulSeries(source.profileViewsTimeSeries) : false;
 
     const setupItems = [
-      { id: "profile", label: "Profile complete", complete: Boolean(data.businessName) },
+      { id: "profile", label: "Profile complete", complete: Boolean(source?.businessName) },
       { id: "product", label: "First product", complete: listingCount > 0 },
-      { id: "profile_visibility", label: "Profile ready", complete: Boolean(data.businessName) },
+      { id: "profile_visibility", label: "Profile ready", complete: Boolean(source?.businessName) },
     ];
 
     const quickActions = [
@@ -477,6 +576,14 @@ const DashboardPage = () => {
     };
   }, [data, dateRange]);
 
+  const categories = data?.categories ?? [];
+  const hasDashboardData = Boolean(data && dashboardState);
+  const showFatalError = fetchState === "error" && !hasDashboardData;
+  const dashboardLastUpdated = data?.lastUpdated ?? "Just now";
+  const dashboardName = data?.businessName;
+  const dashboardAvatarUrl = data?.businessAvatarUrl ?? null;
+  const setupItems = dashboardState?.setupItems ?? DEFAULT_SETUP_ITEMS;
+
   return (
     <main
       className="business-theme min-h-screen -mt-8 px-4 pb-20 pt-10 sm:px-6 md:-mt-10"
@@ -486,62 +593,83 @@ const DashboardPage = () => {
       }}
     >
       <div className="mx-auto flex max-w-7xl flex-col gap-6 sm:gap-[1.625rem]">
-        {status === "loading" ? (
-          <DashboardLoadingState />
-        ) : null}
-
-        {status === "error" ? (
+        {showFatalError ? (
           <DashboardErrorState onRetry={() => setReloadKey((prev) => prev + 1)} />
-        ) : null}
-
-            {status === "ready" && data && dashboardState ? (
+        ) : (
           <>
             <DateRangeControls
               dateRange={dateRange}
               filters={filters}
               categories={categories}
-              businessName={data.businessName}
-              businessAvatarUrl={data.businessAvatarUrl}
-              lastUpdated={data.lastUpdated ?? "Just now"}
-              setupItems={dashboardState.setupItems}
+              businessName={dashboardName}
+              businessAvatarUrl={dashboardAvatarUrl}
+              lastUpdated={dashboardLastUpdated}
+              setupItems={setupItems}
               onDateRangeChange={setDateRange}
               onFiltersChange={setFilters}
             />
 
-            <StripeStatusCard
-              status={stripeStatus}
-              loading={stripeLoading}
-              actionLoading={stripeActionLoading}
-              error={stripeError}
-              onAction={handleStripeAction}
-              onRetry={loadStripeStatus}
-            />
+            {loadError && hasDashboardData ? (
+              <div className="rounded-[14px] border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-800">
+                {loadError}
+              </div>
+            ) : null}
 
-            <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {dashboardState.quickActions.map((action) => (
-                <QuickActionCard
-                  key={action.title}
-                  href={action.href}
-                  title={action.title}
-                  detail={action.detail}
-                  icon={action.icon}
-                />
-              ))}
-            </section>
+            <ContentFade ready={hasDashboardData}>
+              <StripeStatusCard
+                status={stripeStatus}
+                loading={stripeLoading}
+                actionLoading={stripeActionLoading}
+                error={stripeError}
+                onAction={handleStripeAction}
+                onRetry={loadStripeStatus}
+              />
+            </ContentFade>
 
-            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              {dashboardState.kpiCards.map((card) => (
-                <InsightCard
-                  key={card.label}
-                  label={card.label}
-                  value={card.value}
-                  helper={card.helper}
-                  action={card.action}
-                />
-              ))}
-            </section>
+            {hasDashboardData && dashboardState ? (
+              <ContentFade ready>
+                <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {dashboardState.quickActions.map((action) => (
+                    <QuickActionCard
+                      key={action.title}
+                      href={action.href}
+                      title={action.title}
+                      detail={action.detail}
+                      icon={action.icon}
+                    />
+                  ))}
+                </section>
+              </ContentFade>
+            ) : (
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <SectionShell className="h-[92px]" showSkeleton={showSectionSkeletons} lines={1} />
+                <SectionShell className="h-[92px]" showSkeleton={showSectionSkeletons} lines={1} />
+              </section>
+            )}
 
-            {dashboardState.salesHasChart || dashboardState.viewsHasChart ? (
+            {hasDashboardData && dashboardState ? (
+              <ContentFade ready>
+                <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  {dashboardState.kpiCards.map((card) => (
+                    <InsightCard
+                      key={card.label}
+                      label={card.label}
+                      value={card.value}
+                      helper={card.helper}
+                      action={card.action}
+                    />
+                  ))}
+                </section>
+              </ContentFade>
+            ) : (
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
+                <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
+                <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
+              </section>
+            )}
+
+            {hasDashboardData && dashboardState && data && (dashboardState.salesHasChart || dashboardState.viewsHasChart) ? (
               <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 <div className="min-w-0">
                   {dashboardState.salesHasChart ? (
@@ -568,18 +696,33 @@ const DashboardPage = () => {
                   )}
                 </div>
               </section>
+            ) : !hasDashboardData ? (
+              <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <SectionShell className="h-[320px]" showSkeleton={showSectionSkeletons} lines={3} />
+                <SectionShell className="h-[320px]" showSkeleton={showSectionSkeletons} lines={3} />
+              </section>
             ) : null}
 
-            <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <div className="min-w-0">
-                <TopProductsTable products={data.topProducts} />
-              </div>
-              <div className="min-w-0">
-                <RecentOrders orders={data.recentOrders} />
-              </div>
-            </section>
+            {hasDashboardData && data ? (
+              <ContentFade ready>
+                <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div className="min-w-0">
+                    <TopProductsTable products={data.topProducts} />
+                  </div>
+                  <div className="min-w-0">
+                    <RecentOrders orders={data.recentOrders} />
+                  </div>
+                </section>
+              </ContentFade>
+            ) : null}
+            {!hasDashboardData ? (
+              <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <SectionShell className="h-[360px]" showSkeleton={showSectionSkeletons} lines={4} />
+                <SectionShell className="h-[360px]" showSkeleton={showSectionSkeletons} lines={4} />
+              </section>
+            ) : null}
           </>
-        ) : null}
+        )}
       </div>
     </main>
   );

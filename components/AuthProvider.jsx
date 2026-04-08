@@ -78,8 +78,13 @@ const AuthContext = createContext({
   supportModeActive: false,
 });
 
-const resolveRole = (profile) => {
-  return normalizePublicUserRole(profile?.role);
+const resolveRole = (profile, user = null, fallbackRole = null) => {
+  return (
+    normalizePublicUserRole(profile?.role) ||
+    normalizePublicUserRole(user?.app_metadata?.role) ||
+    normalizePublicUserRole(user?.user_metadata?.role) ||
+    normalizePublicUserRole(fallbackRole)
+  );
 };
 
 const isPublicBusinessPath = (pathname) => {

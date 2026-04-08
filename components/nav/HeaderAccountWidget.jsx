@@ -12,7 +12,7 @@ import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
 import CartNavActionClient from "@/components/nav/CartNavActionClient";
 import AccountMenuItems from "@/components/nav/AccountMenuItems";
 import AccountSidebar from "@/components/nav/AccountSidebar";
-import { fetchUnreadTotal } from "@/lib/messages";
+import { fetchUnreadTotal, getUnreadCount } from "@/lib/messages";
 import { getBusinessDisplayName } from "@/lib/auth/displayName";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -122,16 +122,39 @@ export default function HeaderAccountWidget({
     (authStatus === "authenticated" || (authStatus === "loading" && hasAuth));
   const loadUnreadCount = useCallback(async () => {
     const activeClient = supabase ?? getSupabaseBrowserClient();
-    if (!activeClient || !canLoadUnread) {
+    if (!canLoadUnread) {
       return;
     }
     const requestId = ++unreadRequestIdRef.current;
     try {
-      const total = await fetchUnreadTotal({
-        supabase: activeClient,
-        userId: unreadUserId,
-        role: "customer",
-      });
+      let total = 0;
+
+      try {
+        const response = await fetch("/api/customer/conversations", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error(`customer_conversations_${response.status}`);
+        }
+        const payload = await response.json();
+        const conversations = Array.isArray(payload?.conversations)
+          ? payload.conversations
+          : [];
+        total = conversations.reduce(
+          (sum, conversation) => sum + getUnreadCount(conversation, "customer"),
+          0
+        );
+      } catch {
+        if (!activeClient) throw new Error("missing_supabase_client");
+        total = await fetchUnreadTotal({
+          supabase: activeClient,
+          userId: unreadUserId,
+          role: "customer",
+        });
+      }
+
       if (requestId !== unreadRequestIdRef.current) return;
       setUnreadCount(total);
     } catch {

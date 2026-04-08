@@ -94,13 +94,7 @@ export default async function BusinessLayout({ children }) {
       <InactivityLogout />
       <BusinessRouteShell>
           <Suspense
-            fallback={
-              <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)]">
-                <div className="max-w-5xl mx-auto rounded-2xl border border-[var(--yb-border)] bg-white p-8">
-                  Loading business workspace...
-                </div>
-              </div>
-          }
+            fallback={null}
         >
           {children}
         </Suspense>
