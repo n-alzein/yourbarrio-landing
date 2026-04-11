@@ -4,23 +4,32 @@ import { useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { markNavInProgress } from "@/lib/nav/safariNavGuard";
+import { HOMEPAGE_CATEGORY_FALLBACK_IMAGE } from "@/lib/homepage/categories";
 
 const FALLBACK_TILES = Array.from({ length: 8 });
 const CATEGORY_IMAGE_POSITIONS = {
+  "art-handmade": "center center",
   "arts-and-crafts": "center center",
   automotive: "center center",
   "baby-and-maternity": "center 35%",
+  "beauty-personal-care": "center 28%",
   "books-and-media": "center 32%",
+  "books-stationery": "center 32%",
   "clothing-and-accessories": "center 28%",
+  "clothing-fashion": "center 28%",
   "fitness-and-wellness": "center 30%",
   "food-and-drink": "center 38%",
+  "flowers-plants": "center 35%",
   furniture: "center center",
   "garden-and-outdoor": "center 35%",
+  "gifts-crafts": "center center",
   "grocery-and-gourmet": "center 40%",
   "handmade-and-artisan": "center 30%",
   "health-and-beauty": "center 28%",
   "home-and-kitchen": "center 34%",
+  "home-decor": "center 34%",
   "jewelry-and-watches": "center 25%",
+  "jewelry-accessories": "center 25%",
   "kids-and-family": "center 30%",
   photography: "center center",
   shoes: "center 36%",
@@ -85,7 +94,7 @@ export default function CategoryTilesGrid({
             <div className="h-7 w-44 rounded-full bg-black/8 animate-pulse" />
             <div className="h-10 w-24 rounded-full bg-black/8 animate-pulse" />
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 lg:mx-auto lg:max-w-5xl lg:grid-cols-3 lg:gap-5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-3 lg:gap-5">
             {FALLBACK_TILES.map((_, idx) => (
               <div
                 key={`tile-skeleton-${idx}`}
@@ -122,7 +131,7 @@ export default function CategoryTilesGrid({
   return (
     <div className="mx-auto w-full max-w-none">
       <section className="py-6 lg:pb-6 lg:pt-4">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 sm:mb-5 md:mb-6 lg:mx-auto lg:max-w-5xl lg:items-center lg:gap-x-4 lg:gap-y-2">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-x-5 gap-y-3 sm:mb-5 md:mb-6 lg:items-center lg:gap-x-4 lg:gap-y-2">
           <div className="max-w-[34rem]">
             <p className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-[rgba(88,28,135,0.8)]">
               Browse local
@@ -145,7 +154,7 @@ export default function CategoryTilesGrid({
           ) : null}
         </div>
         <div
-          className="yb-tile-scroll-guard-y grid grid-cols-2 gap-x-4 gap-y-6 lg:mx-auto lg:max-w-5xl lg:grid-cols-3 lg:gap-5"
+          className="yb-tile-scroll-guard-y grid grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-3 lg:gap-5"
           onPointerDown={onTilePointerDown}
           onPointerMove={onTilePointerMove}
           onPointerUp={onTilePointerUp}
@@ -154,10 +163,12 @@ export default function CategoryTilesGrid({
           data-home-category-grid="1"
         >
           {categories.map((category, idx) => {
-            const href = `/categories/${category.slug}`;
-            const tileTitle = category.name || "Category";
+            const href = category.href || `/categories/${category.slug}`;
+            const tileTitle = category.label || category.name || "Category";
             const imageObjectPosition =
               CATEGORY_IMAGE_POSITIONS[category.slug] || "center center";
+            const imageSrc =
+              category.imageSrc || category.tileImageUrl || HOMEPAGE_CATEGORY_FALLBACK_IMAGE;
             return (
               <Link
                 key={category.id ?? category.slug ?? idx}
@@ -215,22 +226,16 @@ export default function CategoryTilesGrid({
                 className="tile group relative isolate block overflow-hidden rounded-[24px] border border-[rgba(255,255,255,0.52)] bg-[#fdfbf8] shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-[4px] hover:shadow-[0_18px_45px_rgba(0,0,0,0.14)] lg:hover:-translate-y-[3px] lg:hover:shadow-[0_16px_36px_rgba(0,0,0,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] pointer-events-auto touch-manipulation"
               >
                 <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[inherit] bg-[linear-gradient(180deg,#d9c7b5_0%,#b59882_100%)] lg:aspect-[4/3]">
-                  {category.tileImageUrl ? (
-                    <Image
-                      src={category.tileImageUrl}
-                      alt={tileTitle}
-                      className="absolute inset-0 h-full w-full object-cover brightness-[1.05] contrast-[1.05] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform group-hover:scale-[1.025] group-focus-visible:scale-[1.025]"
-                      style={{ objectPosition: imageObjectPosition }}
-                      fill
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 33vw"
-                      priority={idx < 3}
-                      decoding="async"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
-                      No image
-                    </div>
-                  )}
+                  <Image
+                    src={imageSrc}
+                    alt={tileTitle}
+                    className="absolute inset-0 h-full w-full object-cover brightness-[1.05] contrast-[1.05] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform group-hover:scale-[1.025] group-focus-visible:scale-[1.025]"
+                    style={{ objectPosition: imageObjectPosition }}
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 33vw"
+                    priority={idx < 3}
+                    decoding="async"
+                  />
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] bg-gradient-to-t from-black/50 via-black/12 to-transparent"

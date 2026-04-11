@@ -1,9 +1,9 @@
 import "server-only";
 
-import { fetchFeaturedCategories, type FeaturedCategory } from "@/lib/strapi";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { getNormalizedLocation } from "@/lib/location/filter";
+import { getHomepageCategories, type HomepageCategory } from "@/lib/homepage/categories";
 
 export type BrowseMode = "public" | "customer";
 
@@ -28,7 +28,7 @@ export type ListingSummary = {
   inventory_last_updated_at?: string | null;
 };
 
-export type CategorySummary = FeaturedCategory;
+export type CategorySummary = HomepageCategory;
 
 export type HomeBrowseData = {
   featuredCategories: CategorySummary[];
@@ -186,30 +186,17 @@ export async function getHomeBrowseData({
   const safeZip = null;
   const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 120) : 80;
 
-  let featuredCategories: FeaturedCategory[] = [];
-  let featuredCategoriesError: string | null = null;
-  const [categoriesResult, listingsResult] = await Promise.all([
-    fetchFeaturedCategories()
-      .then((data) => ({ data, error: null as string | null }))
-      .catch((error) => {
-        console.error("Failed to load featured categories:", error);
-        return {
-          data: [] as FeaturedCategory[],
-          error: "We couldn't load categories right now.",
-        };
-      }),
+  const [featuredCategories, listingsResult] = await Promise.all([
+    Promise.resolve(getHomepageCategories()),
     loadPublicSafeListings({
       location: normalizedLocation,
       limit: safeLimit,
     }).then((listings) => attachBusinessNames(listings)),
   ]);
 
-  featuredCategories = categoriesResult.data;
-  featuredCategoriesError = categoriesResult.error;
-
   return {
     featuredCategories,
-    featuredCategoriesError,
+    featuredCategoriesError: null,
     listings: listingsResult,
     city: safeCity,
     zip: safeZip,

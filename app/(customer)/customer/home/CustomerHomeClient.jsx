@@ -32,6 +32,7 @@ import { logDataDiag } from "@/lib/dataDiagnostics";
 import CategoryTilesGrid from "@/components/customer/CategoryTilesGrid";
 import PopularNearYouSection from "@/components/home/PopularNearYouSection";
 import TrendingListingsSection from "@/components/home/TrendingListingsSection";
+import HomeSectionContainer from "@/components/home/HomeSectionContainer";
 import {
   SellerCTASection,
 } from "@/components/home/HomeDiscoverySections";
@@ -692,7 +693,7 @@ function CustomerHomePageInner({
             limit={8}
           />
           <div className="w-full bg-[#fcfcfd] pb-16 pt-2 md:pb-20 md:pt-3">
-            <div className="mx-auto w-full max-w-6xl px-6 md:px-8">
+            <HomeSectionContainer>
               <div id="browse-categories" className="relative z-10" data-home-tiles="1">
                 <CategoryTilesGrid
                   categories={featuredCategoryList}
@@ -709,7 +710,7 @@ function CustomerHomePageInner({
                   diagTileClick={diagTileClick}
                 />
               </div>
-            </div>
+            </HomeSectionContainer>
             <PopularNearYouSection
               mode={mode}
               title={businessHeading}

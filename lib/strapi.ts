@@ -253,18 +253,6 @@ type CategoryAttributes = {
 
 type CategoryEntity = StrapiEntity<CategoryAttributes> | CategoryAttributes;
 
-export type FeaturedCategory = {
-  id: string;
-  name: string;
-  slug: string;
-  tileSubtitle: string | null;
-  homeOrder: number;
-  tileImageUrl: string | null;
-  tileImageFormats: Record<string, { url?: string | null }> | null;
-  tileColor: string | null;
-};
-
-let cachedFeaturedCategories: FeaturedCategory[] | null = null;
 let cachedBanners: any[] | null = null;
 
 function isStrapiEntity<T extends object>(
@@ -282,7 +270,7 @@ function isStrapiNotFound(error: unknown) {
 function buildFallbackCategory(
   category: { name: string; slug: string },
   index = 0,
-): FeaturedCategory {
+){
   const { name, slug } = category;
   return {
     id: `fallback-${index}-${slug}`,
@@ -294,12 +282,6 @@ function buildFallbackCategory(
     tileImageFormats: null,
     tileColor: null,
   };
-}
-
-function getFallbackCategories() {
-  return BUSINESS_CATEGORIES.map((category, index) =>
-    buildFallbackCategory(category, index),
-  );
 }
 
 function getFallbackCategoryBySlug(slug: string) {
@@ -343,48 +325,6 @@ function normalizeCategoryEntity(entity: CategoryEntity | null | undefined) {
     tileImageFormats: media?.formats ?? null,
     tileColor: attributes?.tileColor ?? null,
   };
-}
-
-export async function fetchFeaturedCategories() {
-  const params = new URLSearchParams();
-  params.set("filters[showOnHome][$eq]", "true");
-  params.set("sort[0]", "homeOrder:asc");
-  params.set("fields[0]", "name");
-  params.set("fields[1]", "slug");
-  params.set("fields[2]", "tileSubtitle");
-  params.set("fields[3]", "homeOrder");
-  params.set("fields[4]", "tileColor");
-  params.set("populate[tileImage]", "true");
-  const path = `/api/categories?${params.toString()}`;
-  if (
-    process.env.NODE_ENV === "development" &&
-    !(globalThis as { __featuredCategoriesLogged?: boolean }).__featuredCategoriesLogged
-  ) {
-    (globalThis as { __featuredCategoriesLogged?: boolean }).__featuredCategoriesLogged = true;
-    const baseUrl = process.env.STRAPI_URL || "";
-    const url = `${baseUrl.replace(/\/+$/, "")}${path}`;
-    console.log("[fetchFeaturedCategories] url:", url);
-  }
-  let data: CategoryEntity[] | null = null;
-  try {
-    data = await strapiFetch<CategoryEntity[]>(path, { revalidate: 60 });
-  } catch (error) {
-    if (cachedFeaturedCategories) {
-      console.warn("[Strapi] categories failed -> using cached categories", error);
-      return cachedFeaturedCategories;
-    }
-    if (!isStrapiNotFound(error)) {
-      console.warn("[Strapi] categories failed -> using fallback", error);
-    }
-    const fallbackCategories = getFallbackCategories();
-    cachedFeaturedCategories = fallbackCategories;
-    return fallbackCategories;
-  }
-  const normalizedCategories = (data ?? [])
-    .map((entity) => normalizeCategoryEntity(entity))
-    .filter((entry): entry is FeaturedCategory => Boolean(entry));
-  cachedFeaturedCategories = normalizedCategories;
-  return normalizedCategories;
 }
 
 export async function fetchCategoryBySlug(slug: string) {

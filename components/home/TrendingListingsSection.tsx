@@ -8,6 +8,7 @@ import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
 import { getCustomerListingUrl, getListingUrl } from "@/lib/ids/publicRefs";
 import { sortListingsByAvailability } from "@/lib/inventory";
+import HomeSectionContainer from "@/components/home/HomeSectionContainer";
 
 type TrendingListingsSectionProps = {
   mode?: BrowseMode;
@@ -77,7 +78,7 @@ export default function TrendingListingsSection({
 
   return (
     <section className="relative z-20 -mt-2 w-full bg-[#fcfcfd] pb-6 pt-7 md:-mt-3 md:pb-8 md:pt-9">
-      <div className="mx-auto w-full max-w-6xl px-6 md:px-8 xl:max-w-[88rem]">
+      <HomeSectionContainer className="px-4 sm:px-6 md:px-8">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:mb-4">
           <div className="min-w-0">
             <p className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-[rgba(88,28,135,0.8)]">
@@ -113,7 +114,7 @@ export default function TrendingListingsSection({
           ) : null}
           <div
             ref={carouselRef}
-            className="flex snap-x snap-proximity items-stretch gap-4 overflow-x-auto pb-2 pr-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:gap-4"
+            className="flex snap-x snap-mandatory items-stretch gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-4 sm:pr-6 xl:gap-4"
           >
             {visibleListings.map((listing, index) => {
               const href =
@@ -128,26 +129,28 @@ export default function TrendingListingsSection({
                   key={listing.public_id || listing.id || `${listing.title}-${index}`}
                   href={href}
                   prefetch={false}
-                  className="group flex h-full w-[78vw] min-w-[78vw] flex-[0_0_auto] snap-start flex-col overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] sm:w-[21rem] sm:min-w-[21rem] md:w-[17.25rem] md:min-w-[17.25rem] xl:w-[16rem] xl:min-w-[16rem]"
+                  className="group flex h-full w-[calc((100%-0.75rem)/2)] min-w-[calc((100%-0.75rem)/2)] flex-[0_0_auto] snap-start flex-col overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] sm:w-[21rem] sm:min-w-[21rem] md:w-[17.25rem] md:min-w-[17.25rem] xl:w-[16rem] xl:min-w-[16rem]"
                 >
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
+                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-stone-100 sm:aspect-[3/4]">
                     <Image
                       src={imageSrc}
                       alt={listing.title || "Listing"}
                       fill
-                      sizes="(max-width: 639px) 78vw, (max-width: 767px) 21rem, (max-width: 1279px) 17.25rem, 16rem"
+                      sizes="(max-width: 639px) calc((100vw - 2rem - 0.75rem) / 2), (max-width: 767px) 21rem, (max-width: 1279px) 17.25rem, 16rem"
                       className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
                     />
                   </div>
 
-                  <div className="flex min-h-[104px] flex-1 flex-col justify-between px-4 pb-4 pt-3.5">
-                    <div className="space-y-2">
-                      <h3 className="line-clamp-2 min-h-[2.75rem] text-[15px] font-semibold leading-[1.35] tracking-[-0.02em] text-slate-900">
+                  <div className="flex min-h-[88px] flex-1 flex-col justify-between px-3 pb-3 pt-3 sm:min-h-[104px] sm:px-4 sm:pb-4 sm:pt-3.5">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <h3 className="line-clamp-2 min-h-[2.35rem] text-sm font-semibold leading-[1.35] tracking-[-0.02em] text-slate-900 sm:min-h-[2.75rem] sm:text-[15px]">
                         {listing.title || "Untitled listing"}
                       </h3>
-                      <p className="line-clamp-1 text-[13px] text-slate-500">{businessName}</p>
+                      <p className="line-clamp-1 text-xs text-slate-500 sm:text-[13px]">
+                        {businessName}
+                      </p>
                     </div>
-                    <p className="whitespace-nowrap text-[1.04rem] font-semibold tracking-[-0.03em] text-slate-950">
+                    <p className="whitespace-nowrap text-sm font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.04rem]">
                       {formatPrice(listing.price)}
                     </p>
                   </div>
@@ -156,7 +159,7 @@ export default function TrendingListingsSection({
             })}
           </div>
         </div>
-      </div>
+      </HomeSectionContainer>
     </section>
   );
 }

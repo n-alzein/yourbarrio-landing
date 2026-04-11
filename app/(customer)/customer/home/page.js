@@ -2,7 +2,8 @@ import HomeBrowse from "@/components/browse/HomeBrowse";
 import { getHomeBrowseData } from "@/lib/browse/getHomeBrowseData";
 import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function CustomerHomePage() {
   const location = await getLocationFromCookies();

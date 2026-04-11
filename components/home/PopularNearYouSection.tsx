@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import BusinessCard from "@/components/cards/BusinessCard";
 import { useLocation } from "@/components/location/LocationProvider";
+import HomeSectionContainer from "@/components/home/HomeSectionContainer";
 import {
   getNormalizedLocation,
   hasCoordinates,
@@ -112,7 +113,7 @@ function createBusinessBadges(
 function PopularNearYouSkeleton() {
   return (
     <section className="mt-16 md:mt-20 lg:mt-12">
-      <div className="mx-auto max-w-6xl px-6 md:px-8">
+      <HomeSectionContainer>
         <div className="mb-6 flex items-end justify-between gap-4">
           <div className="space-y-2">
             <div className="h-7 w-48 animate-pulse rounded-full bg-slate-200/80" />
@@ -135,7 +136,7 @@ function PopularNearYouSkeleton() {
             </div>
           ))}
         </div>
-      </div>
+      </HomeSectionContainer>
     </section>
   );
 }
@@ -256,7 +257,7 @@ export default function PopularNearYouSection({
 
   return (
     <section id={sectionId} className="mt-16 md:mt-20 lg:mt-12">
-      <div className="mx-auto max-w-6xl px-6 md:px-8">
+      <HomeSectionContainer>
         <div className="mb-7 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 md:mb-8">
           <div className="min-w-0">
             <h2 className="text-[1.65rem] font-semibold tracking-[-0.04em] text-slate-900">
@@ -290,7 +291,7 @@ export default function PopularNearYouSection({
             </div>
           ))}
         </div>
-      </div>
+      </HomeSectionContainer>
     </section>
   );
 }
