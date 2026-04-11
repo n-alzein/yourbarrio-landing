@@ -4,11 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   buildLocationLabel,
   getDefaultLaunchLocation,
-  getLocationSourcePriority,
+  getInitialLaunchLocation,
   hasLocation,
   isSameLocation,
   normalizeLocation,
   LOCATION_STORAGE_KEY,
+  shouldPromoteLocation,
 } from "@/lib/location";
 import { readLocationClient, setLocationCookieClient } from "@/lib/location/setLocationCookieClient";
 import { decodeHumanLocationString } from "@/lib/location/decodeHumanLocation";
@@ -69,17 +70,6 @@ const clearCookie = (name) => {
   document.cookie = `${name}=; path=/; max-age=0; samesite=lax`;
 };
 
-const readUserSetFlagClient = () => {
-  if (typeof window === "undefined") return false;
-  try {
-    const stored = window.localStorage.getItem(LOCATION_USER_SET_KEY);
-    if (stored === "1") return true;
-  } catch {
-    // Ignore storage read failures.
-  }
-  return readCookie(LOCATION_USER_SET_COOKIE) === "1";
-};
-
 const setUserSetFlagClient = (enabled) => {
   if (typeof window === "undefined") return;
   try {
@@ -106,7 +96,7 @@ const logBootstrap = (...args) => {
 export function LocationProvider({ children, initialLocation = null }) {
   // Keep initial render deterministic between server and client to avoid hydration mismatches.
   const [location, setLocationState] = useState(() =>
-    normalizeForState(initialLocation || getDefaultLaunchLocation())
+    normalizeForState(getInitialLaunchLocation(initialLocation || getDefaultLaunchLocation()))
   );
   const [hydrated, setHydrated] = useState(false);
   const locationRef = useRef(location);
@@ -116,16 +106,20 @@ export function LocationProvider({ children, initialLocation = null }) {
   }, [location]);
 
   const applyLocation = useCallback((next, options = {}) => {
-    const { persist = true, force = false } = options;
+    const {
+      persist = true,
+      force = false,
+      allowGpsPromotion = true,
+      allowIpPromotion = false,
+    } = options;
     const normalized = normalizeForState(next);
     const current = normalizeForState(locationRef.current);
-    const nextPriority = getLocationSourcePriority(normalized?.source);
-    const currentPriority = getLocationSourcePriority(current?.source);
     const shouldSkip =
       !force &&
-      normalized?.source &&
-      current?.source &&
-      currentPriority > nextPriority;
+      !shouldPromoteLocation(current, normalized, {
+        allowGpsPromotion,
+        allowIpPromotion,
+      });
 
     if (shouldSkip) {
       return current;
@@ -150,7 +144,8 @@ export function LocationProvider({ children, initialLocation = null }) {
     return normalized;
   }, []);
 
-  const refreshIpLocation = useCallback(async () => {
+  const refreshIpLocation = useCallback(async (options = {}) => {
+    const { allowPromotion = false, persist = allowPromotion } = options;
     try {
       const res = await fetch("/api/location/ip", { cache: "no-store" });
       if (!res.ok) return null;
@@ -172,14 +167,18 @@ export function LocationProvider({ children, initialLocation = null }) {
         label: buildLabel(city || null, region || null),
         updatedAt: Date.now(),
       };
-      applyLocation(next);
+      const resolved = applyLocation(next, {
+        persist,
+        allowIpPromotion: allowPromotion,
+      });
       logBootstrap("branch=ip", {
         rawCity,
-        city: next.city,
-        region: next.region,
-        country: next.country,
+        city: resolved?.city || next.city,
+        region: resolved?.region || next.region,
+        country: resolved?.country || next.country,
+        promoted: Boolean(allowPromotion),
       });
-      return next;
+      return resolved;
     } catch {
       logBootstrap("branch=ip_error");
       return null;
@@ -234,8 +233,7 @@ export function LocationProvider({ children, initialLocation = null }) {
     });
 
     if (!next) return null;
-    applyLocation(next);
-    return next;
+    return applyLocation(next, { allowGpsPromotion: true });
   }, [applyLocation]);
 
   const setLocation = useCallback(
@@ -275,13 +273,15 @@ export function LocationProvider({ children, initialLocation = null }) {
     let cancelled = false;
     const bootstrap = async () => {
       const stored = readLocationClient();
-      const explicitUserSet = readUserSetFlagClient();
       const hasStoredManual = stored?.source === "manual" && Boolean(stored?.city);
+      const initial = normalizeForState(
+        getInitialLaunchLocation(stored || initialLocation || null)
+      );
 
-      if (stored && !cancelled) {
-        const normalized = normalizeForState(stored);
-        if (!isSameLocation(normalized, locationRef.current) || normalized?.source !== locationRef.current?.source) {
-          setLocationState(normalized);
+      if (!cancelled) {
+        const current = normalizeForState(locationRef.current);
+        if (!isSameLocation(initial, current) || initial?.source !== current?.source) {
+          setLocationState(initial);
         }
       }
 
@@ -294,15 +294,11 @@ export function LocationProvider({ children, initialLocation = null }) {
           city: stored.city,
           source: stored.source,
         });
-      } else if ((explicitUserSet && stored?.city) || hasStoredManual) {
-        logBootstrap("branch=stored_manual", { city: stored.city, source: stored.source });
-      } else if (stored?.source && getLocationSourcePriority(stored.source) >= getLocationSourcePriority("ip")) {
-        logBootstrap(`branch=stored_${stored.source}`, { city: stored.city });
       } else {
-        const inferred = await refreshIpLocation();
-        if (!inferred) {
-          logBootstrap("branch=none");
-        }
+        logBootstrap("branch=launch_default", {
+          city: initial?.city,
+          source: initial?.source,
+        });
       }
       if (!cancelled) {
         setHydrated(true);
@@ -312,7 +308,7 @@ export function LocationProvider({ children, initialLocation = null }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshIpLocation]);
+  }, [initialLocation]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -330,9 +326,7 @@ export function LocationProvider({ children, initialLocation = null }) {
     if (typeof window === "undefined") return undefined;
     const onStorage = (event) => {
       if (event.key !== LOCATION_STORAGE_KEY) return;
-      const next = readLocationClient();
-      if (!next) return;
-      const normalized = normalizeForState(next);
+      const normalized = normalizeForState(getInitialLaunchLocation(readLocationClient() || null));
       if (!isSameLocation(normalized, locationRef.current)) {
         setLocationState(normalized);
       }
