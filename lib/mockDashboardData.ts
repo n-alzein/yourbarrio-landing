@@ -37,7 +37,7 @@ const topProducts: TopProduct[] = [
   {
     id: "p1",
     name: "Cedar + Citrus Candle",
-    category: "Home Fragrance",
+    category: "Home & Decor",
     revenue: 12840,
     orders: 240,
     inventoryQty: 120,
@@ -45,7 +45,7 @@ const topProducts: TopProduct[] = [
   {
     id: "p2",
     name: "Everyday Linen Set",
-    category: "Home Textiles",
+    category: "Home & Decor",
     revenue: 11220,
     orders: 182,
     inventoryQty: 48,
@@ -53,7 +53,7 @@ const topProducts: TopProduct[] = [
   {
     id: "p3",
     name: "Heritage Coffee Kit",
-    category: "Pantry",
+    category: "Other",
     revenue: 9860,
     orders: 154,
     inventoryQty: 210,
@@ -61,7 +61,7 @@ const topProducts: TopProduct[] = [
   {
     id: "p4",
     name: "Market Tote Bundle",
-    category: "Accessories",
+    category: "Jewelry & Accessories",
     revenue: 8140,
     orders: 132,
     inventoryQty: 62,
@@ -69,7 +69,7 @@ const topProducts: TopProduct[] = [
   {
     id: "p5",
     name: "Stoneware Mug Set",
-    category: "Kitchen",
+    category: "Home Goods & Appliances",
     revenue: 7420,
     orders: 118,
     inventoryQty: 34,

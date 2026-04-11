@@ -16,6 +16,7 @@ import {
 import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
 import { getListingUrl } from "@/lib/ids/publicRefs";
+import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
 
 export default function CustomerSavedClient({
   initialSaved,
@@ -301,7 +302,7 @@ export default function CustomerSavedClient({
         }
         let listingQuery = client
           .from("listings")
-          .select("*, category_info:business_categories(name,slug)")
+          .select("*")
           .in("id", ids);
         if (typeof listingQuery.abortSignal === "function") {
           listingQuery = listingQuery.abortSignal(signal);
@@ -334,10 +335,7 @@ export default function CustomerSavedClient({
         if (!result || result.aborted) return;
         if (requestId !== requestIdRef.current) return;
         if (!result.ok) throw result.error;
-        const normalized = (result.result || []).map((row) => ({
-          ...row,
-          category: row.category_info?.name || row.category,
-        }));
+        const normalized = result.result || [];
         dispatchSaved({ type: "LOAD_FROM_CACHE_SUCCESS", saved: normalized });
         if (typeof window !== "undefined") {
           try {
@@ -557,7 +555,7 @@ export default function CustomerSavedClient({
                           {item.title}
                         </h3>
                         <p className="text-xs uppercase tracking-wide text-white/60">
-                          {item.category || "Listing"}
+                          {getListingCategoryLabel(item, "Listing")}
                         </p>
                         <span
                           className="inline-flex items-center rounded-full border bg-transparent px-2 py-1 text-[10px] font-semibold"

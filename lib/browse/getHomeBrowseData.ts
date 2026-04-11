@@ -57,6 +57,7 @@ const PUBLIC_LISTING_SELECT = [
   "description",
   "price",
   "category",
+  "listing_category",
   "category_id",
   "city",
   "photo_url",

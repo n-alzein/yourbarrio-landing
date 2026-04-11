@@ -37,6 +37,28 @@ function formatRelativeTime(value: string | null) {
   return "just now";
 }
 
+function formatUtcTimestamp(value: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes} UTC`;
+}
+
+function formatLocalTimestamp(value: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(date);
+}
+
 function statusBadgeClass(status: BusinessVerificationStatus) {
   if (status === "manually_verified") {
     return "border-emerald-700/60 bg-emerald-950/60 text-emerald-100";
@@ -56,10 +78,15 @@ export default function VerificationQueueTableClient({
   canManage,
 }: VerificationQueueTableClientProps) {
   const [rows, setRows] = useState(initialRows);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
     setRows(initialRows);
   }, [initialRows]);
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   const emptyLabel = useMemo(() => {
     if (activeStatus === "pending") return "No pending verifications.";
@@ -86,7 +113,8 @@ export default function VerificationQueueTableClient({
           </thead>
           <tbody>
             {rows.map((row) => {
-              const createdAtExact = row.created_at ? new Date(row.created_at).toLocaleString() : "-";
+              const createdAtLabel = hasHydrated ? formatRelativeTime(row.created_at) : formatUtcTimestamp(row.created_at);
+              const createdAtTitle = hasHydrated ? formatLocalTimestamp(row.created_at) : formatUtcTimestamp(row.created_at);
               return (
                 <tr key={row.owner_user_id} className="border-t border-neutral-800 align-top">
                   <td className="px-3 py-2">
@@ -104,7 +132,9 @@ export default function VerificationQueueTableClient({
                   <td className="px-3 py-2">{row.owner_email || "-"}</td>
                   <td className="px-3 py-2">{row.city || "-"}</td>
                   <td className="px-3 py-2">
-                    <time title={createdAtExact}>{formatRelativeTime(row.created_at)}</time>
+                    <time dateTime={row.created_at || undefined} title={createdAtTitle}>
+                      {createdAtLabel}
+                    </time>
                   </td>
                   <td className="px-3 py-2">
                     <span

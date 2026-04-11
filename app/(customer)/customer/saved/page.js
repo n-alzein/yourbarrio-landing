@@ -36,7 +36,7 @@ async function getSavedListings() {
 
   const { data: listings, error: listingsError } = await client
     .from("listings")
-    .select("*, category_info:business_categories(name,slug)")
+    .select("*")
     .in("id", ids);
 
   if (listingsError) {
@@ -48,15 +48,10 @@ async function getSavedListings() {
     };
   }
 
-  const normalized = (listings || []).map((row) => ({
-    ...row,
-    category: row.category_info?.name || row.category,
-  }));
-
   return {
     user: { id: effectiveUserId },
     supportModeActive,
-    saved: normalized,
+    saved: listings || [],
     error: null,
   };
 }

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
-import { resolveCategoryIdByName } from "@/lib/categories";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import {
+  getListingsBrowseFilterCategoryNames,
+  getListingsBrowseFilterCategorySlugs,
+  normalizeListingsBrowseCategory,
+} from "@/lib/listings/browseCategories";
 import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import {
@@ -67,7 +71,8 @@ async function searchListings(supabase, term, category, { businessIds }) {
   const safe = sanitize(term);
   if (!safe) return [];
   if (!Array.isArray(businessIds) || businessIds.length === 0) return [];
-  const safeCategory = sanitize(category);
+  const normalizedCategory = normalizeListingsBrowseCategory(category);
+  if (!normalizedCategory.isValid) return [];
 
   let query = supabase
     .from("public_listings_v")
@@ -75,16 +80,69 @@ async function searchListings(supabase, term, category, { businessIds }) {
       "id,public_id,title,description,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
     )
     .in("business_id", businessIds)
-    .or(
-      `title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`
-    );
-  if (safeCategory) {
-    const categoryId = await resolveCategoryIdByName(supabase, safeCategory);
-    if (categoryId) {
-      query = query.eq("category_id", categoryId);
-    } else {
-      query = query.eq("category", safeCategory);
+    .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`);
+  if (!normalizedCategory.isDefault) {
+    const categoryNames = getListingsBrowseFilterCategoryNames(normalizedCategory.canonical);
+    const categorySlugs = getListingsBrowseFilterCategorySlugs(normalizedCategory.canonical);
+    const results = await Promise.all([
+      categoryNames.length
+        ? supabase
+            .from("public_listings_v")
+            .select(
+              "id,public_id,title,description,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+            )
+            .in("business_id", businessIds)
+            .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`)
+            .in("category", categoryNames)
+            .order("created_at", { ascending: false })
+            .limit(8)
+        : Promise.resolve({ data: [], error: null }),
+      categorySlugs.length
+        ? supabase
+            .from("public_listings_v")
+            .select(
+              "id,public_id,title,description,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+            )
+            .in("business_id", businessIds)
+            .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`)
+            .in("category", categorySlugs)
+            .order("created_at", { ascending: false })
+            .limit(8)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const error = results.find((result) => result?.error)?.error || null;
+    if (error) {
+      console.warn("searchListings failed", error);
+      return [];
     }
+
+    const deduped = new Map();
+    for (const result of results) {
+      for (const row of result?.data || []) {
+        if (row?.id) deduped.set(row.id, row);
+      }
+    }
+
+    return Array.from(deduped.values())
+      .slice(0, 8)
+      .map((row) => ({
+        id: row.id,
+        public_id: row.public_id || null,
+        title: row.title,
+        description: row.description,
+        price: row.price,
+        category: getListingCategoryLabel(row, ""),
+        listing_category: getListingCategoryLabel(row, ""),
+        city: row.city,
+        photo_url: primaryPhotoUrl(row.photo_url),
+        business_id: row.business_id,
+        inventory_status: row.inventory_status,
+        inventory_quantity: row.inventory_quantity,
+        low_stock_threshold: row.low_stock_threshold,
+        inventory_last_updated_at: row.inventory_last_updated_at,
+        source: "supabase_listing",
+      }));
   }
   const { data, error } = await query
     .order("created_at", { ascending: false })

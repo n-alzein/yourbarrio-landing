@@ -23,29 +23,29 @@ describe("CategoryTilesGrid", () => {
         categories={[
           {
             id: 1,
-            name: "Coffee",
-            slug: "coffee",
-            tileImageUrl: "/coffee.png",
+            name: "Electronics & Tech",
+            slug: "electronics-tech",
+            tileImageUrl: "/electronics-tech.png",
           },
           {
             id: 2,
-            name: "Groceries",
-            slug: "groceries",
-            tileImageUrl: "/groceries.png",
+            name: "Home & Decor",
+            slug: "home-decor",
+            tileImageUrl: "/home-decor.png",
           },
         ]}
       />
     );
 
-    expect(screen.getByText("Coffee")).toBeInTheDocument();
-    expect(screen.getByText("Groceries")).toBeInTheDocument();
-    expect(screen.getByLabelText("Shop Coffee")).toHaveAttribute(
+    expect(screen.getByText("Electronics & Tech")).toBeInTheDocument();
+    expect(screen.getByText("Home & Decor")).toBeInTheDocument();
+    expect(screen.getByLabelText("Shop Electronics & Tech")).toHaveAttribute(
       "href",
-      "/categories/coffee"
+      "/categories/electronics-tech"
     );
-    expect(screen.getByLabelText("Shop Groceries")).toHaveAttribute(
+    expect(screen.getByLabelText("Shop Home & Decor")).toHaveAttribute(
       "href",
-      "/categories/groceries"
+      "/categories/home-decor"
     );
   });
 

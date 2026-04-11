@@ -3,8 +3,13 @@ import { notFound } from "next/navigation";
 import { fetchCategoryBySlug } from "@/lib/strapi";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
-import { fetchCategoryBySlug as fetchCategoryBySlugFromDb } from "@/lib/categories";
 import { getCustomerListingUrl } from "@/lib/ids/publicRefs";
+import {
+  getListingCategoryDbNames,
+  getListingCategoryDbSlugs,
+  normalizeListingCategory,
+} from "@/lib/taxonomy/listingCategories";
+import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
 import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { hasUsableLocationFilter } from "@/lib/location/filter";
@@ -13,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function CategoryListingsPage({ params }) {
-  const slug = params?.slug;
+  const slug = normalizeListingCategory(params?.slug);
   if (!slug) notFound();
   const location = await getLocationFromCookies();
   const homeHref = "/customer/home";
@@ -29,10 +34,9 @@ export default async function CategoryListingsPage({ params }) {
 
   const supabase = getSupabaseServerClient();
   let listings = [];
-  let categoryRow = null;
   if (supabase) {
-    categoryRow = await fetchCategoryBySlugFromDb(supabase, slug);
-    const categoryName = categoryRow?.name || category.name;
+    const categoryNames = getListingCategoryDbNames(slug);
+    const categorySlugs = getListingCategoryDbSlugs(slug);
 
     const businessIds = hasUsableLocationFilter(location)
       ? await findBusinessOwnerIdsForLocation(supabase, location, { limit: 1000 })
@@ -54,32 +58,20 @@ export default async function CategoryListingsPage({ params }) {
     if (!businessIds.length) {
       listings = [];
     } else {
-      if (categoryRow?.id) {
-        const primaryRes = await buildBaseQuery().eq("category_id", categoryRow.id);
-        data = primaryRes.data || [];
-        error = primaryRes.error;
-
-        if (!error && Array.isArray(data) && data.length === 0 && categoryRow?.name) {
-          const fallbackRes = await buildBaseQuery().ilike("category", categoryRow.name);
-          data = fallbackRes.data || [];
-          error = fallbackRes.error;
-        }
-        if (!error && Array.isArray(data) && data.length === 0 && slug) {
-          const slugFallbackRes = await buildBaseQuery().ilike("category", slug);
-          data = slugFallbackRes.data || [];
-          error = slugFallbackRes.error;
-        }
-      } else if (categoryName) {
-        const legacyRes = await buildBaseQuery().ilike("category", categoryName);
-        data = legacyRes.data || [];
-        error = legacyRes.error;
-
-        if (!error && Array.isArray(data) && data.length === 0 && slug) {
-          const slugFallbackRes = await buildBaseQuery().ilike("category", slug);
-          data = slugFallbackRes.data || [];
-          error = slugFallbackRes.error;
+      const results = await Promise.all([
+        categoryNames.length
+          ? buildBaseQuery().in("category", categoryNames)
+          : Promise.resolve({ data: [], error: null }),
+        categorySlugs.length ? buildBaseQuery().in("category", categorySlugs) : Promise.resolve({ data: [], error: null }),
+      ]);
+      error = results.find((result) => result?.error)?.error || null;
+      const deduped = new Map();
+      for (const result of results) {
+        for (const row of result?.data || []) {
+          if (row?.id) deduped.set(row.id, row);
         }
       }
+      data = Array.from(deduped.values());
 
       if (error) {
         listings = [];
@@ -100,7 +92,7 @@ export default async function CategoryListingsPage({ params }) {
             ← Back to home
           </Link>
           <h1 className="mt-3 text-2xl font-semibold text-slate-900">
-            {categoryRow?.name || category.name}
+            {category.name}
           </h1>
           {category.tileSubtitle ? (
             <p className="mt-2 text-sm text-slate-600">{category.tileSubtitle}</p>
@@ -138,7 +130,7 @@ export default async function CategoryListingsPage({ params }) {
                   </div>
                   <div className="p-4 space-y-2">
                     <div className="text-xs uppercase tracking-wide text-slate-600">
-                      {item.category || "Listing"}
+                      {getListingCategoryLabel(item, "Listing")}
                       {item.city ? ` · ${item.city}` : ""}
                     </div>
                     <h3 className="text-base font-semibold text-slate-900 line-clamp-2">

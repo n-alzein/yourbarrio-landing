@@ -56,7 +56,7 @@ export default function BusinessCard({
     <Link
       href={href}
       prefetch={false}
-      className="group relative flex w-[280px] min-w-[280px] snap-start flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(124,58,237,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-200 focus-visible:ring-offset-2 md:w-full md:min-w-0"
+      className="group relative flex w-[280px] min-w-[280px] snap-start flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(124,58,237,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-200 focus-visible:ring-offset-2 sm:w-[320px] sm:min-w-[320px] lg:w-[340px] lg:min-w-[340px]"
     >
       <div className="relative h-[180px] w-full overflow-hidden rounded-t-2xl bg-stone-100">
         <Image

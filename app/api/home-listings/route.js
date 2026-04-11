@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
-import { resolveCategoryIdByName } from "@/lib/categories";
+import {
+  getListingsBrowseFilterCategoryNames,
+  getListingsBrowseFilterCategorySlugs,
+  normalizeListingsBrowseCategory,
+} from "@/lib/listings/browseCategories";
 import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { getNormalizedLocation, hasUsableLocationFilter } from "@/lib/location/filter";
@@ -44,16 +48,17 @@ async function attachBusinessNames(client, listings) {
   }));
 }
 
-async function runHomeListingsQuery(client, { limit, category, searchQuery, businessIds }) {
+const LISTING_SELECT =
+  "id,public_id,title,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at";
+
+function buildBaseHomeListingsQuery(client, { limit, searchQuery, businessIds }) {
   if (!Array.isArray(businessIds) || businessIds.length === 0) {
-    return { data: [], error: null };
+    return null;
   }
 
   let query = client
     .from("public_listings_v")
-    .select(
-      "id,public_id,title,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
-    )
+    .select(LISTING_SELECT)
     .order("created_at", { ascending: false })
     .limit(limit)
     .in("business_id", businessIds);
@@ -64,16 +69,99 @@ async function runHomeListingsQuery(client, { limit, category, searchQuery, busi
       query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`);
     }
   }
-  if (category) {
-    const categoryId = await resolveCategoryIdByName(client, category);
-    if (categoryId) {
-      query = query.eq("category_id", categoryId);
-    } else {
-      query = query.eq("category", category);
+
+  return query;
+}
+
+function sortAndLimitListings(rows, limit) {
+  return rows
+    .sort(
+      (left, right) =>
+        new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime()
+    )
+    .slice(0, limit);
+}
+
+async function runExactCategoryUnionQuery(client, { limit, searchQuery, businessIds, categoryNames, categorySlugs, branch }) {
+  const queryJobs = [];
+  if (categoryNames.length > 0) {
+    queryJobs.push(
+      buildBaseHomeListingsQuery(client, { limit, searchQuery, businessIds }).in("category", categoryNames)
+    );
+  }
+  if (categorySlugs.length > 0) {
+    queryJobs.push(
+      buildBaseHomeListingsQuery(client, { limit, searchQuery, businessIds }).in("category", categorySlugs)
+    );
+  }
+
+  if (queryJobs.length === 0) {
+    return {
+      data: [],
+      error: null,
+      debug: { branch, categoryNames, categorySlugs },
+    };
+  }
+
+  const results = await Promise.all(queryJobs);
+  const firstError = results.find((result) => result?.error)?.error || null;
+  if (firstError) {
+    return {
+      data: [],
+      error: firstError,
+      debug: { branch: `${branch}-error` },
+    };
+  }
+
+  const deduped = new Map();
+  for (const result of results) {
+    for (const row of result?.data || []) {
+      const key = String(row?.id || "").trim();
+      if (key) deduped.set(key, row);
     }
   }
 
-  return query;
+  return {
+    data: sortAndLimitListings(Array.from(deduped.values()), limit),
+    error: null,
+    debug: { branch, categoryNames, categorySlugs },
+  };
+}
+
+async function runHomeListingsQuery(client, { limit, category, searchQuery, businessIds }) {
+  const baseQuery = buildBaseHomeListingsQuery(client, { limit, searchQuery, businessIds });
+  if (!baseQuery) {
+    return { data: [], error: null, debug: { branch: "no-businesses" } };
+  }
+
+  const normalizedCategory = normalizeListingsBrowseCategory(category);
+  if (!normalizedCategory.isValid) {
+    return {
+      data: [],
+      error: null,
+      debug: { branch: "invalid-category", raw: normalizedCategory.raw || null },
+    };
+  }
+
+  if (normalizedCategory.isDefault) {
+    const { data, error } = await baseQuery;
+    return {
+      data: data || [],
+      error,
+      debug: { branch: "all-listings" },
+    };
+  }
+
+  const categoryNames = getListingsBrowseFilterCategoryNames(normalizedCategory.canonical);
+  const categorySlugs = getListingsBrowseFilterCategorySlugs(normalizedCategory.canonical);
+  return runExactCategoryUnionQuery(client, {
+    limit,
+    searchQuery,
+    businessIds,
+    categoryNames,
+    categorySlugs,
+    branch: `category-union:${normalizedCategory.canonical}`,
+  });
 }
 
 export async function GET(request) {
@@ -92,6 +180,7 @@ export async function GET(request) {
     lng: url.searchParams.get("lng") || cookieLocation?.lng,
   });
   const category = url.searchParams.get("category") || null;
+  const normalizedCategory = normalizeListingsBrowseCategory(category);
   const searchQuery = url.searchParams.get("q") || null;
   const supabaseHost = (() => {
     try {
@@ -109,6 +198,25 @@ export async function GET(request) {
   const errors = [];
   let listings = [];
   let source = "none";
+
+  if (!normalizedCategory.isValid) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[home-listings] invalid category", {
+        rawCategory: category,
+      });
+    }
+    return NextResponse.json(
+      { listings: [], message: "invalid_category" },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store",
+          "x-home-listings-count": "0",
+          "x-home-listings-source": "invalid-category",
+        },
+      }
+    );
+  }
 
   if (!hasUsableLocationFilter(location)) {
     return NextResponse.json(
@@ -129,12 +237,15 @@ export async function GET(request) {
   });
 
   try {
-    const { data, error } = await runHomeListingsQuery(sessionClient, {
+    const { data, error, debug } = await runHomeListingsQuery(sessionClient, {
       limit,
-      category,
+      category: normalizedCategory.canonical,
       searchQuery,
       businessIds,
     });
+    if (process.env.NODE_ENV !== "production" && normalizedCategory.canonical !== "all") {
+      console.info("[home-listings] session category filter", debug);
+    }
     if (error) {
       errors.push(`session:${error.message || String(error)}`);
     } else if (Array.isArray(data) && data.length > 0) {
@@ -147,12 +258,15 @@ export async function GET(request) {
 
   if ((!listings.length || source === "none") && serviceClient) {
     try {
-      const { data, error } = await runHomeListingsQuery(serviceClient, {
+      const { data, error, debug } = await runHomeListingsQuery(serviceClient, {
         limit,
-        category,
+        category: normalizedCategory.canonical,
         searchQuery,
         businessIds,
       });
+      if (process.env.NODE_ENV !== "production" && normalizedCategory.canonical !== "all") {
+        console.info("[home-listings] service category filter", debug);
+      }
       if (error) {
         errors.push(`service:${error.message || String(error)}`);
       } else if (Array.isArray(data)) {
@@ -169,7 +283,8 @@ export async function GET(request) {
       supabaseHost,
       limit,
       location,
-      category,
+      category: normalizedCategory.canonical,
+      rawCategory: category,
       sessionPresent,
       sourceTried: source,
       errors,

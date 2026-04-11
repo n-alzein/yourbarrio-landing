@@ -17,7 +17,7 @@ export async function GET(request) {
     const field = isUuid(listingRef) ? "id" : "public_id";
     const { data, error } = await supabase
       .from("listings")
-      .select("*, category_info:business_categories(name,slug)")
+      .select("*")
       .eq(field, listingRef)
       .eq("business_id", effectiveUserId)
       .maybeSingle();
@@ -40,7 +40,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from("listings")
-    .select("*, category_info:business_categories(name,slug)")
+    .select("*")
     .eq("business_id", effectiveUserId)
     .order("created_at", { ascending: false });
 

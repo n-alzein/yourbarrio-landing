@@ -119,7 +119,7 @@ export async function POST(request) {
   const { data: listing, error: listingError } = await supabase
     .from("listings")
     .select(
-      "id,business_id,title,price,photo_url,category,category_id,category_info:business_categories(name,slug)"
+      "id,business_id,title,price,photo_url,category,listing_category,category_id"
     )
     .eq("id", listingId)
     .maybeSingle();

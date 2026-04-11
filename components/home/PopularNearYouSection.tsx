@@ -122,11 +122,11 @@ function PopularNearYouSkeleton() {
           <div className="hidden h-5 w-20 animate-pulse rounded-full bg-slate-200/70 sm:block" />
         </div>
 
-        <div className="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible xl:grid-cols-4">
+        <div className="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SKELETON_CARDS.map((_, index) => (
             <div
               key={`popular-near-you-skeleton-${index}`}
-              className="w-[280px] min-w-[280px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md md:w-full md:min-w-0"
+              className="w-[280px] min-w-[280px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md sm:w-[320px] sm:min-w-[320px] lg:w-[340px] lg:min-w-[340px]"
             >
               <div className="h-[180px] animate-pulse bg-slate-200/80" />
               <div className="space-y-3 px-4 pb-4 pt-3">
@@ -275,11 +275,11 @@ export default function PopularNearYouSection({
           </Link>
         </div>
 
-        <div className="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible xl:grid-cols-4">
+        <div className="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {visibleBusinesses.map((business, index) => (
             <div
               key={business.public_id || business.id || business.business_name}
-              className="md:min-w-0"
+              className="shrink-0"
             >
               <BusinessCard
                 business={business}

@@ -10,7 +10,13 @@ import { stripHtmlToText } from "@/lib/listingDescription";
 import { retry } from "@/lib/retry";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
-import { buildListingTaxonomyPayload } from "@/lib/taxonomy/compat";
+import {
+  buildListingTaxonomyPayload,
+  getListingCategorySlug,
+} from "@/lib/taxonomy/compat";
+import { getListingCategoryOptions } from "@/lib/taxonomy/listingCategories";
+
+const CATEGORY_OPTIONS = getListingCategoryOptions();
 
 export default function EditListingPage() {
   const router = useRouter();
@@ -40,16 +46,13 @@ export default function EditListingPage() {
     title: "",
     description: "",
     price: "",
-    categoryId: "",
+    category: "",
     city: "",
     inventoryQuantity: "",
     inventoryStatus: "in_stock",
     lowStockThreshold: "",
   });
 
-  const [categories, setCategories] = useState([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesError, setCategoriesError] = useState("");
   const [existingPhotos, setExistingPhotos] = useState([]);
   const [internalListingId, setInternalListingId] = useState(null);
   const [newPhotos, setNewPhotos] = useState([]);
@@ -98,7 +101,7 @@ export default function EditListingPage() {
           title: data.title || "",
           description: data.description || "",
           price: data.price || "",
-          categoryId: data.category_id || "",
+          category: getListingCategorySlug(data, ""),
           city: data.city || "",
           inventoryQuantity: data.inventory_quantity ?? "",
           inventoryStatus: data.inventory_status || "in_stock",
@@ -114,49 +117,6 @@ export default function EditListingPage() {
 
     loadListing();
   }, [loadingUser, accountId, supabase, listingRef]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadCategories() {
-      setCategoriesLoading(true);
-      setCategoriesError("");
-
-      try {
-        const client = getSupabaseBrowserClient() ?? supabase;
-        if (!client) {
-          throw new Error("Connection not ready. Please try again.");
-        }
-
-        const { data, error } = await client
-          .from("business_categories")
-          .select("id,name,slug")
-          .eq("is_active", true)
-          .order("name", { ascending: true });
-
-        if (error) throw error;
-
-        if (isMounted) {
-          setCategories(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error("Failed to load categories", err);
-        if (isMounted) {
-          setCategoriesError(
-            err.message || "Unable to load categories. Please refresh."
-          );
-        }
-      } finally {
-        if (isMounted) setCategoriesLoading(false);
-      }
-    }
-
-    loadCategories();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [supabase]);
 
   const handleAddNewPhotos = (files) => {
     const incoming = Array.from(files || []);
@@ -248,7 +208,7 @@ export default function EditListingPage() {
         return;
       }
 
-      if (!form.categoryId) {
+      if (!form.category) {
         alert("Please select a category.");
         return;
       }
@@ -257,11 +217,8 @@ export default function EditListingPage() {
         return;
       }
 
-      const selectedCategory = categories.find(
-        (category) => category.id === form.categoryId
-      );
       const taxonomy = buildListingTaxonomyPayload({
-        listing_category: selectedCategory?.name || null,
+        listing_category: form.category,
       });
       const payload = {
         title: (form.title || "").trim(),
@@ -269,7 +226,7 @@ export default function EditListingPage() {
         price: form.price,
         listing_category: taxonomy.listing_category,
         category: taxonomy.category,
-        category_id: form.categoryId,
+        category_id: null,
         city: form.city,
         inventory_status: form.inventoryStatus,
         inventory_quantity:
@@ -479,25 +436,26 @@ export default function EditListingPage() {
                 <select
                   id="listing-category"
                   className={selectBase}
-                  value={form.categoryId}
+                  value={form.category}
                   onChange={(e) =>
-                    setForm({ ...form, categoryId: e.target.value })
+                    setForm({ ...form, category: e.target.value })
                   }
                   required
-                  disabled={categoriesLoading}
                 >
                   <option value="" className="text-black">
-                    {categoriesLoading ? "Loading categories..." : "Select category"}
+                    Select category
                   </option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id} className="text-black">
-                      {cat.name}
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <option
+                      key={category.slug}
+                      value={category.slug}
+                      className="text-black"
+                    >
+                      {category.label}
                     </option>
                   ))}
                 </select>
-                {categoriesError && (
-                  <p className="text-xs text-red-200 mt-2">{categoriesError}</p>
-                )}
+                <p className={helperBase}>Choose the best fit for this item.</p>
               </div>
 
               <div>

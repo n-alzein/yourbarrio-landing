@@ -1,4 +1,7 @@
-import { BUSINESS_CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/businessCategories";
+import {
+  LISTING_CATEGORY_BY_SLUG,
+  normalizeListingCategory,
+} from "@/lib/taxonomy/listingCategories";
 import { logServerTiming, perfTimingEnabled } from "@/lib/serverTiming";
 
 type StrapiResponse<T> = {
@@ -285,8 +288,8 @@ function buildFallbackCategory(
 }
 
 function getFallbackCategoryBySlug(slug: string) {
-  const normalized = slug.trim().toLowerCase();
-  const match = CATEGORY_BY_SLUG.get(normalized);
+  const normalized = normalizeListingCategory(slug)?.trim().toLowerCase();
+  const match = normalized ? LISTING_CATEGORY_BY_SLUG.get(normalized) : null;
   return match ? buildFallbackCategory(match) : null;
 }
 
@@ -329,8 +332,10 @@ function normalizeCategoryEntity(entity: CategoryEntity | null | undefined) {
 
 export async function fetchCategoryBySlug(slug: string) {
   if (!slug) return null;
+  const canonicalSlug = normalizeListingCategory(slug);
+  if (!canonicalSlug) return null;
   const params = new URLSearchParams();
-  params.set("filters[slug][$eq]", slug);
+  params.set("filters[slug][$eq]", canonicalSlug);
   params.set("fields[0]", "name");
   params.set("fields[1]", "slug");
   params.set("fields[2]", "tileSubtitle");
@@ -350,5 +355,5 @@ export async function fetchCategoryBySlug(slug: string) {
     throw error;
   }
   const first = Array.isArray(data) ? data[0] : null;
-  return normalizeCategoryEntity(first);
+  return normalizeCategoryEntity(first) || getFallbackCategoryBySlug(canonicalSlug);
 }

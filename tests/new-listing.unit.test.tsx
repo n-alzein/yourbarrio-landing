@@ -57,15 +57,6 @@ function makeSupabaseMock({ insertError } = {}) {
     data: { publicUrl: "https://example.com/1.jpg" },
   }));
 
-  const categoryQuery = {
-    select: vi.fn(() => categoryQuery),
-    eq: vi.fn(() => categoryQuery),
-    order: vi.fn(async () => ({
-      data: [{ id: "cat-1", name: "Food & Drink", slug: "food-and-drink" }],
-      error: null,
-    })),
-  };
-
   const usersQuery = {
     select: vi.fn(() => usersQuery),
     eq: vi.fn(() => usersQuery),
@@ -84,7 +75,6 @@ function makeSupabaseMock({ insertError } = {}) {
       from: vi.fn(() => ({ upload, getPublicUrl })),
     },
     from: vi.fn((table) => {
-      if (table === "business_categories") return categoryQuery;
       if (table === "users") return usersQuery;
       return { insert };
     }),
@@ -98,9 +88,9 @@ async function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Small batch concentrate." },
   });
-  await screen.findByRole("option", { name: "Food & Drink" });
+  await screen.findByRole("option", { name: "Clothing & Fashion" });
   fireEvent.change(screen.getByLabelText("Category"), {
-    target: { value: "cat-1" },
+    target: { value: "clothing-fashion" },
   });
   fireEvent.change(screen.getByLabelText("Price"), {
     target: { value: "12" },

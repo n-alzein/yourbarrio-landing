@@ -8,6 +8,9 @@ import { useAuth } from "@/components/AuthProvider";
 import { stripHtmlToText } from "@/lib/listingDescription";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildListingTaxonomyPayload } from "@/lib/taxonomy/compat";
+import { getListingCategoryOptions } from "@/lib/taxonomy/listingCategories";
+
+const CATEGORY_OPTIONS = getListingCategoryOptions();
 
 export default function NewListingPage() {
   const { supabase, user, profile, loadingUser } = useAuth();
@@ -18,15 +21,12 @@ export default function NewListingPage() {
     title: "",
     description: "",
     price: "",
-    categoryId: "",
+    category: "",
     inventoryQuantity: "",
     inventoryStatus: "in_stock",
     lowStockThreshold: "",
   });
 
-  const [categories, setCategories] = useState([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesError, setCategoriesError] = useState("");
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -55,49 +55,6 @@ export default function NewListingPage() {
     },
     [photoPreviews]
   );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadCategories() {
-      setCategoriesLoading(true);
-      setCategoriesError("");
-
-      try {
-        const client = getSupabaseBrowserClient() ?? supabase;
-        if (!client) {
-          throw new Error("Connection not ready. Please try again.");
-        }
-
-        const { data, error } = await client
-          .from("business_categories")
-          .select("id,name,slug")
-          .eq("is_active", true)
-          .order("name", { ascending: true });
-
-        if (error) throw error;
-
-        if (isMounted) {
-          setCategories(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error("Failed to load categories", err);
-        if (isMounted) {
-          setCategoriesError(
-            err.message || "Unable to load categories. Please refresh."
-          );
-        }
-      } finally {
-        if (isMounted) setCategoriesLoading(false);
-      }
-    }
-
-    loadCategories();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [supabase]);
 
   const handleAddPhotos = (files) => {
     const incoming = Array.from(files || []);
@@ -183,7 +140,7 @@ export default function NewListingPage() {
       return;
     }
 
-    if (!form.categoryId) {
+    if (!form.category) {
       setSubmitError("Please select a category.");
       return;
     }
@@ -216,11 +173,8 @@ export default function NewListingPage() {
         throw bizError;
       }
 
-      const selectedCategory = categories.find(
-        (category) => category.id === form.categoryId
-      );
       const taxonomy = buildListingTaxonomyPayload({
-        listing_category: selectedCategory?.name || null,
+        listing_category: form.category,
       });
       const listingPayload = {
         // public_id is intentionally omitted; DB default/trigger generates it.
@@ -230,7 +184,7 @@ export default function NewListingPage() {
         price: form.price,
         listing_category: taxonomy.listing_category,
         category: taxonomy.category,
-        category_id: form.categoryId,
+        category_id: null,
         inventory_status: form.inventoryStatus,
         inventory_quantity:
           form.inventoryStatus === "out_of_stock"
@@ -403,25 +357,26 @@ export default function NewListingPage() {
                 <select
                   id="listing-category"
                   className={selectBase}
-                  value={form.categoryId}
+                  value={form.category}
                   onChange={(e) =>
-                    setForm({ ...form, categoryId: e.target.value })
+                    setForm({ ...form, category: e.target.value })
                   }
                   required
-                  disabled={categoriesLoading}
                 >
                   <option value="" className="text-black">
-                    {categoriesLoading ? "Loading categories..." : "Select category"}
+                    Select category
                   </option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id} className="text-black">
-                      {cat.name}
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <option
+                      key={category.slug}
+                      value={category.slug}
+                      className="text-black"
+                    >
+                      {category.label}
                     </option>
                   ))}
                 </select>
-                {categoriesError && (
-                  <p className="text-xs text-red-200 mt-2">{categoriesError}</p>
-                )}
+                <p className={helperBase}>Choose the best fit for this item.</p>
               </div>
 
               <div>

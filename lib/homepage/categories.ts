@@ -1,3 +1,5 @@
+import { getListingCategories } from "@/lib/taxonomy/listingCategories";
+
 export type HomepageCategory = {
   slug: string;
   label: string;
@@ -9,51 +11,26 @@ export type HomepageCategory = {
 
 export const HOMEPAGE_CATEGORY_FALLBACK_IMAGE = "/images/categories/clothing-fashion.png";
 
-export const HOMEPAGE_CATEGORIES: HomepageCategory[] = [
-  {
-    slug: "clothing-fashion",
-    label: "Clothing & Fashion",
-    href: "/categories/clothing-fashion",
-    imageSrc: "/images/categories/clothing-fashion.png",
-    enabled: true,
-    sortOrder: 1,
-  },
-  {
-    slug: "beauty-personal-care",
-    label: "Beauty & Personal Care",
-    href: "/categories/beauty-personal-care",
-    imageSrc: "/images/categories/beauty-personal-care.png",
-    enabled: true,
-    sortOrder: 2,
-  },
-  {
-    slug: "home-decor",
-    label: "Home & Decor",
-    href: "/categories/home-decor",
-    imageSrc: "/images/categories/home-decor.png",
-    enabled: true,
-    sortOrder: 3,
-  },
-  {
-    slug: "jewelry-accessories",
-    label: "Jewelry & Accessories",
-    href: "/categories/jewelry-accessories",
-    imageSrc: "/images/categories/jewelry-accessories.png",
-    enabled: true,
-    sortOrder: 4,
-  },
-  {
-    slug: "gifts-crafts",
-    label: "Gifts & Crafts",
-    href: "/categories/gifts-crafts",
-    imageSrc: "/images/categories/gifts-crafts.png",
-    enabled: true,
-    sortOrder: 5,
-  },
+const HOMEPAGE_CATEGORY_IMAGE_BY_SLUG: Record<string, string> = {
+  "clothing-fashion": "/images/categories/clothing-fashion.png",
+  "beauty-personal-care": "/images/categories/beauty-personal-care.png",
+  "home-decor": "/images/categories/home-decor.png",
+  "jewelry-accessories": "/images/categories/jewelry-accessories.png",
+  "books-stationery": "/images/categories/books-stationery.png",
+};
+
+const HOMEPAGE_IMAGE_BACKED_SLUGS = new Set([
+  "clothing-fashion",
+  "beauty-personal-care",
+  "home-decor",
+  "jewelry-accessories",
+]);
+
+const HOMEPAGE_IMAGE_BACKED_FALLBACKS: HomepageCategory[] = [
   {
     slug: "flowers-plants",
     label: "Flowers & Plants",
-    href: "/categories/flowers-plants",
+    href: "/categories/other",
     imageSrc: "/images/categories/flowers-plant.png",
     enabled: true,
     sortOrder: 6,
@@ -61,19 +38,26 @@ export const HOMEPAGE_CATEGORIES: HomepageCategory[] = [
   {
     slug: "art-handmade",
     label: "Art & Handmade",
-    href: "/categories/art-handmade",
+    href: "/categories/other",
     imageSrc: "/images/categories/art-handmade.png",
-    enabled: false,
+    enabled: true,
     sortOrder: 7,
   },
-  {
-    slug: "books-stationery",
-    label: "Books & Stationery",
-    href: "/categories/books-stationery",
-    imageSrc: "/images/categories/books-stationery.png",
-    enabled: false,
-    sortOrder: 8,
-  },
+];
+
+export const HOMEPAGE_CATEGORIES: HomepageCategory[] = [
+  ...getListingCategories()
+    .filter((category) => HOMEPAGE_IMAGE_BACKED_SLUGS.has(category.slug))
+    .map((category) => ({
+      slug: category.slug,
+      label: category.label,
+      href: `/categories/${category.slug}`,
+      imageSrc:
+        HOMEPAGE_CATEGORY_IMAGE_BY_SLUG[category.slug] || HOMEPAGE_CATEGORY_FALLBACK_IMAGE,
+      enabled: true,
+      sortOrder: category.sortOrder,
+    })),
+  ...HOMEPAGE_IMAGE_BACKED_FALLBACKS,
 ];
 
 export function getHomepageCategories(includeDisabled = false) {

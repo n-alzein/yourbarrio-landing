@@ -5,32 +5,17 @@ import { X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocation } from "@/components/location/LocationProvider";
 import { sortListingsByAvailability } from "@/lib/inventory";
+import {
+  getListingsBrowseCategoryOptions,
+  normalizeListingsBrowseCategory,
+} from "@/lib/listings/browseCategories";
 import { getLocationCacheKey } from "@/lib/location";
 import { installNetTrace } from "@/lib/netTrace";
 import ListingMarketplaceCard from "./components/ListingMarketplaceCard";
 import ListingsToolbar from "./components/ListingsToolbar";
 import type { ListingItem } from "./types";
 
-const CATEGORY_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "food", label: "Food" },
-  { value: "shops", label: "Shops" },
-  { value: "services", label: "Services" },
-  { value: "tech", label: "Tech" },
-  { value: "beauty", label: "Beauty" },
-  { value: "home", label: "Home" },
-  { value: "clothing", label: "Clothing" },
-];
-
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  food: ["food", "drink", "grocery", "gourmet"],
-  shops: ["artisan", "craft", "book", "media", "gift", "toy", "pet", "music", "jewelry"],
-  services: ["service", "professional", "fitness", "wellness", "automotive", "hospitality"],
-  tech: ["tech", "electronic", "computer", "mobile", "smart home", "video game"],
-  beauty: ["beauty", "health", "spa", "cosmetic"],
-  home: ["home", "kitchen", "furniture", "garden", "bath", "bedding", "tool"],
-  clothing: ["clothing", "accessories", "shoes", "fashion"],
-};
+const CATEGORY_OPTIONS = getListingsBrowseCategoryOptions();
 
 const SORT_OPTIONS = [
   { value: "recommended", label: "Recommended" },
@@ -61,33 +46,18 @@ function normalizePrice(value: ListingItem["price"]) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function inferCategoryKey(value: string | null | undefined) {
-  const normalized = normalizeText(value);
-  if (!normalized) return "all";
-  if (CATEGORY_OPTIONS.some((option) => option.value === normalized)) return normalized;
+function getResultErrorMessage(error: unknown) {
+  if (typeof error === "string") return error.trim() || null;
+  if (!error || typeof error !== "object") return null;
 
-  for (const [key, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (keywords.some((keyword) => normalized.includes(keyword))) {
-      return key;
-    }
+  const candidate = error as { message?: unknown; error?: unknown };
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    return candidate.message.trim();
   }
-
-  return "all";
-}
-
-function matchesCategory(listing: ListingItem, categoryKey: string) {
-  if (!categoryKey || categoryKey === "all") return true;
-  const categoryText = [
-    listing?.listing_category,
-    listing?.category,
-    listing?.title,
-    listing?.description,
-  ]
-    .map((value) => normalizeText(value))
-    .filter(Boolean)
-    .join(" ");
-
-  return CATEGORY_KEYWORDS[categoryKey]?.some((keyword) => categoryText.includes(keyword)) || false;
+  if (typeof candidate.error === "string" && candidate.error.trim()) {
+    return candidate.error.trim();
+  }
+  return null;
 }
 
 function LoadingGridSkeleton() {
@@ -259,9 +229,12 @@ export default function ListingsClient() {
   const pathname = usePathname();
   const { location, hydrated: locationHydrated } = useLocation();
   const searchTerm = searchParams.get("q")?.trim() || "";
-  const category = inferCategoryKey(searchParams.get("category")?.trim() || "");
+  const rawCategory = searchParams.get("category")?.trim() || "";
+  const normalizedCategory = normalizeListingsBrowseCategory(rawCategory);
+  const category = normalizedCategory.canonical || "all";
+  const invalidCategory = Boolean(rawCategory) && !normalizedCategory.isValid;
   const locationKey = getLocationCacheKey(location);
-  const cacheKey = `${locationKey}::${searchTerm || "all"}`;
+  const cacheKey = `${locationKey}::${searchTerm || "all"}::${category}`;
   const hasLocation = locationKey !== "none";
   const showLocationEmpty = locationHydrated && !hasLocation;
   const marketCity = String(location?.city || "").trim() || "Long Beach";
@@ -274,9 +247,7 @@ export default function ListingsClient() {
   );
 
   const filteredListings = useMemo(() => {
-    const categoryFiltered = sortedListings.filter((listing) => matchesCategory(listing, category));
-
-    const priceFiltered = categoryFiltered.filter((listing) => {
+    const priceFiltered = sortedListings.filter((listing) => {
       const amount = normalizePrice(listing?.price);
       if (priceFilter === "under-50") return amount !== null && amount < 50;
       if (priceFilter === "under-100") return amount !== null && amount < 100;
@@ -334,7 +305,7 @@ export default function ListingsClient() {
     }
 
     return openFiltered;
-  }, [category, distanceFilter, marketCity, openNow, priceFilter, sortBy, sortedListings]);
+  }, [distanceFilter, marketCity, openNow, priceFilter, sortBy, sortedListings]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -374,8 +345,17 @@ export default function ListingsClient() {
   }, []);
 
   useEffect(() => {
+    if (!rawCategory) return;
+    if (!normalizedCategory.isValid) return;
+    if (normalizedCategory.isAlias) {
+      updateQueryParam("category", normalizedCategory.canonical);
+    }
+  }, [normalizedCategory.canonical, normalizedCategory.isAlias, normalizedCategory.isValid, rawCategory]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     if (!hasLocation) return;
+    if (invalidCategory) return;
     try {
       const raw = sessionStorage.getItem(cacheKey);
       const parsed = raw ? JSON.parse(raw) : null;
@@ -396,6 +376,17 @@ export default function ListingsClient() {
   }, [loading]);
 
   useEffect(() => {
+    if (invalidCategory) {
+      setListings([]);
+      setLoadError(null);
+      setHasLoaded(true);
+      setLoading(false);
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[listings] invalid category param", { rawCategory });
+      }
+      return undefined;
+    }
+
     if (!hasLocation) {
       setListings([]);
       setLoadError(null);
@@ -411,6 +402,7 @@ export default function ListingsClient() {
       try {
         const params = new URLSearchParams();
         if (searchTerm) params.set("q", searchTerm);
+        if (category !== "all") params.set("category", category);
         params.set("limit", "120");
         const response = await fetch(`/api/home-listings?${params.toString()}`, {
           signal,
@@ -440,18 +432,22 @@ export default function ListingsClient() {
         if (!active) return;
         if (!result.ok) {
           if (result.aborted) return;
-          const requestKey = searchTerm || "all";
+          const requestKey = `${searchTerm || "all"}::${category}`;
+          const errorMessage =
+            getResultErrorMessage(result.error) || "We couldn't load listings right now.";
           if (loggedErrorRef.current !== requestKey) {
             loggedErrorRef.current = requestKey;
-            console.error("[LISTINGS][load:error]", {
-              route: "/listings",
-              request: "api:home-listings",
-              status: result.status,
-              message: result.error?.message || "Unknown error",
-            });
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[LISTINGS][load:warn]", {
+                route: "/listings",
+                request: "api:home-listings",
+                status: result.status ?? null,
+                message: errorMessage,
+              });
+            }
           }
           setLoadError({
-            message: result.error?.message || "We couldn't load listings right now.",
+            message: errorMessage,
           });
           setListings([]);
           return;
@@ -479,7 +475,7 @@ export default function ListingsClient() {
       active = false;
       controller.abort();
     };
-  }, [cacheKey, hasLoaded, hasLocation, retryKey, searchTerm]);
+  }, [cacheKey, category, hasLoaded, hasLocation, invalidCategory, rawCategory, retryKey, searchTerm]);
 
   function updateQueryParam(key: string, value: string | null) {
     const next = new URLSearchParams(searchParams.toString());
@@ -557,7 +553,9 @@ export default function ListingsClient() {
 
         {!loading && !loadError && !showLocationEmpty && filteredListings.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-slate-200 bg-[#fbfbfd] p-6 text-slate-600">
-            No listings match the current filters.
+            {invalidCategory
+              ? "That category filter is invalid."
+              : "No listings match the current filters."}
           </div>
         ) : null}
 

@@ -2,7 +2,11 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
-import { fetchCategoryBySlug } from "@/lib/categories";
+import {
+  getListingCategory,
+  getListingCategoryDbNames,
+  getListingCategoryDbSlugs,
+} from "@/lib/taxonomy/listingCategories";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import {
   getLocationCacheKey,
@@ -40,8 +44,14 @@ export async function getCategoryRowCached(slug: string): Promise<CategoryRow> {
   if (!normalized) return null;
   const cached = unstable_cache(
     async () => {
-      const supabase = getPublicSupabaseServerClient();
-      return fetchCategoryBySlug(supabase, normalized);
+      const category = getListingCategory(normalized);
+      return category
+        ? {
+            id: category.slug,
+            name: category.label,
+            slug: category.slug,
+          }
+        : null;
     },
     ["category:row", normalized],
     {
@@ -105,37 +115,25 @@ export async function getCategoryListingsCached({
       let error: Error | null = null;
       const fallbacks: string[] = [];
       let branch = "none";
-      if (categoryId) {
-        branch = "category_id";
-        const primaryRes = await buildBaseQuery().eq("category_id", categoryId);
-        data = primaryRes.data || [];
-        error = primaryRes.error;
+      const categoryNames = getListingCategoryDbNames(normalizedSlug || normalizedName);
+      const categorySlugs = getListingCategoryDbSlugs(normalizedSlug || normalizedName);
 
-        if (!error && Array.isArray(data) && data.length === 0 && normalizedName) {
-          fallbacks.push("category_name");
-          const fallbackRes = await buildBaseQuery().ilike("category", normalizedName);
-          data = fallbackRes.data || [];
-          error = fallbackRes.error;
-        }
-        if (!error && Array.isArray(data) && data.length === 0 && normalizedSlug) {
-          fallbacks.push("category_slug");
-          const slugFallbackRes = await buildBaseQuery().ilike("category", normalizedSlug);
-          data = slugFallbackRes.data || [];
-          error = slugFallbackRes.error;
-        }
-      } else if (normalizedName) {
-        branch = "legacy_category";
-        const legacyRes = await buildBaseQuery().ilike("category", normalizedName);
-        data = legacyRes.data || [];
-        error = legacyRes.error;
+      branch = categoryId ? "category_slug" : "listing_category";
+      const results = await Promise.all([
+        categoryNames.length
+          ? buildBaseQuery().in("category", categoryNames)
+          : Promise.resolve({ data: [], error: null }),
+        categorySlugs.length ? buildBaseQuery().in("category", categorySlugs) : Promise.resolve({ data: [], error: null }),
+      ]);
 
-        if (!error && Array.isArray(data) && data.length === 0 && normalizedSlug) {
-          fallbacks.push("category_slug");
-          const slugFallbackRes = await buildBaseQuery().ilike("category", normalizedSlug);
-          data = slugFallbackRes.data || [];
-          error = slugFallbackRes.error;
+      error = (results.find((result) => result?.error)?.error as Error | null) || null;
+      const deduped = new Map();
+      for (const result of results) {
+        for (const row of result?.data || []) {
+          if (row?.id) deduped.set(row.id, row);
         }
       }
+      data = Array.from(deduped.values());
 
       if (error) {
         return { listings: [], error, branch, fallbacks };

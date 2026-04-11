@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
-import { CATEGORY_BY_SLUG } from "@/lib/businessCategories";
+import {
+  LISTING_CATEGORY_BY_SLUG,
+  normalizeListingCategory,
+} from "@/lib/taxonomy/listingCategories";
 import CategoryPerfMark from "./CategoryPerfMark";
 import {
   getCategoryListingsCached,
@@ -49,7 +52,7 @@ export default async function CategoryListingsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const categorySlug = slug?.trim();
+  const categorySlug = normalizeListingCategory(slug?.trim());
   if (!categorySlug) notFound();
   const location = await getLocationFromCookies();
   const listingsHref = "/listings";
@@ -57,12 +60,12 @@ export default async function CategoryListingsPage({
   let listings: SupabaseListing[] = [];
   const normalizedSlug = categorySlug.toLowerCase();
   let categoryName =
-    CATEGORY_BY_SLUG.get(normalizedSlug)?.name || humanizeSlug(categorySlug);
+    LISTING_CATEGORY_BY_SLUG.get(normalizedSlug)?.label || humanizeSlug(categorySlug);
   let listingsError: Error | null = null;
   const totalStart = Date.now();
   try {
     const categoryRow = await getCategoryRowCached(categorySlug);
-    const fallbackCategory = CATEGORY_BY_SLUG.get(normalizedSlug);
+    const fallbackCategory = LISTING_CATEGORY_BY_SLUG.get(normalizedSlug);
     if (!categoryRow && !fallbackCategory) {
       notFound();
     }

@@ -38,6 +38,7 @@ import {
 } from "@/components/home/HomeDiscoverySections";
 import { useLocation } from "@/components/location/LocationProvider";
 import FeedbackSection from "@/components/browse/FeedbackSection";
+import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
 
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 function HomeGuardFallback() {
@@ -659,7 +660,7 @@ function CustomerHomePageInner({
 
                   {!hybridItemsLoading && !hybridItemsError && hybridItems.length === 0 ? (
                     <div className={`mt-3 text-sm ${textTone.soft}`}>
-                      No items yet. Try a category like “coffee”, “salon”, or “groceries”.
+                      No items yet. Try a category like “electronics”, “home decor”, or “toys”.
                     </div>
                   ) : null}
 
@@ -712,7 +713,7 @@ function CustomerHomePageInner({
                             ) : null}
                           </div>
                           <div className={`text-[11px] uppercase tracking-wide ${textTone.faint} mt-1`}>
-                            {item.category || "Listing"}
+                            {getListingCategoryLabel(item, "Listing")}
                             {item.city ? ` · ${item.city}` : ""}
                           </div>
                           <span

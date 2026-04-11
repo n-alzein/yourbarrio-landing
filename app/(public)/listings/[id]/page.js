@@ -157,7 +157,7 @@ export default function ListingDetails({ params }) {
 
         const { data: item, error: listingError } = await client
           .from("listings")
-          .select("*, category_info:business_categories(name,slug)")
+          .select("*")
           .eq(isUuid(listingRef) ? "id" : "public_id", listingRef)
           .maybeSingle();
 

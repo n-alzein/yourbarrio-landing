@@ -192,7 +192,7 @@ export async function GET(request) {
         supabase
         .from("listings")
         .select(
-          "id, title, category, category_info:business_categories(name,slug), inventory_quantity"
+          "id, title, category, listing_category, inventory_quantity"
         )
         ,
         "business_id",
