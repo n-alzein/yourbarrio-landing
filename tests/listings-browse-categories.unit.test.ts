@@ -16,6 +16,8 @@ describe("listings browse categories", () => {
       { value: "jewelry-accessories", label: "Jewelry & Accessories" },
       { value: "books-stationery", label: "Books & Stationery" },
       { value: "electronics-tech", label: "Electronics & Tech" },
+      { value: "flowers-plants", label: "Flowers & Plants" },
+      { value: "art-handmade", label: "Art & Handmade" },
       { value: "home-goods-appliances", label: "Home Goods & Appliances" },
       { value: "toys-games", label: "Toys & Games" },
       { value: "sports-outdoors", label: "Sports & Outdoors" },
@@ -44,6 +46,16 @@ describe("listings browse categories", () => {
     });
     expect(normalizeListingsBrowseCategory("Video Games")).toMatchObject({
       canonical: "electronics-tech",
+      isValid: true,
+      isAlias: true,
+    });
+    expect(normalizeListingsBrowseCategory("Garden & Outdoor")).toMatchObject({
+      canonical: "flowers-plants",
+      isValid: true,
+      isAlias: true,
+    });
+    expect(normalizeListingsBrowseCategory("Handmade & Artisan")).toMatchObject({
+      canonical: "art-handmade",
       isValid: true,
       isAlias: true,
     });
@@ -80,12 +92,22 @@ describe("listings browse categories", () => {
       "tech-and-electronics",
       "video-games",
     ]);
+    expect(getListingsBrowseFilterCategorySlugs("flowers-plants")).toEqual([
+      "flowers-plants",
+      "flowers",
+      "garden-and-outdoor",
+    ]);
+    expect(getListingsBrowseFilterCategorySlugs("art-handmade")).toEqual([
+      "art-handmade",
+      "arts-and-crafts",
+      "handmade-and-artisan",
+      "arts-and-entertainment",
+      "photography",
+      "music-and-instruments",
+    ]);
     expect(getListingsBrowseFilterCategorySlugs("other")).toEqual([
       "other",
       "gifts-specialty",
-      "arts-and-crafts",
-      "handmade-and-artisan",
-      "flowers-plants",
       "pantry",
       "kitchen",
       "food-and-drink",
@@ -94,9 +116,7 @@ describe("listings browse categories", () => {
       "home-services",
       "industrial-and-scientific",
       "kids-and-family",
-      "music-and-instruments",
       "pets-and-animals",
-      "photography",
       "professional-services",
       "travel-and-hospitality",
       "travel-and-luggage",

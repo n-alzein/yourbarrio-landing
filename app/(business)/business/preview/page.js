@@ -19,6 +19,9 @@ import {
   sanitizePublicProfile,
   sanitizeReviews,
 } from "@/lib/publicBusinessProfile/normalize";
+import {
+  fetchBusinessReviews,
+} from "@/lib/publicBusinessProfile/reviews";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -171,30 +174,7 @@ async function fetchGallery(supabase, businessId) {
 }
 
 async function fetchReviews(supabase, businessId) {
-  const baseQuery = supabase
-    .from("business_reviews")
-    .select(
-      "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-    )
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const withUpdatedQuery = supabase
-    .from("business_reviews")
-    .select(
-      "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
-    )
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const result = await safeQuery(withUpdatedQuery, [], "reviews");
-  if (result.error?.code === "42703") {
-    const fallback = await safeQuery(baseQuery, [], "reviews");
-    return fallback.data || [];
-  }
-  return result.data || [];
+  return fetchBusinessReviews(supabase, { businessId, limit: 10 });
 }
 
 async function fetchReviewRatings(supabase, businessId) {

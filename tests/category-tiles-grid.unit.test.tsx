@@ -26,12 +26,14 @@ describe("CategoryTilesGrid", () => {
             name: "Electronics & Tech",
             slug: "electronics-tech",
             tileImageUrl: "/electronics-tech.png",
+            href: "/listings?category=electronics-tech",
           },
           {
             id: 2,
             name: "Home & Decor",
             slug: "home-decor",
             tileImageUrl: "/home-decor.png",
+            href: "/listings?category=home-decor",
           },
         ]}
       />
@@ -41,11 +43,11 @@ describe("CategoryTilesGrid", () => {
     expect(screen.getByText("Home & Decor")).toBeInTheDocument();
     expect(screen.getByLabelText("Shop Electronics & Tech")).toHaveAttribute(
       "href",
-      "/categories/electronics-tech"
+      "/listings?category=electronics-tech"
     );
     expect(screen.getByLabelText("Shop Home & Decor")).toHaveAttribute(
       "href",
-      "/categories/home-decor"
+      "/listings?category=home-decor"
     );
   });
 

@@ -70,6 +70,15 @@ mapped AS (
         'tech-and-electronics',
         'video-games'
       ) THEN 'electronics-tech'
+      WHEN n.normalized_value IN ('flowers-plants', 'flowers', 'garden-and-outdoor') THEN 'flowers-plants'
+      WHEN n.normalized_value IN (
+        'art-handmade',
+        'arts-and-crafts',
+        'handmade-and-artisan',
+        'arts-and-entertainment',
+        'photography',
+        'music-and-instruments'
+      ) THEN 'art-handmade'
       WHEN n.normalized_value IN ('home-goods-appliances', 'tools-and-home-improvement') THEN 'home-goods-appliances'
       WHEN n.normalized_value IN ('toys-games', 'toys-and-games') THEN 'toys-games'
       WHEN n.normalized_value IN ('sports-outdoors', 'sports-and-outdoors', 'sports-and-recreation', 'fitness-and-wellness') THEN 'sports-outdoors'
@@ -90,6 +99,15 @@ mapped AS (
         'tech-and-electronics',
         'video-games'
       ) THEN 'Electronics & Tech'
+      WHEN n.normalized_value IN ('flowers-plants', 'flowers', 'garden-and-outdoor') THEN 'Flowers & Plants'
+      WHEN n.normalized_value IN (
+        'art-handmade',
+        'arts-and-crafts',
+        'handmade-and-artisan',
+        'arts-and-entertainment',
+        'photography',
+        'music-and-instruments'
+      ) THEN 'Art & Handmade'
       WHEN n.normalized_value IN ('home-goods-appliances', 'tools-and-home-improvement') THEN 'Home Goods & Appliances'
       WHEN n.normalized_value IN ('toys-games', 'toys-and-games') THEN 'Toys & Games'
       WHEN n.normalized_value IN ('sports-outdoors', 'sports-and-outdoors', 'sports-and-recreation', 'fitness-and-wellness') THEN 'Sports & Outdoors'
@@ -169,6 +187,15 @@ mapped AS (
         'tech-and-electronics',
         'video-games'
       ) THEN 'electronics-tech'
+      WHEN n.normalized_value IN ('flowers-plants', 'flowers', 'garden-and-outdoor') THEN 'flowers-plants'
+      WHEN n.normalized_value IN (
+        'art-handmade',
+        'arts-and-crafts',
+        'handmade-and-artisan',
+        'arts-and-entertainment',
+        'photography',
+        'music-and-instruments'
+      ) THEN 'art-handmade'
       WHEN n.normalized_value IN ('home-goods-appliances', 'tools-and-home-improvement') THEN 'home-goods-appliances'
       WHEN n.normalized_value IN ('toys-games', 'toys-and-games') THEN 'toys-games'
       WHEN n.normalized_value IN ('sports-outdoors', 'sports-and-outdoors', 'sports-and-recreation', 'fitness-and-wellness') THEN 'sports-outdoors'
@@ -189,6 +216,15 @@ mapped AS (
         'tech-and-electronics',
         'video-games'
       ) THEN 'Electronics & Tech'
+      WHEN n.normalized_value IN ('flowers-plants', 'flowers', 'garden-and-outdoor') THEN 'Flowers & Plants'
+      WHEN n.normalized_value IN (
+        'art-handmade',
+        'arts-and-crafts',
+        'handmade-and-artisan',
+        'arts-and-entertainment',
+        'photography',
+        'music-and-instruments'
+      ) THEN 'Art & Handmade'
       WHEN n.normalized_value IN ('home-goods-appliances', 'tools-and-home-improvement') THEN 'Home Goods & Appliances'
       WHEN n.normalized_value IN ('toys-games', 'toys-and-games') THEN 'Toys & Games'
       WHEN n.normalized_value IN ('sports-outdoors', 'sports-and-outdoors', 'sports-and-recreation', 'fitness-and-wellness') THEN 'Sports & Outdoors'

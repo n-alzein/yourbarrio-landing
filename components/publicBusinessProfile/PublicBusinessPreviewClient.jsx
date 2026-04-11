@@ -21,6 +21,7 @@ import {
   sanitizePublicProfile,
   sanitizeReviews,
 } from "@/lib/publicBusinessProfile/normalize";
+import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
 
 const EMPTY_SUMMARY = {
   count: 0,
@@ -273,30 +274,14 @@ export default function PublicBusinessPreviewClient({
         .order("created_at", { ascending: false })
         .limit(24);
 
-      const reviewsSelectBase =
-        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at";
-      const reviewsSelectWithUpdated = `${reviewsSelectBase},updated_at`;
-      const reviewsQuery = client
-        .from("business_reviews")
-        .select(reviewsSelectWithUpdated)
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
       const ratingsQuery = client
         .from("business_reviews")
         .select("rating")
         .eq("business_id", businessId);
-
-      let reviewsResult = await reviewsQuery;
-      if (reviewsResult?.error?.code === "42703") {
-        reviewsResult = await client
-          .from("business_reviews")
-          .select(reviewsSelectBase)
-          .eq("business_id", businessId)
-          .order("created_at", { ascending: false })
-          .limit(10);
-      }
+      const reviewsWithAuthors = await fetchBusinessReviews(client, {
+        businessId,
+        limit: 10,
+      });
 
       const [
         profileResult,
@@ -314,7 +299,7 @@ export default function PublicBusinessPreviewClient({
 
       console.log("[public business] reviews load", {
         businessId,
-        reviewsCount: reviewsResult?.data?.length || 0,
+        reviewsCount: reviewsWithAuthors?.length || 0,
         ratingsCount: ratingsResult?.data?.length || 0,
       });
 
@@ -337,7 +322,7 @@ export default function PublicBusinessPreviewClient({
           announcements: sanitizeAnnouncements(announcementsResult?.data),
           gallery: sanitizeGalleryPhotos(galleryResult?.data),
           listings: sanitizeListings(listingsResult?.data),
-          reviews: sanitizeReviews(reviewsResult?.data),
+          reviews: sanitizeReviews(reviewsWithAuthors),
           ratingSummary: ratingsResult?.data
             ? buildRatingSummary(ratingsResult.data)
             : EMPTY_SUMMARY,

@@ -1,7 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getPublicBusinessByOwnerId } from "@/lib/business/getPublicBusinessByOwnerId";
-import { getSupabaseServerClient } from "@/lib/supabaseServer";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
@@ -20,17 +19,13 @@ import {
   sanitizePublicProfile,
   sanitizeReviews,
 } from "@/lib/publicBusinessProfile/normalize";
+import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
 
 const PUBLIC_CACHE_SECONDS = 300;
 const PERF_ENV_FLAG = "YB_PROFILE_PERF";
 const LOOKUP_DEBUG_ENV_FLAG = "YB_PROFILE_LOOKUP_DEBUG";
 const UUID_ANY_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isMissingColumnError(error) {
-  if (!error) return false;
-  return error?.code === "42703";
-}
 
 function buildRatingSummary(rows) {
   const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -217,30 +212,7 @@ async function fetchGallery(supabase, businessId) {
 }
 
 async function fetchReviews(supabase, businessId) {
-  const baseQuery = supabase
-    .from("business_reviews")
-    .select(
-      "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-    )
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const withUpdatedQuery = supabase
-    .from("business_reviews")
-    .select(
-      "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
-    )
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const result = await safeQuery(withUpdatedQuery, [], "reviews");
-  if (result.error && isMissingColumnError(result.error)) {
-    const fallback = await safeQuery(baseQuery, [], "reviews");
-    return fallback.data || [];
-  }
-  return result.data || [];
+  return fetchBusinessReviews(supabase, { businessId, limit: 10 });
 }
 
 async function fetchReviewRatings(supabase, businessId) {
@@ -411,10 +383,6 @@ export default async function PublicBusinessProfilePage({
     return <PublicBusinessPreviewClient businessId={businessId} trackView={false} />;
   }
 
-  const useAuthenticatedClient = shell === "customer";
-  const supabase = useAuthenticatedClient
-    ? await getSupabaseServerClient()
-    : null;
   const profileResult = await perf.time("profile", () =>
     getPublicProfileCached(businessId)
   );
@@ -425,11 +393,9 @@ export default async function PublicBusinessProfilePage({
     notFound();
   }
 
-  const publicReadClient = supabase || getPublicSupabaseServerClient();
+  const publicReadClient = getPublicSupabaseServerClient();
   const listingPreview = await perf.time("listings-preview", () =>
-    useAuthenticatedClient
-      ? fetchListingsWithFallback(publicReadClient, businessId, 1)
-      : getPublicListingsCached(businessId, 1)
+    getPublicListingsCached(businessId, 1)
   );
   const isEligible = listingPreview.length > 0;
 
@@ -441,29 +407,19 @@ export default async function PublicBusinessProfilePage({
   const [galleryResult, announcementsResult, listingsResult, reviewsResult, reviewRatings] =
     await Promise.all([
       perf.time("gallery", () =>
-        useAuthenticatedClient
-          ? fetchGallery(publicReadClient, businessId)
-          : getPublicGalleryCached(businessId)
+        getPublicGalleryCached(businessId)
       ),
       perf.time("announcements", () =>
-        useAuthenticatedClient
-          ? fetchAnnouncements(publicReadClient, businessId)
-          : getPublicAnnouncementsCached(businessId)
+        getPublicAnnouncementsCached(businessId)
       ),
       perf.time("listings", () =>
-        useAuthenticatedClient
-          ? fetchListingsWithFallback(publicReadClient, businessId, 24)
-          : getPublicListingsCached(businessId, 24)
+        getPublicListingsCached(businessId, 24)
       ),
       perf.time("reviews", () =>
-        useAuthenticatedClient
-          ? fetchReviews(publicReadClient, businessId)
-          : getPublicReviewsCached(businessId)
+        getPublicReviewsCached(businessId)
       ),
       perf.time("review-ratings", () =>
-        useAuthenticatedClient
-          ? fetchReviewRatings(publicReadClient, businessId)
-          : getPublicReviewRatingsCached(businessId)
+        getPublicReviewRatingsCached(businessId)
       ),
     ]);
 

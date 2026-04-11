@@ -30,7 +30,7 @@ const HOMEPAGE_IMAGE_BACKED_FALLBACKS: HomepageCategory[] = [
   {
     slug: "flowers-plants",
     label: "Flowers & Plants",
-    href: "/categories/other",
+    href: "/listings?category=flowers-plants",
     imageSrc: "/images/categories/flowers-plant.png",
     enabled: true,
     sortOrder: 6,
@@ -38,7 +38,7 @@ const HOMEPAGE_IMAGE_BACKED_FALLBACKS: HomepageCategory[] = [
   {
     slug: "art-handmade",
     label: "Art & Handmade",
-    href: "/categories/other",
+    href: "/listings?category=art-handmade",
     imageSrc: "/images/categories/art-handmade.png",
     enabled: true,
     sortOrder: 7,
@@ -51,7 +51,7 @@ export const HOMEPAGE_CATEGORIES: HomepageCategory[] = [
     .map((category) => ({
       slug: category.slug,
       label: category.label,
-      href: `/categories/${category.slug}`,
+      href: `/listings?category=${category.slug}`,
       imageSrc:
         HOMEPAGE_CATEGORY_IMAGE_BY_SLUG[category.slug] || HOMEPAGE_CATEGORY_FALLBACK_IMAGE,
       enabled: true,

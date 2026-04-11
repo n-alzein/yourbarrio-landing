@@ -2,18 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { MessageSquareQuote, Star } from "lucide-react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { logMutation } from "@/lib/auth/requireSession";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useAuth } from "@/components/AuthProvider";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useViewerContext } from "@/components/public/ViewerContextEnhancer";
 import ReportModal from "@/components/moderation/ReportModal";
-
-function formatReviewer(id) {
-  if (!id) return "Customer";
-  return `Customer ${id.slice(0, 6)}`;
-}
+import {
+  attachReviewAuthorProfiles,
+  getReviewAuthorDisplayName,
+  mergePublicBusinessReview,
+  REVIEW_SELECT_BASE,
+  REVIEW_SELECT_WITH_UPDATED,
+} from "@/lib/publicBusinessProfile/reviews";
 
 function formatDate(value) {
   if (!value) return "";
@@ -24,10 +25,27 @@ function formatDate(value) {
   }
 }
 
-function isMissingColumnError(error) {
-  if (!error) return false;
-  if (error?.code === "42703") return true;
-  return /column "([^"]+)" does not exist/i.test(error?.message || "");
+async function fetchPublicReviewFeed({
+  businessId,
+  from,
+  to,
+  limit,
+  customerId,
+  single = false,
+}) {
+  const params = new URLSearchParams({ businessId });
+  if (typeof from === "number") params.set("from", String(from));
+  if (typeof to === "number") params.set("to", String(to));
+  if (typeof limit === "number") params.set("limit", String(limit));
+  if (customerId) params.set("customerId", customerId);
+  if (single) params.set("single", "1");
+
+  const response = await fetch(`/api/public-business-reviews?${params.toString()}`, {
+    credentials: "same-origin",
+  });
+  if (!response.ok) return single ? null : [];
+  const payload = await response.json();
+  return payload?.reviews ?? (single ? null : []);
 }
 
 function buildSummaryFromReviews(items = []) {
@@ -78,6 +96,15 @@ function isSameReviewList(prev = [], next = []) {
   if (prev.length !== next.length) return false;
   for (let i = 0; i < prev.length; i += 1) {
     if (prev[i]?.id !== next[i]?.id) return false;
+    const prevAuthor = prev[i]?.author_profile || null;
+    const nextAuthor = next[i]?.author_profile || null;
+    if ((prevAuthor?.user_id || null) !== (nextAuthor?.user_id || null)) return false;
+    if ((prevAuthor?.display_name || null) !== (nextAuthor?.display_name || null)) {
+      return false;
+    }
+    if ((prevAuthor?.avatar_url || null) !== (nextAuthor?.avatar_url || null)) {
+      return false;
+    }
   }
   return true;
 }
@@ -96,7 +123,7 @@ export default function BusinessReviewsPanel({
   const [reviews, setReviews] = useState(initialReviews || []);
   const [summary, setSummary] = useState(() => normalizeSummary(ratingSummary, []));
   const [loadingMore, setLoadingMore] = useState(false);
-  const [customerNames, setCustomerNames] = useState({});
+  const [customerProfiles, setCustomerProfiles] = useState({});
   const [customerReviewId, setCustomerReviewId] = useState(null);
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");
@@ -143,34 +170,16 @@ export default function BusinessReviewsPanel({
     if (!businessId || loadingMore) return;
     setLoadingMore(true);
 
-    const client = getSupabaseBrowserClient();
-    if (!client) {
-      setLoadingMore(false);
-      return;
-    }
-
     const from = reviews.length;
     const to = from + pageSize - 1;
-    const reviewsSelectBase =
-      "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at";
-    const reviewsSelectWithUpdated = `${reviewsSelectBase},updated_at`;
-    let { data, error } = await client
-      .from("business_reviews")
-      .select(reviewsSelectWithUpdated)
-      .eq("business_id", businessId)
-      .order("created_at", { ascending: false })
-      .range(from, to);
-    if (error && isMissingColumnError(error)) {
-      ({ data, error } = await client
-        .from("business_reviews")
-        .select(reviewsSelectBase)
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false })
-        .range(from, to));
-    }
+    const enriched = await fetchPublicReviewFeed({
+      businessId,
+      from,
+      to,
+    });
 
-    if (!error && data?.length) {
-      setReviews((prev) => [...prev, ...data]);
+    if (enriched?.length) {
+      setReviews((prev) => [...prev, ...enriched]);
     }
 
     setLoadingMore(false);
@@ -185,6 +194,19 @@ export default function BusinessReviewsPanel({
   }, [initialReviews]);
 
   useEffect(() => {
+    setCustomerProfiles((prev) => {
+      const next = { ...prev };
+      reviews.forEach((review) => {
+        const customerId = review?.customer_id;
+        const profile = review?.author_profile;
+        if (!customerId || !profile) return;
+        next[customerId] = profile;
+      });
+      return next;
+    });
+  }, [reviews]);
+
+  useEffect(() => {
     setSummary((prev) => normalizeSummary(ratingSummary, reviews) || prev);
   }, [ratingSummary, reviews]);
 
@@ -196,31 +218,21 @@ export default function BusinessReviewsPanel({
     }
 
     const loadCustomerReview = async () => {
-      const client = supabase ?? getSupabaseBrowserClient();
-      if (!client) return;
-      const reviewsSelectBase =
-        "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at";
-      const reviewsSelectWithUpdated = `${reviewsSelectBase},updated_at`;
-      let { data, error } = await client
-        .from("business_reviews")
-        .select(reviewsSelectWithUpdated)
-        .eq("business_id", businessId)
-        .eq("customer_id", customerId)
-        .maybeSingle();
-      if (error && isMissingColumnError(error)) {
-        ({ data, error } = await client
-          .from("business_reviews")
-          .select(reviewsSelectBase)
-          .eq("business_id", businessId)
-          .eq("customer_id", customerId)
-          .maybeSingle());
-      }
+      const data = await fetchPublicReviewFeed({
+        businessId,
+        customerId,
+        single: true,
+      });
 
       if (!active) return;
-      if (!error && data) {
+      if (data) {
         setCustomerReviewId(data.id);
         setReviews((prev) => {
-          if (prev.some((item) => item.id === data.id)) return prev;
+          if (prev.some((item) => item.id === data.id)) {
+            return prev.map((item) =>
+              item.id === data.id ? mergePublicBusinessReview(item, data) : item
+            );
+          }
           return [data, ...prev];
         });
       } else {
@@ -237,32 +249,26 @@ export default function BusinessReviewsPanel({
   useEffect(() => {
     let active = true;
     const ids = Array.from(new Set(reviews.map((item) => item.customer_id).filter(Boolean)));
-    const missing = ids.filter((id) => !customerNames[id]);
+    const missing = ids.filter((id) => {
+      const profile = customerProfiles[id];
+      return !profile || (!profile.display_name && !profile.avatar_url);
+    });
     if (!missing.length) return () => {};
 
-    const loadNames = async () => {
-      const client = supabase ?? getSupabaseBrowserClient();
-      if (!client) return;
-      const { data, error } = await client
-        .from("users")
-        .select("id,full_name,business_name")
-        .in("id", missing);
-
-      if (!active || error || !data?.length) return;
-      setCustomerNames((prev) => {
-        const next = { ...prev };
-        data.forEach((row) => {
-          next[row.id] = row.full_name || row.business_name || "Customer";
-        });
-        return next;
+    const loadProfiles = async () => {
+      const enriched = await fetchPublicReviewFeed({
+        businessId,
+        limit: Math.max(reviews.length, totalReviews || reviews.length || 10),
       });
+      if (!active || !enriched.length) return;
+      setReviews((prev) => (isSameReviewList(prev, enriched) ? prev : enriched));
     };
 
-    loadNames();
+    loadProfiles();
     return () => {
       active = false;
     };
-  }, [reviews, customerNames, supabase]);
+  }, [businessId, reviews, customerProfiles, supabase, totalReviews]);
 
   const handleSubmitReview = async (event) => {
     event.preventDefault();
@@ -324,9 +330,7 @@ export default function BusinessReviewsPanel({
       const { data, error } = await client
         .from("business_reviews")
         .insert(payload)
-        .select(
-          "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-        )
+        .select(REVIEW_SELECT_BASE)
         .single();
 
       if (error) {
@@ -340,7 +344,8 @@ export default function BusinessReviewsPanel({
       }
 
       if (data) {
-        setReviews((prev) => [data, ...prev]);
+        const [enriched] = await attachReviewAuthorProfiles(client, [data]);
+        setReviews((prev) => [mergePublicBusinessReview(null, enriched || data), ...prev]);
         setCustomerReviewId(data.id);
         setSummary((prev) => {
           const base = normalizeSummary(prev, reviews);
@@ -431,9 +436,7 @@ export default function BusinessReviewsPanel({
         .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("id", reviewId)
         .eq("customer_id", userId)
-        .select(
-          "id,business_id,customer_id,rating,title,body,created_at,updated_at,business_reply,business_reply_at"
-        )
+        .select(REVIEW_SELECT_WITH_UPDATED)
         .single();
       if (error && isMissingColumnError(error)) {
         ({ data, error } = await client
@@ -441,9 +444,7 @@ export default function BusinessReviewsPanel({
           .update(payload)
           .eq("id", reviewId)
           .eq("customer_id", userId)
-          .select(
-            "id,business_id,customer_id,rating,title,body,created_at,business_reply,business_reply_at"
-          )
+          .select(REVIEW_SELECT_BASE)
           .single());
       }
 
@@ -458,7 +459,14 @@ export default function BusinessReviewsPanel({
       }
 
       if (data) {
-        setReviews((prev) => prev.map((item) => (item.id === reviewId ? data : item)));
+        const [enriched] = await attachReviewAuthorProfiles(client, [data]);
+        setReviews((prev) =>
+          prev.map((item) =>
+            item.id === reviewId
+              ? mergePublicBusinessReview(item, enriched || data)
+              : item
+          )
+        );
         setSummary((prev) => {
           const base = normalizeSummary(prev, reviews);
           const existing = reviews.find((item) => item.id === reviewId);
@@ -595,6 +603,16 @@ export default function BusinessReviewsPanel({
     });
     return [...mine, ...others];
   }, [reviews, customerId]);
+
+  const resolveReviewerName = (review) => {
+    const profile =
+      review?.author_profile ||
+      (review?.customer_id ? customerProfiles[review.customer_id] : null);
+    return getReviewAuthorDisplayName({
+      ...review,
+      author_profile: profile,
+    });
+  };
 
   useEffect(() => {
     if (!reportToast) return undefined;
@@ -783,8 +801,7 @@ export default function BusinessReviewsPanel({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-950">
-                    {customerNames[review.customer_id] ||
-                      formatReviewer(review.customer_id)}
+                    {resolveReviewerName(review)}
                   </p>
                   <p className="text-xs text-slate-500">
                     {review.created_at ? formatDate(review.created_at) : ""}
