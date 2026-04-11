@@ -1,4 +1,5 @@
 import { decodeHumanLocationString } from "@/lib/location/decodeHumanLocation";
+import { isAppLocationSource, type AppLocationSource } from "@/lib/location/defaults";
 import { buildLocationLabel, normalizeStateCode } from "@/lib/location/filter";
 
 export const LOCATION_COOKIE_NAME = "yb_location";
@@ -8,7 +9,7 @@ export const LOCATION_STORAGE_KEY = "yb-location";
 export const LEGACY_CITY_KEY = "yb-city";
 
 export type LocationState = {
-  source?: "ip" | "gps" | "manual";
+  source?: AppLocationSource;
   city?: string;
   region?: string;
   country?: string;
@@ -42,10 +43,7 @@ export const normalizeLocationState = (input: unknown): LocationState | null => 
   const obj = parseObject(input);
   if (!obj) return null;
 
-  const source =
-    obj.source === "ip" || obj.source === "gps" || obj.source === "manual"
-      ? obj.source
-      : undefined;
+  const source = isAppLocationSource(obj.source) ? obj.source : undefined;
   const city = normalizeHuman(obj.city);
   const region = normalizeStateCode(normalizeHuman(obj.region));
   const country = normalizeHuman(obj.country);

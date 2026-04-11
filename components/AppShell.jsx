@@ -24,7 +24,7 @@ import UrlLocationMigratorClient from "@/components/location/UrlLocationMigrator
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 import AutoRefreshGuardBanner from "@/components/auth/AutoRefreshGuardBanner";
 
-export default function AppShell({ children }) {
+export default function AppShell({ children, initialLocation = null }) {
   const pathname = usePathname();
   const flushFooterOnHome = pathname === "/" || pathname === "/customer/home";
   const isOnboardingRoute = pathname === "/onboarding";
@@ -73,7 +73,7 @@ export default function AppShell({ children }) {
 
         {/* Single provider tree; LocationProvider is the source of truth for city/ZIP. */}
         <Suspense fallback={null}>
-          <LocationProvider>
+          <LocationProvider initialLocation={initialLocation}>
             <UrlLocationMigratorClient />
             <AuthProvider>
               <AutoRefreshGuardBanner />

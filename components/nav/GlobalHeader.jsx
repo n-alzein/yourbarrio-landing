@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   Loader2,
@@ -54,11 +54,6 @@ export default function GlobalHeader({
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const { location, hasLocation, setLocation } = useLocation();
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileDrawerId = useMemo(
     () => `global-mobile-drawer-${surface || "public"}`,
@@ -92,8 +87,7 @@ export default function GlobalHeader({
   const locationSuggestShownAtRef = useRef(0);
   const searchRequestIdRef = useRef(0);
   const lastQueryRef = useRef("");
-  // Keep first client render aligned with SSR to avoid hydration mismatches.
-  const locationLabel = mounted ? getLocationLabel(location) : "Set location";
+  const locationLabel = getLocationLabel(location);
   const locationNoMatchMessage = isZipLike(locationInput)
     ? "No matches. Try another postal code."
     : "No matches. Try another city.";

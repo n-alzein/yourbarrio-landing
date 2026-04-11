@@ -3,6 +3,7 @@ import "./globals.css";
 import "./safari-layer-budget.css";
 import GlobalSupportModeBanner from "@/components/admin/GlobalSupportModeBanner";
 import AppShell from "@/components/AppShell";
+import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
@@ -13,7 +14,8 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({ children, auth, businessAuth }) {
+export default async function RootLayout({ children, auth, businessAuth }) {
+  const initialLocation = await getLocationFromCookies();
   const imageHosts = (() => {
     const hosts = new Set();
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -47,7 +49,7 @@ export default function RootLayout({ children, auth, businessAuth }) {
       </head>
       <body className="min-h-screen w-full overflow-x-hidden antialiased text-[var(--yb-text)]">
         <GlobalSupportModeBanner />
-        <AppShell>
+        <AppShell initialLocation={initialLocation}>
           {children}
           {auth}
           {businessAuth}

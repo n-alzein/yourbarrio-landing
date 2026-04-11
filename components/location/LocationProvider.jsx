@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildLocationLabel,
+  getDefaultLaunchLocation,
+  getLocationSourcePriority,
   hasLocation,
   isSameLocation,
   normalizeLocation,
@@ -32,6 +34,7 @@ const buildLabel = (city, region) => {
 const isFresh = (location) => {
   if (!location || !Number.isFinite(Number(location.updatedAt))) return false;
   if (location.source === "manual") return true;
+  if (location.source === "default") return true;
   const ttl = location.source === "gps" ? GPS_REFRESH_TTL_MS : IP_REFRESH_TTL_MS;
   return Date.now() - Number(location.updatedAt) <= ttl;
 };
@@ -100,9 +103,11 @@ const logBootstrap = (...args) => {
   console.info("[LocationProvider/bootstrap]", ...args);
 };
 
-export function LocationProvider({ children }) {
+export function LocationProvider({ children, initialLocation = null }) {
   // Keep initial render deterministic between server and client to avoid hydration mismatches.
-  const [location, setLocationState] = useState(() => normalizeForState({}));
+  const [location, setLocationState] = useState(() =>
+    normalizeForState(initialLocation || getDefaultLaunchLocation())
+  );
   const [hydrated, setHydrated] = useState(false);
   const locationRef = useRef(location);
 
@@ -110,15 +115,31 @@ export function LocationProvider({ children }) {
     locationRef.current = location;
   }, [location]);
 
-  const applyLocation = useCallback((next) => {
+  const applyLocation = useCallback((next, options = {}) => {
+    const { persist = true, force = false } = options;
     const normalized = normalizeForState(next);
-    if (!isSameLocation(normalized, locationRef.current)) {
+    const current = normalizeForState(locationRef.current);
+    const nextPriority = getLocationSourcePriority(normalized?.source);
+    const currentPriority = getLocationSourcePriority(current?.source);
+    const shouldSkip =
+      !force &&
+      normalized?.source &&
+      current?.source &&
+      currentPriority > nextPriority;
+
+    if (shouldSkip) {
+      return current;
+    }
+
+    if (!isSameLocation(normalized, current) || normalized?.source !== current?.source) {
       setLocationState(normalized);
     }
-    const persisted = setLocationCookieClient({
-      ...next,
-      updatedAt: Number.isFinite(Number(next?.updatedAt)) ? Number(next.updatedAt) : Date.now(),
-    });
+    const persisted = persist
+      ? setLocationCookieClient({
+          ...next,
+          updatedAt: Number.isFinite(Number(next?.updatedAt)) ? Number(next.updatedAt) : Date.now(),
+        })
+      : null;
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent(LOCATION_CHANGED_EVENT, {
@@ -221,7 +242,10 @@ export function LocationProvider({ children }) {
     (next) => {
       const normalized = normalizeForState(next);
       const source =
-        next?.source === "ip" || next?.source === "gps" || next?.source === "manual"
+        next?.source === "ip" ||
+        next?.source === "gps" ||
+        next?.source === "manual" ||
+        next?.source === "default"
           ? next.source
           : "manual";
       const resolved = applyLocation({
@@ -256,7 +280,7 @@ export function LocationProvider({ children }) {
 
       if (stored && !cancelled) {
         const normalized = normalizeForState(stored);
-        if (!isSameLocation(normalized, locationRef.current)) {
+        if (!isSameLocation(normalized, locationRef.current) || normalized?.source !== locationRef.current?.source) {
           setLocationState(normalized);
         }
       }
@@ -265,10 +289,15 @@ export function LocationProvider({ children }) {
         setUserSetFlagClient(true);
       }
 
-      if ((explicitUserSet && stored?.city) || hasStoredManual) {
+      if (stored && isFresh(stored)) {
+        logBootstrap(`branch=stored_${stored.source || "unknown"}`, {
+          city: stored.city,
+          source: stored.source,
+        });
+      } else if ((explicitUserSet && stored?.city) || hasStoredManual) {
         logBootstrap("branch=stored_manual", { city: stored.city, source: stored.source });
-      } else if (stored?.source === "ip" && isFresh(stored)) {
-        logBootstrap("branch=stored_ip_fresh", { city: stored.city });
+      } else if (stored?.source && getLocationSourcePriority(stored.source) >= getLocationSourcePriority("ip")) {
+        logBootstrap(`branch=stored_${stored.source}`, { city: stored.city });
       } else {
         const inferred = await refreshIpLocation();
         if (!inferred) {
