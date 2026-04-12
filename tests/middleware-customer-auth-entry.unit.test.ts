@@ -58,6 +58,25 @@ describe("middleware customer auth entry", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
+  it("does not bounce legacy customer business profile routes when auth cookies exist but user has not resolved yet", async () => {
+    const response = await middleware(
+      makeRequest("/customer/b/test-business", "sb-test-auth-token=fake-session")
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not redirect authenticated users away from legacy customer business profile routes", async () => {
+    resolveCurrentUserRoleFromClientMock.mockResolvedValue({
+      user: { id: "user-1" },
+      role: "business",
+    });
+
+    const response = await middleware(makeRequest("/customer/b/test-business"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("allows guest customer routes to load so the login modal can open on the same URL", async () => {
     const response = await middleware(makeRequest("/customer/orders"));
     expect(response.status).toBe(200);

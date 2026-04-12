@@ -16,6 +16,10 @@ export default async function LoginPage({
         ? resolvedSearchParams.returnUrl
         : null;
 
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[auth-next] login page next:", next || "/");
+  }
+
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-white px-4 py-10 text-slate-900">
       <div className="w-full max-w-md rounded-2xl border border-[var(--yb-border)] bg-white p-8 shadow-sm">

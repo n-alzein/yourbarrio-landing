@@ -87,17 +87,9 @@ function isAllowedNextPath(value) {
   if (!isSafeInternalPath(value)) return false;
   const path = value.trim();
   return (
-    path === "/" ||
-    path === "/onboarding" ||
-    path.startsWith("/onboarding/") ||
-    path === "/business" ||
-    path.startsWith("/business/") ||
-    path.startsWith("/customer/") ||
-    path.startsWith("/go/") ||
-    path.startsWith("/admin/") ||
-    path.startsWith("/signin") ||
-    path.startsWith("/login") ||
-    path.startsWith("/auth/")
+    !path.startsWith("/api/") &&
+    !path.startsWith("/_next/") &&
+    !path.startsWith("/_vercel/")
   );
 }
 
@@ -166,6 +158,10 @@ export async function GET(request) {
   const nextAllowed =
     nextSafe && isSafeInternalPath(nextNormalized) && isAllowedNextPath(nextNormalized);
   const safeNext = nextAllowed ? nextNormalized : null;
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[auth-next] callback raw next:", rawNext ?? "/");
+    console.info("[auth-next] callback validated next:", safeNext || "/");
+  }
   const businessIntent =
     isBusinessIntentPath(safeNext) || isBusinessIntentPath(rawNext || nextNormalized || "");
 
@@ -200,6 +196,9 @@ export async function GET(request) {
 
   const buildRedirectResponse = ({ destination, role, reason }) => {
     const chosenDestination = destination || "/onboarding";
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[auth-next] callback final redirect:", chosenDestination);
+    }
     const { response: redirectResponse, hasSupabaseCookies } = attachSupabaseCookies(
       NextResponse.redirect(new URL(chosenDestination, request.url), 303)
     );

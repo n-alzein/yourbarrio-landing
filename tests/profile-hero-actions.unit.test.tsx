@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ProfileHero } from "@/components/business/profile-system/ProfileSystem";
+import {
+  buildAuthReturnPath,
+  buildLoginHrefForReturnPath,
+  ProfileHero,
+} from "@/components/business/profile-system/ProfileSystem";
 
 let mockAuth = {
   user: null,
@@ -15,6 +19,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushMock,
   }),
+  usePathname: () => "/b/shop-111",
+  useSearchParams: () => new URLSearchParams(""),
 }));
 
 vi.mock("next/link", () => ({
@@ -71,6 +77,23 @@ describe("ProfileHero preview actions", () => {
     };
   });
 
+  it("builds login hrefs that preserve the current route and query string", () => {
+    expect(buildAuthReturnPath("/b/test-store", "")).toBe("/b/test-store");
+    expect(buildAuthReturnPath("/customer/b/test-store", "")).toBe("/customer/b/test-store");
+    expect(buildAuthReturnPath("/b/test-store", "preview=1&ref=qr")).toBe(
+      "/b/test-store?preview=1&ref=qr"
+    );
+    expect(buildLoginHrefForReturnPath("/b/test-store")).toBe(
+      "/login?next=%2Fb%2Ftest-store"
+    );
+    expect(buildLoginHrefForReturnPath("/customer/b/test-store")).toBe(
+      "/login?next=%2Fcustomer%2Fb%2Ftest-store"
+    );
+    expect(buildLoginHrefForReturnPath("/b/test-store?preview=1&ref=qr")).toBe(
+      "/login?next=%2Fb%2Ftest-store%3Fpreview%3D1%26ref%3Dqr"
+    );
+  });
+
   it("shows directions as the primary CTA and keeps guest messaging de-emphasized", () => {
     render(
       <ProfileHero
@@ -86,7 +109,7 @@ describe("ProfileHero preview actions", () => {
     expect(screen.getByRole("link", { name: "Call" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sign in to message" })).toHaveAttribute(
       "href",
-      "/login?next=%2Fmessages%2F00000000-0000-0000-0000-000000000111"
+      "/login?next=%2Fb%2Fshop-111"
     );
     expect(screen.queryByText("Local business")).not.toBeInTheDocument();
     expect(screen.getAllByText("Los Angeles, CA")).toHaveLength(1);

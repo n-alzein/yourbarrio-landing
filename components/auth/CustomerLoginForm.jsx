@@ -73,17 +73,22 @@ export default function CustomerLoginForm({
   }, []);
 
   const getNextParam = useCallback(() => {
-    const queryNext = sanitizeAuthRedirectPath(
+    const rawNext =
       typeof nextOverride === "string" && nextOverride.trim()
         ? nextOverride.trim()
-        : getRequestedPathFromCurrentUrl() ||
+        : searchParams?.get("next") ||
             searchParams?.get("returnUrl") ||
-            searchParams?.get("next") ||
-            searchParams?.get("callbackUrl"),
-      null
-    );
-    return queryNext;
+            searchParams?.get("callbackUrl") ||
+            getRequestedPathFromCurrentUrl();
+    if (!rawNext) return null;
+    return sanitizeAuthRedirectPath(rawNext, null);
   }, [nextOverride, searchParams]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[auth-next] form received next:", getNextParam() || null);
+    }
+  }, [getNextParam]);
 
   useEffect(() => {
     if ((searchParams?.get("auth") || "").trim() !== "invalid_credentials") return;
@@ -236,10 +241,15 @@ export default function CustomerLoginForm({
       }
 
       const requestedPath = getNextParam();
-      const intentPath = consumeAuthIntent({
-        role: "customer",
-        fallbackPath: requestedPath || "/",
-      });
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[auth-next] auth submit next:", requestedPath || "/");
+      }
+      const intentPath =
+        requestedPath ||
+        consumeAuthIntent({
+          role: "customer",
+          fallbackPath: "/",
+        });
       const roleForRedirect = isAdmin
         ? "admin"
         : normalizedRole === "business"
@@ -249,6 +259,14 @@ export default function CustomerLoginForm({
         role: roleForRedirect,
         requestedPath: intentPath || requestedPath,
       });
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[auth-next] login success next:", requestedPath || null);
+        console.info(
+          "[auth-next] login success fallback:",
+          requestedPath ? null : intentPath || null
+        );
+        console.info("[auth-next] final redirect destination:", dest);
+      }
       if (process.env.NODE_ENV !== "production") {
         console.info("[AUTH_REDIRECT_TRACE] customer_login_submit", {
           role: roleForRedirect,
@@ -316,8 +334,14 @@ export default function CustomerLoginForm({
 
       onSuccess?.(dest, { isAdmin });
       if (isAdmin) {
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth-next] post-login push:", dest);
+        }
         window.location.replace(dest);
         return;
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[auth-next] post-login push:", dest);
       }
       router.replace(dest);
     } catch (err) {
@@ -353,10 +377,9 @@ export default function CustomerLoginForm({
       setLoading(true);
 
       const queryNext = getNextParam();
-      const storedIntent = sanitizeAuthRedirectPath(
-        consumeAuthIntent({ role: "customer", fallbackPath: queryNext || "/" }),
-        "/"
-      );
+      const storedIntent =
+        queryNext ||
+        sanitizeAuthRedirectPath(consumeAuthIntent({ role: "customer", fallbackPath: "/" }), "/");
 
       const { error: oauthError } = await client.auth.signInWithOAuth({
         provider: "google",
@@ -366,6 +389,9 @@ export default function CustomerLoginForm({
             const callback = new URL("/api/auth/callback", origin);
             if (storedIntent) {
               callback.searchParams.set("next", storedIntent);
+            }
+            if (process.env.NODE_ENV !== "production") {
+              console.info("[auth-next] oauth redirectTo:", callback.toString());
             }
             return callback.toString();
           })(),

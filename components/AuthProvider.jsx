@@ -1935,6 +1935,14 @@ export function AuthProvider({
     if (authState.authStatus !== "unauthenticated" || authState.user) return;
     if (!pathname) return;
     const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[auth-next] client session effect:", {
+        effect: "unauthenticated_guard",
+        pathname: currentPath,
+        authStatus: authState.authStatus,
+        hasUser: Boolean(authState.user),
+      });
+    }
     if (isAuthCallbackPath(pathname) || isAuthCallbackPath(currentPath)) return;
     if (isBootstrapOnboardingPath(currentPath)) {
       if (process.env.NODE_ENV !== "production") {
@@ -1978,6 +1986,7 @@ export function AuthProvider({
         hasUser: Boolean(authState.user),
         destination: normalizedTarget,
       });
+      console.info("[auth-next] router replace:", normalizedTarget);
       console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
         from: currentPath,
         to: normalizedTarget,
@@ -2006,6 +2015,15 @@ export function AuthProvider({
     if (authState.authStatus !== "authenticated" || !authState.user) return;
     if (!pathname) return;
     const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[auth-next] client session effect:", {
+        effect: "authenticated_guard",
+        pathname: currentPath,
+        authStatus: authState.authStatus,
+        hasUser: Boolean(authState.user),
+        role: authState.profile?.role ?? authState.role ?? null,
+      });
+    }
     if (isBootstrapOnboardingPath(currentPath)) {
       if (process.env.NODE_ENV !== "production") {
         console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_allow", {
@@ -2099,6 +2117,7 @@ export function AuthProvider({
         persistedRedirectState: readClientRedirectState(),
         hasSession: Boolean(authState.session),
       });
+      console.info("[auth-next] router replace:", normalizedTarget);
       console.info("[ONBOARDING_REDIRECT_TRACE] source=AuthProvider_guard_redirect", {
         from: currentPath,
         to: normalizedTarget,
@@ -2134,6 +2153,12 @@ export function AuthProvider({
     searchParams,
     router,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (process.env.NODE_ENV === "production") return;
+    console.info("[auth-next] final mounted pathname:", window.location.pathname + window.location.search);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (isNestedProvider) return;

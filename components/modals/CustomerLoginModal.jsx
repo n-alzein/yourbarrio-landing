@@ -7,6 +7,9 @@ import { clearAuthIntent } from "@/lib/auth/authIntent";
 
 export default function CustomerLoginModal({ onClose, next: nextFromModalProps = null }) {
   const { openModal } = useModal();
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[auth-next] modal received next:", nextFromModalProps || "/");
+  }
   const handleClose = () => {
     clearAuthIntent();
     onClose?.();

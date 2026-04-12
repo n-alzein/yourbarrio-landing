@@ -50,6 +50,10 @@ function isCustomerNearbyPath(pathname) {
   return pathname === "/customer/nearby" || pathname.startsWith("/customer/nearby/");
 }
 
+function isCustomerBusinessProfilePath(pathname) {
+  return pathname === "/customer/b" || pathname.startsWith("/customer/b/");
+}
+
 async function fetchCustomerNearbyPublicFlag(request) {
   // Dev verify: inspect /customer/nearby response headers x-nearby-mw + x-nearby-public-decision.
   try {
@@ -158,7 +162,11 @@ async function resolveSupportModeState({ supabase, request, shouldLogRole, pathn
 
 export async function middleware(request) {
   const pathname = request.nextUrl.pathname;
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[auth-next] middleware pathname:", pathname);
+  }
   const isNearbyRoute = isCustomerNearbyPath(pathname);
+  const isCustomerBusinessProfileRoute = isCustomerBusinessProfilePath(pathname);
   if (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/_vercel/") ||
@@ -383,10 +391,18 @@ export async function middleware(request) {
   const shouldLogRole =
     process.env.NODE_ENV !== "production" &&
     (process.env.AUTH_GUARD_DIAG === "1" || process.env.NEXT_PUBLIC_AUTH_DIAG === "1");
+  const hasAuthCookies = getBusinessAuthCookieNames(request.cookies.getAll()).length > 0;
   const { user, role } = await resolveCurrentUserRoleFromClient(supabase, {
     log: shouldLogRole,
   });
-  const hasAuthCookies = getBusinessAuthCookieNames(request.cookies.getAll()).length > 0;
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[auth-next] middleware auth state:", {
+      pathname,
+      hasAuthCookies,
+      userId: user?.id || null,
+      role: role || null,
+    });
+  }
 
   if (pathname.startsWith("/business-auth/")) {
     let businessRowFound = null;
@@ -641,6 +657,10 @@ export async function middleware(request) {
   }
 
   if (pathname.startsWith("/customer")) {
+    if (isCustomerBusinessProfileRoute) {
+      return withSupabaseCookies(response);
+    }
+
     if (isNearbyRoute) {
       const nearbyFlag = await fetchCustomerNearbyPublicFlag(request);
       if (!user && nearbyFlag.enabled) {
@@ -740,12 +760,18 @@ export async function middleware(request) {
 
     if (!user) {
       if (hasAuthCookies) {
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth-next] middleware redirecting to:", "/");
+        }
         return withSupabaseCookies(NextResponse.redirect(new URL("/", request.url)));
       }
       return withSupabaseCookies(response);
     }
     if (role !== "customer") {
       if (role === "business") {
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth-next] middleware redirecting to:", "/business/dashboard");
+        }
         return withSupabaseCookies(
           NextResponse.redirect(new URL("/business/dashboard", request.url))
         );
@@ -753,6 +779,9 @@ export async function middleware(request) {
       if (role === "admin") {
         if (supportMode.supportModeActive && supportMode.targetRole === "customer") {
           return withSupabaseCookies(response);
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth-next] middleware redirecting to:", "/admin");
         }
         return withSupabaseCookies(NextResponse.redirect(new URL("/admin", request.url)));
       }

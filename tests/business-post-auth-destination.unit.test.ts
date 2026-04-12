@@ -68,4 +68,26 @@ describe("business post-auth destination", () => {
       })
     ).toBe(BUSINESS_ONBOARDING_PATH);
   });
+
+  it("returns non-business users to a safe next path when present", () => {
+    expect(
+      resolvePostAuthDestination({
+        role: "customer",
+        hasSession: true,
+        hasUser: true,
+        safeNext: "/b/test-store",
+      })
+    ).toBe("/b/test-store");
+  });
+
+  it("rejects unsafe non-business next paths and falls back to role landing", () => {
+    expect(
+      resolvePostAuthDestination({
+        role: "customer",
+        hasSession: true,
+        hasUser: true,
+        safeNext: "https://evil.example",
+      })
+    ).toBe("/customer/home");
+  });
 });

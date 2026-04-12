@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import FastImage from "@/components/FastImage";
 import { useAuth } from "@/components/AuthProvider";
 import { cx } from "@/lib/utils/cx";
@@ -33,6 +33,20 @@ import {
 const NAV_OFFSET = 152;
 
 export { normalizeUrl, formatTime, formatHoursValue, parseHours, toObject };
+
+export function buildAuthReturnPath(pathname, searchParamsString = "") {
+  const safePath = typeof pathname === "string" && pathname.startsWith("/") ? pathname : "/";
+  const safeSearch = typeof searchParamsString === "string" ? searchParamsString.trim() : "";
+  return `${safePath}${safeSearch ? `?${safeSearch}` : ""}`;
+}
+
+export function buildLoginHrefForReturnPath(returnPath) {
+  const safeReturnPath =
+    typeof returnPath === "string" && returnPath.startsWith("/") && !returnPath.startsWith("//")
+      ? returnPath
+      : "/";
+  return `/login?next=${encodeURIComponent(safeReturnPath)}`;
+}
 
 export function getProfileIdentity(profile) {
   const name = profile?.business_name || profile?.full_name || "Business profile";
@@ -379,12 +393,28 @@ function HeroPreviewActions({ profile, publicPath }) {
   const [messageLoading, setMessageLoading] = useState(false);
   const { user, role, supabase } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const website = profile?.website ? normalizeUrl(profile.website) : "";
   const directions = buildDirectionsUrl(profile);
   const businessId = String(profile?.id || profile?.owner_user_id || "").trim();
-  const loginTarget = businessId ? `/messages/${encodeURIComponent(businessId)}` : "/messages";
-  const loginHref = `/login?next=${encodeURIComponent(loginTarget)}`;
+  const currentQuery = searchParams?.toString() || "";
+  const loginTarget = buildAuthReturnPath(
+    pathname || publicPath || (businessId ? `/b/${encodeURIComponent(businessId)}` : "/"),
+    currentQuery
+  );
+  const loginHref = buildLoginHrefForReturnPath(loginTarget);
   const canMessageDirectly = Boolean(user?.id) && role !== "business" && user?.id !== businessId;
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    console.info("[auth-next] CTA href:", {
+      pathname: pathname || null,
+      query: currentQuery || "",
+      loginTarget,
+      loginHref,
+    });
+  }, [currentQuery, loginHref, loginTarget, pathname]);
 
   const handleShare = async () => {
     if (typeof window === "undefined") return;
