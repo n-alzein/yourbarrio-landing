@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { resolveBusinessImageSrc } from "@/lib/placeholders/businessPlaceholders";
+import { getBusinessPublicUrl } from "@/lib/ids/publicRefs";
 
 type BusinessCardProps = {
   business: {
@@ -46,7 +47,7 @@ export default function BusinessCard({
   badges = [],
   isVerified = false,
 }: BusinessCardProps) {
-  const href = `/customer/b/${business?.public_id || ""}`;
+  const href = getBusinessPublicUrl(business || {});
   const imageSrc = getBusinessImage(business);
   const businessName = String(business?.business_name || "Local business").trim();
   const locationLine = formatLocationLine(business);

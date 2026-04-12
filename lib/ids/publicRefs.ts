@@ -33,7 +33,11 @@ export function getBusinessPublicRef(business: { public_id?: unknown; id?: unkno
   return cleanRef(business?.public_id) || cleanRef(business?.id);
 }
 
-export function getCustomerBusinessUrl(business: { public_id?: unknown; id?: unknown }) {
+export function getBusinessPublicUrl(business: { public_id?: unknown; id?: unknown }) {
   const ref = getBusinessPublicRef(business);
-  return ref ? `/customer/b/${encodeRef(ref)}` : "/customer/home";
+  return ref ? `/b/${encodeRef(ref)}` : "/";
+}
+
+export function getCustomerBusinessUrl(business: { public_id?: unknown; id?: unknown }) {
+  return getBusinessPublicUrl(business);
 }

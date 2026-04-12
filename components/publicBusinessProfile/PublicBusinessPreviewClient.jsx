@@ -13,7 +13,7 @@ import {
   ProfilePageShell,
   ProfileSectionNav,
 } from "@/components/business/profile-system/ProfileSystem";
-import { getCustomerBusinessUrl } from "@/lib/ids/publicRefs";
+import { getBusinessPublicUrl } from "@/lib/ids/publicRefs";
 import {
   sanitizeAnnouncements,
   sanitizeGalleryPhotos,
@@ -361,7 +361,7 @@ export default function PublicBusinessPreviewClient({
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}
-        publicPath={getCustomerBusinessUrl(profile || { id: businessId })}
+        publicPath={getBusinessPublicUrl(profile || { id: businessId })}
       />
       <ProfileSectionNav
         items={[

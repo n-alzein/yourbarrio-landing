@@ -16,10 +16,17 @@ import {
   REVIEW_SELECT_WITH_UPDATED,
 } from "@/lib/publicBusinessProfile/reviews";
 
+const REVIEW_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 function formatDate(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleDateString();
+    return REVIEW_DATE_FORMATTER.format(new Date(value));
   } catch {
     return "";
   }

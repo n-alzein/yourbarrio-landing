@@ -16,16 +16,19 @@ export default function useBusinessProfileAccessGate() {
 
   return useCallback(
     (event, destination) => {
+      const targetPath =
+        typeof destination === "string" && destination.trim()
+          ? destination.trim()
+          : getCurrentPath();
+      if (targetPath.startsWith("/b/")) {
+        return true;
+      }
       if (user?.id) return true;
 
       event?.preventDefault?.();
       event?.stopPropagation?.();
 
       const currentPath = getCurrentPath();
-      const targetPath =
-        typeof destination === "string" && destination.trim()
-          ? destination.trim()
-          : currentPath;
       setAuthIntent({ redirectTo: targetPath, role: "customer" });
       openModal("customer-login", { next: targetPath });
 

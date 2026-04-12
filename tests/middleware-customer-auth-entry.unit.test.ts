@@ -52,6 +52,12 @@ describe("middleware customer auth entry", () => {
     resolveCurrentUserRoleFromClientMock.mockResolvedValue({ user: null, role: null });
   });
 
+  it("allows guest public business profile routes to load anonymously", async () => {
+    const response = await middleware(makeRequest("/b/test-business"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("allows guest customer routes to load so the login modal can open on the same URL", async () => {
     const response = await middleware(makeRequest("/customer/orders"));
     expect(response.status).toBe(200);

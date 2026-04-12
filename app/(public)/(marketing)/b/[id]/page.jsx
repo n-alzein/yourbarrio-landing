@@ -72,7 +72,7 @@ async function fetchPublicProfile(id) {
   if (!profile) {
     console.warn("[monitor] public_business_not_found_or_unverified", {
       ownerUserId: id,
-      route: "/customer/b/[id]",
+      route: "/b/[id]",
     });
   }
   return profile;
@@ -343,7 +343,7 @@ export async function generateMetadata({ params }) {
     title: `${name} on YourBarrio`,
     description,
     alternates: {
-      canonical: `/customer/b/${businessPublicId || businessId || ""}`,
+      canonical: `/b/${businessPublicId || businessId || ""}`,
     },
     openGraph: {
       title: `${name} on YourBarrio`,
@@ -367,9 +367,9 @@ export default async function PublicBusinessProfilePage({
   const businessId = resolvedRef.id;
   const businessPublicId = String(resolvedRef.public_id || "").trim();
   if (UUID_ANY_RE.test(idOrPublicId) && businessPublicId) {
-    permanentRedirect(`/customer/b/${encodeURIComponent(businessPublicId)}`);
+    permanentRedirect(`/b/${encodeURIComponent(businessPublicId)}`);
   }
-  const publicPath = `/customer/b/${encodeURIComponent(businessPublicId || businessId)}`;
+  const publicPath = `/b/${encodeURIComponent(businessPublicId || businessId)}`;
   const isPreview = resolvedSearch?.preview === "1";
   const perfEnabled =
     resolvedSearch?.perf === "1" || process.env[PERF_ENV_FLAG] === "1";

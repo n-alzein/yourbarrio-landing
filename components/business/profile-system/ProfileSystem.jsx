@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import FastImage from "@/components/FastImage";
+import { useAuth } from "@/components/AuthProvider";
 import { cx } from "@/lib/utils/cx";
+import { getOrCreateConversation } from "@/lib/messages";
 import {
   Clock3,
   Globe,
@@ -72,7 +75,7 @@ function buildDirectionsUrl(profile) {
 function getHoursStatus(profile) {
   const raw = toObject(profile?.hours_json);
   if (!raw || typeof raw !== "object" || !Object.keys(raw).length) {
-    return { label: "Hours unavailable", tone: "muted" };
+    return { label: null, tone: "muted", available: false };
   }
 
   const weekdayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -80,13 +83,13 @@ function getHoursStatus(profile) {
   const today = raw?.[weekdayMap[now.getDay()]];
 
   if (!today || typeof today !== "object") {
-    return { label: "Hours listed", tone: "neutral" };
+    return { label: "Hours listed", tone: "neutral", available: true };
   }
   if (today.isClosed) {
-    return { label: "Closed today", tone: "muted" };
+    return { label: "Closed today", tone: "muted", available: true };
   }
   if (!(today.open && today.close)) {
-    return { label: "Hours listed", tone: "neutral" };
+    return { label: "Hours listed", tone: "neutral", available: true };
   }
 
   const [openHour = 0, openMinute = 0] = String(today.open)
@@ -100,7 +103,7 @@ function getHoursStatus(profile) {
       Number.isNaN(value)
     )
   ) {
-    return { label: "Hours listed", tone: "neutral" };
+    return { label: "Hours listed", tone: "neutral", available: true };
   }
 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -114,6 +117,7 @@ function getHoursStatus(profile) {
   return {
     label: isOpen ? "Open now" : "Closed now",
     tone: isOpen ? "success" : "muted",
+    available: true,
   };
 }
 
@@ -281,7 +285,6 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
   return (
     <>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600">
-        {businessType ? <span>{businessType}</span> : null}
         {location ? (
           <span className="inline-flex items-center gap-2">
             <MapPin className="h-4 w-4 text-[#6a3df0]" />
@@ -294,37 +297,94 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
         </span>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <PreviewMetaChip>Local business</PreviewMetaChip>
-        {location ? (
-          <PreviewMetaChip icon={MapPin} tone="muted">
-            {location}
-          </PreviewMetaChip>
-        ) : null}
         {businessType ? (
           <PreviewMetaChip tone="muted">{businessType}</PreviewMetaChip>
         ) : null}
-        <PreviewMetaChip icon={Clock3} tone={hoursStatus.tone}>
-          {hoursStatus.label}
-        </PreviewMetaChip>
+        {hoursStatus.available ? (
+          <PreviewMetaChip icon={Clock3} tone={hoursStatus.tone}>
+            {hoursStatus.label}
+          </PreviewMetaChip>
+        ) : null}
       </div>
     </>
   );
 }
 
+function HeroActionIconButton({ href, icon: Icon, label, onClick }) {
+  const baseClassName =
+    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-[#f3efff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2";
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={href.startsWith("tel:") ? undefined : "_blank"}
+        rel={href.startsWith("tel:") ? undefined : "noreferrer"}
+        aria-label={label}
+        title={label}
+        className={baseClassName}
+      >
+        <Icon className="h-4 w-4" />
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={baseClassName}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+function HeroActionButton({ href, icon: Icon, label, tone = "outline", onClick }) {
+  const className = cx(
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-[16px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
+    tone === "primary"
+      ? "dashboard-primary-action bg-[#6E34FF] text-white shadow-[0_18px_38px_-24px_rgba(106,61,240,0.7)] hover:bg-[#5E2DE0]"
+      : "border border-slate-300 bg-white text-slate-800 hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
+  );
+  const primaryStyle = tone === "primary" ? { color: "#ffffff" } : undefined;
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={href.startsWith("tel:") ? undefined : "_blank"}
+        rel={href.startsWith("tel:") ? undefined : "noreferrer"}
+        className={className}
+        style={primaryStyle}
+      >
+        {Icon ? <Icon className="h-4 w-4" style={primaryStyle} /> : null}
+        <span style={primaryStyle}>{label}</span>
+      </a>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className} style={primaryStyle}>
+      {Icon ? <Icon className="h-4 w-4" style={primaryStyle} /> : null}
+      <span style={primaryStyle}>{label}</span>
+    </button>
+  );
+}
+
 function HeroPreviewActions({ profile, publicPath }) {
   const [copied, setCopied] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
+  const { user, role, supabase } = useAuth();
+  const router = useRouter();
   const website = profile?.website ? normalizeUrl(profile.website) : "";
   const directions = buildDirectionsUrl(profile);
-  const primaryAction = directions
-    ? { key: "directions", label: "Directions", href: directions, icon: MapPin }
-    : null;
-  const secondaryActions = [
-    website ? { key: "website", label: "Website", href: website, icon: Globe } : null,
-    profile?.phone
-      ? { key: "phone", label: "Call", href: `tel:${profile.phone}`, icon: Phone }
-      : null,
-  ].filter(Boolean);
-  const PrimaryIcon = primaryAction?.icon;
+  const businessId = String(profile?.id || profile?.owner_user_id || "").trim();
+  const loginTarget = businessId ? `/messages/${encodeURIComponent(businessId)}` : "/messages";
+  const loginHref = `/login?next=${encodeURIComponent(loginTarget)}`;
+  const canMessageDirectly = Boolean(user?.id) && role !== "business" && user?.id !== businessId;
 
   const handleShare = async () => {
     if (typeof window === "undefined") return;
@@ -338,42 +398,78 @@ function HeroPreviewActions({ profile, publicPath }) {
     } catch {}
   };
 
+  const handleMessage = async () => {
+    if (!canMessageDirectly || !businessId || messageLoading) return;
+    setMessageLoading(true);
+    try {
+      const conversationId = await getOrCreateConversation({
+        supabase,
+        businessId,
+      });
+      if (conversationId) {
+        router.push(`/customer/messages/${conversationId}`);
+      }
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
   return (
-    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-      {primaryAction ? (
-        <a
-          href={primaryAction.href}
-          target={primaryAction.href.startsWith("tel:") ? undefined : "_blank"}
-          rel={primaryAction.href.startsWith("tel:") ? undefined : "noreferrer"}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-[#6E34FF] bg-[#6E34FF] px-4 py-2.5 text-sm font-medium text-white shadow-[0_18px_38px_-24px_rgba(106,61,240,0.7)] transition hover:border-[#5E2DE0] hover:bg-[#5E2DE0]"
-        >
-          {PrimaryIcon ? <PrimaryIcon className="h-4 w-4" /> : null}
-          {primaryAction.label}
-        </a>
-      ) : null}
-      <button
-        type="button"
-        onClick={handleShare}
-        className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-      >
-        <Share2 className="h-4 w-4 text-[#6a3df0]" />
-        {copied ? "Copied" : "Share"}
-      </button>
-      {secondaryActions.map((action) => {
-        const Icon = action.icon;
-        return (
-          <a
-            key={action.key}
-            href={action.href}
-            target={action.href.startsWith("tel:") ? undefined : "_blank"}
-            rel={action.href.startsWith("tel:") ? undefined : "noreferrer"}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+    <div className="flex w-full flex-col gap-3 sm:w-auto">
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        {directions ? (
+          <HeroActionButton
+            href={directions}
+            icon={MapPin}
+            label="Directions"
+            tone="primary"
+          />
+        ) : null}
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:grid-cols-none sm:flex-wrap">
+          {website ? (
+            <HeroActionButton
+              href={website}
+              icon={Globe}
+              label="Website"
+            />
+          ) : null}
+          {profile?.phone ? (
+            <HeroActionButton
+              href={`tel:${profile.phone}`}
+              icon={Phone}
+              label="Call"
+            />
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex w-full items-center gap-3 sm:justify-end">
+        {canMessageDirectly ? (
+          <button
+            type="button"
+            onClick={handleMessage}
+            disabled={messageLoading}
+            className="inline-flex min-h-9 items-center justify-center rounded-full px-1 text-sm font-medium text-slate-600 transition hover:text-[#5b37d6] disabled:opacity-70"
           >
-            <Icon className="h-4 w-4 text-[#6a3df0]" />
-            {action.label}
-          </a>
-        );
-      })}
+            {messageLoading ? "Opening..." : "Message"}
+          </button>
+        ) : (
+          <Link
+            href={loginHref}
+            className="inline-flex min-h-9 items-center justify-center rounded-full px-1 text-sm font-medium text-slate-600 transition hover:text-[#5b37d6]"
+          >
+            Sign in to message
+          </Link>
+        )}
+
+        <div className="ml-auto sm:ml-0">
+          <HeroActionIconButton
+            icon={Share2}
+            label={copied ? "Copied" : "Share"}
+            onClick={handleShare}
+          />
+        </div>
+      </div>
     </div>
   );
 }
