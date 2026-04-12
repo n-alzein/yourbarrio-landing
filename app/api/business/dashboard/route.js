@@ -115,6 +115,12 @@ const applyScopedIdFilter = (query, field, scopedIds) => {
   return query.in(field, scopedIds);
 };
 
+const asTrimmedString = (value) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
 export async function GET(request) {
   const access = await getBusinessDataClientForRequest();
   if (!access.ok) {
@@ -506,8 +512,8 @@ export async function GET(request) {
         businessProfile?.full_name ||
         "YourBarrio",
       businessAvatarUrl:
-        access.effectiveProfile?.profile_photo_url ||
-        businessProfile?.profile_photo_url ||
+        asTrimmedString(access.effectiveProfile?.profile_photo_url) ||
+        asTrimmedString(businessProfile?.profile_photo_url) ||
         null,
     },
     { status: 200 }

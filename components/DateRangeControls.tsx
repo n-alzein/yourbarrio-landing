@@ -1,10 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Building2, CheckCircle2, Eye, PackagePlus, SlidersHorizontal } from "lucide-react";
+import SafeImage from "@/components/SafeImage";
 import type { DashboardFilters, DateRangeKey } from "@/lib/dashboardTypes";
+import { resolveImageSrc } from "@/lib/safeImage";
 
 const DATE_RANGES: { value: DateRangeKey; label: string }[] = [
   { value: "7d", label: "7d" },
@@ -32,6 +33,16 @@ type DateRangeControlsProps = {
 const actionBaseClass =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-[10px] px-4 py-2 text-sm font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900";
 
+const DASHBOARD_AVATAR_INVALID = "__dashboard-avatar-invalid__";
+
+function normalizeDashboardAvatarUrl(value?: string | null) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const resolved = resolveImageSrc(trimmed, DASHBOARD_AVATAR_INVALID);
+  return resolved === DASHBOARD_AVATAR_INVALID ? null : resolved;
+}
+
 const DateRangeControls = ({
   dateRange,
   filters,
@@ -44,7 +55,16 @@ const DateRangeControls = ({
   onFiltersChange,
 }: DateRangeControlsProps) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const displayName = businessName || "YourBarrio";
+  const normalizedBusinessAvatarUrl = useMemo(
+    () => normalizeDashboardAvatarUrl(businessAvatarUrl),
+    [businessAvatarUrl]
+  );
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [normalizedBusinessAvatarUrl]);
 
   const activeFilters = useMemo(() => filters.categories.length, [filters]);
   const completedCount = useMemo(
@@ -92,10 +112,13 @@ const DateRangeControls = ({
             </p>
             <div className="mt-6 flex items-start gap-4 sm:gap-5">
               <div className="relative mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[12px] border border-slate-200/70 bg-white shadow-[0_5px_14px_rgba(15,23,42,0.04)]">
-                {businessAvatarUrl ? (
-                  <Image
-                    src={businessAvatarUrl}
+                {normalizedBusinessAvatarUrl && !avatarLoadFailed ? (
+                  <SafeImage
+                    src={normalizedBusinessAvatarUrl}
                     alt={`${displayName} profile image`}
+                    fallbackSrc={DASHBOARD_AVATAR_INVALID}
+                    onError={() => setAvatarLoadFailed(true)}
+                    useNextImage
                     fill
                     sizes="56px"
                     className="object-cover"
@@ -297,3 +320,4 @@ const DateRangeControls = ({
 };
 
 export default DateRangeControls;
+export { normalizeDashboardAvatarUrl };
