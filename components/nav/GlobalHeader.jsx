@@ -632,7 +632,6 @@ export default function GlobalHeader({
                 boxShadow: "0 0 0 0 rgba(124,58,237,0)",
               }}
             >
-              <Search className="h-4 w-4 text-white/70" />
               <input
                 id="global-nav-search-mobile"
                 name="search"
