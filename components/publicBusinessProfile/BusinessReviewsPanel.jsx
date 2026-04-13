@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useModal } from "@/components/modals/ModalProvider";
 import { useViewerContext } from "@/components/public/ViewerContextEnhancer";
 import ReportModal from "@/components/moderation/ReportModal";
+import { setAuthIntent } from "@/lib/auth/authIntent";
 import {
   attachReviewAuthorProfiles,
   getReviewAuthorDisplayName,
@@ -31,6 +32,11 @@ function formatDate(value) {
   } catch {
     return "";
   }
+}
+
+function getCurrentPath() {
+  if (typeof window === "undefined") return "/";
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
 async function fetchPublicReviewFeed({
@@ -728,6 +734,12 @@ export default function BusinessReviewsPanel({
   const showLoginPrompt = viewer.status === "guest";
   const showBusinessNote = isBusinessViewer;
 
+  const handlePromptLogin = () => {
+    const next = getCurrentPath();
+    setAuthIntent({ redirectTo: next, role: "customer" });
+    openModal("customer-login", { next });
+  };
+
   const orderedReviews = useMemo(() => {
     if (!customerId) return reviews;
     const mine = [];
@@ -880,7 +892,7 @@ export default function BusinessReviewsPanel({
             </div>
             <button
               type="button"
-              onClick={() => openModal("customer-login")}
+              onClick={handlePromptLogin}
               className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
             >
               Sign in
@@ -1141,24 +1153,15 @@ export default function BusinessReviewsPanel({
                   <div className="mt-4 flex items-center gap-2 text-sm">
                     <button
                       type="button"
-                      className="text-slate-400 transition hover:text-slate-600"
-                      aria-label="Mark review as helpful"
-                      onClick={() => {}}
+                      onClick={() => {
+                        setReportTarget(review);
+                      }}
+                      className="text-slate-400 transition hover:text-slate-600 hover:underline"
                     >
-                      Helpful
+                      Report
                     </button>
-                      <span className="text-slate-300">|</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReportTarget(review);
-                        }}
-                        className="text-slate-400 transition hover:text-slate-600 hover:underline"
-                      >
-                        Report
-                      </button>
-                    </div>
-                  )}
+                  </div>
+                )}
                 </>
               )}
             </div>

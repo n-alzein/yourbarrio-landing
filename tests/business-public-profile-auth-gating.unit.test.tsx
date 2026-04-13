@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import BusinessReviewsPanel from "@/components/publicBusinessProfile/BusinessReviewsPanel";
 
 const openModalMock = vi.fn();
+const setAuthIntentMock = vi.fn();
 const fetchMock = vi.fn(async () => ({
   ok: false,
   json: async () => ({ reviews: [] }),
@@ -14,6 +15,10 @@ vi.mock("@/components/AuthProvider", () => ({
 
 vi.mock("@/components/modals/ModalProvider", () => ({
   useModal: () => ({ openModal: openModalMock }),
+}));
+
+vi.mock("@/lib/auth/authIntent", () => ({
+  setAuthIntent: (...args) => setAuthIntentMock(...args),
 }));
 
 vi.mock("@/components/public/ViewerContextEnhancer", () => ({
@@ -40,6 +45,7 @@ describe("BusinessReviewsPanel auth gating", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/b/test-shop?ref=reviews");
   });
 
   it("prompts guests to sign in instead of showing a writable review form", () => {
@@ -56,7 +62,13 @@ describe("BusinessReviewsPanel auth gating", () => {
     expect(screen.queryByText("Leave a review")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(openModalMock).toHaveBeenCalledWith("customer-login");
+    expect(setAuthIntentMock).toHaveBeenCalledWith({
+      redirectTo: "/b/test-shop?ref=reviews",
+      role: "customer",
+    });
+    expect(openModalMock).toHaveBeenCalledWith("customer-login", {
+      next: "/b/test-shop?ref=reviews",
+    });
   });
 
   it("renders review dates with a deterministic SSR-safe format", () => {
