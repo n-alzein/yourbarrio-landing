@@ -60,24 +60,6 @@ export default function BusinessOrdersClient() {
   const [acknowledgedOrderIds, setAcknowledgedOrderIds] = useState(() => new Set());
   const deliveryInstructions = selectedOrder?.delivery_instructions?.trim();
 
-  const buildNotificationSummary = (order) => {
-    const rows = Array.isArray(order?.order_notifications)
-      ? order.order_notifications
-      : [];
-    const hasReminder = rows.some((row) => row.notification_kind === "reminder");
-    const hasPermanentFailure = rows.some((row) =>
-      ["failed", "undelivered", "skipped"].includes(row.status)
-    );
-    return {
-      hasReminder,
-      hasPermanentFailure,
-      awaitingAck:
-        !order?.acknowledged_at &&
-        (order?.notification_state === "awaiting_ack" ||
-          order?.notification_state === "sms_degraded"),
-    };
-  };
-
   const getConfirmMessage = (fromStatus, toStatus, orderNumber) => {
     const orderLabel = orderNumber ? `Order ${orderNumber}` : "this order";
     if (fromStatus === "cancelled") {
@@ -581,16 +563,6 @@ export default function BusinessOrdersClient() {
                               <p className="font-semibold">
                                 Order {order.order_number}
                               </p>
-                              {buildNotificationSummary(order).awaitingAck ? (
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-600">
-                                  Awaiting acknowledgment
-                                </p>
-                              ) : null}
-                              {buildNotificationSummary(order).hasReminder ? (
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                                  Reminder sent
-                                </p>
-                              ) : null}
                               <p className="text-xs opacity-70">
                                 {formatOrderDateTime(order.created_at)}
                               </p>
@@ -697,16 +669,6 @@ export default function BusinessOrdersClient() {
                         <p className="text-sm font-semibold">
                           Order {order.order_number}
                         </p>
-                        {buildNotificationSummary(order).awaitingAck ? (
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-600">
-                            Awaiting acknowledgment
-                          </p>
-                        ) : null}
-                        {buildNotificationSummary(order).hasReminder ? (
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                            Reminder sent
-                          </p>
-                        ) : null}
                         <p className="text-xs opacity-70">
                           {formatOrderDateTime(order.created_at)}
                         </p>
@@ -932,68 +894,6 @@ export default function BusinessOrdersClient() {
                 label={getOrderStatusLabel(selectedOrder.status)}
               />
             </div>
-
-            {buildNotificationSummary(selectedOrder).hasPermanentFailure ? (
-              <div
-                className="mt-4 rounded-2xl px-4 py-3 text-sm text-amber-700"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-              >
-                Some order alerts failed or used invalid contact data. Update your business phone or email in settings if this keeps happening.
-              </div>
-            ) : null}
-
-            {Array.isArray(selectedOrder.order_notifications) &&
-            selectedOrder.order_notifications.length > 0 ? (
-              <div
-                className="mt-4 border-t pt-4"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <p className="text-sm font-semibold">Notification history</p>
-                <div className="mt-3 space-y-2 text-sm">
-                  {selectedOrder.order_notifications.map((row) => (
-                    <div
-                      key={row.id}
-                      className="rounded-2xl px-4 py-3"
-                      style={{
-                        background: "var(--surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-semibold">
-                          {row.channel.toUpperCase()} {row.notification_kind}
-                        </span>
-                        <span className="text-xs uppercase tracking-[0.12em] opacity-70">
-                          {row.status}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs opacity-70">
-                        {row.sent_at
-                          ? `Sent ${formatOrderDateTime(row.sent_at)}`
-                          : `Created ${formatOrderDateTime(row.created_at)}`}
-                      </p>
-                      {row.delivered_at ? (
-                        <p className="text-xs opacity-70">
-                          Delivered {formatOrderDateTime(row.delivered_at)}
-                        </p>
-                      ) : null}
-                      {row.error_message ? (
-                        <p className="text-xs text-rose-600">{row.error_message}</p>
-                      ) : null}
-                    </div>
-                  ))}
-                  {selectedOrder.acknowledged_at ? (
-                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                      Acknowledged {formatOrderDateTime(selectedOrder.acknowledged_at)}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : selectedOrder.acknowledged_at ? (
-              <div className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                Acknowledged {formatOrderDateTime(selectedOrder.acknowledged_at)}
-              </div>
-            ) : null}
 
             {orderActions.primaryAction || orderActions.hasMenu ? (
               <div className="mt-5 flex flex-wrap gap-2">
