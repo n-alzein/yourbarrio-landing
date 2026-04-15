@@ -1,19 +1,14 @@
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
 import AdminShellClient from "@/app/admin/_components/AdminShellClient";
 import AdminSidebar from "@/app/admin/_components/AdminSidebar";
 import AdminStatusStack from "@/app/admin/_components/AdminStatusStack";
 import { getCachedPendingBusinessVerificationsCount } from "@/lib/admin/businessVerification";
 import { getEffectiveUserId } from "@/lib/admin/impersonation";
 import { getHighestAdminRole, isAdminDevAllowlistConfigured, requireAdmin } from "@/lib/admin/permissions";
-import { getCurrentUserRole } from "@/lib/auth/getCurrentUserRole";
 import { getRequestPath } from "@/lib/url/getRequestPath";
 import { isAdminBypassRlsEnabled } from "@/lib/supabase/admin";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const { role } = await getCurrentUserRole();
-  if (role !== "admin") redirect("/");
-
   const guardDiagEnabled =
     String(process.env.AUTH_GUARD_DIAG || "") === "1" ||
     String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1";

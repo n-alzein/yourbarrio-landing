@@ -5,7 +5,6 @@ import {
   finalizePaidOrderFromPaymentIntent,
   markStripePaymentFailed,
 } from "@/lib/orders/persistence";
-import { sendNewOrderNotifications } from "@/lib/notifications/orders";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -130,15 +129,6 @@ export async function POST(request: Request) {
           client,
           event.data.object as Stripe.Checkout.Session
         );
-          if (result?.nextStatus === "requested" && result?.order?.id) {
-            void sendNewOrderNotifications(result.order.id, { client }).catch((error) => {
-              console.error("[ORDER_FINALIZATION_TRACE]", "send_new_order_notifications_failed", {
-                eventId: event.id,
-                orderId: result.order.id,
-                message: error?.message || "Unknown notification dispatch error",
-              });
-            });
-          }
         }
         break;
       case "payment_intent.succeeded":
@@ -147,15 +137,6 @@ export async function POST(request: Request) {
           client,
           event.data.object as Stripe.PaymentIntent
         );
-          if (result?.nextStatus === "requested" && result?.order?.id) {
-            void sendNewOrderNotifications(result.order.id, { client }).catch((error) => {
-              console.error("[ORDER_FINALIZATION_TRACE]", "send_new_order_notifications_failed", {
-                eventId: event.id,
-                orderId: result.order.id,
-                message: error?.message || "Unknown notification dispatch error",
-              });
-            });
-          }
         }
         break;
       case "payment_intent.payment_failed":
