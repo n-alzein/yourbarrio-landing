@@ -5,6 +5,7 @@ import {
   finalizePaidOrderFromPaymentIntent,
   markStripePaymentFailed,
 } from "@/lib/orders/persistence";
+import { sendNewOrderNotifications } from "@/lib/notifications/orders";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -51,22 +52,24 @@ async function handleCheckoutCompleted(
   client: any,
   session: Stripe.Checkout.Session
 ) {
-  await finalizePaidOrderFromCheckoutSession({
+  const result = await finalizePaidOrderFromCheckoutSession({
     client,
     session,
     logPrefix: "[ORDER_FINALIZATION_TRACE]",
   });
+  return result;
 }
 
 async function handlePaymentIntentSucceeded(
   client: any,
   paymentIntent: Stripe.PaymentIntent
 ) {
-  await finalizePaidOrderFromPaymentIntent({
+  const result = await finalizePaidOrderFromPaymentIntent({
     client,
     paymentIntent,
     logPrefix: "[ORDER_FINALIZATION_TRACE]",
   });
+  return result;
 }
 
 async function handlePaymentIntentFailed(
@@ -122,16 +125,38 @@ export async function POST(request: Request) {
         await handleAccountUpdated(client, event.data.object as Stripe.Account);
         break;
       case "checkout.session.completed":
-        await handleCheckoutCompleted(
+        {
+          const result = await handleCheckoutCompleted(
           client,
           event.data.object as Stripe.Checkout.Session
         );
+          if (result?.nextStatus === "requested" && result?.order?.id) {
+            void sendNewOrderNotifications(result.order.id, { client }).catch((error) => {
+              console.error("[ORDER_FINALIZATION_TRACE]", "send_new_order_notifications_failed", {
+                eventId: event.id,
+                orderId: result.order.id,
+                message: error?.message || "Unknown notification dispatch error",
+              });
+            });
+          }
+        }
         break;
       case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(
+        {
+          const result = await handlePaymentIntentSucceeded(
           client,
           event.data.object as Stripe.PaymentIntent
         );
+          if (result?.nextStatus === "requested" && result?.order?.id) {
+            void sendNewOrderNotifications(result.order.id, { client }).catch((error) => {
+              console.error("[ORDER_FINALIZATION_TRACE]", "send_new_order_notifications_failed", {
+                eventId: event.id,
+                orderId: result.order.id,
+                message: error?.message || "Unknown notification dispatch error",
+              });
+            });
+          }
+        }
         break;
       case "payment_intent.payment_failed":
         await handlePaymentIntentFailed(

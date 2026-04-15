@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
 import { getLowStockThreshold } from "@/lib/inventory";
+import {
+  markOrderAcknowledged,
+  markOrderAcknowledgedForStatusChange,
+} from "@/lib/notifications/orders";
 import { reconcilePendingStripeOrders } from "@/lib/orders/persistence";
 import {
   ORDER_STATUSES,
@@ -30,6 +34,36 @@ const STATUS_LABELS = {
 
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
+}
+
+async function attachOrderNotificationHistory({ client, orders }) {
+  const rows = Array.isArray(orders) ? orders : [];
+  const orderIds = rows.map((order) => order?.id).filter(Boolean);
+  if (orderIds.length === 0) return rows;
+
+  const { data, error } = await client
+    .from("order_notifications")
+    .select(
+      "id,order_id,channel,notification_kind,status,destination,provider,provider_message_id,error_code,error_message,attempt_number,meta,created_at,sent_at,delivered_at,failed_at"
+    )
+    .in("order_id", orderIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const notificationsByOrderId = new Map();
+  for (const row of data || []) {
+    const current = notificationsByOrderId.get(row.order_id) || [];
+    current.push(row);
+    notificationsByOrderId.set(row.order_id, current);
+  }
+
+  return rows.map((order) => ({
+    ...order,
+    order_notifications: notificationsByOrderId.get(order.id) || [],
+  }));
 }
 
 function aggregateOrderItems(items) {
@@ -195,7 +229,82 @@ export async function GET(request) {
     });
   }
 
-  return NextResponse.json({ orders: data || [] }, { status: 200 });
+  try {
+    const ordersWithNotifications = await attachOrderNotificationHistory({
+      client: serviceClient ?? supabase,
+      orders: data || [],
+    });
+    return NextResponse.json({ orders: ordersWithNotifications }, { status: 200 });
+  } catch (notificationError) {
+    return jsonError(
+      notificationError?.message || "Failed to load order notification history",
+      500
+    );
+  }
+}
+
+export async function POST(request) {
+  const access = await getBusinessDataClientForRequest();
+  if (!access.ok) {
+    return jsonError(access.error, access.status);
+  }
+
+  const supabase = access.client;
+  const effectiveUserId = access.effectiveUserId;
+  const actorUserId = access.actorUserId || access.effectiveUserId;
+  const serviceClient = getSupabaseServiceClient();
+
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+
+  const orderId = body?.order_id;
+  if (!orderId) {
+    return jsonError("Missing order_id", 400);
+  }
+
+  const { data: existingOrder, error: existingOrderError } = await supabase
+    .from("orders")
+    .select("id,vendor_id,acknowledged_at,acknowledged_by,notification_state")
+    .eq("id", orderId)
+    .eq("vendor_id", effectiveUserId)
+    .maybeSingle();
+
+  if (existingOrderError) {
+    return jsonError(existingOrderError.message || "Failed to load order", 500);
+  }
+
+  if (!existingOrder?.id) {
+    return jsonError("Order not found", 404);
+  }
+
+  try {
+    const acknowledged = await markOrderAcknowledged(orderId, actorUserId, {
+      client: serviceClient ?? supabase,
+    });
+
+    return NextResponse.json(
+      {
+        order: {
+          id: existingOrder.id,
+          acknowledged_at:
+            acknowledged?.acknowledged_at || existingOrder.acknowledged_at || null,
+          acknowledged_by:
+            acknowledged?.acknowledged_by || existingOrder.acknowledged_by || null,
+          notification_state:
+            acknowledged?.notification_state ||
+            existingOrder.notification_state ||
+            null,
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    return jsonError(error?.message || "Failed to acknowledge order", 500);
+  }
 }
 
 export async function PATCH(request) {
@@ -300,7 +409,7 @@ export async function PATCH(request) {
     .update(updates)
     .eq("id", orderId)
     .select(
-      "id,order_number,user_id,status,updated_at,confirmed_at,fulfilled_at,cancelled_at"
+      "id,order_number,user_id,status,updated_at,confirmed_at,fulfilled_at,cancelled_at,acknowledged_at,acknowledged_by,notification_state"
     )
     .maybeSingle();
 
@@ -400,5 +509,41 @@ export async function PATCH(request) {
     }
   }
 
-  return NextResponse.json({ order: data }, { status: 200 });
+  let acknowledgmentUpdate = null;
+  try {
+    acknowledgmentUpdate = await markOrderAcknowledgedForStatusChange({
+      orderId,
+      actorUserId,
+      nextStatus,
+      client: serviceClient ?? supabase,
+    });
+  } catch (ackError) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[BUSINESS_ORDERS_TRACE]", "acknowledge_on_status_change_failed", {
+        orderId,
+        actorUserId,
+        nextStatus,
+        message: ackError?.message || null,
+      });
+    }
+  }
+
+  return NextResponse.json(
+    {
+      order: acknowledgmentUpdate
+        ? {
+            ...data,
+            acknowledged_at:
+              acknowledgmentUpdate.acknowledged_at || data?.acknowledged_at || null,
+            acknowledged_by:
+              acknowledgmentUpdate.acknowledged_by || data?.acknowledged_by || null,
+            notification_state:
+              acknowledgmentUpdate.notification_state ||
+              data?.notification_state ||
+              null,
+          }
+        : data,
+    },
+    { status: 200 }
+  );
 }
