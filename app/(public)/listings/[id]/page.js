@@ -33,6 +33,12 @@ import {
   getPurchaseRestrictionMessage,
 } from "@/lib/auth/purchaseAccess";
 import { descriptionSnippet } from "@/lib/listingDescription";
+import {
+  DELIVERY_FULFILLMENT_TYPE,
+  deriveFulfillmentSummary,
+  formatCents,
+  PICKUP_FULFILLMENT_TYPE,
+} from "@/lib/fulfillment";
 import { getCustomerBusinessUrl, getListingUrl } from "@/lib/ids/publicRefs";
 import {
   getBusinessTypeLabel,
@@ -173,7 +179,7 @@ export default function ListingDetails({ params }) {
         const { data: biz } = await client
           .from("businesses")
           .select(
-            "id,owner_user_id,public_id,business_name,business_type,category,city,address,website,phone,profile_photo_url,verification_status"
+            "id,owner_user_id,public_id,business_name,business_type,category,city,address,website,phone,profile_photo_url,verification_status,pickup_enabled_default,local_delivery_enabled_default,default_delivery_fee_cents,delivery_radius_miles,delivery_min_order_cents,delivery_notes"
           )
           .eq("owner_user_id", item.business_id)
           .maybeSingle();
@@ -305,6 +311,25 @@ export default function ListingDetails({ params }) {
       return listing.price;
     }
   }, [listing?.price]);
+  const fulfillmentSummary = useMemo(
+    () =>
+      deriveFulfillmentSummary({
+        listings: listing ? [listing] : [],
+        business,
+        subtotalCents: Math.round(Number(listing?.price || 0) * 100) * quantity,
+        currentFulfillmentType: fulfillmentType,
+      }),
+    [business, fulfillmentType, listing, quantity]
+  );
+
+  useEffect(() => {
+    if (
+      fulfillmentSummary.selectedFulfillmentType &&
+      fulfillmentSummary.selectedFulfillmentType !== fulfillmentType
+    ) {
+      setFulfillmentType(fulfillmentSummary.selectedFulfillmentType);
+    }
+  }, [fulfillmentSummary.selectedFulfillmentType, fulfillmentType]);
 
   useEffect(() => {
     if (!cartToast) return undefined;
@@ -357,6 +382,13 @@ export default function ListingDetails({ params }) {
       return;
     }
     if (!requireAuth("place orders", setStatusMessage)) return;
+    if (!fulfillmentSummary.availableMethods.includes(fulfillmentType)) {
+      setStatusMessage(
+        fulfillmentSummary.deliveryUnavailableReason ||
+          "That fulfillment option is not available for this listing."
+      );
+      return;
+    }
     setCartActionLoading(true);
     setStatusMessage("");
     try {
@@ -738,11 +770,8 @@ export default function ListingDetails({ params }) {
               style={{ background: "var(--surface)", border: "1px solid rgba(15,23,42,0.08)" }}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="space-y-2.5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-65">
-                    Ready to order
-                  </p>
-                  <div className="text-[2rem] font-semibold leading-none tracking-[-0.03em]">
+                <div className="space-y-2">
+                  <div className="mb-3 text-[2rem] font-semibold leading-none tracking-[-0.03em]">
                     {formattedPrice ? `$${formattedPrice}` : "Contact store"}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -760,7 +789,7 @@ export default function ListingDetails({ params }) {
                     >
                       {inventory.label}
                     </span>
-                    <span className="opacity-75">Sold by {storeName}</span>
+                    <span className="opacity-60">Sold by {storeName}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -822,182 +851,201 @@ export default function ListingDetails({ params }) {
                 </div>
               </div>
 
-                <div className="mt-6 space-y-4 border-t pt-4" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
-                    <Truck className="h-4 w-4" />
+              <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
+                <div>
+                  <div className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
+                    Fulfillment
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold">Delivery available</p>
-                    <p className="text-xs opacity-75">Delivered within the business service area.</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {[
+                      {
+                        id: PICKUP_FULFILLMENT_TYPE,
+                        label: "Pickup",
+                        meta: "Free",
+                        icon: ShoppingBag,
+                        available: fulfillmentSummary.pickupAvailable,
+                        hidden:
+                          !fulfillmentSummary.pickupAvailable &&
+                          !fulfillmentSummary.deliveryAvailable,
+                      },
+                      {
+                        id: DELIVERY_FULFILLMENT_TYPE,
+                        label: "Delivery",
+                        meta: fulfillmentSummary.deliveryAvailable
+                          ? `$${formatCents(fulfillmentSummary.deliveryFeeCents)}`
+                          : "Unavailable",
+                        icon: Truck,
+                        available: fulfillmentSummary.deliveryAvailable,
+                        hidden: false,
+                      },
+                    ]
+                      .filter((option) => !option.hidden)
+                      .map((option) => {
+                        const Icon = option.icon;
+                        const active = fulfillmentType === option.id;
+                        const disabled =
+                          purchaseRestricted ||
+                          purchaseEligibilityPending ||
+                          cartActionLoading ||
+                          !option.available;
+
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setFulfillmentType(option.id)}
+                            disabled={disabled}
+                            className={`rounded-2xl px-4 py-3 text-left transition ${
+                              active ? "ring-2 ring-indigo-500/20" : ""
+                            } ${disabled && !active ? "cursor-not-allowed" : ""}`}
+                            style={{
+                              background: active ? "rgba(79,70,229,0.08)" : "rgba(15,23,42,0.02)",
+                              border: active
+                                ? "1px solid rgba(79,70,229,0.18)"
+                                : "1px solid rgba(15,23,42,0.08)",
+                              color: "var(--text)",
+                              opacity: option.available ? 1 : 0.55,
+                            }}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                                <Icon className="h-3.5 w-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold">{option.label}</div>
+                                <div className="mt-1 text-xs opacity-70">{option.meta}</div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
-                    <ShoppingBag className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Pickup available</p>
-                    <p className="text-xs opacity-75">Choose in-store pickup at checkout.</p>
-                  </div>
+                  {fulfillmentSummary.deliveryUnavailableReason &&
+                  !fulfillmentSummary.deliveryAvailable ? (
+                    <p className="text-xs leading-5 opacity-65">
+                      {fulfillmentSummary.deliveryUnavailableReason}
+                    </p>
+                  ) : fulfillmentType === DELIVERY_FULFILLMENT_TYPE &&
+                    fulfillmentSummary.deliveryAvailable &&
+                    fulfillmentSummary.deliveryNotes ? (
+                    <p className="text-xs leading-5 opacity-65">
+                      {fulfillmentSummary.deliveryNotes}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="mt-6 space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-                    Fulfillment
-                  </label>
-                  <span className="text-xs opacity-70">Saved profile details will be used at checkout</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "pickup", label: "Pickup" },
-                    { id: "delivery", label: "Delivery" },
-                  ].map((option) => {
-                    const active = fulfillmentType === option.id;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setFulfillmentType(option.id)}
-                        disabled={purchaseRestricted || purchaseEligibilityPending || cartActionLoading}
-                        className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                          active ? "ring-2 ring-indigo-500/20" : ""
-                        }`}
-                        style={{
-                          background: active ? "rgba(79,70,229,0.08)" : "var(--surface)",
-                          border: "1px solid rgba(15,23,42,0.08)",
-                          color: "var(--text)",
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-                    Quantity
-                  </label>
-                  {!isOutOfStock ? (
-                    <span className="text-xs opacity-70">Review address and payment at checkout</span>
-                  ) : null}
-                </div>
-                <select
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  disabled={isOutOfStock || purchaseRestricted || purchaseEligibilityPending}
-                  className="w-full rounded-xl px-3 py-3 text-base font-semibold md:text-sm"
-                  style={{ background: "var(--surface)", border: "1px solid rgba(15,23,42,0.08)", color: "var(--text)" }}
-                >
-                  {Array.from({ length: 5 }).map((_, idx) => (
-                    <option key={idx + 1} value={idx + 1}>
-                      {idx + 1}
-                    </option>
-                  ))}
-                </select>
-
-                {purchaseEligibilityPending ? (
-                  <div
-                    className="mt-4 rounded-2xl border px-4 py-3"
-                    style={{ background: "var(--overlay)", borderColor: "var(--border)" }}
-                  >
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full rounded-xl px-3 py-3 text-sm font-semibold opacity-70"
-                      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-                    >
-                      Checking account...
-                    </button>
-                    <p className="mt-2 text-xs opacity-80">
-                      We’re confirming your account before enabling checkout.
-                    </p>
-                  </div>
-                ) : purchaseRestricted ? (
-                  <div
-                    className="mt-4 rounded-2xl border px-4 py-3"
-                    style={{ background: "var(--overlay)", borderColor: "var(--border)" }}
-                  >
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full rounded-xl px-3 py-3 text-sm font-semibold opacity-70"
-                      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-                    >
-                      Customer accounts only
-                    </button>
-                    <p className="mt-2 text-xs opacity-80">
-                      {getPurchaseRestrictionHelpText()}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-5 grid gap-3">
-                    <button
-                      type="button"
-                      onClick={handleAddToCart}
-                      disabled={isOutOfStock || cartActionLoading}
-                      className="yb-auth-cta flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-semibold transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(111,52,255,0.24)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-4 block text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
+                      Quantity
+                    </label>
+                    <select
+                      value={quantity}
+                      onChange={(e) => setQuantity(Number(e.target.value))}
+                      disabled={isOutOfStock || purchaseRestricted || purchaseEligibilityPending}
+                      className="w-full rounded-2xl px-3 py-3 text-base font-semibold md:text-sm"
                       style={{
-                        background: isOutOfStock ? "rgba(15,23,42,0.12)" : "var(--yb-focus)",
-                        color: isOutOfStock ? "rgba(15,23,42,0.46)" : "#ffffff",
-                        boxShadow: isOutOfStock
-                          ? "none"
-                          : "0 12px 24px -20px rgba(110,52,255,0.38)",
+                        background: "rgba(15,23,42,0.02)",
+                        border: "1px solid rgba(15,23,42,0.08)",
+                        color: "var(--text)",
                       }}
                     >
-                      {cartActionLoading ? "Adding..." : "Add to cart"}
-                    </button>
-                    <Link
-                      href={listing.business_id
-                        ? `/checkout?business_id=${encodeURIComponent(listing.business_id)}`
-                        : "/checkout"}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3.5 text-sm font-semibold transition hover:bg-black/[0.03]"
-                      style={{ borderColor: "rgba(15,23,42,0.08)" }}
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <option key={idx + 1} value={idx + 1}>
+                          {idx + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {purchaseEligibilityPending ? (
+                    <div className="mt-4 space-y-2">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full rounded-2xl px-4 py-3.5 text-sm font-semibold opacity-70"
+                        style={{ background: "rgba(15,23,42,0.08)", color: "var(--text)" }}
+                      >
+                        Checking account...
+                      </button>
+                      <p className="text-xs leading-5 opacity-75">
+                        We’re confirming your account before enabling checkout.
+                      </p>
+                    </div>
+                  ) : purchaseRestricted ? (
+                    <div className="mt-4 space-y-2">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full rounded-2xl px-4 py-3.5 text-sm font-semibold opacity-70"
+                        style={{ background: "rgba(15,23,42,0.08)", color: "var(--text)" }}
+                      >
+                        Customer accounts only
+                      </button>
+                      <p className="text-xs leading-5 opacity-75">
+                        {getPurchaseRestrictionHelpText()}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      <button
+                        type="button"
+                        onClick={handleAddToCart}
+                        disabled={isOutOfStock || cartActionLoading}
+                        className="yb-auth-cta flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-semibold transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(111,52,255,0.24)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{
+                          background: isOutOfStock ? "rgba(15,23,42,0.12)" : "var(--yb-focus)",
+                          color: isOutOfStock ? "rgba(15,23,42,0.46)" : "#ffffff",
+                          boxShadow: isOutOfStock
+                            ? "none"
+                            : "0 12px 24px -20px rgba(110,52,255,0.38)",
+                        }}
+                      >
+                        {cartActionLoading ? "Adding..." : "Add to cart"}
+                      </button>
+                      <Link
+                        href="/cart"
+                        className="inline-flex items-center text-sm font-medium opacity-75 transition hover:opacity-100"
+                      >
+                        Go to cart →
+                      </Link>
+                    </div>
+                  )}
+
+                  {isOutOfStock ? (
+                    <div className="text-xs leading-5 opacity-75">
+                      This item is currently out of stock
+                    </div>
+                  ) : statusMessage ? (
+                    <div
+                      className="rounded-xl px-3 py-2 text-xs"
+                      style={{ background: "var(--overlay)", border: "1px solid rgba(15,23,42,0.08)" }}
                     >
-                      View checkout
-                    </Link>
-                  </div>
-                )}
+                      {statusMessage}
+                    </div>
+                  ) : purchaseRestricted ? (
+                    <div className="text-xs leading-5 opacity-75">
+                      Browse listings with your business account, but switch to a customer account to place orders.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
-                {isOutOfStock ? (
-                  <div className="mt-4 text-xs opacity-75">
-                    This item is currently out of stock
-                  </div>
-                ) : statusMessage ? (
-                  <div
-                    className="mt-4 text-xs rounded-xl px-3 py-2"
-                    style={{ background: "var(--overlay)", border: "1px solid rgba(15,23,42,0.08)" }}
-                  >
-                    {statusMessage}
-                  </div>
-                ) : purchaseEligibilityPending ? (
-                  <div className="mt-4 text-xs opacity-80">
-                    We’re confirming your account before enabling checkout.
-                  </div>
-                ) : purchaseRestricted ? (
-                  <div className="mt-4 text-xs opacity-80">
-                    Browse listings with your business account, but switch to a customer account to place orders.
-                  </div>
-                ) : (
-                  <div className="mt-4 text-xs leading-5 opacity-75">
-                    Choose pickup or delivery here, add the item to your cart, and finish payment at checkout.
-                  </div>
-                )}
-
-                <div className="mt-6 border-t pt-4" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
-                  <div className="flex items-center gap-2 text-[13px] font-semibold">
-                    <Shield className="h-4 w-4 text-[var(--yb-focus)] opacity-80" />
-                    <p>What to expect</p>
-                  </div>
-                  <ul className="mt-2.5 space-y-2 text-[13px] leading-6 opacity-70">
+              <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
+                <details className="group">
+                  <summary className="cursor-pointer list-none text-sm font-semibold marker:content-none">
+                    <span className="opacity-80 transition group-open:opacity-100">
+                      What to expect
+                    </span>
+                  </summary>
+                  <ul className="mt-3 space-y-2 text-[13px] leading-6 opacity-68">
                     <li>Message the business to confirm any final details.</li>
                     <li>Delivery windows are shared after the order is confirmed.</li>
                     <li>Pickup instructions are sent directly by the business.</li>
                   </ul>
-                </div>
+                </details>
               </div>
             </div>
           </aside>

@@ -22,6 +22,12 @@ const PUBLIC_BUSINESS_SELECT = [
   "city",
   "state",
   "postal_code",
+  "pickup_enabled_default",
+  "local_delivery_enabled_default",
+  "default_delivery_fee_cents",
+  "delivery_radius_miles",
+  "delivery_min_order_cents",
+  "delivery_notes",
   "latitude",
   "longitude",
   "hours_json",
@@ -49,6 +55,12 @@ export type PublicBusiness = {
   city: string | null;
   state: string | null;
   postal_code: string | null;
+  pickup_enabled_default: boolean;
+  local_delivery_enabled_default: boolean;
+  default_delivery_fee_cents: number | null;
+  delivery_radius_miles: number | null;
+  delivery_min_order_cents: number | null;
+  delivery_notes: string | null;
   latitude: number | null;
   longitude: number | null;
   hours_json: Record<string, unknown>;
@@ -74,6 +86,12 @@ type PublicBusinessRow = {
   city: string | null;
   state: string | null;
   postal_code: string | null;
+  pickup_enabled_default: boolean | null;
+  local_delivery_enabled_default: boolean | null;
+  default_delivery_fee_cents: number | null;
+  delivery_radius_miles: number | null;
+  delivery_min_order_cents: number | null;
+  delivery_notes: string | null;
   latitude: number | null;
   longitude: number | null;
   hours_json: unknown;
@@ -136,6 +154,12 @@ export async function getPublicBusinessByOwnerId(
     city: data.city ?? null,
     state: data.state ?? null,
     postal_code: data.postal_code ?? null,
+    pickup_enabled_default: data.pickup_enabled_default !== false,
+    local_delivery_enabled_default: data.local_delivery_enabled_default === true,
+    default_delivery_fee_cents: data.default_delivery_fee_cents ?? null,
+    delivery_radius_miles: data.delivery_radius_miles ?? null,
+    delivery_min_order_cents: data.delivery_min_order_cents ?? null,
+    delivery_notes: data.delivery_notes ?? null,
     latitude: data.latitude ?? null,
     longitude: data.longitude ?? null,
     hours_json: asRecord(data.hours_json),

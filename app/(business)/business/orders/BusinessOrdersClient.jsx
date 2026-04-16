@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
@@ -42,6 +43,13 @@ const getLocalRangeStart = (days) => {
   return start.getTime();
 };
 
+const toNumberOrZero = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const centsToDollars = (value) => Math.max(0, toNumberOrZero(value) / 100);
+
 export default function BusinessOrdersClient() {
   const searchParams = useSearchParams();
   const initialTab = searchParams?.get("tab") || "new";
@@ -59,6 +67,31 @@ export default function BusinessOrdersClient() {
   const [statusMenuOrder, setStatusMenuOrder] = useState(null);
   const [acknowledgedOrderIds, setAcknowledgedOrderIds] = useState(() => new Set());
   const deliveryInstructions = selectedOrder?.delivery_instructions?.trim();
+  const deliveryNotesSnapshot = selectedOrder?.delivery_notes_snapshot?.trim();
+  const subtotalAmount = Math.max(0, toNumberOrZero(selectedOrder?.subtotal));
+  const deliveryFeeAmount = centsToDollars(selectedOrder?.delivery_fee_cents_snapshot);
+  const taxAmount = Math.max(
+    0,
+    toNumberOrZero(
+      selectedOrder?.tax ??
+        selectedOrder?.tax_amount ??
+        selectedOrder?.tax_total ??
+        selectedOrder?.tax_snapshot
+    )
+  );
+  const derivedPlatformFeeAmount = Math.max(
+    0,
+    toNumberOrZero(selectedOrder?.total) - subtotalAmount - deliveryFeeAmount - taxAmount
+  );
+  const platformFeeAmount = Math.max(
+    0,
+    selectedOrder?.platform_fee_cents != null
+      ? centsToDollars(selectedOrder.platform_fee_cents)
+      : selectedOrder?.platform_fee_amount != null
+        ? centsToDollars(selectedOrder.platform_fee_amount)
+        : derivedPlatformFeeAmount
+  );
+  const totalAmount = Math.max(0, toNumberOrZero(selectedOrder?.total));
 
   const getConfirmMessage = (fromStatus, toStatus, orderNumber) => {
     const orderLabel = orderNumber ? `Order ${orderNumber}` : "this order";
@@ -843,6 +876,17 @@ export default function BusinessOrdersClient() {
                     </p>
                   </div>
                 ) : null}
+                {selectedOrder.fulfillment_type === "delivery" &&
+                deliveryNotesSnapshot ? (
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-[0.2em] opacity-60">
+                      Delivery notes
+                    </p>
+                    <p className="text-xs opacity-70 whitespace-pre-wrap">
+                      {deliveryNotesSnapshot}
+                    </p>
+                  </div>
+                ) : null}
                 <p className="text-xs opacity-70">
                   {getOrderStatusDescription(selectedOrder.status)}
                 </p>
@@ -866,7 +910,18 @@ export default function BusinessOrdersClient() {
                     key={item.id}
                     className="grid grid-cols-[1fr_80px_110px_130px] items-center gap-6"
                   >
-                    <span className="opacity-80">{item.title}</span>
+                    <span className="opacity-80">
+                      {item.listing_id ? (
+                        <Link
+                          href={`/listings/${item.listing_id}`}
+                          className="hover:underline"
+                        >
+                          {item.title}
+                        </Link>
+                      ) : (
+                        item.title
+                      )}
+                    </span>
                     <span className="text-right">{item.quantity}</span>
                     <span className="text-right">
                       ${formatMoney(item.unit_price)}
@@ -882,13 +937,40 @@ export default function BusinessOrdersClient() {
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <span
-                className="rounded-full border px-3 py-1 text-xs"
+            <div
+              className="mt-4 border-t pt-4 text-sm"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="opacity-80">Subtotal</span>
+                <span className="text-right">${formatMoney(subtotalAmount)}</span>
+              </div>
+              {selectedOrder.fulfillment_type === "delivery" ? (
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="opacity-80">Delivery fee</span>
+                  <span className="text-right">${formatMoney(deliveryFeeAmount)}</span>
+                </div>
+              ) : null}
+              <div className="mt-2 flex items-center justify-between">
+                <span className="opacity-80">Platform fee</span>
+                <span className="text-right">${formatMoney(platformFeeAmount)}</span>
+              </div>
+              {taxAmount > 0 ? (
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="opacity-80">Tax</span>
+                  <span className="text-right">${formatMoney(taxAmount)}</span>
+                </div>
+              ) : null}
+              <div
+                className="mt-2 flex items-center justify-between border-t pt-2 font-medium"
                 style={{ borderColor: "var(--border)" }}
               >
-                Total: ${formatMoney(selectedOrder.total)}
-              </span>
+                <span>Total</span>
+                <span className="text-right">${formatMoney(totalAmount)}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
               <OrderStatusBadge
                 status={selectedOrder.status}
                 label={getOrderStatusLabel(selectedOrder.status)}

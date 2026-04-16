@@ -7,6 +7,10 @@ import RichTextDescriptionEditor from "@/components/editor/RichTextDescriptionEd
 import { useAuth } from "@/components/AuthProvider";
 import { stripHtmlToText } from "@/lib/listingDescription";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import {
+  centsToDollarsInput,
+  dollarsInputToCents,
+} from "@/lib/fulfillment";
 import { buildListingTaxonomyPayload } from "@/lib/taxonomy/compat";
 import { getListingCategoryOptions } from "@/lib/taxonomy/listingCategories";
 
@@ -25,6 +29,15 @@ export default function NewListingPage() {
     inventoryQuantity: "",
     inventoryStatus: "in_stock",
     lowStockThreshold: "",
+    pickupEnabled: true,
+    localDeliveryEnabled: false,
+    useBusinessDeliveryDefaults: true,
+    deliveryFee: "",
+  });
+  const [businessFulfillmentDefaults, setBusinessFulfillmentDefaults] = useState({
+    pickup_enabled_default: true,
+    local_delivery_enabled_default: false,
+    default_delivery_fee_cents: null,
   });
 
   const [photos, setPhotos] = useState([]);
@@ -55,6 +68,42 @@ export default function NewListingPage() {
     },
     [photoPreviews]
   );
+
+  useEffect(() => {
+    const client = getSupabaseBrowserClient() ?? supabase;
+    if (!client || !accountId) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await client
+        .from("businesses")
+        .select(
+          "pickup_enabled_default,local_delivery_enabled_default,default_delivery_fee_cents"
+        )
+        .eq("owner_user_id", accountId)
+        .maybeSingle();
+
+      if (cancelled || !data) return;
+
+      setBusinessFulfillmentDefaults({
+        pickup_enabled_default: data.pickup_enabled_default !== false,
+        local_delivery_enabled_default: data.local_delivery_enabled_default === true,
+        default_delivery_fee_cents:
+          typeof data.default_delivery_fee_cents === "number"
+            ? data.default_delivery_fee_cents
+            : null,
+      });
+      setForm((prev) => ({
+        ...prev,
+        pickupEnabled: data.pickup_enabled_default !== false,
+        localDeliveryEnabled: data.local_delivery_enabled_default === true,
+      }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, supabase]);
 
   const handleAddPhotos = (files) => {
     const incoming = Array.from(files || []);
@@ -148,6 +197,23 @@ export default function NewListingPage() {
       setSubmitError("Please add a description.");
       return;
     }
+    if (
+      form.localDeliveryEnabled &&
+      form.useBusinessDeliveryDefaults &&
+      businessFulfillmentDefaults.default_delivery_fee_cents == null
+    ) {
+      setSubmitError("Add a default delivery fee in business settings before enabling delivery.");
+      return;
+    }
+    const listingDeliveryFeeCents = dollarsInputToCents(form.deliveryFee);
+    if (
+      form.localDeliveryEnabled &&
+      !form.useBusinessDeliveryDefaults &&
+      (Number.isNaN(listingDeliveryFeeCents) || listingDeliveryFeeCents === null)
+    ) {
+      setSubmitError("Enter a valid listing delivery fee.");
+      return;
+    }
 
     setSaving(true);
 
@@ -199,6 +265,13 @@ export default function NewListingPage() {
         inventory_last_updated_at: new Date().toISOString(),
         city: business?.city || null,
         photo_url: photo_urls.length ? JSON.stringify(photo_urls) : null,
+        pickup_enabled: form.pickupEnabled,
+        local_delivery_enabled: form.localDeliveryEnabled,
+        use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
+        delivery_fee_cents:
+          form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
+            ? listingDeliveryFeeCents
+            : null,
       };
       const insertQuery = client.from("listings").insert(listingPayload);
       const { error } = await withTimeout(
@@ -483,6 +556,113 @@ export default function NewListingPage() {
               </p>
             </div>
           )}
+        </section>
+
+        <section className={sectionCard}>
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-white">Fulfillment</h2>
+            <p className="text-sm text-white/60">
+              Pickup is the default. Only offer delivery when you can fulfill it reliably.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <label className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+              <span className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.pickupEnabled}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      pickupEnabled: e.target.checked,
+                    }))
+                  }
+                />
+                Pickup available
+              </span>
+              <span className={`mt-2 block ${helperBase}`}>
+                Customers can collect this order directly from your business.
+              </span>
+            </label>
+
+            <label className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+              <span className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.localDeliveryEnabled}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      localDeliveryEnabled: e.target.checked,
+                      useBusinessDeliveryDefaults: e.target.checked
+                        ? prev.useBusinessDeliveryDefaults
+                        : true,
+                    }))
+                  }
+                />
+                Local delivery available
+              </span>
+              <span className={`mt-2 block ${helperBase}`}>
+                {businessFulfillmentDefaults.local_delivery_enabled_default
+                  ? "Customers only see delivery when this listing also supports it."
+                  : "Turn on local delivery in business settings before customers can use it."}
+              </span>
+            </label>
+          </div>
+
+          {form.localDeliveryEnabled ? (
+            <div className="mt-6 space-y-5">
+              <label className="block text-sm text-white/80">
+                <span className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={form.useBusinessDeliveryDefaults}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        useBusinessDeliveryDefaults: e.target.checked,
+                      }))
+                    }
+                  />
+                  Use business default delivery settings
+                </span>
+                <span className={`mt-2 block ${helperBase}`}>
+                  Current business default fee:{" "}
+                  {businessFulfillmentDefaults.default_delivery_fee_cents == null
+                    ? "Not set"
+                    : `$${centsToDollarsInput(
+                        businessFulfillmentDefaults.default_delivery_fee_cents
+                      )}`}
+                </span>
+              </label>
+
+              {!form.useBusinessDeliveryDefaults ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <label className={labelBase} htmlFor="listing-delivery-fee">
+                    Listing delivery fee
+                  </label>
+                  <input
+                    id="listing-delivery-fee"
+                    className={inputBase}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Ex: 5.00"
+                    value={form.deliveryFee}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        deliveryFee: e.target.value,
+                      }))
+                    }
+                  />
+                  <p className={helperBase}>
+                    This fee is added on top of the item subtotal at checkout.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <div className="flex flex-col-reverse sm:flex-row gap-4 pt-2">

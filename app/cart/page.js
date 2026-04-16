@@ -6,6 +6,7 @@ import { ShoppingBag, Trash2, Truck, Minus, Plus } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { useCart } from "@/components/cart/CartProvider";
 import { useCurrentAccountContext } from "@/lib/auth/useCurrentAccountContext";
+import { DELIVERY_FULFILLMENT_TYPE, PICKUP_FULFILLMENT_TYPE } from "@/lib/fulfillment";
 import {
   getPurchaseRestrictionHelpText,
   getPurchaseRestrictionMessage,
@@ -36,7 +37,15 @@ export default function CartPage() {
     () => vendorGroups.reduce((sum, group) => sum + calculatePlatformFeeDollars(group.subtotal), 0),
     [vendorGroups]
   );
-  const total = allItemsSubtotal + fees;
+  const deliveryFees = useMemo(
+    () =>
+      vendorGroups.reduce((sum, group) => {
+        if (group.fulfillment_type !== DELIVERY_FULFILLMENT_TYPE) return sum;
+        return sum + Number(group.delivery_fee_cents || 0) / 100;
+      }, 0),
+    [vendorGroups]
+  );
+  const total = allItemsSubtotal + deliveryFees + fees;
 
   const handleQuantityChange = async (item, delta) => {
     const nextQuantity = Number(item.quantity || 0) + delta;
@@ -164,31 +173,59 @@ export default function CartPage() {
                   <div>
                     <p className="text-sm font-semibold">Fulfillment</p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleFulfillmentChange(group, "delivery")}
-                        className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                          group.fulfillment_type === "delivery" ? "ring-2 ring-indigo-500/40" : ""
-                        }`}
-                        style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
-                      >
-                        <span className="flex items-center justify-center gap-2">
-                          <Truck className="h-4 w-4" /> Delivery
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleFulfillmentChange(group, "pickup")}
-                        className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                          group.fulfillment_type === "pickup" ? "ring-2 ring-indigo-500/40" : ""
-                        }`}
-                        style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
-                      >
-                        <span className="flex items-center justify-center gap-2">
-                          <ShoppingBag className="h-4 w-4" /> Pickup
-                        </span>
-                      </button>
+                      {group.available_fulfillment_methods?.includes(
+                        DELIVERY_FULFILLMENT_TYPE
+                      ) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleFulfillmentChange(group, DELIVERY_FULFILLMENT_TYPE)
+                          }
+                          className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                            group.fulfillment_type === DELIVERY_FULFILLMENT_TYPE
+                              ? "ring-2 ring-indigo-500/40"
+                              : ""
+                          }`}
+                          style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                        >
+                          <span className="flex items-center justify-center gap-2">
+                            <Truck className="h-4 w-4" /> Delivery
+                          </span>
+                        </button>
+                      ) : null}
+                      {group.available_fulfillment_methods?.includes(
+                        PICKUP_FULFILLMENT_TYPE
+                      ) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleFulfillmentChange(group, PICKUP_FULFILLMENT_TYPE)
+                          }
+                          className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                            group.fulfillment_type === PICKUP_FULFILLMENT_TYPE
+                              ? "ring-2 ring-indigo-500/40"
+                              : ""
+                          }`}
+                          style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                        >
+                          <span className="flex items-center justify-center gap-2">
+                            <ShoppingBag className="h-4 w-4" /> Pickup
+                          </span>
+                        </button>
+                      ) : null}
                     </div>
+                    {group.available_fulfillment_methods?.includes(
+                      DELIVERY_FULFILLMENT_TYPE
+                    ) ? (
+                      <p className="mt-3 text-xs opacity-75">
+                        Delivery fee: ${formatMoney((group.delivery_fee_cents || 0) / 100)}
+                      </p>
+                    ) : null}
+                    {group.delivery_unavailable_reason ? (
+                      <p className="mt-3 text-xs opacity-75">
+                        {group.delivery_unavailable_reason}
+                      </p>
+                    ) : null}
                     {fulfillmentErrors[groupKey] ? (
                       <p className="mt-3 text-xs text-rose-200">{fulfillmentErrors[groupKey]}</p>
                     ) : null}
@@ -271,6 +308,12 @@ export default function CartPage() {
                   <span className="opacity-80">Estimated service fees</span>
                   <span>${formatMoney(fees)}</span>
                 </div>
+                {deliveryFees > 0 ? (
+                  <div className="flex items-center justify-between">
+                    <span className="opacity-80">Selected delivery fees</span>
+                    <span>${formatMoney(deliveryFees)}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: "var(--border)" }}>
                   <span className="text-sm font-semibold">Total</span>
                   <span className="text-sm font-semibold">${formatMoney(total)}</span>

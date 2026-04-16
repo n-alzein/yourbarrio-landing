@@ -85,6 +85,12 @@ export default function OrderReceiptClient({ order, vendor, purchasedAtLabel }) 
                       <p className="mt-2 text-xs opacity-70">{order.delivery_instructions}</p>
                     </div>
                   ) : null}
+                  {order?.delivery_notes_snapshot ? (
+                    <div className="text-right">
+                      <p className="uppercase tracking-[0.2em] text-[0.6rem] opacity-60">Delivery notes</p>
+                      <p className="mt-2 text-xs opacity-70">{order.delivery_notes_snapshot}</p>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <p className="text-xs opacity-70 mb-3">
@@ -134,6 +140,12 @@ export default function OrderReceiptClient({ order, vendor, purchasedAtLabel }) 
               <span className="opacity-80">Subtotal</span>
               <span>${formatMoney(order?.subtotal)}</span>
             </div>
+            {Number(order?.delivery_fee_cents_snapshot || 0) > 0 ? (
+              <div className="flex items-center justify-between">
+                <span className="opacity-80">Delivery fee</span>
+                <span>${formatMoney(Number(order?.delivery_fee_cents_snapshot || 0) / 100)}</span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <span className="opacity-80">Service fee</span>
               <span>${formatMoney(order?.fees)}</span>

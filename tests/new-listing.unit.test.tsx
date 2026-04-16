@@ -65,6 +65,18 @@ function makeSupabaseMock({ insertError } = {}) {
       error: null,
     })),
   };
+  const businessesQuery = {
+    select: vi.fn(() => businessesQuery),
+    eq: vi.fn(() => businessesQuery),
+    maybeSingle: vi.fn(async () => ({
+      data: {
+        pickup_enabled_default: true,
+        local_delivery_enabled_default: false,
+        default_delivery_fee_cents: 500,
+      },
+      error: null,
+    })),
+  };
 
   const insert = vi.fn(async () => ({
     error: insertError || null,
@@ -75,6 +87,7 @@ function makeSupabaseMock({ insertError } = {}) {
       from: vi.fn(() => ({ upload, getPublicUrl })),
     },
     from: vi.fn((table) => {
+      if (table === "businesses") return businessesQuery;
       if (table === "users") return usersQuery;
       return { insert };
     }),
@@ -122,6 +135,25 @@ beforeEach(() => {
 });
 
 describe("NewListingPage", () => {
+  it("defaults new listings to pickup on and delivery off", async () => {
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    render(<NewListingPage />);
+
+    expect(
+      await screen.findByRole("checkbox", { name: /pickup available/i })
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: /local delivery available/i })
+    ).not.toBeChecked();
+  });
+
   it("clears loading state and shows error on publish failure", async () => {
     mockSupabase = makeSupabaseMock({
       insertError: { message: "Insert failed" },

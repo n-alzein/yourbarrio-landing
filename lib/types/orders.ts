@@ -41,6 +41,8 @@ export type Order = {
   delivery_instructions?: string | null;
   delivery_time?: string | null;
   pickup_time?: string | null;
+  delivery_fee_cents_snapshot?: number;
+  delivery_notes_snapshot?: string | null;
   subtotal: number;
   fees: number;
   total: number;

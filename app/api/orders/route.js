@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { getPurchaseRestrictionMessage } from "@/lib/auth/purchaseAccess";
+import {
+  BUSINESS_FULFILLMENT_SELECT,
+  DELIVERY_FULFILLMENT_TYPE,
+  deriveFulfillmentSummary,
+  LISTING_FULFILLMENT_SELECT,
+} from "@/lib/fulfillment";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
 import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 import { createOrderWithItems } from "@/lib/orders/persistence";
@@ -114,8 +120,46 @@ export async function POST(request) {
     return sum + unitPrice * qty;
   }, 0);
 
+  const { data: business, error: businessError } = await supabase
+    .from("businesses")
+    .select(`owner_user_id,${BUSINESS_FULFILLMENT_SELECT}`)
+    .eq("owner_user_id", activeCart.vendor_id)
+    .maybeSingle();
+
+  if (businessError) {
+    return jsonError(businessError.message || "Failed to load business fulfillment", 500);
+  }
+
+  const listingIds = items.map((item) => item?.listing_id).filter(Boolean);
+  const { data: listingRows, error: listingRowsError } = await supabase
+    .from("listings")
+    .select(`id,business_id,${LISTING_FULFILLMENT_SELECT}`)
+    .in("id", listingIds);
+
+  if (listingRowsError) {
+    return jsonError(listingRowsError.message || "Failed to load listing fulfillment", 500);
+  }
+
+  const fulfillmentSummary = deriveFulfillmentSummary({
+    listings: Array.isArray(listingRows) ? listingRows : [],
+    business,
+    subtotalCents: Math.round(subtotal * 100),
+    currentFulfillmentType: fulfillmentType,
+  });
+
+  if (!fulfillmentSummary.availableMethods.includes(fulfillmentType)) {
+    return jsonError(
+      fulfillmentSummary.deliveryUnavailableReason ||
+        "That fulfillment option is not available for this order.",
+      400
+    );
+  }
+
   const fees = 0;
-  const total = subtotal + fees;
+  const deliveryFee = fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+    ? fulfillmentSummary.deliveryFeeCents / 100
+    : 0;
+  const total = subtotal + deliveryFee + fees;
 
   let orderRecord = null;
   try {
@@ -139,6 +183,14 @@ export async function POST(request) {
         delivery_instructions: deliveryInstructions,
         delivery_time: fulfillmentType === "delivery" ? deliveryTime : null,
         pickup_time: fulfillmentType === "pickup" ? pickupTime : null,
+        delivery_fee_cents_snapshot:
+          fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+            ? fulfillmentSummary.deliveryFeeCents
+            : 0,
+        delivery_notes_snapshot:
+          fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+            ? fulfillmentSummary.deliveryNotes
+            : null,
         subtotal,
         fees,
         total,

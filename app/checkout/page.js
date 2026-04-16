@@ -12,6 +12,10 @@ import {
 } from "@/lib/auth/purchaseAccess";
 import { US_STATES } from "@/lib/constants/usStates";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
+import {
+  DELIVERY_FULFILLMENT_TYPE,
+  PICKUP_FULFILLMENT_TYPE,
+} from "@/lib/fulfillment";
 import { calculatePlatformFeeDollars } from "@/lib/stripe/fees";
 
 const formatMoney = (value) => {
@@ -73,7 +77,14 @@ export default function CheckoutPage() {
     [items]
   );
   const fees = useMemo(() => calculatePlatformFeeDollars(subtotal), [subtotal]);
-  const total = subtotal + fees;
+  const deliveryFee = useMemo(
+    () =>
+      fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+        ? Number(selectedGroup?.delivery_fee_cents || 0) / 100
+        : 0,
+    [fulfillmentType, selectedGroup?.delivery_fee_cents]
+  );
+  const total = subtotal + deliveryFee + fees;
 
   useEffect(() => {
     if (selectedGroup?.fulfillment_type) {
@@ -316,35 +327,57 @@ export default function CheckoutPage() {
             <div className="space-y-3 mt-6 mb-8">
               <h2 className="text-lg font-semibold mb-4">Fulfillment</h2>
               <div className="grid md:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleFulfillmentSelect("delivery")}
-                  className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                    fulfillmentType === "delivery" ? "ring-2 ring-indigo-500/40" : ""
-                  }`}
-                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
-                >
-                  Delivery
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleFulfillmentSelect("pickup")}
-                  className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                    fulfillmentType === "pickup" ? "ring-2 ring-indigo-500/40" : ""
-                  }`}
-                  style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
-                >
-                  Pickup
-                </button>
+                {selectedGroup?.available_fulfillment_methods?.includes(
+                  DELIVERY_FULFILLMENT_TYPE
+                ) ? (
+                  <button
+                    type="button"
+                    onClick={() => handleFulfillmentSelect(DELIVERY_FULFILLMENT_TYPE)}
+                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                      fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+                        ? "ring-2 ring-indigo-500/40"
+                        : ""
+                    }`}
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  >
+                    Delivery
+                  </button>
+                ) : null}
+                {selectedGroup?.available_fulfillment_methods?.includes(
+                  PICKUP_FULFILLMENT_TYPE
+                ) ? (
+                  <button
+                    type="button"
+                    onClick={() => handleFulfillmentSelect(PICKUP_FULFILLMENT_TYPE)}
+                    className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                      fulfillmentType === PICKUP_FULFILLMENT_TYPE
+                        ? "ring-2 ring-indigo-500/40"
+                        : ""
+                    }`}
+                    style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
+                  >
+                    Pickup
+                  </button>
+                ) : null}
               </div>
               {!fulfillmentType ? (
                 <p className="text-xs opacity-70">Choose delivery or pickup to continue.</p>
               ) : null}
+              {selectedGroup?.delivery_unavailable_reason &&
+              !selectedGroup?.available_fulfillment_methods?.includes(
+                DELIVERY_FULFILLMENT_TYPE
+              ) ? (
+                <p className="text-xs opacity-70">{selectedGroup.delivery_unavailable_reason}</p>
+              ) : null}
             </div>
 
-            {fulfillmentType === "delivery" ? (
+            {fulfillmentType === DELIVERY_FULFILLMENT_TYPE ? (
               <div className="space-y-3 mt-6 mb-8">
                 <h2 className="text-lg font-semibold mb-4">Delivery details</h2>
+                <p className="text-xs opacity-75">
+                  Delivery fee: ${formatMoney(deliveryFee)}
+                  {selectedGroup?.delivery_notes ? ` • ${selectedGroup.delivery_notes}` : ""}
+                </p>
                 <div className="grid md:grid-cols-2 gap-3">
                   <input
                     name="delivery_address1"
@@ -417,7 +450,7 @@ export default function CheckoutPage() {
                   />
                 </div>
               </div>
-            ) : fulfillmentType === "pickup" ? (
+            ) : fulfillmentType === PICKUP_FULFILLMENT_TYPE ? (
               <div className="space-y-3 mt-6 mb-8">
                 <h2 className="text-lg font-semibold">Pickup details</h2>
                 {vendor?.address || vendor?.city ? (
@@ -482,6 +515,12 @@ export default function CheckoutPage() {
                   <span className="opacity-80">Subtotal</span>
                   <span>${formatMoney(subtotal)}</span>
                 </div>
+                {deliveryFee > 0 ? (
+                  <div className="flex items-center justify-between">
+                    <span className="opacity-80">Delivery fee</span>
+                    <span>${formatMoney(deliveryFee)}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <span className="opacity-80">Service fee</span>
                   <span>${formatMoney(fees)}</span>

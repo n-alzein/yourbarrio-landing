@@ -15,7 +15,12 @@ describe("groupCartItemsByBusiness", () => {
         "vendor-b": { id: "vendor-b", business_name: "Vendor B" },
       },
       cartsByVendorId: {
-        "vendor-a": { id: "cart-a", fulfillment_type: "delivery" },
+        "vendor-a": {
+          id: "cart-a",
+          fulfillment_type: "delivery",
+          available_fulfillment_methods: ["pickup", "delivery"],
+          delivery_fee_cents: 500,
+        },
         "vendor-b": { id: "cart-b", fulfillment_type: "pickup" },
       },
     });
@@ -26,6 +31,7 @@ describe("groupCartItemsByBusiness", () => {
       business_name: "Vendor A",
       cart_id: "cart-a",
       fulfillment_type: "delivery",
+      delivery_fee_cents: 500,
       item_count: 3,
       subtotal: 13.5,
     });

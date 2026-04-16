@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 import { getPurchaseRestrictionMessage } from "@/lib/auth/purchaseAccess";
+import {
+  BUSINESS_FULFILLMENT_SELECT,
+  DELIVERY_FULFILLMENT_TYPE,
+  deriveFulfillmentSummary,
+  LISTING_FULFILLMENT_SELECT,
+} from "@/lib/fulfillment";
 import { getListingUrl } from "@/lib/ids/publicRefs";
 import { isUuid } from "@/lib/ids/isUuid";
 import { createOrderWithItems } from "@/lib/orders/persistence";
@@ -151,6 +157,8 @@ export async function POST(request: Request) {
     quantity: number;
   }> = [];
   let subtotalCents = 0;
+  let deliveryFeeCents = 0;
+  let fulfillmentListings: any[] = [];
   let cancelPath = "";
   let orderInput: Record<string, unknown> = {
     user_id: user.id,
@@ -185,7 +193,7 @@ export async function POST(request: Request) {
     const { data: listing, error: listingError } = await serviceClient
       .from("listings")
       .select(
-        "id,public_id,title,price,photo_url,business_id,inventory_status,inventory_quantity"
+        `id,public_id,title,price,photo_url,business_id,inventory_status,inventory_quantity,${LISTING_FULFILLMENT_SELECT}`
       )
       .eq("id", listingId)
       .maybeSingle();
@@ -213,6 +221,7 @@ export async function POST(request: Request) {
           "id",
           "owner_user_id",
           "business_name",
+          BUSINESS_FULFILLMENT_SELECT,
           "stripe_account_id",
           "stripe_charges_enabled",
           "stripe_payouts_enabled",
@@ -240,6 +249,7 @@ export async function POST(request: Request) {
       },
     ];
     subtotalCents = unitAmount * quantity;
+    fulfillmentListings = [listing];
     cancelPath = getListingUrl(listing);
     orderInput = {
       ...orderInput,
@@ -267,6 +277,7 @@ export async function POST(request: Request) {
           "id",
           "owner_user_id",
           "business_name",
+          BUSINESS_FULFILLMENT_SELECT,
           "stripe_account_id",
           "stripe_charges_enabled",
           "stripe_payouts_enabled",
@@ -300,6 +311,20 @@ export async function POST(request: Request) {
       return jsonError("Your cart is not available for Stripe checkout yet", 400);
     }
 
+    const listingIds = items.map((item: any) => item?.listing_id).filter(Boolean);
+    if (listingIds.length > 0) {
+      const { data: listingRows, error: listingRowsError } = await serviceClient
+        .from("listings")
+        .select(`id,business_id,${LISTING_FULFILLMENT_SELECT}`)
+        .in("id", listingIds);
+
+      if (listingRowsError) {
+        return jsonError(listingRowsError.message || "Failed to load listing fulfillment", 500);
+      }
+
+      fulfillmentListings = Array.isArray(listingRows) ? listingRows : [];
+    }
+
     cancelPath = businessData.owner_user_id
       ? `/checkout?business_id=${encodeURIComponent(businessData.owner_user_id)}`
       : "/checkout";
@@ -313,6 +338,26 @@ export async function POST(request: Request) {
   if (!business?.id) {
     return jsonError("Business not found", 404);
   }
+
+  const fulfillmentSummary = deriveFulfillmentSummary({
+    listings: fulfillmentListings,
+    business,
+    subtotalCents,
+    currentFulfillmentType: fulfillmentType,
+  });
+
+  if (!fulfillmentSummary.availableMethods.includes(fulfillmentType)) {
+    return jsonError(
+      fulfillmentSummary.deliveryUnavailableReason ||
+        "That fulfillment option is not available for this order.",
+      400
+    );
+  }
+
+  deliveryFeeCents =
+    fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+      ? fulfillmentSummary.deliveryFeeCents
+      : 0;
 
   const stripeStatus = getBusinessStripeStatus({
     stripeAccountId: business.stripe_account_id,
@@ -329,7 +374,7 @@ export async function POST(request: Request) {
     return jsonError("This business is not ready to accept payments yet", 400);
   }
   const platformFeeAmount = calculatePlatformFeeAmount(subtotalCents);
-  const totalCents = subtotalCents + platformFeeAmount;
+  const totalCents = subtotalCents + deliveryFeeCents + platformFeeAmount;
   const subtotal = subtotalCents / 100;
   const fees = platformFeeAmount / 100;
   const total = totalCents / 100;
@@ -338,6 +383,11 @@ export async function POST(request: Request) {
     subtotal,
     fees,
     total,
+    delivery_fee_cents_snapshot: deliveryFeeCents,
+    delivery_notes_snapshot:
+      fulfillmentType === DELIVERY_FULFILLMENT_TYPE
+        ? fulfillmentSummary.deliveryNotes
+        : null,
   };
   let orderRecord:
     | { id: string; order_number: string; status?: string | null; vendor_id?: string | null; user_id?: string | null }
@@ -398,7 +448,24 @@ export async function POST(request: Request) {
             name: item.title || "Marketplace order",
           },
         },
-      })).concat({
+      }))
+      .concat(
+        deliveryFeeCents > 0
+          ? [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: "usd",
+                  unit_amount: deliveryFeeCents,
+                  product_data: {
+                    name: "Local delivery fee",
+                  },
+                },
+              },
+            ]
+          : []
+      )
+      .concat({
         quantity: 1,
         price_data: {
           currency: "usd",
@@ -421,6 +488,7 @@ export async function POST(request: Request) {
         quantity: String(orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)),
         cart_id: String(cartId || orderInput.cart_id || ""),
         subtotal_cents: String(subtotalCents),
+        delivery_fee_cents: String(deliveryFeeCents),
         platform_fee_amount: String(platformFeeAmount),
         total_cents: String(totalCents),
       },
@@ -440,6 +508,7 @@ export async function POST(request: Request) {
           quantity: String(orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)),
           cart_id: String(cartId || orderInput.cart_id || ""),
           subtotal_cents: String(subtotalCents),
+          delivery_fee_cents: String(deliveryFeeCents),
           platform_fee_amount: String(platformFeeAmount),
           total_cents: String(totalCents),
         },
@@ -486,6 +555,7 @@ export async function POST(request: Request) {
         orderId: orderRecord.id,
         orderNumber: orderRecord.order_number,
         subtotal,
+        deliveryFee: deliveryFeeCents / 100,
         fees,
         total,
       },

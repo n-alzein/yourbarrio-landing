@@ -20,6 +20,12 @@ export type Cart = {
   vendor_id: string;
   status: CartStatus;
   fulfillment_type: FulfillmentType | null;
+  available_fulfillment_methods?: FulfillmentType[];
+  delivery_fee_cents?: number;
+  delivery_notes?: string | null;
+  delivery_min_order_cents?: number | null;
+  delivery_radius_miles?: number | null;
+  delivery_unavailable_reason?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   cart_items?: CartItem[];

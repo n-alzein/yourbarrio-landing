@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { getPurchaseRestrictionMessage } from "@/lib/auth/purchaseAccess";
+import {
+  BUSINESS_FULFILLMENT_SELECT,
+  DELIVERY_FULFILLMENT_TYPE,
+  deriveFulfillmentSummary,
+  LISTING_FULFILLMENT_SELECT,
+  PICKUP_FULFILLMENT_TYPE,
+} from "@/lib/fulfillment";
 import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 
@@ -32,6 +39,73 @@ async function getVendorsById(supabase, vendorIds) {
   }, {});
 }
 
+async function getBusinessFulfillmentByVendorId(supabase, vendorIds) {
+  if (!vendorIds.length) return {};
+
+  const { data, error } = await supabase
+    .from("businesses")
+    .select(`owner_user_id,${BUSINESS_FULFILLMENT_SELECT}`)
+    .in("owner_user_id", vendorIds);
+
+  if (error) throw error;
+
+  return (data || []).reduce((acc, row) => {
+    if (row?.owner_user_id) {
+      acc[row.owner_user_id] = row;
+    }
+    return acc;
+  }, {});
+}
+
+async function getListingFulfillmentById(supabase, listingIds) {
+  if (!listingIds.length) return {};
+
+  const { data, error } = await supabase
+    .from("listings")
+    .select(`id,business_id,${LISTING_FULFILLMENT_SELECT}`)
+    .in("id", listingIds);
+
+  if (error) throw error;
+
+  return (data || []).reduce((acc, row) => {
+    if (row?.id) {
+      acc[row.id] = row;
+    }
+    return acc;
+  }, {});
+}
+
+function enrichCartsWithFulfillment(carts, businessByVendorId, listingById) {
+  return carts.map((cart) => {
+    const cartItems = Array.isArray(cart?.cart_items) ? cart.cart_items : [];
+    const listings = cartItems
+      .map((item) => listingById[item?.listing_id] || null)
+      .filter(Boolean);
+    const subtotalCents = cartItems.reduce((sum, item) => {
+      const unitPrice = Number(item?.unit_price || 0);
+      const quantity = Number(item?.quantity || 0);
+      return sum + Math.round(unitPrice * 100) * quantity;
+    }, 0);
+    const summary = deriveFulfillmentSummary({
+      listings,
+      business: businessByVendorId[cart?.vendor_id] || null,
+      subtotalCents,
+      currentFulfillmentType: cart?.fulfillment_type || PICKUP_FULFILLMENT_TYPE,
+    });
+
+    return {
+      ...cart,
+      fulfillment_type: summary.selectedFulfillmentType,
+      available_fulfillment_methods: summary.availableMethods,
+      delivery_fee_cents: summary.deliveryFeeCents,
+      delivery_notes: summary.deliveryNotes,
+      delivery_min_order_cents: summary.deliveryMinOrderCents,
+      delivery_radius_miles: summary.deliveryRadiusMiles,
+      delivery_unavailable_reason: summary.deliveryUnavailableReason,
+    };
+  });
+}
+
 function buildCartPayload(carts, vendorsById) {
   const primaryCart = carts[0] || null;
   const primaryVendor = primaryCart ? vendorsById[primaryCart.vendor_id] || null : null;
@@ -47,8 +121,19 @@ function buildCartPayload(carts, vendorsById) {
 async function getCartPayload(supabase, userId) {
   const carts = await getActiveCarts(supabase, userId);
   const vendorIds = [...new Set(carts.map((cart) => cart.vendor_id).filter(Boolean))];
+  const listingIds = [
+    ...new Set(
+      carts.flatMap((cart) =>
+        Array.isArray(cart?.cart_items)
+          ? cart.cart_items.map((item) => item?.listing_id).filter(Boolean)
+          : []
+      )
+    ),
+  ];
   const vendors = await getVendorsById(supabase, vendorIds);
-  return buildCartPayload(carts, vendors);
+  const businesses = await getBusinessFulfillmentByVendorId(supabase, vendorIds);
+  const listings = await getListingFulfillmentById(supabase, listingIds);
+  return buildCartPayload(enrichCartsWithFulfillment(carts, businesses, listings), vendors);
 }
 
 function jsonError(message, status = 400, extra = {}) {
@@ -119,7 +204,7 @@ export async function POST(request) {
   const { data: listing, error: listingError } = await supabase
     .from("listings")
     .select(
-      "id,business_id,title,price,photo_url,category,listing_category,category_id"
+      `id,business_id,title,price,photo_url,category,listing_category,category_id,${LISTING_FULFILLMENT_SELECT}`
     )
     .eq("id", listingId)
     .maybeSingle();
@@ -129,6 +214,20 @@ export async function POST(request) {
   }
   if (!listing) {
     return jsonError("Listing not found", 404);
+  }
+
+  const businessFulfillmentByVendorId = await getBusinessFulfillmentByVendorId(supabase, [
+    listing.business_id,
+  ]);
+  const listingSummary = deriveFulfillmentSummary({
+    listings: [listing],
+    business: businessFulfillmentByVendorId[listing.business_id] || null,
+    subtotalCents: Math.round(Number(listing.price || 0) * 100) * quantity,
+    currentFulfillmentType: PICKUP_FULFILLMENT_TYPE,
+  });
+
+  if (listingSummary.availableMethods.length === 0) {
+    return jsonError("This listing is not available for checkout right now.", 400);
   }
 
   let cartPayload;
@@ -148,7 +247,7 @@ export async function POST(request) {
         user_id: user.id,
         vendor_id: listing.business_id,
         status: "active",
-        fulfillment_type: null,
+        fulfillment_type: listingSummary.selectedFulfillmentType || PICKUP_FULFILLMENT_TYPE,
       })
       .select("*")
       .single();
@@ -220,7 +319,7 @@ export async function PATCH(request) {
     return jsonError("Unauthorized", 401);
   }
 
-  const purchaseRestrictionError = await getPurchaseRestrictionError(supabase, user.id);
+  const purchaseRestrictionError = await getPurchaseRestrictionError({ request, supabase });
   if (purchaseRestrictionError) {
     return purchaseRestrictionError;
   }
@@ -263,6 +362,31 @@ export async function PATCH(request) {
 
     if (!fulfillmentCart) {
       return jsonError("Cart scope required for fulfillment update", 400);
+    }
+
+    const listingIds = Array.isArray(fulfillmentCart?.cart_items)
+      ? fulfillmentCart.cart_items.map((item) => item?.listing_id).filter(Boolean)
+      : [];
+    const [businessByVendorId, listingById] = await Promise.all([
+      getBusinessFulfillmentByVendorId(supabase, fulfillmentCart?.vendor_id ? [fulfillmentCart.vendor_id] : []),
+      getListingFulfillmentById(supabase, listingIds),
+    ]);
+    const summary = deriveFulfillmentSummary({
+      listings: listingIds.map((listingId) => listingById[listingId]).filter(Boolean),
+      business: businessByVendorId[fulfillmentCart.vendor_id] || null,
+      subtotalCents: (fulfillmentCart?.cart_items || []).reduce((sum, item) => {
+        const unitPrice = Number(item?.unit_price || 0);
+        const itemQuantity = Number(item?.quantity || 0);
+        return sum + Math.round(unitPrice * 100) * itemQuantity;
+      }, 0),
+      currentFulfillmentType: fulfillmentCart.fulfillment_type || PICKUP_FULFILLMENT_TYPE,
+    });
+
+    if (!summary.availableMethods.includes(fulfillmentType)) {
+      return jsonError(
+        summary.deliveryUnavailableReason || "That fulfillment option is not available for this cart.",
+        400
+      );
     }
   }
 
@@ -321,7 +445,7 @@ export async function PATCH(request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request) {
   const supabase = await getSupabaseServerClient();
   const { user, error: userError } = await getUserCached(supabase);
 
@@ -329,7 +453,7 @@ export async function DELETE() {
     return jsonError("Unauthorized", 401);
   }
 
-  const purchaseRestrictionError = await getPurchaseRestrictionError(supabase, user.id);
+  const purchaseRestrictionError = await getPurchaseRestrictionError({ request, supabase });
   if (purchaseRestrictionError) {
     return purchaseRestrictionError;
   }

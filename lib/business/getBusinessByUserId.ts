@@ -26,6 +26,12 @@ export type UnifiedBusiness = {
   city: string | null;
   state: string | null;
   postal_code: string | null;
+  pickup_enabled_default: boolean;
+  local_delivery_enabled_default: boolean;
+  default_delivery_fee_cents: number | null;
+  delivery_radius_miles: number | null;
+  delivery_min_order_cents: number | null;
+  delivery_notes: string | null;
   latitude: number | null;
   longitude: number | null;
   hours_json: Record<string, unknown> | null;
@@ -70,6 +76,12 @@ const BUSINESS_SELECT = [
   "city",
   "state",
   "postal_code",
+  "pickup_enabled_default",
+  "local_delivery_enabled_default",
+  "default_delivery_fee_cents",
+  "delivery_radius_miles",
+  "delivery_min_order_cents",
+  "delivery_notes",
   "latitude",
   "longitude",
   "hours_json",
@@ -159,6 +171,22 @@ function mapFromBusinesses(row: any, userRow: any | null): UnifiedBusiness {
     city: row?.city ?? userRow?.city ?? null,
     state: row?.state ?? userRow?.state ?? null,
     postal_code: row?.postal_code ?? userRow?.postal_code ?? null,
+    pickup_enabled_default: row?.pickup_enabled_default !== false,
+    local_delivery_enabled_default: row?.local_delivery_enabled_default === true,
+    default_delivery_fee_cents:
+      typeof row?.default_delivery_fee_cents === "number"
+        ? row.default_delivery_fee_cents
+        : null,
+    delivery_radius_miles:
+      typeof row?.delivery_radius_miles === "number"
+        ? row.delivery_radius_miles
+        : null,
+    delivery_min_order_cents:
+      typeof row?.delivery_min_order_cents === "number"
+        ? row.delivery_min_order_cents
+        : null,
+    delivery_notes:
+      typeof row?.delivery_notes === "string" ? row.delivery_notes : null,
     latitude: row?.latitude ?? userRow?.latitude ?? null,
     longitude: row?.longitude ?? userRow?.longitude ?? null,
     hours_json: asRecord(row?.hours_json || userRow?.hours_json || null),
@@ -199,6 +227,12 @@ function mapFromLegacyUser(userRow: any): UnifiedBusiness {
     city: userRow?.city ?? null,
     state: userRow?.state ?? null,
     postal_code: userRow?.postal_code ?? null,
+    pickup_enabled_default: true,
+    local_delivery_enabled_default: false,
+    default_delivery_fee_cents: null,
+    delivery_radius_miles: null,
+    delivery_min_order_cents: null,
+    delivery_notes: null,
     latitude: userRow?.latitude ?? null,
     longitude: userRow?.longitude ?? null,
     hours_json: asRecord(userRow?.hours_json),
