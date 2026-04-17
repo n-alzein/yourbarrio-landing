@@ -8,7 +8,7 @@ import {
   LISTING_FULFILLMENT_SELECT,
   PICKUP_FULFILLMENT_TYPE,
 } from "@/lib/fulfillment";
-import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 
 async function getActiveCarts(supabase, userId) {
@@ -204,7 +204,7 @@ export async function POST(request) {
   const { data: listing, error: listingError } = await supabase
     .from("listings")
     .select(
-      `id,business_id,title,price,photo_url,photo_variants,category,listing_category,category_id,${LISTING_FULFILLMENT_SELECT}`
+      `id,business_id,title,price,photo_url,category,listing_category,category_id,${LISTING_FULFILLMENT_SELECT}`
     )
     .eq("id", listingId)
     .maybeSingle();
@@ -277,7 +277,7 @@ export async function POST(request) {
     quantity: existingItem ? existingItem.quantity + quantity : quantity,
     title: listing.title,
     unit_price: listing.price,
-    image_url: getListingPrimaryPhotoUrl(listing),
+    image_url: primaryPhotoUrl(listing.photo_url),
     updated_at: new Date().toISOString(),
   };
 

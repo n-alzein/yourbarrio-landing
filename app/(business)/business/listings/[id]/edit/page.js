@@ -10,6 +10,7 @@ import {
   createLocalPhotoDraft,
   hydratePhotoDrafts,
 } from "@/lib/listingPhotoDrafts";
+import { normalizeImageUpload } from "@/lib/normalizeImageUpload";
 import { stripHtmlToText } from "@/lib/listingDescription";
 import { retry } from "@/lib/retry";
 import { validateImageFile } from "@/lib/storageUpload";
@@ -159,7 +160,7 @@ export default function EditListingPage() {
     loadListing();
   }, [loadingUser, accountId, supabase, listingRef]);
 
-  const handleAddNewPhotos = (files) => {
+  const handleAddNewPhotos = async (files) => {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;
 
@@ -168,12 +169,22 @@ export default function EditListingPage() {
 
     const accepted = [];
     for (const file of incoming.slice(0, Math.max(0, availableSlots))) {
-      const validation = validateImageFile(file, { maxSizeMB: 8 });
+      let normalizedFile;
+      try {
+        normalizedFile = await normalizeImageUpload(file);
+      } catch (error) {
+        setPhotoError(
+          error?.message || "We couldn't process this image. Please try a different file."
+        );
+        continue;
+      }
+
+      const validation = validateImageFile(normalizedFile, { maxSizeMB: 8 });
       if (!validation.ok) {
         setPhotoError(validation.error);
         continue;
       }
-      accepted.push(createLocalPhotoDraft(file));
+      accepted.push(createLocalPhotoDraft(normalizedFile));
     }
 
     if (!accepted.length) return;

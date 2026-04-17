@@ -10,6 +10,7 @@ import {
   buildListingPhotoPayloadFromDrafts,
   createLocalPhotoDraft,
 } from "@/lib/listingPhotoDrafts";
+import { normalizeImageUpload } from "@/lib/normalizeImageUpload";
 import { validateImageFile } from "@/lib/storageUpload";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
@@ -99,18 +100,28 @@ export default function NewListingPage() {
     };
   }, [accountId, supabase]);
 
-  const handleAddPhotos = (files) => {
+  const handleAddPhotos = async (files) => {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;
 
     const accepted = [];
     for (const file of incoming) {
-      const validation = validateImageFile(file, { maxSizeMB: 8 });
+      let normalizedFile;
+      try {
+        normalizedFile = await normalizeImageUpload(file);
+      } catch (error) {
+        setPhotoError(
+          error?.message || "We couldn't process this image. Please try a different file."
+        );
+        continue;
+      }
+
+      const validation = validateImageFile(normalizedFile, { maxSizeMB: 8 });
       if (!validation.ok) {
         setPhotoError(validation.error);
         continue;
       }
-      accepted.push(createLocalPhotoDraft(file));
+      accepted.push(createLocalPhotoDraft(normalizedFile));
     }
 
     if (!accepted.length) return;

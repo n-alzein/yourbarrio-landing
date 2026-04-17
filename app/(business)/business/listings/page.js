@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getLowStockThreshold, normalizeInventory } from "@/lib/inventory";
 import { useTheme } from "@/components/ThemeProvider";
 import SafeImage from "@/components/SafeImage";
@@ -468,14 +468,14 @@ export default function BusinessListingsPage() {
                   }`}
                 >
                   {/* Image Section */}
-                  {getListingPrimaryPhotoUrl(listing) ? (
+                  {primaryPhotoUrl(listing.photo_url) ? (
                     <div
                       className={`relative h-56 w-full overflow-hidden ${
                         isLight ? "bg-white" : "bg-slate-800"
                       }`}
                     >
                       <SafeImage
-                        src={getListingPrimaryPhotoUrl(listing)}
+                        src={primaryPhotoUrl(listing.photo_url)}
                         alt={listing.title}
                         className="h-full w-full transition-transform duration-300 group-hover:scale-105"
                         style={{ objectFit: "contain", objectPosition: "center" }}

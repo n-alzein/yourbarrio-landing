@@ -3,7 +3,7 @@
 import Link from "next/link";
 import FastImage from "@/components/FastImage";
 import { ArrowUpRight, MapPin, Tag } from "lucide-react";
-import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getListingUrl } from "@/lib/ids/publicRefs";
 import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
@@ -45,7 +45,7 @@ export default function BusinessListingsGrid({
         <div className="-mx-1 px-1">
           <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {listings.map((item) => {
-              const cover = getListingPrimaryPhotoUrl(item);
+              const cover = primaryPhotoUrl(item.photo_url);
               const categoryLabel = getListingCategoryLabel(item, "Listing");
               return (
                 <Link

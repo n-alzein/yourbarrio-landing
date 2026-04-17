@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import type { BrowseMode, ListingSummary } from "@/lib/browse/getHomeBrowseData";
-import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
+import { primaryPhotoUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
 import { getCustomerListingUrl, getListingUrl } from "@/lib/ids/publicRefs";
 import { sortListingsByAvailability } from "@/lib/inventory";
@@ -120,7 +120,7 @@ export default function TrendingListingsSection({
               const href =
                 mode === "customer" ? getCustomerListingUrl(listing) : getListingUrl(listing);
               const imageSrc =
-                getListingPrimaryPhotoUrl(listing) || getListingCategoryPlaceholder(listing);
+                primaryPhotoUrl(listing.photo_url) || getListingCategoryPlaceholder(listing);
               const businessName =
                 String(listing?.business_name || "").trim() || "Local business";
 

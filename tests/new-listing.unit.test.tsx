@@ -7,6 +7,7 @@ let mockSupabase = null;
 let mockAuth = null;
 let insertMock = vi.fn();
 let fetchMock = vi.fn();
+const normalizeImageUploadMock = vi.fn(async (file) => file);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -20,6 +21,10 @@ vi.mock("@/components/AuthProvider", () => ({
 
 vi.mock("@/lib/supabase/browser", () => ({
   getSupabaseBrowserClient: () => mockSupabase,
+}));
+
+vi.mock("@/lib/normalizeImageUpload", () => ({
+  normalizeImageUpload: (...args) => normalizeImageUploadMock(...args),
 }));
 
 vi.mock("next/image", () => ({
@@ -113,10 +118,11 @@ async function fillRequiredFields() {
   });
 }
 
-function addPhoto(container) {
+async function addPhoto(container) {
   const fileInput = container.querySelector('input[type="file"]');
   const file = new File(["photo"], "photo.jpg", { type: "image/jpeg" });
   fireEvent.change(fileInput, { target: { files: [file] } });
+  await screen.findByRole("button", { name: "Enhance photo" });
 }
 
 beforeEach(() => {
@@ -125,6 +131,8 @@ beforeEach(() => {
   mockAuth = null;
   insertMock = vi.fn();
   fetchMock = vi.fn();
+  normalizeImageUploadMock.mockReset();
+  normalizeImageUploadMock.mockImplementation(async (file) => file);
   global.fetch = fetchMock;
   if (!global.URL.createObjectURL) {
     global.URL.createObjectURL = vi.fn(() => "blob:preview");
@@ -176,9 +184,71 @@ describe("NewListingPage", () => {
     };
 
     const { container } = render(<NewListingPage />);
-    addPhoto(container);
+    await addPhoto(container);
 
     expect(await screen.findByRole("button", { name: "Enhance photo" })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("normalizes HEIC uploads before preview and publish", async () => {
+    const normalizedFile = new File(["jpeg"], "photo.jpg", { type: "image/jpeg" });
+    normalizeImageUploadMock.mockResolvedValue(normalizedFile);
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+    const fileInput = container.querySelector('input[type="file"]');
+    const heicFile = new File(["heic"], "photo.heic", { type: "image/heic" });
+
+    fireEvent.change(fileInput, { target: { files: [heicFile] } });
+
+    expect(await screen.findByRole("button", { name: "Enhance photo" })).toBeInTheDocument();
+    expect(normalizeImageUploadMock).toHaveBeenCalledWith(heicFile);
+
+    await fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Publish listing" }));
+
+    await waitFor(() => {
+      expect(insertMock).toHaveBeenCalled();
+    });
+
+    const storageFrom = mockSupabase.storage.from;
+    const uploadMock = storageFrom.mock.results[0].value.upload;
+    expect(uploadMock).toHaveBeenCalledWith(
+      expect.stringMatching(/photo\.jpg$/),
+      normalizedFile,
+      expect.objectContaining({ contentType: "image/jpeg" })
+    );
+  });
+
+  it("shows a friendly error when HEIC normalization fails", async () => {
+    normalizeImageUploadMock.mockRejectedValue(
+      new Error("We couldn't process this iPhone photo. Please try a different image.")
+    );
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+    const fileInput = container.querySelector('input[type="file"]');
+    fireEvent.change(fileInput, {
+      target: {
+        files: [new File(["heic"], "photo.heic", { type: "image/heic" })],
+      },
+    });
+
+    expect(
+      await screen.findByText("We couldn't process this iPhone photo. Please try a different image.")
+    ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -207,7 +277,7 @@ describe("NewListingPage", () => {
     };
 
     const { container } = render(<NewListingPage />);
-    addPhoto(container);
+    await addPhoto(container);
 
     fireEvent.click(await screen.findByRole("button", { name: "Enhance photo" }));
     await screen.findByRole("button", { name: "Use enhanced photo" });
@@ -254,7 +324,7 @@ describe("NewListingPage", () => {
     };
 
     const { container } = render(<NewListingPage />);
-    addPhoto(container);
+    await addPhoto(container);
 
     fireEvent.click(await screen.findByRole("button", { name: "Enhance photo" }));
     await screen.findByRole("button", { name: "Use enhanced photo" });
@@ -285,7 +355,7 @@ describe("NewListingPage", () => {
     const { container } = render(<NewListingPage />);
 
     await fillRequiredFields();
-    addPhoto(container);
+    await addPhoto(container);
 
     fireEvent.click(screen.getByRole("button", { name: "Publish listing" }));
 
@@ -316,7 +386,7 @@ describe("NewListingPage", () => {
 
     const { container } = render(<NewListingPage />);
 
-    addPhoto(container);
+    await addPhoto(container);
     fireEvent.click(await screen.findByRole("button", { name: "Enhance photo" }));
     expect(await screen.findByText("Enhancement unavailable")).toBeInTheDocument();
 
@@ -345,7 +415,7 @@ describe("NewListingPage", () => {
     const { container } = render(<NewListingPage />);
 
     await fillRequiredFields();
-    addPhoto(container);
+    await addPhoto(container);
 
     fireEvent.click(screen.getByRole("button", { name: "Publish listing" }));
 

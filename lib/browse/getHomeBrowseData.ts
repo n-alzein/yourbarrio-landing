@@ -19,7 +19,6 @@ export type ListingSummary = {
   category_info?: { name?: string | null; slug?: string | null } | null;
   city: string | null;
   photo_url: unknown;
-  photo_variants?: unknown;
   business_id: string | null;
   business_name?: string | null;
   created_at: string | null;
@@ -62,7 +61,6 @@ const PUBLIC_LISTING_SELECT = [
   "category_id",
   "city",
   "photo_url",
-  "photo_variants",
   "business_id",
   "created_at",
   "inventory_status",
