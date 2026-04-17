@@ -22,6 +22,7 @@ type PhotoroomRequestError = Error & {
   status?: number;
   requestId?: string | null;
   responseBody?: string;
+  stage?: string;
 };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -98,13 +99,23 @@ function buildPhotoroomError(
     status?: number;
     requestId?: string | null;
     responseBody?: string;
+    stage?: string;
   }
 ): PhotoroomRequestError {
   const error = new Error(message) as PhotoroomRequestError;
   error.status = options?.status;
   error.requestId = options?.requestId ?? null;
   error.responseBody = options?.responseBody;
+  error.stage = options?.stage;
   return error;
+}
+
+function isTransientStatus(status?: number) {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function enhancePhotoWithPhotoroom({
@@ -125,15 +136,64 @@ export async function enhancePhotoWithPhotoroom({
   const originalBuffer = await image.arrayBuffer();
 
   try {
-    const response = await fetch(getPhotoroomApiUrl(), {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-      },
-      body: buildPhotoroomEditFormData({ image, background }),
-      signal: controller.signal,
-      cache: "no-store",
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[photoroom] request_start", {
+        fileName: image.name || null,
+        contentType: image.type || null,
+        byteSize: image.size || null,
+        background,
+      });
+    }
+
+    let response: Response | null = null;
+    let attempt = 0;
+    const maxAttempts = 2;
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        response = await fetch(getPhotoroomApiUrl(), {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+          },
+          body: buildPhotoroomEditFormData({ image, background }),
+          signal: controller.signal,
+          cache: "no-store",
+        });
+      } catch (error) {
+        if ((error as Error)?.name === "AbortError") {
+          if (attempt < maxAttempts) {
+            await sleep(250);
+            continue;
+          }
+          throw buildPhotoroomError("Photoroom request timed out", {
+            status: 504,
+            stage: "provider_timeout",
+          });
+        }
+        throw error;
+      }
+
+      if (!response.ok && isTransientStatus(response.status) && attempt < maxAttempts) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[photoroom] transient_retry", {
+            attempt,
+            status: response.status,
+          });
+        }
+        await sleep(250);
+        continue;
+      }
+
+      break;
+    }
+
+    if (!response) {
+      throw buildPhotoroomError("Photoroom request failed", {
+        status: 502,
+        stage: "provider_unknown",
+      });
+    }
 
     if (!response.ok) {
       const requestId =
@@ -154,11 +214,21 @@ export async function enhancePhotoWithPhotoroom({
         status: response.status,
         requestId,
         responseBody,
+        stage: "provider_response",
       });
     }
 
     const contentType = response.headers.get("content-type") || "image/png";
     const buffer = await response.arrayBuffer();
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[photoroom] response_success", {
+        upstreamStatus: response.status,
+        upstreamContentType: response.headers.get("content-type") || null,
+        upstreamContentLength: response.headers.get("content-length") || null,
+        returnedContentType: contentType,
+        returnedByteLength: buffer.byteLength,
+      });
+    }
 
     try {
       const [originalAspectRatio, enhancedAspectRatio] = await Promise.all([
@@ -199,12 +269,6 @@ export async function enhancePhotoWithPhotoroom({
       transformed: true,
     };
   } catch (error) {
-    if ((error as Error)?.name === "AbortError") {
-      throw buildPhotoroomError("Photoroom request timed out", {
-        status: 504,
-      });
-    }
-
     throw error;
   } finally {
     clearTimeout(timeoutId);

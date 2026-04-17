@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
 import { useAuth } from "@/components/AuthProvider";
@@ -10,7 +10,11 @@ import {
   createLocalPhotoDraft,
   hydratePhotoDrafts,
 } from "@/lib/listingPhotoDrafts";
-import { normalizeImageUpload } from "@/lib/normalizeImageUpload";
+import {
+  describeImageFile,
+  normalizeImageUpload,
+  prepareEnhancementImage,
+} from "@/lib/normalizeImageUpload";
 import { stripHtmlToText } from "@/lib/listingDescription";
 import { retry } from "@/lib/retry";
 import { validateImageFile } from "@/lib/storageUpload";
@@ -86,8 +90,14 @@ export default function EditListingPage() {
   });
 
   const [photos, setPhotos] = useState([]);
+  const photosRef = useRef([]);
+  const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
   const [internalListingId, setInternalListingId] = useState(null);
+
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
 
   useEffect(() => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -214,7 +224,16 @@ export default function EditListingPage() {
         setPhotoError(validation.error);
         continue;
       }
-      accepted.push(createLocalPhotoDraft(normalizedFile, { source }));
+      accepted.push(
+        createLocalPhotoDraft(normalizedFile, {
+          source,
+          normalization: {
+            converted: normalizedFile !== file,
+            raw: describeImageFile(file),
+            normalized: describeImageFile(normalizedFile),
+          },
+        })
+      );
     }
 
     if (!accepted.length) return;
@@ -282,6 +301,7 @@ export default function EditListingPage() {
   }
 
   const handleRemovePhoto = (photoId) => {
+    enhancementAttemptsRef.current.delete(photoId);
     setPhotos((prev) => {
       const target = prev.find((photo) => photo.id === photoId);
       if (target?.status === "new" && target?.original?.previewUrl) {
@@ -325,8 +345,10 @@ export default function EditListingPage() {
   };
 
   async function handleEnhancePhoto(photoId) {
-    const target = photos.find((photo) => photo.id === photoId);
+    const target = photosRef.current.find((photo) => photo.id === photoId);
     if (!target?.original?.file) return;
+    const attemptCount = (enhancementAttemptsRef.current.get(photoId) || 0) + 1;
+    enhancementAttemptsRef.current.set(photoId, attemptCount);
 
     setPhotoError("");
     setPhotos((prev) =>
@@ -345,17 +367,48 @@ export default function EditListingPage() {
     );
 
     try {
+      const prepared = await prepareEnhancementImage(target.original.file, {
+        source: target.source || "unknown",
+        inputControl: "listing-photo-primary",
+      });
       const formData = new FormData();
-      formData.append("image", target.original.file, target.original.name || "listing-photo.jpg");
+      formData.append("image", prepared.file, prepared.file.name || "listing-photo.jpg");
       formData.append("background", target.enhancement.background);
       formData.append("imageSource", target.source || "unknown");
+      formData.append("imageNormalized", String(Boolean(target.normalization?.converted)));
+      formData.append("enhancementAttempt", String(attemptCount));
+      if (prepared.dimensions?.width) formData.append("imageWidth", String(prepared.dimensions.width));
+      if (prepared.dimensions?.height) formData.append("imageHeight", String(prepared.dimensions.height));
+      if (prepared.optimizedDimensions?.width) {
+        formData.append("optimizedWidth", String(prepared.optimizedDimensions.width));
+      }
+      if (prepared.optimizedDimensions?.height) {
+        formData.append("optimizedHeight", String(prepared.optimizedDimensions.height));
+      }
 
       logListingPhotoDebug("enhance.request", {
         source: target.source || "unknown",
-        rawFileName: target.original.file.name || null,
-        rawFileType: target.original.file.type || null,
-        rawFileSize: typeof target.original.file.size === "number" ? target.original.file.size : null,
+        selectedFileName: target.original.file.name || null,
+        selectedFileType: target.original.file.type || null,
+        selectedFileSize: typeof target.original.file.size === "number" ? target.original.file.size : null,
+        normalized: Boolean(target.normalization?.converted),
+        normalizedFileName: target.normalization?.normalized?.name || target.original.file.name || null,
+        normalizedFileType: target.normalization?.normalized?.type || target.original.file.type || null,
+        normalizedFileSize: target.normalization?.normalized?.size || target.original.file.size || null,
+        enhancementInputName: prepared.file.name || null,
+        enhancementInputType: prepared.file.type || null,
+        enhancementInputSize: typeof prepared.file.size === "number" ? prepared.file.size : null,
+        imageWidth: prepared.dimensions?.width || null,
+        imageHeight: prepared.dimensions?.height || null,
+        optimizedForEnhancement: prepared.optimized,
+        optimizedWidth: prepared.optimizedDimensions?.width || null,
+        optimizedHeight: prepared.optimizedDimensions?.height || null,
         previewSource: target.original.previewUrl ? "object-url" : "none",
+        attemptCount,
+        isRetry: attemptCount > 1,
+        sameFileSentUpstream:
+          prepared.file === target.original.file ||
+          describeImageFile(prepared.file)?.name === describeImageFile(target.original.file)?.name,
       });
 
       const response = await fetch("/api/images/enhance", {
@@ -365,6 +418,15 @@ export default function EditListingPage() {
       const payload = await response.json();
 
       if (!response.ok || !payload?.ok || !payload?.image?.publicUrl || payload?.image?.isFallbackOriginal) {
+        if (process.env.NODE_ENV !== "production") {
+          logListingPhotoDebug("enhance.error", {
+            source: target.source || "unknown",
+            attemptCount,
+            status: response.status,
+            code: payload?.error?.code || null,
+            debug: payload?.debug || null,
+          });
+        }
         throw new Error(
           payload?.error?.message ||
             "We couldn't enhance this photo right now. You can keep the original and continue."
@@ -377,6 +439,7 @@ export default function EditListingPage() {
         enhancedPath: payload.image.path || null,
         enhancedContentType: payload.image.contentType || null,
         finalSelectedVariant: "enhanced",
+        attemptCount,
       });
 
       setPhotos((prev) =>
@@ -412,6 +475,13 @@ export default function EditListingPage() {
         )
       );
     } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        logListingPhotoDebug("enhance.catch", {
+          source: target.source || "unknown",
+          attemptCount,
+          message: error?.message || "unknown",
+        });
+      }
       setPhotos((prev) =>
         prev.map((photo) =>
           photo.id === photoId

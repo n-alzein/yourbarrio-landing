@@ -10,6 +10,11 @@ import {
 const routeLimiter = rateLimit({ interval: 10 * 60_000, uniqueTokenPerInterval: 200 });
 const ALLOWED_BACKGROUNDS = new Set<PhotoroomBackgroundMode>(["original", "white", "soft_gray"]);
 
+function buildDebugPayload(debug: Record<string, unknown>) {
+  if (process.env.NODE_ENV === "production") return undefined;
+  return debug;
+}
+
 function buildAssetPath({
   userId,
   extension,
@@ -56,6 +61,12 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const image = formData.get("image");
     const imageSource = String(formData.get("imageSource") || "unknown").trim() || "unknown";
+    const imageNormalized = String(formData.get("imageNormalized") || "false").trim() === "true";
+    const enhancementAttempt = Number(formData.get("enhancementAttempt") || 1);
+    const imageWidth = Number(formData.get("imageWidth") || 0) || null;
+    const imageHeight = Number(formData.get("imageHeight") || 0) || null;
+    const optimizedWidth = Number(formData.get("optimizedWidth") || 0) || null;
+    const optimizedHeight = Number(formData.get("optimizedHeight") || 0) || null;
     const requestedBackground = String(formData.get("background") || "white").trim() as PhotoroomBackgroundMode;
     const background = ALLOWED_BACKGROUNDS.has(requestedBackground)
       ? requestedBackground
@@ -89,12 +100,19 @@ export async function POST(request: Request) {
     });
 
     if (process.env.NODE_ENV !== "production") {
-      console.info("[images.enhance] request_metadata", {
+      console.info("[images.enhance] request_received", {
         userId: access.effectiveUserId,
         source: imageSource,
-        rawFileName: image.name || null,
-        rawFileType: image.type || null,
-        rawFileSize: typeof image.size === "number" ? image.size : null,
+        inputFileName: image.name || null,
+        inputContentType: image.type || null,
+        inputByteSize: typeof image.size === "number" ? image.size : null,
+        imageNormalized,
+        enhancementAttempt,
+        imageWidth,
+        imageHeight,
+        optimizedWidth,
+        optimizedHeight,
+        background,
       });
     }
 
@@ -111,6 +129,13 @@ export async function POST(request: Request) {
             code: "ENHANCEMENT_UNUSABLE",
             message: "We couldn't enhance this photo right now. You can keep the original and continue.",
           },
+          debug: buildDebugPayload({
+            stage: "provider_response",
+            reason: "transformed_output_missing",
+            source: imageSource,
+            imageNormalized,
+            enhancementAttempt,
+          }),
         },
         { status: 422 }
       );
@@ -125,6 +150,7 @@ export async function POST(request: Request) {
       console.info("[images.enhance] upload_metadata", {
         userId: access.effectiveUserId,
         source: imageSource,
+        enhancementAttempt,
         enhancedBytesLength: enhanced.buffer.byteLength,
         enhancedContentType: enhanced.contentType,
         targetEnhancedPath: path,
@@ -145,8 +171,12 @@ export async function POST(request: Request) {
         userId: access.effectiveUserId,
         code: uploadError.code || null,
         message: uploadError.message || null,
+        targetEnhancedPath: path,
       });
-      throw new Error("Failed to store enhanced image");
+      throw Object.assign(new Error("Failed to store enhanced image"), {
+        stage: "storage_upload",
+        uploadCode: uploadError.code || null,
+      });
     }
 
     const { data } = access.client.storage.from("listing-photos").getPublicUrl(path);
@@ -170,21 +200,43 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const typedError = error as Error & { status?: number; requestId?: string | null };
-    console.error("[images.enhance] request_failed", {
-      userId: access.effectiveUserId,
+    const debug = buildDebugPayload({
+      stage: (typedError as Error & { stage?: string })?.stage || "unknown",
       status: typedError?.status || null,
       requestId: typedError?.requestId || null,
       message: typedError?.message || "Unknown enhancement failure",
     });
+    console.error("[images.enhance] request_failed", {
+      userId: access.effectiveUserId,
+      status: typedError?.status || null,
+      requestId: typedError?.requestId || null,
+      stage: (typedError as Error & { stage?: string })?.stage || null,
+      message: typedError?.message || "Unknown enhancement failure",
+    });
 
-    const status = typedError?.status === 504 ? 504 : 502;
+    const status =
+      typedError?.status === 429
+        ? 429
+        : typedError?.status === 504
+        ? 504
+        : typedError?.status && typedError.status >= 400 && typedError.status < 500
+        ? 422
+        : 502;
     return NextResponse.json(
       {
         ok: false,
         error: {
-          code: status === 504 ? "UPSTREAM_TIMEOUT" : "ENHANCEMENT_FAILED",
+          code:
+            status === 429
+              ? "UPSTREAM_RATE_LIMITED"
+              : status === 504
+              ? "UPSTREAM_TIMEOUT"
+              : status === 422
+              ? "UNSUPPORTED_INPUT"
+              : "ENHANCEMENT_FAILED",
           message: "We couldn't enhance this photo right now. You can keep the original and continue.",
         },
+        debug,
       },
       { status }
     );

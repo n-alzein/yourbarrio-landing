@@ -110,11 +110,14 @@ describe("POST /api/images/enhance", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(422);
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       ok: false,
       error: {
         code: "ENHANCEMENT_UNUSABLE",
         message: "We couldn't enhance this photo right now. You can keep the original and continue.",
+      },
+      debug: {
+        stage: "provider_response",
       },
     });
     expect(uploadMock).not.toHaveBeenCalled();
@@ -136,11 +139,15 @@ describe("POST /api/images/enhance", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(502);
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       ok: false,
       error: {
         code: "ENHANCEMENT_FAILED",
         message: "We couldn't enhance this photo right now. You can keep the original and continue.",
+      },
+      debug: {
+        stage: "unknown",
+        status: 502,
       },
     });
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
 import RichTextDescriptionEditor from "@/components/editor/RichTextDescriptionEditor";
@@ -10,7 +10,11 @@ import {
   buildListingPhotoPayloadFromDrafts,
   createLocalPhotoDraft,
 } from "@/lib/listingPhotoDrafts";
-import { normalizeImageUpload } from "@/lib/normalizeImageUpload";
+import {
+  describeImageFile,
+  normalizeImageUpload,
+  prepareEnhancementImage,
+} from "@/lib/normalizeImageUpload";
 import { validateImageFile } from "@/lib/storageUpload";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
@@ -60,6 +64,8 @@ export default function NewListingPage() {
   });
 
   const [photos, setPhotos] = useState([]);
+  const photosRef = useRef([]);
+  const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -76,6 +82,10 @@ export default function NewListingPage() {
     "w-full mt-2 px-4 py-3 h-12 rounded-xl bg-white/10 text-white placeholder-white/40 border border-white/10 focus:border-white/30 focus:ring-4 focus:ring-blue-500/30 outline-none transition";
   const selectBase =
     "w-full mt-2 px-4 py-3 h-12 rounded-xl bg-white/10 text-white border border-white/10 focus:border-white/30 focus:ring-4 focus:ring-blue-500/30 outline-none transition appearance-none";
+
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
 
   useEffect(() => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -151,7 +161,16 @@ export default function NewListingPage() {
         setPhotoError(validation.error);
         continue;
       }
-      accepted.push(createLocalPhotoDraft(normalizedFile, { source }));
+      accepted.push(
+        createLocalPhotoDraft(normalizedFile, {
+          source,
+          normalization: {
+            converted: normalizedFile !== file,
+            raw: describeImageFile(file),
+            normalized: describeImageFile(normalizedFile),
+          },
+        })
+      );
     }
 
     if (!accepted.length) return;
@@ -161,6 +180,7 @@ export default function NewListingPage() {
   };
 
   const handleRemovePhoto = (photoId) => {
+    enhancementAttemptsRef.current.delete(photoId);
     setPhotos((prev) => {
       const target = prev.find((photo) => photo.id === photoId);
       if (target?.status === "new" && target?.original?.previewUrl) {
@@ -271,8 +291,10 @@ export default function NewListingPage() {
   }
 
   async function handleEnhancePhoto(photoId) {
-    const target = photos.find((photo) => photo.id === photoId);
+    const target = photosRef.current.find((photo) => photo.id === photoId);
     if (!target?.original?.file) return;
+    const attemptCount = (enhancementAttemptsRef.current.get(photoId) || 0) + 1;
+    enhancementAttemptsRef.current.set(photoId, attemptCount);
 
     setPhotoError("");
     setPhotos((prev) =>
@@ -291,17 +313,48 @@ export default function NewListingPage() {
     );
 
     try {
+      const prepared = await prepareEnhancementImage(target.original.file, {
+        source: target.source || "unknown",
+        inputControl: "listing-photo-primary",
+      });
       const formData = new FormData();
-      formData.append("image", target.original.file, target.original.name || "listing-photo.jpg");
+      formData.append("image", prepared.file, prepared.file.name || "listing-photo.jpg");
       formData.append("background", target.enhancement.background);
       formData.append("imageSource", target.source || "unknown");
+      formData.append("imageNormalized", String(Boolean(target.normalization?.converted)));
+      formData.append("enhancementAttempt", String(attemptCount));
+      if (prepared.dimensions?.width) formData.append("imageWidth", String(prepared.dimensions.width));
+      if (prepared.dimensions?.height) formData.append("imageHeight", String(prepared.dimensions.height));
+      if (prepared.optimizedDimensions?.width) {
+        formData.append("optimizedWidth", String(prepared.optimizedDimensions.width));
+      }
+      if (prepared.optimizedDimensions?.height) {
+        formData.append("optimizedHeight", String(prepared.optimizedDimensions.height));
+      }
 
       logListingPhotoDebug("enhance.request", {
         source: target.source || "unknown",
-        rawFileName: target.original.file.name || null,
-        rawFileType: target.original.file.type || null,
-        rawFileSize: typeof target.original.file.size === "number" ? target.original.file.size : null,
+        selectedFileName: target.original.file.name || null,
+        selectedFileType: target.original.file.type || null,
+        selectedFileSize: typeof target.original.file.size === "number" ? target.original.file.size : null,
+        normalized: Boolean(target.normalization?.converted),
+        normalizedFileName: target.normalization?.normalized?.name || target.original.file.name || null,
+        normalizedFileType: target.normalization?.normalized?.type || target.original.file.type || null,
+        normalizedFileSize: target.normalization?.normalized?.size || target.original.file.size || null,
+        enhancementInputName: prepared.file.name || null,
+        enhancementInputType: prepared.file.type || null,
+        enhancementInputSize: typeof prepared.file.size === "number" ? prepared.file.size : null,
+        imageWidth: prepared.dimensions?.width || null,
+        imageHeight: prepared.dimensions?.height || null,
+        optimizedForEnhancement: prepared.optimized,
+        optimizedWidth: prepared.optimizedDimensions?.width || null,
+        optimizedHeight: prepared.optimizedDimensions?.height || null,
         previewSource: target.original.previewUrl ? "object-url" : "none",
+        attemptCount,
+        isRetry: attemptCount > 1,
+        sameFileSentUpstream:
+          prepared.file === target.original.file ||
+          describeImageFile(prepared.file)?.name === describeImageFile(target.original.file)?.name,
       });
 
       const response = await fetch("/api/images/enhance", {
@@ -311,6 +364,15 @@ export default function NewListingPage() {
       const payload = await response.json();
 
       if (!response.ok || !payload?.ok || !payload?.image?.publicUrl || payload?.image?.isFallbackOriginal) {
+        if (process.env.NODE_ENV !== "production") {
+          logListingPhotoDebug("enhance.error", {
+            source: target.source || "unknown",
+            attemptCount,
+            status: response.status,
+            code: payload?.error?.code || null,
+            debug: payload?.debug || null,
+          });
+        }
         throw new Error(
           payload?.error?.message ||
             "We couldn't enhance this photo right now. You can keep the original and continue."
@@ -323,6 +385,7 @@ export default function NewListingPage() {
         enhancedPath: payload.image.path || null,
         enhancedContentType: payload.image.contentType || null,
         finalSelectedVariant: "enhanced",
+        attemptCount,
       });
 
       setPhotos((prev) =>
@@ -358,6 +421,13 @@ export default function NewListingPage() {
         )
       );
     } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        logListingPhotoDebug("enhance.catch", {
+          source: target.source || "unknown",
+          attemptCount,
+          message: error?.message || "unknown",
+        });
+      }
       setPhotos((prev) =>
         prev.map((photo) =>
           photo.id === photoId

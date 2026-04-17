@@ -8,6 +8,16 @@ let mockAuth = null;
 let insertMock = vi.fn();
 let fetchMock = vi.fn();
 const normalizeImageUploadMock = vi.fn(async (file) => file);
+const prepareEnhancementImageMock = vi.fn(async (file) => ({
+  file,
+  optimized: false,
+  dimensions: { width: 1200, height: 1200 },
+}));
+const describeImageFileMock = vi.fn((file) => ({
+  name: file?.name || null,
+  type: file?.type || null,
+  size: file?.size || null,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -25,6 +35,8 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("@/lib/normalizeImageUpload", () => ({
   normalizeImageUpload: (...args) => normalizeImageUploadMock(...args),
+  prepareEnhancementImage: (...args) => prepareEnhancementImageMock(...args),
+  describeImageFile: (...args) => describeImageFileMock(...args),
 }));
 
 vi.mock("next/image", () => ({
@@ -133,6 +145,18 @@ beforeEach(() => {
   fetchMock = vi.fn();
   normalizeImageUploadMock.mockReset();
   normalizeImageUploadMock.mockImplementation(async (file) => file);
+  prepareEnhancementImageMock.mockReset();
+  prepareEnhancementImageMock.mockImplementation(async (file) => ({
+    file,
+    optimized: false,
+    dimensions: { width: 1200, height: 1200 },
+  }));
+  describeImageFileMock.mockReset();
+  describeImageFileMock.mockImplementation((file) => ({
+    name: file?.name || null,
+    type: file?.type || null,
+    size: file?.size || null,
+  }));
   global.fetch = fetchMock;
   if (!global.URL.createObjectURL) {
     global.URL.createObjectURL = vi.fn(() => "blob:preview");
@@ -232,6 +256,69 @@ describe("NewListingPage", () => {
       normalizedFile,
       expect.objectContaining({ contentType: "image/jpeg" })
     );
+  });
+
+  it("uses the latest normalized file for enhancement when multiple photos are added", async () => {
+    const firstNormalized = new File(["jpeg-1"], "first.jpg", { type: "image/jpeg" });
+    const secondNormalized = new File(["jpeg-2"], "second.jpg", { type: "image/jpeg" });
+    global.crypto.randomUUID
+      .mockImplementationOnce(() => "uuid-1")
+      .mockImplementationOnce(() => "uuid-2");
+    normalizeImageUploadMock
+      .mockResolvedValueOnce(firstNormalized)
+      .mockResolvedValueOnce(secondNormalized);
+    fetchMock.mockImplementation(async (_url, options) => {
+      const body = options?.body;
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          image: {
+            publicUrl:
+              body?.get("image")?.name === "second.jpg"
+                ? "https://example.com/second-enhanced.png"
+                : "https://example.com/first-enhanced.png",
+            path: "enhanced/user-1/photo.png",
+          },
+          enhancement: {
+            background: "white",
+            lighting: "auto",
+            shadow: "subtle",
+          },
+        }),
+      };
+    });
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+    const fileInput = container.querySelector('input[type="file"]');
+
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["one"], "first.heic", { type: "image/heic" })] },
+    });
+    await screen.findByRole("button", { name: "Enhance photo" });
+
+    fireEvent.change(fileInput, {
+      target: { files: [new File(["two"], "second.heic", { type: "image/heic" })] },
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Enhance photo" })).toHaveLength(2);
+    });
+
+    const enhanceButtons = screen.getAllByRole("button", { name: "Enhance photo" });
+    fireEvent.click(enhanceButtons[1]);
+
+    await waitFor(() => {
+      const [, request] = fetchMock.mock.calls.at(-1);
+      expect(request.body.get("image").name).toBe(secondNormalized.name);
+      expect(request.body.get("image").type).toBe(secondNormalized.type);
+    });
   });
 
   it("shows a friendly error when HEIC normalization fails", async () => {
