@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
 import { getCustomerListingUrl } from "@/lib/ids/publicRefs";
 import {
   getListingCategory,
@@ -41,7 +41,7 @@ export default async function CategoryListingsPage({ params }) {
       supabase
         .from("public_listings_v")
         .select(
-          "id,public_id,title,description,price,category,category_id,city,photo_url,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+          "id,public_id,title,description,price,category,category_id,city,photo_url,photo_variants,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
         )
         .order("created_at", { ascending: false })
         .limit(80)
@@ -103,7 +103,7 @@ export default async function CategoryListingsPage({ params }) {
         ) : (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((item) => {
-              const cover = primaryPhotoUrl(item.photo_url);
+              const cover = getListingPrimaryPhotoUrl(item);
               return (
                 <Link
                   key={item.id}

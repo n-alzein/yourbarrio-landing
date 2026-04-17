@@ -100,7 +100,7 @@ function buildListingsQuery(supabase, businessId, limit, filters) {
   let query = supabase
     .from("listings")
     .select(
-      "id,public_id,business_id,title,description,price,category,listing_category,category_id,city,photo_url,created_at"
+      "id,public_id,business_id,title,description,price,category,listing_category,category_id,city,photo_url,photo_variants,created_at"
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })

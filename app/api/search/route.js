@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabaseServer";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
 import {
   getListingsBrowseFilterCategoryNames,
   getListingsBrowseFilterCategorySlugs,
@@ -77,7 +77,7 @@ async function searchListings(supabase, term, category, { businessIds }) {
   let query = supabase
     .from("public_listings_v")
     .select(
-      "id,public_id,title,description,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+      "id,public_id,title,description,price,category,category_id,city,photo_url,photo_variants,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
     )
     .in("business_id", businessIds)
     .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`);
@@ -89,7 +89,7 @@ async function searchListings(supabase, term, category, { businessIds }) {
         ? supabase
             .from("public_listings_v")
             .select(
-              "id,public_id,title,description,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+              "id,public_id,title,description,price,category,category_id,city,photo_url,photo_variants,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
             )
             .in("business_id", businessIds)
             .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`)
@@ -101,7 +101,7 @@ async function searchListings(supabase, term, category, { businessIds }) {
         ? supabase
             .from("public_listings_v")
             .select(
-              "id,public_id,title,description,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
+              "id,public_id,title,description,price,category,category_id,city,photo_url,photo_variants,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at"
             )
             .in("business_id", businessIds)
             .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`)
@@ -135,7 +135,8 @@ async function searchListings(supabase, term, category, { businessIds }) {
         category: getListingCategoryLabel(row, ""),
         listing_category: getListingCategoryLabel(row, ""),
         city: row.city,
-        photo_url: primaryPhotoUrl(row.photo_url),
+        photo_url: getListingPrimaryPhotoUrl(row),
+        photo_variants: row.photo_variants || null,
         business_id: row.business_id,
         inventory_status: row.inventory_status,
         inventory_quantity: row.inventory_quantity,
@@ -162,7 +163,8 @@ async function searchListings(supabase, term, category, { businessIds }) {
     category: getListingCategoryLabel(row, ""),
     listing_category: getListingCategoryLabel(row, ""),
     city: row.city,
-    photo_url: primaryPhotoUrl(row.photo_url),
+    photo_url: getListingPrimaryPhotoUrl(row),
+    photo_variants: row.photo_variants || null,
     business_id: row.business_id,
     inventory_status: row.inventory_status,
     inventory_quantity: row.inventory_quantity,

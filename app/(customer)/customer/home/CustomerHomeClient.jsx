@@ -16,7 +16,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
 import FastImage from "@/components/FastImage";
 import {
   getAvailabilityBadgeStyle,
@@ -355,7 +355,10 @@ function CustomerHomePageInner({
           console.log("[CLICK_DIAG] TILE_POST", { tileId, href: window.location.href });
         });
       };
-  const coverFor = (value) => primaryPhotoUrl(value) || null;
+  const coverFor = (value) => {
+    const resolved = typeof value === "string" ? value.trim() : "";
+    return resolved || null;
+  };
   const DRAG_DISTANCE_PX = 10;
   const DRAG_CANCEL_WINDOW_MS = 300;
   const handleTilePointerDown = useCallback((event) => {
@@ -684,9 +687,9 @@ function CustomerHomePageInner({
                         onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id || idx)}
                         onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || idx)}
                       >
-                        {coverFor(item.photo_url) ? (
+                        {coverFor(getListingPrimaryPhotoUrl(item)) ? (
                           <FastImage
-                            src={coverFor(item.photo_url)}
+                            src={coverFor(getListingPrimaryPhotoUrl(item))}
                             alt={item.title || "Listing"}
                             className="h-20 w-20 object-cover rounded-lg border border-white/10"
                             fallbackSrc="/business-placeholder.png"

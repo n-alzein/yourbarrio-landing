@@ -15,7 +15,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
 import { useCurrentAccountContext } from "@/lib/auth/useCurrentAccountContext";
-import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getListingPhotoUrls, getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useParams, usePathname, useRouter } from "next/navigation";
@@ -148,7 +148,7 @@ export default function ListingDetails({ params }) {
           setBusiness(payload?.business ?? null);
           setIsSaved(Boolean(payload?.isSaved));
           setHeroSrc(
-            primaryPhotoUrl(payload?.listing?.photo_url) ||
+            getListingPrimaryPhotoUrl(payload?.listing) ||
               getListingCategoryPlaceholder(payload?.listing)
           );
           return;
@@ -173,7 +173,7 @@ export default function ListingDetails({ params }) {
         if (!isMounted) return;
         setListing(item);
         setHeroSrc(
-          primaryPhotoUrl(item.photo_url) || getListingCategoryPlaceholder(item)
+          getListingPrimaryPhotoUrl(item) || getListingCategoryPlaceholder(item)
         );
 
         const { data: biz } = await client
@@ -511,7 +511,7 @@ export default function ListingDetails({ params }) {
   const showMessage = !accountContext.isBusiness;
   const purchaseRestricted = accountContext.purchaseRestricted;
   const purchaseEligibilityPending = accountContext.rolePending;
-  const galleryPhotos = extractPhotoUrls(listing.photo_url);
+  const galleryPhotos = getListingPhotoUrls(listing);
   const inventory = normalizeInventory(listing);
   const badgeStyle = getAvailabilityBadgeStyle(inventory.availability, isLight);
   const isOutOfStock = inventory.availability === "out";

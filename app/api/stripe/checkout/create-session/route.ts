@@ -17,6 +17,7 @@ import { getBusinessStripeStatus } from "@/lib/stripe/status";
 import { getSupabaseServerClient as getServiceClient } from "@/lib/supabase/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
+import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
 import { calculatePlatformFeeAmount } from "@/lib/stripe/fees";
 
 function jsonError(message: string, status = 400, extra: Record<string, unknown> = {}) {
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
     const { data: listing, error: listingError } = await serviceClient
       .from("listings")
       .select(
-        `id,public_id,title,price,photo_url,business_id,inventory_status,inventory_quantity,${LISTING_FULFILLMENT_SELECT}`
+        `id,public_id,title,price,photo_url,photo_variants,business_id,inventory_status,inventory_quantity,${LISTING_FULFILLMENT_SELECT}`
       )
       .eq("id", listingId)
       .maybeSingle();
@@ -244,7 +245,7 @@ export async function POST(request: Request) {
         listing_id: listing.id,
         title: listing.title,
         unit_price: Number(listing.price || 0),
-        image_url: listing.photo_url || null,
+        image_url: getListingPrimaryPhotoUrl(listing),
         quantity,
       },
     ];

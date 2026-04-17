@@ -9,6 +9,7 @@ export type ListingItem = {
   category_id?: string | number | null;
   city?: string | null;
   photo_url?: unknown;
+  photo_variants?: unknown;
   business_id?: string | null;
   business_name?: string | null;
   created_at?: string | null;

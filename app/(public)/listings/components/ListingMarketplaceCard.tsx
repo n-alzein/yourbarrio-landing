@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import SafeImage from "@/components/SafeImage";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { getListingPrimaryPhotoUrl } from "@/lib/listingPhotos";
 import { getListingUrl } from "@/lib/ids/publicRefs";
 import {
   getAvailabilityBadgeStyle,
@@ -59,7 +59,7 @@ export default function ListingMarketplaceCard({
       <div className="relative aspect-[4/3] overflow-hidden bg-white">
         <div className="absolute inset-x-0 top-0 h-16 bg-[linear-gradient(180deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]" />
         <SafeImage
-          src={primaryPhotoUrl(listing.photo_url)}
+          src={getListingPrimaryPhotoUrl(listing)}
           alt={listing.title || "Listing photo"}
           className={getMediaImageClassName(mediaMode)}
           sizes="(max-width: 767px) 50vw, (max-width: 1023px) 25vw, (max-width: 1439px) 20vw, 19vw"
