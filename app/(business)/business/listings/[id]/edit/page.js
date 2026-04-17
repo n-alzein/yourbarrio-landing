@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
+import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
 import { useAuth } from "@/components/AuthProvider";
 import RichTextDescriptionEditor from "@/components/editor/RichTextDescriptionEditor";
-import { extractPhotoUrls } from "@/lib/listingPhotos";
+import {
+  buildListingPhotoPayloadFromDrafts,
+  createLocalPhotoDraft,
+  hydratePhotoDrafts,
+} from "@/lib/listingPhotoDrafts";
 import { stripHtmlToText } from "@/lib/listingDescription";
 import { retry } from "@/lib/retry";
+import { validateImageFile } from "@/lib/storageUpload";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import {
-  centsToDollarsInput,
   dollarsInputToCents,
+  centsToDollarsInput,
 } from "@/lib/fulfillment";
 import {
   buildListingTaxonomyPayload,
@@ -66,20 +71,9 @@ export default function EditListingPage() {
     default_delivery_fee_cents: null,
   });
 
-  const [existingPhotos, setExistingPhotos] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [photoError, setPhotoError] = useState("");
   const [internalListingId, setInternalListingId] = useState(null);
-  const [newPhotos, setNewPhotos] = useState([]);
-  const newPhotoPreviews = useMemo(
-    () => newPhotos.map((file) => ({ url: URL.createObjectURL(file) })),
-    [newPhotos]
-  );
-
-  useEffect(
-    () => () => {
-      newPhotoPreviews.forEach(({ url }) => URL.revokeObjectURL(url));
-    },
-    [newPhotoPreviews]
-  );
 
   useEffect(() => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -154,7 +148,7 @@ export default function EditListingPage() {
           useBusinessDeliveryDefaults: data.use_business_delivery_defaults !== false,
           deliveryFee: centsToDollarsInput(data.delivery_fee_cents),
         });
-        setExistingPhotos(extractPhotoUrls(data.photo_url));
+        setPhotos(hydratePhotoDrafts(data.photo_url, data.photo_variants));
       } catch (err) {
         console.error("❌ Fetch listing error:", err);
       } finally {
@@ -169,32 +163,38 @@ export default function EditListingPage() {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;
 
-    const availableSlots =
-      MAX_PHOTOS - existingPhotos.length - newPhotos.length;
+    const availableSlots = MAX_PHOTOS - photos.length;
     if (availableSlots <= 0) return;
 
-    setNewPhotos((prev) => [
-      ...prev,
-      ...incoming.slice(0, Math.max(0, availableSlots)),
-    ]);
-  };
+    const accepted = [];
+    for (const file of incoming.slice(0, Math.max(0, availableSlots))) {
+      const validation = validateImageFile(file, { maxSizeMB: 8 });
+      if (!validation.ok) {
+        setPhotoError(validation.error);
+        continue;
+      }
+      accepted.push(createLocalPhotoDraft(file));
+    }
 
-  const handleRemoveExisting = (index) => {
-    setExistingPhotos((prev) => prev.filter((_, i) => i !== index));
-  };
+    if (!accepted.length) return;
 
-  const handleRemoveNew = (index) => {
-    setNewPhotos((prev) => prev.filter((_, i) => i !== index));
+    setPhotoError("");
+    setPhotos((prev) => [...prev, ...accepted]);
   };
 
   async function uploadNewPhotos() {
-    if (!newPhotos.length) return [];
+    if (!photos.length) return [];
     const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) throw new Error("Connection not ready. Try again.");
 
     const uploaded = [];
 
-    for (const file of newPhotos) {
+    for (const photo of photos) {
+      if (photo.status !== "new" || !photo.original.file) {
+        uploaded.push(photo);
+        continue;
+      }
+      const file = photo.original.file;
       const fileName = `${accountId}-${Date.now()}-${crypto
         .randomUUID?.()
         ?.slice(0, 6) || Math.random().toString(36).slice(2, 8)}-${
@@ -226,11 +226,133 @@ export default function EditListingPage() {
         .getPublicUrl(fileName);
 
       if (url?.publicUrl) {
-        uploaded.push(url.publicUrl);
+        uploaded.push({
+          ...photo,
+          original: {
+            ...photo.original,
+            publicUrl: url.publicUrl,
+            path: `listing-photos/${fileName}`,
+          },
+        });
       }
     }
 
     return uploaded;
+  }
+
+  const handleRemovePhoto = (photoId) => {
+    setPhotos((prev) => {
+      const target = prev.find((photo) => photo.id === photoId);
+      if (target?.status === "new" && target?.original?.previewUrl) {
+        URL.revokeObjectURL(target.original.previewUrl);
+      }
+      return prev.filter((photo) => photo.id !== photoId);
+    });
+  };
+
+  const handleBackgroundChange = (photoId, background) => {
+    setPhotos((prev) =>
+      prev.map((photo) =>
+        photo.id === photoId
+          ? {
+              ...photo,
+              enhancement: {
+                ...photo.enhancement,
+                background,
+                error: "",
+              },
+            }
+          : photo
+      )
+    );
+  };
+
+  const handleChooseVariant = (photoId, selectedVariant) => {
+    setPhotos((prev) =>
+      prev.map((photo) =>
+        photo.id === photoId ? { ...photo, selectedVariant } : photo
+      )
+    );
+  };
+
+  async function handleEnhancePhoto(photoId) {
+    const target = photos.find((photo) => photo.id === photoId);
+    if (!target?.original?.file) return;
+
+    setPhotoError("");
+    setPhotos((prev) =>
+      prev.map((photo) =>
+        photo.id === photoId
+          ? {
+              ...photo,
+              enhancement: {
+                ...photo.enhancement,
+                isProcessing: true,
+                error: "",
+              },
+            }
+          : photo
+      )
+    );
+
+    try {
+      const formData = new FormData();
+      formData.append("image", target.original.file, target.original.name || "listing-photo.jpg");
+      formData.append("background", target.enhancement.background);
+
+      const response = await fetch("/api/images/enhance", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload?.ok || !payload?.image?.publicUrl) {
+        throw new Error(
+          payload?.error?.message ||
+            "We couldn't enhance this photo right now. You can keep the original and continue."
+        );
+      }
+
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId
+            ? {
+                ...photo,
+                enhanced: {
+                  publicUrl: payload.image.publicUrl,
+                  path: payload.image.path || null,
+                  background: payload.enhancement?.background || photo.enhancement.background,
+                  lighting: payload.enhancement?.lighting || "auto",
+                  shadow: payload.enhancement?.shadow || "subtle",
+                },
+                selectedVariant: "enhanced",
+                enhancement: {
+                  ...photo.enhancement,
+                  isProcessing: false,
+                  error: "",
+                },
+              }
+            : photo
+        )
+      );
+    } catch (error) {
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId
+            ? {
+                ...photo,
+                enhancement: {
+                  ...photo.enhancement,
+                  isProcessing: false,
+                  error:
+                    error?.message ||
+                    "We couldn't enhance this photo right now. You can keep the original and continue.",
+                },
+              }
+            : photo
+        )
+      );
+    }
   }
 
   async function handleSubmit(e) {
@@ -247,8 +369,7 @@ export default function EditListingPage() {
       setSaving(true);
 
       const uploaded = await uploadNewPhotos();
-
-      const photoUrls = [...existingPhotos, ...uploaded].slice(0, MAX_PHOTOS);
+      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(uploaded);
 
       if (!photoUrls.length) {
         alert("Please keep at least one photo.");
@@ -305,6 +426,7 @@ export default function EditListingPage() {
             : null,
         inventory_last_updated_at: new Date().toISOString(),
         photo_url: JSON.stringify(photoUrls),
+        photo_variants: photoVariants.length ? photoVariants : null,
         pickup_enabled: form.pickupEnabled,
         local_delivery_enabled: form.localDeliveryEnabled,
         use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
@@ -386,82 +508,18 @@ export default function EditListingPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <section className={sectionCard}>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Photos</h2>
-              <p className="text-sm text-white/60">
-                Add up to {MAX_PHOTOS} photos. The first photo is your cover.
-              </p>
-            </div>
-            <span className="text-xs text-white/60">
-              {existingPhotos.length + newPhotos.length}/{MAX_PHOTOS} total
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {existingPhotos.map((src, idx) => (
-              <div key={`${src}-${idx}`} className="relative group">
-                <Image
-                  src={src}
-                  alt={`Listing photo ${idx + 1}`}
-                  width={256}
-                  height={144}
-                  className="w-full h-36 object-cover rounded-2xl border border-white/15"
-                  unoptimized
-                />
-                <button
-                  type="button"
-                  onClick={() => handleRemoveExisting(idx)}
-                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/60 text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition"
-                  aria-label="Remove photo"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-
-            {newPhotoPreviews.map((preview, idx) => (
-              <div key={`new-${idx}`} className="relative group">
-                <Image
-                  src={preview.url}
-                  alt={`New listing photo ${idx + 1}`}
-                  width={256}
-                  height={144}
-                  className="w-full h-36 object-cover rounded-2xl border border-dashed border-white/15"
-                  unoptimized
-                />
-                <span className="absolute left-2 top-2 text-[11px] px-2 py-1 rounded-full bg-black/60 text-white/80">
-                  New
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveNew(idx)}
-                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/60 text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition"
-                  aria-label="Remove photo"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-
-            {existingPhotos.length + newPhotos.length < MAX_PHOTOS && (
-              <label className="h-36 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/30 bg-white/5 text-gray-200 cursor-pointer hover:bg-white/10 transition">
-                <span className="text-sm font-semibold">Add photos</span>
-                <span className="text-xs text-white/70">PNG, JPG</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    handleAddNewPhotos(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            )}
-          </div>
-        </section>
+        <ListingPhotoManager
+          photos={photos}
+          maxPhotos={MAX_PHOTOS}
+          helperText={`Add up to ${MAX_PHOTOS} photos. The first photo is your cover.`}
+          error={photoError}
+          onAddFiles={handleAddNewPhotos}
+          onRemovePhoto={handleRemovePhoto}
+          onEnhancePhoto={handleEnhancePhoto}
+          onChooseVariant={handleChooseVariant}
+          onBackgroundChange={handleBackgroundChange}
+          canAddMore={photos.length < MAX_PHOTOS}
+        />
 
         <section className={sectionCard}>
           <div className="mb-6">
