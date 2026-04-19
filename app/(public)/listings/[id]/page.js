@@ -1113,20 +1113,21 @@ export default function ListingDetails({ params }) {
                 </div>
               </div>
 
-              <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
-                <details className="group">
-                  <summary className="cursor-pointer list-none text-sm font-semibold marker:content-none">
-                    <span className="opacity-80 transition group-open:opacity-100">
-                      What to expect
-                    </span>
-                  </summary>
+              {fulfillmentSummary.deliveryAvailable || fulfillmentSummary.pickupAvailable ? (
+                <div className="mt-6 border-t pt-6" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
+                  <div className="text-sm font-semibold">
+                    <span className="opacity-80">What to expect</span>
+                  </div>
                   <ul className="mt-3 space-y-2 text-[13px] leading-6 opacity-68">
-                    <li>Message the business to confirm any final details.</li>
-                    <li>Delivery windows are shared after the order is confirmed.</li>
-                    <li>Pickup instructions are sent directly by the business.</li>
+                    {fulfillmentSummary.deliveryAvailable ? (
+                      <li>Delivery windows are shared after your order is confirmed.</li>
+                    ) : null}
+                    {fulfillmentSummary.pickupAvailable ? (
+                      <li>Pickup instructions are sent after your order is confirmed.</li>
+                    ) : null}
                   </ul>
-                </details>
-              </div>
+                </div>
+              ) : null}
             </div>
           </aside>
         </div>

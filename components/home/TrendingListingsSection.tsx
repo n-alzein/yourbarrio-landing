@@ -144,13 +144,13 @@ export default function TrendingListingsSection({
                   prefetch={false}
                   className="group flex h-full w-[calc((100%-0.75rem)/2)] min-w-[calc((100%-0.75rem)/2)] flex-[0_0_auto] snap-start flex-col overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] sm:w-[21rem] sm:min-w-[21rem] md:w-[17.25rem] md:min-w-[17.25rem] xl:w-[16rem] xl:min-w-[16rem]"
                 >
-                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-stone-100 sm:aspect-[3/4]">
+                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-white sm:aspect-[3/4]">
                     <Image
                       src={imageSrc}
                       alt={listing.title || "Listing"}
                       fill
                       sizes="(max-width: 639px) calc((100vw - 2rem - 0.75rem) / 2), (max-width: 767px) 21rem, (max-width: 1279px) 17.25rem, 16rem"
-                      className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                      className="object-contain object-center transition-transform duration-500 ease-out"
                     />
                   </div>
 

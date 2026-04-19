@@ -464,15 +464,16 @@ function CustomerHomePageInner({
 
         if (!isActive || requestId !== homeListingsRequestIdRef.current) return;
         if (!response.ok) {
-          setHomeListings([]);
+          setHomeListings((current) => (current.length > 0 ? current : []));
           return;
         }
 
-        setHomeListings(Array.isArray(payload?.listings) ? payload.listings : []);
+        const nextListings = Array.isArray(payload?.listings) ? payload.listings : [];
+        setHomeListings((current) => (nextListings.length > 0 ? nextListings : current));
       } catch (error) {
         if (!isActive || requestId !== homeListingsRequestIdRef.current) return;
         if (error?.name === "AbortError") return;
-        setHomeListings([]);
+        setHomeListings((current) => (current.length > 0 ? current : []));
       } finally {
         if (isActive && requestId === homeListingsRequestIdRef.current) {
           setHomeListingsLoading(false);

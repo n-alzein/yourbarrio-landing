@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth/server";
-import { formatOrderDateTime } from "@/lib/orders";
+import { formatOrderPurchaseDateTime } from "@/lib/orders";
 import { reconcilePendingStripeOrders } from "@/lib/orders/persistence";
 import { getSupabaseServerClient as getServiceClient } from "@/lib/supabase/server";
 import OrderReceiptClient from "./OrderReceiptClient";
@@ -25,6 +25,7 @@ export default async function OrderPage({ params, searchParams }) {
       ? resolvedSearchParams.checkout_session_id.trim()
       : "";
   const { supabase, user } = await requireRole("customer");
+  const userId = user?.id || "";
 
   if (!orderNumber) {
     return (
@@ -37,11 +38,22 @@ export default async function OrderPage({ params, searchParams }) {
     );
   }
 
+  if (!userId) {
+    return (
+      <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+        <div className="max-w-3xl mx-auto rounded-3xl p-8" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <h1 className="text-2xl font-semibold">Order not available</h1>
+          <p className="mt-3 text-sm opacity-80">Please log in to view this order.</p>
+        </div>
+      </div>
+    );
+  }
+
   let { data: order } = await supabase
     .from("orders")
-    .select("*, order_items(*)")
+    .select("*, order_items(*, listing:listings!order_items_listing_id_fkey(id))")
     .ilike("order_number", orderNumber)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (
@@ -52,7 +64,7 @@ export default async function OrderPage({ params, searchParams }) {
   ) {
     await reconcilePendingStripeOrders({
       client: getServiceClient() ?? supabase,
-      userId: user.id,
+      userId,
       orderIds: [order.id],
       limit: 1,
       logPrefix: "[ORDER_FINALIZATION_TRACE]",
@@ -60,9 +72,9 @@ export default async function OrderPage({ params, searchParams }) {
 
     const { data: reconciledOrder } = await supabase
       .from("orders")
-      .select("*, order_items(*)")
+      .select("*, order_items(*, listing:listings!order_items_listing_id_fkey(id))")
       .eq("id", order.id)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     order = reconciledOrder || order;
@@ -89,7 +101,7 @@ export default async function OrderPage({ params, searchParams }) {
     <OrderReceiptClient
       order={order}
       vendor={vendor}
-      purchasedAtLabel={formatOrderDateTime(order.created_at)}
+      purchasedAtLabel={formatOrderPurchaseDateTime(order)}
     />
   );
 }

@@ -20,6 +20,7 @@ export type OrderItem = {
   image_url: string | null;
   quantity: number;
   created_at?: string | null;
+  listing?: { id: string } | null;
 };
 
 export type Order = {

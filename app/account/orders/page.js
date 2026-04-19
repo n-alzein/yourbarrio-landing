@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AccountNavTabs from "@/components/account/AccountNavTabs";
 import OrderStatusBadge from "@/components/orders/OrderStatusBadge";
+import OrderItemThumbnails from "./OrderItemThumbnails";
 import {
   formatMoney,
   formatOrderDateTime,
@@ -36,7 +37,7 @@ export default async function AccountOrdersPage({ searchParams }) {
   const { data: orders, error } = await client
     .from("orders")
     .select(
-      "id,order_number,created_at,updated_at,status,fulfillment_type,delivery_time,pickup_time,total, vendor:users!orders_vendor_id_fkey (business_name, full_name)"
+      "id,order_number,created_at,updated_at,status,fulfillment_type,delivery_time,pickup_time,total, vendor:users!orders_vendor_id_fkey (business_name, full_name), order_items(id,title,image_url,created_at, listing:listings!order_items_listing_id_fkey(photo_url,photo_variants))"
     )
     .eq("user_id", effectiveUserId)
     .in("status", PENDING_STATUSES)
@@ -115,17 +116,20 @@ export default async function AccountOrdersPage({ searchParams }) {
                   className="rounded-3xl p-6 space-y-5"
                   style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
                 >
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold">
-                        Order {order.order_number}
-                      </p>
-                      <p className="text-xs opacity-70">{vendorName}</p>
-                      <p className="text-xs opacity-70">
-                        Placed {formatOrderDateTime(order.created_at)}
-                      </p>
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 min-w-0">
+                      <OrderItemThumbnails order={order} />
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-sm font-semibold">
+                          Order {order.order_number}
+                        </p>
+                        <p className="text-xs opacity-70">{vendorName}</p>
+                        <p className="text-xs opacity-70">
+                          Placed {formatOrderDateTime(order.created_at)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 md:justify-end">
                       <OrderStatusBadge status={order.status} />
                       <span className="text-sm font-semibold">
                         ${formatMoney(order.total)}

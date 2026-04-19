@@ -107,7 +107,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from("orders")
-    .select("*, order_items(*)")
+    .select("*, order_items(*, listing:listings!order_items_listing_id_fkey(photo_url,photo_variants))")
     .eq("vendor_id", effectiveUserId)
     .in("status", statusList)
     .order("created_at", { ascending: false });

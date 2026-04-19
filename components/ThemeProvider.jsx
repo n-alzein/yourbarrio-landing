@@ -12,8 +12,14 @@ import {
 
 const STORAGE_KEY = "yb-theme";
 const THEMES = ["light", "dark"];
+const DEFAULT_THEME_CONTEXT = {
+  theme: "light",
+  hydrated: false,
+  setTheme: () => {},
+  themes: THEMES,
+};
 
-const ThemeContext = createContext(null);
+const ThemeContext = createContext(DEFAULT_THEME_CONTEXT);
 
 export function ThemeProvider({ children, forcedTheme = "light" }) {
   const hasForcedTheme = THEMES.includes(forcedTheme);
@@ -77,6 +83,5 @@ export function ThemeProvider({ children, forcedTheme = "light" }) {
 
 export function useTheme() {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
-  return ctx;
+  return ctx || DEFAULT_THEME_CONTEXT;
 }

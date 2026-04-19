@@ -16,6 +16,7 @@ import {
   canTransition,
   isBackward,
 } from "@/lib/orders/statusTransitions";
+import { getOrderItemThumbnailUrl } from "@/lib/orders/itemThumbnails";
 
 const TABS = [
   { id: "new", label: "New" },
@@ -49,6 +50,72 @@ const toNumberOrZero = (value) => {
 };
 
 const centsToDollars = (value) => Math.max(0, toNumberOrZero(value) / 100);
+
+const getOrderItems = (order) =>
+  Array.isArray(order?.order_items) ? order.order_items : [];
+
+const getOrderPreviewThumbnailUrl = (order) =>
+  getOrderItemThumbnailUrl(getOrderItems(order)[0]);
+
+function OrderThumbnail({ order }) {
+  const thumbnailUrl = getOrderPreviewThumbnailUrl(order);
+  const itemCount = getOrderItems(order).length;
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {thumbnailUrl ? (
+        <img
+          src={thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="h-10 w-10 shrink-0 rounded-lg"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.02))",
+            border: "1px solid rgba(15, 23, 42, 0.06)",
+          }}
+        />
+      )}
+      {itemCount > 1 ? (
+        <span className="whitespace-nowrap text-[11px] font-medium opacity-60">
+          {itemCount} items
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function ItemThumbnail({ item }) {
+  const thumbnailUrl = getOrderItemThumbnailUrl(item);
+
+  if (!thumbnailUrl) {
+    return (
+      <div
+        aria-hidden="true"
+        className="h-9 w-9 shrink-0 rounded-lg"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.02))",
+          border: "1px solid rgba(15, 23, 42, 0.06)",
+        }}
+      />
+    );
+  }
+
+  return (
+    <img
+      src={thumbnailUrl}
+      alt=""
+      loading="lazy"
+      className="h-9 w-9 shrink-0 rounded-lg object-cover"
+    />
+  );
+}
 
 export default function BusinessOrdersClient() {
   const searchParams = useSearchParams();
@@ -592,13 +659,16 @@ export default function BusinessOrdersClient() {
                       return (
                         <tr key={order.id} className="hover:bg-[var(--overlay)]">
                           <td className="py-4 px-4">
-                            <div className="space-y-1">
-                              <p className="font-semibold">
-                                Order {order.order_number}
-                              </p>
-                              <p className="text-xs opacity-70">
-                                {formatOrderDateTime(order.created_at)}
-                              </p>
+                            <div className="flex items-center gap-3">
+                              <OrderThumbnail order={order} />
+                              <div className="min-w-0 space-y-1">
+                                <p className="font-semibold">
+                                  Order {order.order_number}
+                                </p>
+                                <p className="text-xs opacity-70">
+                                  {formatOrderDateTime(order.created_at)}
+                                </p>
+                              </div>
                             </div>
                           </td>
                           <td className="py-4 px-4">
@@ -698,13 +768,16 @@ export default function BusinessOrdersClient() {
                     style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold">
-                          Order {order.order_number}
-                        </p>
-                        <p className="text-xs opacity-70">
-                          {formatOrderDateTime(order.created_at)}
-                        </p>
+                      <div className="flex min-w-0 items-start gap-3">
+                        <OrderThumbnail order={order} />
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-sm font-semibold">
+                            Order {order.order_number}
+                          </p>
+                          <p className="text-xs opacity-70">
+                            {formatOrderDateTime(order.created_at)}
+                          </p>
+                        </div>
                       </div>
                       <OrderStatusBadge status={order.status} />
                     </div>
@@ -911,16 +984,21 @@ export default function BusinessOrdersClient() {
                     className="grid grid-cols-[1fr_80px_110px_130px] items-center gap-6"
                   >
                     <span className="opacity-80">
-                      {item.listing_id ? (
-                        <Link
-                          href={`/listings/${item.listing_id}`}
-                          className="hover:underline"
-                        >
-                          {item.title}
-                        </Link>
-                      ) : (
-                        item.title
-                      )}
+                      <span className="flex min-w-0 items-center gap-3">
+                        <ItemThumbnail item={item} />
+                        <span className="min-w-0">
+                          {item.listing_id ? (
+                            <Link
+                              href={`/listings/${item.listing_id}`}
+                              className="hover:underline"
+                            >
+                              {item.title}
+                            </Link>
+                          ) : (
+                            item.title
+                          )}
+                        </span>
+                      </span>
                     </span>
                     <span className="text-right">{item.quantity}</span>
                     <span className="text-right">

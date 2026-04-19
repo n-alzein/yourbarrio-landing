@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { getNormalizedLocation } from "@/lib/location/filter";
@@ -58,10 +59,8 @@ const PUBLIC_LISTING_SELECT = [
   "id",
   "public_id",
   "title",
-  "description",
   "price",
   "category",
-  "listing_category",
   "category_id",
   "city",
   "photo_url",
@@ -72,6 +71,10 @@ const PUBLIC_LISTING_SELECT = [
   "low_stock_threshold",
   "inventory_last_updated_at",
 ].join(",");
+
+function getHomeBrowseSupabaseClient() {
+  return getSupabaseServerClient() || getPublicSupabaseServerClient();
+}
 
 async function attachBusinessNames(listings: ListingSummary[]) {
   if (!Array.isArray(listings) || listings.length === 0) return [];
@@ -86,7 +89,7 @@ async function attachBusinessNames(listings: ListingSummary[]) {
 
   if (businessIds.length === 0) return listings.map((listing) => withListingPricing(listing));
 
-  const supabase = getPublicSupabaseServerClient();
+  const supabase = getHomeBrowseSupabaseClient();
   const { data, error } = await supabase
     .from("users")
     .select("id,business_name,full_name")
@@ -121,7 +124,7 @@ async function tryLoadFromPublicListingsView({
   location: ReturnType<typeof getNormalizedLocation>;
   limit: number;
 }) {
-  const supabase = getPublicSupabaseServerClient();
+  const supabase = getHomeBrowseSupabaseClient();
   const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, { limit: 1000 });
   if (businessIds.length === 0) {
     return { data: [] as ListingSummary[], error: null };
@@ -145,7 +148,7 @@ async function tryLoadFromListingsTable({
   location: ReturnType<typeof getNormalizedLocation>;
   limit: number;
 }) {
-  const supabase = getPublicSupabaseServerClient();
+  const supabase = getHomeBrowseSupabaseClient();
   const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, { limit: 1000 });
   if (businessIds.length === 0) {
     return { data: [] as ListingSummary[], error: null };
@@ -164,6 +167,32 @@ async function tryLoadFromListingsTable({
   return { data: (data ?? []) as unknown as ListingSummary[], error: null };
 }
 
+async function tryLoadAllFromPublicListingsView({ limit }: { limit: number }) {
+  const supabase = getHomeBrowseSupabaseClient();
+  const { data, error } = await supabase
+    .from("public_listings_v")
+    .select(PUBLIC_LISTING_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return { data: null, error };
+  return { data: (data ?? []) as unknown as ListingSummary[], error: null };
+}
+
+async function tryLoadAllFromListingsTable({ limit }: { limit: number }) {
+  const supabase = getHomeBrowseSupabaseClient();
+  const { data, error } = await supabase
+    .from("public_listings")
+    .select(PUBLIC_LISTING_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return { data: [] as ListingSummary[], error: "legacy_public_listings_query_failed" };
+  }
+  return { data: (data ?? []) as unknown as ListingSummary[], error: null };
+}
+
 async function loadPublicSafeListings({
   location,
   limit,
@@ -172,10 +201,24 @@ async function loadPublicSafeListings({
   limit: number;
 }) {
   const fromView = await tryLoadFromPublicListingsView({ location, limit });
-  if (!fromView.error && fromView.data) return fromView.data;
+  if (!fromView.error && fromView.data?.length) return fromView.data;
 
   const fromLegacyView = await tryLoadFromListingsTable({ location, limit });
-  if (!fromLegacyView.error && Array.isArray(fromLegacyView.data)) return fromLegacyView.data;
+  if (!fromLegacyView.error && Array.isArray(fromLegacyView.data) && fromLegacyView.data.length) {
+    return fromLegacyView.data;
+  }
+
+  const allFromView = await tryLoadAllFromPublicListingsView({ limit });
+  if (!allFromView.error && allFromView.data?.length) return allFromView.data;
+
+  const allFromLegacyView = await tryLoadAllFromListingsTable({ limit });
+  if (
+    !allFromLegacyView.error &&
+    Array.isArray(allFromLegacyView.data) &&
+    allFromLegacyView.data.length
+  ) {
+    return allFromLegacyView.data;
+  }
 
   return [];
 }

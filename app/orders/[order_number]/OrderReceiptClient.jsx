@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 /** @typedef {import("@/lib/types/orders").Order} Order */
 /** @typedef {import("@/lib/types/cart").VendorSummary} VendorSummary */
 
@@ -22,6 +24,35 @@ const statusCopy = {
   completed: "Completed",
   cancelled: "Cancelled",
 };
+
+function ReceiptItemName({ item }) {
+  const title = item?.title || "Item";
+  const listingExists = Boolean(item?.listing_id && item?.listing?.id);
+
+  if (!listingExists) {
+    return (
+      <span title={item?.listing_id ? "Item no longer available" : undefined}>
+        {title}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={`/listings/${item.listing_id}`}
+      aria-label={`View item details for ${title}`}
+      className="group inline-flex max-w-full items-center gap-1 text-inherit no-underline hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
+      <span className="min-w-0 break-words">{title}</span>
+      <span
+        aria-hidden="true"
+        className="shrink-0 opacity-0 transition-opacity group-hover:opacity-70 group-focus-visible:opacity-70"
+      >
+        &rarr;
+      </span>
+    </Link>
+  );
+}
 
 /** @param {{ order: Order, vendor: VendorSummary, purchasedAtLabel: string }} props */
 export default function OrderReceiptClient({ order, vendor, purchasedAtLabel }) {
@@ -120,7 +151,18 @@ export default function OrderReceiptClient({ order, vendor, purchasedAtLabel }) 
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id} className="align-top">
-                      <td className="opacity-80 pr-2 py-1 break-words">{item.title}</td>
+                      <td className="opacity-80 pr-2 py-1 break-words">
+                        <div className="flex items-start gap-3">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt=""
+                              className="h-11 w-11 shrink-0 rounded-lg object-cover"
+                            />
+                          ) : null}
+                          <ReceiptItemName item={item} />
+                        </div>
+                      </td>
                       <td className="text-right py-1">{item.quantity}</td>
                       <td className="text-right py-1">
                         ${formatMoney(item.unit_price)}
