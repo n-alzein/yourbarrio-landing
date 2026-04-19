@@ -5,6 +5,8 @@ import { logMutation, requireSession } from "@/lib/auth/requireSession";
 
 export const MESSAGE_PAGE_SIZE = 50;
 export const CONVERSATION_PAGE_SIZE = 40;
+const MESSAGE_SELECT_COLUMNS =
+  "id, conversation_id, sender_id, recipient_id, body, created_at, read_at, type, order_id, order_number, status, timestamp, fulfillment_type, business_name, order_items";
 
 export function getDisplayName(profile: {
   business_name?: string | null;
@@ -320,7 +322,7 @@ export async function fetchMessages({
 
   let query = client
     .from("messages")
-    .select("id, conversation_id, sender_id, recipient_id, body, created_at, read_at")
+    .select(MESSAGE_SELECT_COLUMNS)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -372,7 +374,7 @@ export async function sendMessage({
         recipient_id: recipientId,
         body,
       })
-      .select("id, conversation_id, sender_id, recipient_id, body, created_at, read_at")
+      .select(MESSAGE_SELECT_COLUMNS)
       .single();
 
     if (error) {

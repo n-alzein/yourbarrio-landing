@@ -13,6 +13,8 @@ export default function PublicBusinessHero({
   onCoverUpload,
   uploading,
   editMode = false,
+  variant = "default",
+  ownerSecondaryActions,
 }) {
   const backHref = shell === "public" ? "/business/profile" : null;
 
@@ -25,10 +27,12 @@ export default function PublicBusinessHero({
       mode="preview"
       viewerMode={mode}
       ownerPrimaryAction={ownerPrimaryAction}
+      ownerSecondaryActions={ownerSecondaryActions}
       onAvatarUpload={onAvatarUpload}
       onCoverUpload={onCoverUpload}
       uploading={uploading}
       editMode={editMode}
+      variant={variant}
     />
   );
 }

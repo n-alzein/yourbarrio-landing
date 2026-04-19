@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ImagePlus, Megaphone, Plus } from "lucide-react";
+import { ImagePlus, ListChecks, Megaphone, Pencil, Plus, Settings } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getBusinessPublicUrl } from "@/lib/ids/publicRefs";
@@ -108,7 +108,7 @@ export default function BusinessProfilePage({
       profile,
       galleryCount: gallery?.length ?? 0,
       announcementCount: announcements?.length ?? 0,
-      reviewCount: initialReviews?.length ?? 0,
+      reviewCount: reviews?.length ?? 0,
     });
     if (signature === previewSigRef.current) return;
     previewSigRef.current = signature;
@@ -328,11 +328,26 @@ export default function BusinessProfilePage({
         reviews={reviews}
         announcements={announcements}
         gallery={gallery}
+        heroVariant="publicFullBleed"
+        navClassName="mb-6"
         heroProps={{
           ownerPrimaryAction: {
             label: editMode ? "Close editor" : "Edit profile",
             onClick: () => setEditMode((prev) => !prev),
+            icon: Pencil,
           },
+          ownerSecondaryActions: [
+            {
+              label: "Manage listings",
+              href: "/business/listings",
+              icon: ListChecks,
+            },
+            {
+              label: "Settings",
+              href: "/business/settings",
+              icon: Settings,
+            },
+          ],
           editMode,
           uploading,
           onAvatarUpload: (file) => handleHeaderUpload("avatar", file),

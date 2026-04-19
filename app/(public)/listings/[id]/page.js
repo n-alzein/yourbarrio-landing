@@ -603,6 +603,16 @@ export default function ListingDetails({ params }) {
   const isBusinessVerified = ["auto_verified", "manually_verified"].includes(
     String(business?.verification_status || "").trim().toLowerCase()
   );
+  const pickupOnly =
+    fulfillmentSummary.pickupAvailable && !fulfillmentSummary.deliveryAvailable;
+  const deliveryOnly =
+    !fulfillmentSummary.pickupAvailable && fulfillmentSummary.deliveryAvailable;
+  const bothFulfillmentOptionsAvailable =
+    fulfillmentSummary.pickupAvailable && fulfillmentSummary.deliveryAvailable;
+  const deliveryOnlySubtitle =
+    Number(fulfillmentSummary.deliveryFeeCents || 0) > 0
+      ? `$${formatCents(fulfillmentSummary.deliveryFeeCents)} delivery`
+      : "Delivery available";
 
   return (
     <>
@@ -680,8 +690,7 @@ export default function ListingDetails({ params }) {
               ) : null}
 
               <div
-                className="relative flex h-[420px] w-full items-center justify-center overflow-hidden p-5"
-                style={{ background: "#ffffff" }}
+                className="relative w-full aspect-[4/3] overflow-hidden rounded-2xl bg-white"
               >
                 <div
                   className="pointer-events-none absolute inset-4 rounded-[28px]"
@@ -690,24 +699,28 @@ export default function ListingDetails({ params }) {
                       "inset 0 0 0 1px rgba(15,23,42,0.05), inset 0 -18px 32px -32px rgba(15,23,42,0.12)",
                   }}
                 />
-                <SafeImage
-                  src={heroSrc || getListingCategoryPlaceholder(listing)}
-                  alt={listing.title}
-                  className="object-contain"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                  useNextImage
-                  loading="lazy"
-                  onError={() => {
-                    const fallback = getListingCategoryPlaceholder(listing);
-                    if (heroSrc !== fallback) {
-                      setHeroSrc(fallback);
-                    }
-                  }}
-                  style={{ objectPosition: "center center" }}
-                  referrerPolicy="no-referrer"
-                  fallbackSrc={getListingCategoryPlaceholder(listing)}
-                />
+                <div className="absolute inset-0 flex items-center justify-center p-6">
+                  <div className="relative h-full w-full">
+                    <SafeImage
+                      src={heroSrc || getListingCategoryPlaceholder(listing)}
+                      alt={listing.title}
+                      className="max-h-full max-w-full object-contain"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 66vw"
+                      useNextImage
+                      loading="lazy"
+                      onError={() => {
+                        const fallback = getListingCategoryPlaceholder(listing);
+                        if (heroSrc !== fallback) {
+                          setHeroSrc(fallback);
+                        }
+                      }}
+                      style={{ objectPosition: "center center" }}
+                      referrerPolicy="no-referrer"
+                      fallbackSrc={getListingCategoryPlaceholder(listing)}
+                    />
+                  </div>
+                </div>
                 <div className="pointer-events-none absolute inset-0 ring-1 ring-black/[0.04]" />
               </div>
               <div className="space-y-0 p-5 md:p-6">
@@ -942,76 +955,114 @@ export default function ListingDetails({ params }) {
                   <div className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
                     Fulfillment
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {[
-                      {
-                        id: PICKUP_FULFILLMENT_TYPE,
-                        label: "Pickup",
-                        meta: "Free",
-                        icon: ShoppingBag,
-                        available: fulfillmentSummary.pickupAvailable,
-                        hidden:
-                          !fulfillmentSummary.pickupAvailable &&
-                          !fulfillmentSummary.deliveryAvailable,
-                      },
-                      {
-                        id: DELIVERY_FULFILLMENT_TYPE,
-                        label: "Delivery",
-                        meta: fulfillmentSummary.deliveryAvailable
-                          ? `$${formatCents(fulfillmentSummary.deliveryFeeCents)}`
-                          : "Unavailable",
-                        icon: Truck,
-                        available: fulfillmentSummary.deliveryAvailable,
-                        hidden: false,
-                      },
-                    ]
-                      .filter((option) => !option.hidden)
-                      .map((option) => {
-                        const Icon = option.icon;
-                        const active = fulfillmentType === option.id;
-                        const disabled =
-                          purchaseRestricted ||
-                          purchaseEligibilityPending ||
-                          cartActionLoading ||
-                          !option.available;
+                  {pickupOnly ? (
+                    <div
+                      className="rounded-2xl px-4 py-3 text-left"
+                      style={{
+                        background: "rgba(79,70,229,0.08)",
+                        border: "1px solid rgba(79,70,229,0.18)",
+                        color: "var(--text)",
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                          <ShoppingBag className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">Pickup</div>
+                          <div className="mt-1 truncate text-xs opacity-70">Pick up today</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : deliveryOnly ? (
+                    <div
+                      className="rounded-2xl px-4 py-3 text-left"
+                      style={{
+                        background: "rgba(79,70,229,0.08)",
+                        border: "1px solid rgba(79,70,229,0.18)",
+                        color: "var(--text)",
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                          <Truck className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">Delivery</div>
+                          <div className="mt-1 truncate text-xs opacity-70">
+                            {deliveryOnlySubtitle}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : bothFulfillmentOptionsAvailable ? (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {[
+                        {
+                          id: PICKUP_FULFILLMENT_TYPE,
+                          label: "Pickup",
+                          meta: "Pick up today",
+                          icon: ShoppingBag,
+                          available: fulfillmentSummary.pickupAvailable,
+                          hidden:
+                            !fulfillmentSummary.pickupAvailable &&
+                            !fulfillmentSummary.deliveryAvailable,
+                        },
+                        {
+                          id: DELIVERY_FULFILLMENT_TYPE,
+                          label: "Delivery",
+                          meta:
+                            Number(fulfillmentSummary.deliveryFeeCents || 0) > 0
+                              ? `$${formatCents(fulfillmentSummary.deliveryFeeCents)}`
+                              : "Delivery available",
+                          icon: Truck,
+                          available: fulfillmentSummary.deliveryAvailable,
+                          hidden: false,
+                        },
+                      ]
+                        .filter((option) => !option.hidden)
+                        .map((option) => {
+                          const Icon = option.icon;
+                          const active = fulfillmentType === option.id;
+                          const disabled =
+                            purchaseRestricted ||
+                            purchaseEligibilityPending ||
+                            cartActionLoading ||
+                            !option.available;
 
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => setFulfillmentType(option.id)}
-                            disabled={disabled}
-                            className={`rounded-2xl px-4 py-3 text-left transition ${
-                              active ? "ring-2 ring-indigo-500/20" : ""
-                            } ${disabled && !active ? "cursor-not-allowed" : ""}`}
-                            style={{
-                              background: active ? "rgba(79,70,229,0.08)" : "rgba(15,23,42,0.02)",
-                              border: active
-                                ? "1px solid rgba(79,70,229,0.18)"
-                                : "1px solid rgba(15,23,42,0.08)",
-                              color: "var(--text)",
-                              opacity: option.available ? 1 : 0.55,
-                            }}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
-                                <Icon className="h-3.5 w-3.5" />
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => setFulfillmentType(option.id)}
+                              disabled={disabled}
+                              className={`rounded-2xl px-4 py-3 text-left transition ${
+                                active ? "ring-2 ring-indigo-500/20" : ""
+                              } ${disabled && !active ? "cursor-not-allowed" : ""}`}
+                              style={{
+                                background: active ? "rgba(79,70,229,0.08)" : "rgba(15,23,42,0.02)",
+                                border: active
+                                  ? "1px solid rgba(79,70,229,0.18)"
+                                  : "1px solid rgba(15,23,42,0.08)",
+                                color: "var(--text)",
+                                opacity: option.available ? 1 : 0.55,
+                              }}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                                  <Icon className="h-3.5 w-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold">{option.label}</div>
+                                  <div className="mt-1 text-xs opacity-70">{option.meta}</div>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold">{option.label}</div>
-                                <div className="mt-1 text-xs opacity-70">{option.meta}</div>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                  {fulfillmentSummary.deliveryUnavailableReason &&
-                  !fulfillmentSummary.deliveryAvailable ? (
-                    <p className="text-xs leading-5 opacity-65">
-                      {fulfillmentSummary.deliveryUnavailableReason}
-                    </p>
-                  ) : fulfillmentType === DELIVERY_FULFILLMENT_TYPE &&
+                            </button>
+                          );
+                        })}
+                    </div>
+                  ) : null}
+                  {fulfillmentType === DELIVERY_FULFILLMENT_TYPE &&
                     fulfillmentSummary.deliveryAvailable &&
                     fulfillmentSummary.deliveryNotes ? (
                     <p className="text-xs leading-5 opacity-65">

@@ -43,6 +43,8 @@ export default function BusinessProfileView({
   updatesSupplement = null,
   galleryHeaderAction = null,
   galleryTileActions = null,
+  heroVariant = "default",
+  navClassName = "",
 }) {
   return (
     <>
@@ -52,10 +54,11 @@ export default function BusinessProfileView({
         publicPath={publicPath}
         shell={shell}
         mode={mode}
+        variant={heroVariant}
         {...heroProps}
       />
 
-      <ProfileSectionNav items={DEFAULT_NAV_ITEMS} />
+      <ProfileSectionNav items={DEFAULT_NAV_ITEMS} className={navClassName} />
 
       <div className="space-y-8">
         <BusinessAbout

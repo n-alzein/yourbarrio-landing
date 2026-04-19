@@ -115,27 +115,30 @@ export default function BusinessHoursSummaryCard({ hoursJson }) {
   const hoursState = useMemo(() => getHoursState(hoursJson), [hoursJson]);
 
   return (
-    <div className="rounded-[16px] border border-slate-100 bg-white px-3.5 py-3 shadow-sm">
+    <div className="rounded-[20px] border border-slate-100/70 bg-white/85 p-4 shadow-[0_14px_34px_-32px_rgba(15,23,42,0.3)]">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-xl bg-slate-50 p-2 text-[#6a3df0]">
+        <div className="mt-0.5 rounded-xl bg-[#faf8ff] p-1.5 text-[#6a3df0]">
           <Clock className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-slate-400">
                 Hours
               </p>
-              <p className={`mt-1 text-sm font-medium ${hoursState.statusTone}`}>
+              <p className={`mt-1 text-base font-semibold tracking-[-0.01em] ${hoursState.statusTone}`}>
                 {hoursState.statusLabel}
               </p>
-              <p className="mt-1 text-sm text-slate-600">{hoursState.todayLabel}</p>
+              <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                {hoursState.todayLabel}
+              </p>
             </div>
             {hoursState.hasHours ? (
               <button
                 type="button"
                 onClick={() => setExpanded((value) => !value)}
-                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-[#5b37d6] transition hover:bg-[#f6f1ff]"
+                aria-expanded={expanded}
+                className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#5b37d6] transition hover:bg-[#f6f1ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6a3df0]"
               >
                 {expanded ? "Hide hours" : "View full hours"}
                 <ChevronDown
@@ -146,14 +149,14 @@ export default function BusinessHoursSummaryCard({ hoursJson }) {
           </div>
 
           {expanded ? (
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-1.5">
               {hoursState.weeklyHours.map((entry) => (
                 <div
                   key={entry.key}
-                  className="flex items-center justify-between gap-4 rounded-[12px] bg-slate-50 px-3 py-2 text-sm"
+                  className="flex items-center justify-between gap-4 rounded-[12px] bg-slate-50/80 px-3 py-2 text-sm"
                 >
                   <span className="font-medium text-slate-700">{entry.label}</span>
-                  <span className="text-slate-500">{entry.value}</span>
+                  <span className="text-right text-slate-500">{entry.value}</span>
                 </div>
               ))}
             </div>

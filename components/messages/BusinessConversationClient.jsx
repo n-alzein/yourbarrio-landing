@@ -20,6 +20,14 @@ import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { memoizeRequest } from "@/lib/requestMemo";
 import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
+import {
+  appendMessageDedup,
+  getTrackedOrderIds,
+  isNearScrollBottom,
+  patchOrderStatusMessage,
+  prependMessagesDedup,
+  scrollToBottom,
+} from "@/components/messages/realtimeThreadState";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
 
@@ -61,8 +69,12 @@ export default function BusinessConversationClient({
     typeof document === "undefined" ? true : !document.hidden
   );
   const scrollRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const shouldStickToBottomRef = useRef(true);
   const hasThreadRef = useRef(Boolean(initialConversation));
   const showThreadSkeleton = useDelayedFlag(loading && messages.length === 0);
+  const trackedOrderIds = useMemo(() => getTrackedOrderIds(messages), [messages]);
+  const trackedOrderKey = trackedOrderIds.join(",");
 
   const loadThread = useCallback(async () => {
     if (!conversationId || authStatus !== "authenticated") return;
@@ -128,6 +140,7 @@ export default function BusinessConversationClient({
       if (requestId !== requestIdRef.current) return;
 
       setConversation(result.conversation);
+      shouldStickToBottomRef.current = true;
       setMessages(result.messages);
       setHasMore(result.messages.length === MESSAGE_PAGE_SIZE);
       hasThreadRef.current = Boolean(result.conversation);
@@ -174,6 +187,7 @@ export default function BusinessConversationClient({
 
       const payload = await response.json();
       const nextMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+      shouldStickToBottomRef.current = true;
       setMessages(nextMessages);
       setHasMore(nextMessages.length === MESSAGE_PAGE_SIZE);
     } catch (err) {
@@ -248,11 +262,17 @@ export default function BusinessConversationClient({
       });
   }, [authStatus, conversationId, notifyUnreadRefresh, userId]);
 
+  const handleThreadScroll = useCallback(() => {
+    isNearBottomRef.current = isNearScrollBottom(scrollRef.current);
+  }, []);
+
   useEffect(() => {
     if (!scrollRef.current || loadingMore) return;
+    if (!shouldStickToBottomRef.current && !isNearBottomRef.current) return;
     const handle = requestAnimationFrame(() => {
-      if (!scrollRef.current) return;
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollToBottom(scrollRef.current);
+      shouldStickToBottomRef.current = false;
+      isNearBottomRef.current = true;
     });
     return () => cancelAnimationFrame(handle);
   }, [loadingMore, messages.length]);
@@ -272,9 +292,10 @@ export default function BusinessConversationClient({
           (payload) => {
             const next = payload.new;
             if (!next?.id) return;
+            shouldStickToBottomRef.current =
+              next.type === "order_status_update" ? false : isNearBottomRef.current;
             setMessages((prev) => {
-              if (prev.some((item) => item.id === next.id)) return prev;
-              return [...prev, next];
+              return appendMessageDedup(prev, next);
             });
             if (next.recipient_id === userId) {
               markConversationRead({
@@ -299,6 +320,43 @@ export default function BusinessConversationClient({
       Boolean(conversationId),
     buildChannel: buildThreadChannel,
     diagLabel: "business-thread",
+  });
+
+  const buildOrderChannel = useCallback(
+    (activeClient) => {
+      let channel = activeClient.channel(`orders-for-thread-${conversationId}`);
+      const orderIds = trackedOrderKey ? trackedOrderKey.split(",") : [];
+      orderIds.forEach((orderId) => {
+        channel = channel.on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${orderId}`,
+          },
+          (payload) => {
+            const nextOrder = payload.new;
+            if (!nextOrder?.id) return;
+            shouldStickToBottomRef.current = false;
+            setMessages((prev) => patchOrderStatusMessage(prev, nextOrder));
+          }
+        );
+      });
+      return channel;
+    },
+    [conversationId, trackedOrderKey]
+  );
+
+  useRealtimeChannel({
+    supabase,
+    enabled:
+      !loadingUser &&
+      authStatus === "authenticated" &&
+      Boolean(conversationId) &&
+      Boolean(trackedOrderKey),
+    buildChannel: buildOrderChannel,
+    diagLabel: `business-thread-orders-${trackedOrderKey}`,
   });
 
   const loadOlder = useCallback(async () => {
@@ -330,7 +388,8 @@ export default function BusinessConversationClient({
       if (older.length === 0) {
         setHasMore(false);
       } else {
-        setMessages((prev) => [...older, ...prev]);
+        shouldStickToBottomRef.current = false;
+        setMessages((prev) => prependMessagesDedup(prev, older));
         if (older.length < MESSAGE_PAGE_SIZE) setHasMore(false);
       }
     } catch (err) {
@@ -366,9 +425,9 @@ export default function BusinessConversationClient({
           session,
         });
         if (sent?.id) {
+          shouldStickToBottomRef.current = true;
           setMessages((prev) => {
-            if (prev.some((item) => item.id === sent.id)) return prev;
-            return [...prev, sent];
+            return appendMessageDedup(prev, sent);
           });
         }
       } catch (err) {
@@ -477,7 +536,11 @@ export default function BusinessConversationClient({
               {loadingMore ? "Loading..." : "Load older messages"}
             </button>
           ) : null}
-          <div className="mt-4 flex-1 overflow-y-auto pr-2" ref={scrollRef}>
+          <div
+            className="mt-4 flex-1 overflow-y-auto pr-2"
+            ref={scrollRef}
+            onScroll={handleThreadScroll}
+          >
             <MessageThread
               messages={messages}
               currentUserId={userId}

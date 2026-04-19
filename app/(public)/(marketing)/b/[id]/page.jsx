@@ -428,8 +428,8 @@ export default async function PublicBusinessProfilePage({
   const isCustomerShell = shell === "customer";
   const wrapperClassName =
     isCustomerShell
-      ? "min-h-screen bg-[#f8fafc] text-white -mt-28 md:-mt-20"
-      : "min-h-screen bg-[#f8fafc] text-white -mt-20";
+      ? "min-h-[calc(100vh+7rem)] bg-[#f8fafc] text-white -mt-28 md:min-h-[calc(100vh+5rem)] md:-mt-20"
+      : "min-h-[calc(100vh+5rem)] bg-[#f8fafc] text-white -mt-20";
   const contentShellPadding = isCustomerShell
     ? "mx-auto max-w-[1180px] px-0 sm:px-6 md:px-8 pb-14"
     : "mx-auto max-w-[1180px] px-4 sm:px-6 md:px-8 pb-14";
@@ -453,6 +453,8 @@ export default async function PublicBusinessProfilePage({
           gallery={gallery}
           sectionClassName={sectionShellClassName}
           reviewsClassName={reviewsShellClassName}
+          heroVariant="publicFullBleed"
+          navClassName="mb-6"
         />
       </div>
     </div>

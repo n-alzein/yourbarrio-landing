@@ -1,5 +1,7 @@
 "use client";
 
+import OrderCard from "@/components/messages/OrderCard";
+
 function formatMessageTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -10,17 +12,98 @@ function formatMessageTime(value) {
   });
 }
 
-function groupMessages(messages = []) {
-  const groups = [];
+function normalizeOrderItems(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      name: item.name || item.title || "",
+      image_url: item.image_url || item.photo_url || "",
+    }));
+}
+
+function getOrderMessageKey(message) {
+  if (message?.type !== "order_status_update") return null;
+  return message.order_id || message.order_number || null;
+}
+
+function buildOrderCards(messages = [], currentUserId) {
+  const cards = new Map();
   messages.forEach((message) => {
-    const last = groups[groups.length - 1];
-    if (last && last.sender_id === message.sender_id) {
+    const key = getOrderMessageKey(message);
+    if (!key) return;
+    const existing =
+      cards.get(key) ||
+      {
+        orderId: message.order_id || key,
+        orderNumber: message.order_number || "",
+        businessName: message.business_name || "",
+        items: normalizeOrderItems(message.order_items),
+        statusHistory: [],
+        updatedAt: message.timestamp || message.created_at || null,
+        fulfillmentType: message.fulfillment_type || null,
+        senderId: message.sender_id || null,
+      };
+    const status = String(message.status || "").trim();
+    if (status && !existing.statusHistory.includes(status)) {
+      existing.statusHistory.push(status);
+    }
+    existing.orderNumber = existing.orderNumber || message.order_number || "";
+    existing.businessName = existing.businessName || message.business_name || "";
+    existing.fulfillmentType =
+      existing.fulfillmentType || message.fulfillment_type || null;
+    const nextItems = normalizeOrderItems(message.order_items);
+    if (!existing.items.length && nextItems.length) existing.items = nextItems;
+    existing.updatedAt = message.timestamp || message.created_at || existing.updatedAt;
+    existing.viewHref =
+      existing.senderId && existing.senderId === currentUserId
+        ? `/business/orders?order=${encodeURIComponent(existing.orderNumber || "")}`
+        : existing.orderNumber
+          ? `/orders/${encodeURIComponent(existing.orderNumber)}`
+          : "/account/orders";
+    cards.set(key, existing);
+  });
+  return cards;
+}
+
+function buildThreadEntries(messages = [], currentUserId) {
+  const orderCards = buildOrderCards(messages, currentUserId);
+  const renderedOrderKeys = new Set();
+  const entries = [];
+
+  messages.forEach((message) => {
+    const orderKey = getOrderMessageKey(message);
+    if (orderKey) {
+      if (renderedOrderKeys.has(orderKey)) return;
+      const card = orderCards.get(orderKey);
+      if (card) {
+        entries.push({
+          type: "order-card",
+          key: `order-${orderKey}`,
+          card,
+        });
+        renderedOrderKeys.add(orderKey);
+      }
+      return;
+    }
+
+    const last = entries[entries.length - 1];
+    if (
+      last?.type === "messages" &&
+      last.sender_id === message.sender_id
+    ) {
       last.items.push(message);
     } else {
-      groups.push({ sender_id: message.sender_id, items: [message] });
+      entries.push({
+        type: "messages",
+        key: `messages-${message.sender_id || "unknown"}-${entries.length}`,
+        sender_id: message.sender_id,
+        items: [message],
+      });
     }
   });
-  return groups;
+
+  return entries;
 }
 
 export default function MessageThread({
@@ -75,15 +158,24 @@ export default function MessageThread({
     );
   }
 
-  const groups = groupMessages(messages);
+  const entries = buildThreadEntries(messages, currentUserId);
 
   return (
     <div className="space-y-4">
-      {groups.map((group, idx) => {
+      {entries.map((entry, idx) => {
+        if (entry.type === "order-card") {
+          return (
+            <div key={entry.key} className="flex justify-start">
+              <OrderCard {...entry.card} />
+            </div>
+          );
+        }
+
+        const group = entry;
         const isSelf = group.sender_id === currentUserId;
         return (
           <div
-            key={`${group.sender_id}-${idx}`}
+            key={group.key || `${group.sender_id}-${idx}`}
             className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
           >
             <div className={`max-w-[80%] flex flex-col ${isSelf ? "items-end" : "items-start"}`}>

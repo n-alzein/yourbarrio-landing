@@ -36,6 +36,14 @@ const STATUS_LABELS = {
   cancelled: "Cancelled",
 };
 
+function normalizeOrderMessageItems(items = []) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    name: item?.title || "Order item",
+    image_url: item?.image_url || item?.listing?.photo_url || null,
+  }));
+}
+
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
 }
@@ -473,6 +481,16 @@ export async function PATCH(request) {
       return jsonError("Failed to start conversation", 500);
     }
 
+    const { data: orderItems } = await notificationClient
+      .from("order_items")
+      .select("title,image_url, listing:listings!order_items_listing_id_fkey(photo_url)")
+      .eq("order_id", data.id);
+
+    const businessName =
+      access.effectiveProfile?.business_name ||
+      access.effectiveProfile?.full_name ||
+      "YourBarrio business";
+
     const { error: messageError } = await notificationClient
       .from("messages")
       .insert({
@@ -480,6 +498,14 @@ export async function PATCH(request) {
         sender_id: effectiveUserId,
         recipient_id: data.user_id,
         body: `Order ${data.order_number} update: Your order status is now ${statusLabel}.`,
+        type: "order_status_update",
+        order_id: data.id,
+        order_number: data.order_number,
+        status: data.status,
+        timestamp: data.updated_at || new Date().toISOString(),
+        fulfillment_type: existingOrder.fulfillment_type,
+        business_name: businessName,
+        order_items: normalizeOrderMessageItems(orderItems || []),
       });
     if (messageError) {
       return jsonError(

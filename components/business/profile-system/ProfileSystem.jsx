@@ -13,6 +13,7 @@ import {
   Clock3,
   Globe,
   MapPin,
+  MessageCircle,
   Pencil,
   Phone,
   Share2,
@@ -226,7 +227,7 @@ export function ProfileEmptyState({
   );
 }
 
-export function ProfileSectionNav({ items }) {
+export function ProfileSectionNav({ items, className = "" }) {
   const [activeId, setActiveId] = useState(items?.[0]?.id || "");
 
   useEffect(() => {
@@ -255,7 +256,7 @@ export function ProfileSectionNav({ items }) {
   }, [items]);
 
   return (
-    <div className="sticky top-16 z-20 mb-8 overflow-x-auto rounded-full border border-slate-100 bg-[rgba(255,255,255,0.92)] px-2 py-1.5 shadow-sm backdrop-blur">
+    <div className={cx("sticky top-16 z-20 mb-8 overflow-x-auto rounded-full border border-slate-100 bg-[rgba(255,255,255,0.92)] px-2 py-1.5 shadow-sm backdrop-blur", className)}>
       <div className="flex min-w-max items-center gap-1">
         {items.map((item) => {
           const active = item.id === activeId;
@@ -334,9 +335,11 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
   );
 }
 
-function HeroActionIconButton({ href, icon: Icon, label, onClick }) {
-  const baseClassName =
-    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-[#f3efff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2";
+function HeroActionIconButton({ href, icon: Icon, label, onClick, variant = "default" }) {
+  const baseClassName = cx(
+    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-[#f3efff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
+    variant === "elevated" ? "bg-slate-50 shadow-sm ring-1 ring-slate-100" : ""
+  );
 
   if (href) {
     return (
@@ -366,12 +369,21 @@ function HeroActionIconButton({ href, icon: Icon, label, onClick }) {
   );
 }
 
-function HeroActionButton({ href, icon: Icon, label, tone = "outline", onClick }) {
+function HeroActionButton({
+  href,
+  icon: Icon,
+  label,
+  tone = "outline",
+  onClick,
+  variant = "default",
+}) {
   const className = cx(
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-[16px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
     tone === "primary"
       ? "dashboard-primary-action bg-[#6E34FF] text-white shadow-[0_18px_38px_-24px_rgba(106,61,240,0.7)] hover:bg-[#5E2DE0]"
-      : "border border-slate-300 bg-white text-slate-800 hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
+      : variant === "elevated"
+        ? "border border-slate-200 bg-slate-50/80 text-slate-800 shadow-sm hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
+        : "border border-slate-300 bg-white text-slate-800 hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
   );
   const primaryStyle = tone === "primary" ? { color: "#ffffff" } : undefined;
 
@@ -403,6 +415,8 @@ function HeroPreviewActions({
   publicPath,
   viewerMode = "public",
   ownerPrimaryAction = null,
+  ownerSecondaryActions = [],
+  variant = "default",
 }) {
   const [copied, setCopied] = useState(false);
   const [messageLoading, setMessageLoading] = useState(false);
@@ -425,6 +439,13 @@ function HeroPreviewActions({
     Boolean(user?.id) &&
     role !== "business" &&
     user?.id !== businessId;
+  const inlineActionClassName =
+    variant === "elevated"
+      ? "inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium text-slate-600 transition hover:bg-[#f3efff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2"
+      : "inline-flex min-h-9 items-center justify-center rounded-full px-1 text-sm font-medium text-slate-600 transition hover:text-[#5b37d6]";
+  const ownerActions = Array.isArray(ownerSecondaryActions)
+    ? ownerSecondaryActions.filter(Boolean)
+    : [];
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
@@ -475,8 +496,82 @@ function HeroPreviewActions({
     openModal("customer-login", { next: loginTarget });
   };
 
+  if (viewerMode === "owner" && variant === "elevated") {
+    return (
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+          {ownerPrimaryAction ? (
+            <HeroActionButton
+              icon={ownerPrimaryAction.icon}
+              label={ownerPrimaryAction.label}
+              onClick={ownerPrimaryAction.onClick}
+              tone="primary"
+              variant={variant}
+            />
+          ) : null}
+
+          {ownerActions.map((action) => {
+            const Icon = action.icon;
+            const className =
+              "inline-flex min-h-11 items-center justify-center gap-2 rounded-[16px] border border-slate-200 bg-slate-50/80 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2";
+
+            return action.href ? (
+              <Link key={action.label} href={action.href} className={className}>
+                {Icon ? <Icon className="h-4 w-4" /> : null}
+                <span>{action.label}</span>
+              </Link>
+            ) : (
+              <button
+                key={action.label}
+                type="button"
+                onClick={action.onClick}
+                className={className}
+              >
+                {Icon ? <Icon className="h-4 w-4" /> : null}
+                <span>{action.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex w-full items-center justify-end gap-2">
+          {directions ? (
+            <HeroActionIconButton
+              href={directions}
+              icon={MapPin}
+              label="Directions"
+              variant={variant}
+            />
+          ) : null}
+          {website ? (
+            <HeroActionIconButton
+              href={website}
+              icon={Globe}
+              label="Website"
+              variant={variant}
+            />
+          ) : null}
+          {profile?.phone ? (
+            <HeroActionIconButton
+              href={`tel:${profile.phone}`}
+              icon={Phone}
+              label="Call"
+              variant={variant}
+            />
+          ) : null}
+          <HeroActionIconButton
+            icon={Share2}
+            label={copied ? "Copied" : "Share"}
+            onClick={handleShare}
+            variant={variant}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex w-full flex-col gap-3 sm:w-auto">
+    <div className={cx("flex w-full flex-col sm:w-auto", variant === "elevated" ? "gap-2" : "gap-3")}>
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         {directions ? (
           <HeroActionButton
@@ -484,6 +579,7 @@ function HeroPreviewActions({
             icon={MapPin}
             label="Directions"
             tone="primary"
+            variant={variant}
           />
         ) : null}
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:grid-cols-none sm:flex-wrap">
@@ -492,6 +588,7 @@ function HeroPreviewActions({
               href={website}
               icon={Globe}
               label="Website"
+              variant={variant}
             />
           ) : null}
           {profile?.phone ? (
@@ -499,35 +596,48 @@ function HeroPreviewActions({
               href={`tel:${profile.phone}`}
               icon={Phone}
               label="Call"
+              variant={variant}
             />
           ) : null}
         </div>
       </div>
 
-      <div className="flex w-full items-center gap-3 sm:justify-end">
+      <div className={cx("flex w-full items-center sm:justify-end", variant === "elevated" ? "gap-2" : "gap-3")}>
         {viewerMode === "owner" && ownerPrimaryAction ? (
-          <button
-            type="button"
-            onClick={ownerPrimaryAction.onClick}
-            className="inline-flex min-h-9 items-center justify-center rounded-full px-1 text-sm font-medium text-slate-600 transition hover:text-[#5b37d6]"
-          >
-            {ownerPrimaryAction.label}
-          </button>
+          variant === "elevated" ? (
+            <HeroActionButton
+              icon={ownerPrimaryAction.icon}
+              label={ownerPrimaryAction.label}
+              onClick={ownerPrimaryAction.onClick}
+              tone="primary"
+              variant={variant}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={ownerPrimaryAction.onClick}
+              className={inlineActionClassName}
+            >
+              {ownerPrimaryAction.label}
+            </button>
+          )
         ) : canMessageDirectly ? (
           <button
             type="button"
             onClick={handleMessage}
             disabled={messageLoading}
-            className="inline-flex min-h-9 items-center justify-center rounded-full px-1 text-sm font-medium text-slate-600 transition hover:text-[#5b37d6] disabled:opacity-70"
+            className={cx(inlineActionClassName, "disabled:opacity-70")}
           >
+            {variant === "elevated" ? <MessageCircle className="h-4 w-4" /> : null}
             {messageLoading ? "Opening..." : "Message"}
           </button>
         ) : (
           <button
             type="button"
             onClick={handleGuestMessageIntent}
-            className="inline-flex min-h-9 items-center justify-center rounded-full px-1 text-sm font-medium text-slate-600 transition hover:text-[#5b37d6]"
+            className={inlineActionClassName}
           >
+            {variant === "elevated" ? <MessageCircle className="h-4 w-4" /> : null}
             Sign in to message
           </button>
         )}
@@ -537,6 +647,7 @@ function HeroPreviewActions({
             icon={Share2}
             label={copied ? "Copied" : "Share"}
             onClick={handleShare}
+            variant={variant}
           />
         </div>
       </div>
@@ -555,16 +666,27 @@ function PreviewHeroCard({
   avatarSrc,
   viewerMode = "public",
   ownerPrimaryAction = null,
+  ownerSecondaryActions = [],
   editMode = false,
   onAvatarUpload,
   uploading,
+  variant = "default",
 }) {
+  const isElevated = variant === "elevated";
+
   return (
-    <div className="relative z-10 -mt-10 px-4 sm:-mt-14 sm:px-6 lg:px-8">
-      <div className="rounded-[28px] border border-slate-200/90 bg-white/96 p-4 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.4)] backdrop-blur sm:p-5 lg:p-6">
+    <div className={cx("relative z-10 px-4 sm:px-6 lg:px-8", isElevated ? "mx-auto -mt-14 max-w-[1180px] sm:-mt-16 lg:-mt-[4.5rem]" : "-mt-10 sm:-mt-14")}>
+      <div
+        className={cx(
+          "bg-white/96 p-4 backdrop-blur sm:p-5 lg:p-6",
+          isElevated
+            ? "rounded-[24px] shadow-[0_24px_70px_-42px_rgba(15,23,42,0.44)] ring-1 ring-slate-100/80"
+            : "rounded-[28px] border border-slate-200/90 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.4)]"
+        )}
+      >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:min-w-0 lg:flex-1">
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[26px] border border-white bg-slate-100 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.38)] sm:h-24 sm:w-24">
+            <div className={cx("relative h-20 w-20 shrink-0 overflow-hidden border border-white bg-slate-100 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.38)] sm:h-24 sm:w-24", isElevated ? "rounded-[22px]" : "rounded-[26px]")}>
               <FastImage
                 src={avatarSrc}
                 alt={`${name} logo`}
@@ -597,7 +719,7 @@ function PreviewHeroCard({
               ) : null}
             </div>
             <div className="min-w-0">
-              <h1 className="text-[1.9rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[2.35rem]">
+              <h1 className={cx("font-semibold tracking-[-0.05em] text-slate-950", isElevated ? "text-[1.75rem] leading-tight sm:text-[2.3rem]" : "text-[1.9rem] sm:text-[2.35rem]")}>
                 {name}
               </h1>
               <HeroMetadata
@@ -615,6 +737,8 @@ function PreviewHeroCard({
               publicPath={publicPath}
               viewerMode={viewerMode}
               ownerPrimaryAction={ownerPrimaryAction}
+              ownerSecondaryActions={ownerSecondaryActions}
+              variant={variant}
             />
           </div>
         </div>
@@ -632,10 +756,12 @@ export function ProfileHero({
   backHref,
   primaryAction,
   ownerPrimaryAction,
+  ownerSecondaryActions,
   onAvatarUpload,
   onCoverUpload,
   uploading,
   editMode = false,
+  variant = "default",
 }) {
   const { name, businessType, location, placeholderSrc, avatarSrc, coverSrc } =
     useMemo(() => getProfileIdentity(profile), [profile]);
@@ -643,24 +769,44 @@ export function ProfileHero({
   const topActionClasses =
     "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition";
   const isPreview = mode === "preview";
+  const isPublicFullBleed = variant === "publicFullBleed" && isPreview;
 
   return (
-    <section className={cx("mb-6", isPreview ? "lg:mb-8" : "")}>
-      <div className="overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.4)]">
+    <section
+      className={cx(
+        isPublicFullBleed ? "mb-0" : "mb-6",
+        isPreview && !isPublicFullBleed ? "lg:mb-8" : "",
+        isPublicFullBleed ? "relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen text-slate-950" : ""
+      )}
+    >
+      <div
+        className={cx(
+          isPublicFullBleed ? "bg-[#f8fafc]" : "bg-white",
+          isPublicFullBleed
+            ? "overflow-visible shadow-none"
+            : "overflow-hidden rounded-[34px] border border-slate-200 shadow-[0_32px_80px_-48px_rgba(15,23,42,0.4)]"
+        )}
+      >
         <div
           className={cx(
-            "relative",
-            isPreview ? "h-[180px] sm:h-[220px] lg:h-[250px]" : "h-[220px] sm:h-[260px] lg:h-[300px]"
-          )}
-        >
-          <div
-            className={cx(
-              "absolute inset-0",
-              isPreview
-                ? "bg-[linear-gradient(180deg,rgba(15,23,42,0.08),rgba(15,23,42,0.12)_45%,rgba(15,23,42,0.62)_100%),linear-gradient(120deg,rgba(106,61,240,0.14),rgba(15,23,42,0.1))]"
-                : "bg-[linear-gradient(180deg,rgba(15,23,42,0.16),rgba(15,23,42,0.4)),linear-gradient(120deg,rgba(106,61,240,0.16),rgba(15,23,42,0.08))]"
+            "relative overflow-hidden",
+            isPublicFullBleed
+              ? "h-[205px] sm:h-[245px] lg:h-[270px]"
+              : isPreview
+                ? "h-[180px] sm:h-[220px] lg:h-[250px]"
+                : "h-[220px] sm:h-[260px] lg:h-[300px]"
             )}
-          />
+        >
+          {!isPublicFullBleed ? (
+            <div
+              className={cx(
+                "absolute inset-0",
+                isPreview
+                  ? "bg-[linear-gradient(180deg,rgba(15,23,42,0.08),rgba(15,23,42,0.12)_45%,rgba(15,23,42,0.62)_100%),linear-gradient(120deg,rgba(106,61,240,0.14),rgba(15,23,42,0.1))]"
+                  : "bg-[linear-gradient(180deg,rgba(15,23,42,0.16),rgba(15,23,42,0.4)),linear-gradient(120deg,rgba(106,61,240,0.16),rgba(15,23,42,0.08))]"
+              )}
+            />
+          ) : null}
           <FastImage
             src={coverSrc}
             alt={`${name} cover`}
@@ -671,8 +817,11 @@ export function ProfileHero({
             priority
             decoding="async"
           />
+          {isPublicFullBleed ? (
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.16),rgba(15,23,42,0.08)_40%,rgba(15,23,42,0.52)_100%),linear-gradient(120deg,rgba(106,61,240,0.18),rgba(15,23,42,0.04)_52%,rgba(15,23,42,0.18))]" />
+          ) : null}
 
-          <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6">
+          <div className={cx("absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6", isPublicFullBleed ? "mx-auto max-w-[1180px] lg:px-8" : "")}>
             {backHref ? (
               <Link
                 href={backHref}
@@ -720,9 +869,11 @@ export function ProfileHero({
             avatarSrc={avatarSrc}
             viewerMode={viewerMode}
             ownerPrimaryAction={ownerPrimaryAction}
+            ownerSecondaryActions={ownerSecondaryActions}
             editMode={editMode}
             onAvatarUpload={onAvatarUpload}
             uploading={uploading}
+            variant={isPublicFullBleed ? "elevated" : "default"}
           />
         ) : (
           <div className="relative bg-white px-5 pb-5 pt-0 sm:px-6 lg:px-8">

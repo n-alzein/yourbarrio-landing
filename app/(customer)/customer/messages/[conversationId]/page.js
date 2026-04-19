@@ -21,6 +21,14 @@ import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
 import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
+import {
+  appendMessageDedup,
+  getTrackedOrderIds,
+  isNearScrollBottom,
+  patchOrderStatusMessage,
+  prependMessagesDedup,
+  scrollToBottom,
+} from "@/components/messages/realtimeThreadState";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
 
@@ -42,10 +50,18 @@ export default function CustomerConversationPage() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
   const [sendError, setSendError] = useState(null);
+  const [isVisible, setIsVisible] = useState(
+    typeof document === "undefined" ? true : !document.hidden
+  );
   const requestIdRef = useRef(0);
   const inflightRef = useRef(null);
   const loadOlderRequestIdRef = useRef(0);
   const scrollRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const shouldStickToBottomRef = useRef(true);
+  const previousVisibleRef = useRef(isVisible);
+  const trackedOrderIds = useMemo(() => getTrackedOrderIds(messages), [messages]);
+  const trackedOrderKey = trackedOrderIds.join(",");
 
   useEffect(() => {
     setHydrated(true);
@@ -115,6 +131,7 @@ export default function CustomerConversationPage() {
       if (!result.ok) throw result.error;
       setConversation(result.result?.convo ?? null);
       const nextMessages = result.result?.nextMessages ?? [];
+      shouldStickToBottomRef.current = true;
       setMessages(nextMessages);
       setHasMore(nextMessages.length === MESSAGE_PAGE_SIZE);
     } catch (err) {
@@ -135,11 +152,68 @@ export default function CustomerConversationPage() {
     };
   }, []);
 
+  const reloadMessages = useCallback(async () => {
+    if (!conversationKey || authStatus !== "authenticated") return;
+    try {
+      const response = await retry(
+        () =>
+          fetchWithTimeout(
+            `/api/customer/messages?conversationId=${encodeURIComponent(
+              conversationKey
+            )}`,
+            {
+              method: "GET",
+              credentials: "include",
+              timeoutMs: 12000,
+            }
+          ),
+        { retries: 1, delayMs: 600 }
+      );
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Failed to load messages");
+      }
+      const payload = await response.json();
+      const nextMessages = Array.isArray(payload?.messages)
+        ? payload.messages
+        : [];
+      shouldStickToBottomRef.current = isNearBottomRef.current;
+      setMessages(nextMessages);
+      setHasMore(nextMessages.length === MESSAGE_PAGE_SIZE);
+    } catch (err) {
+      console.error("Failed to reload messages", err);
+    }
+  }, [authStatus, conversationKey]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const handleVisibility = () => setIsVisible(!document.hidden);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
   useEffect(() => {
     if (!hydrated || loadingUser || !conversationKey) return;
     if (authStatus !== "authenticated") return;
     loadThread();
   }, [authStatus, hydrated, loadingUser, conversationKey, loadThread]);
+
+  useEffect(() => {
+    const wasVisible = previousVisibleRef.current;
+    previousVisibleRef.current = isVisible;
+    if (wasVisible || !isVisible) return;
+    if (!hydrated || !conversationKey || !conversation) return;
+    if (authStatus !== "authenticated") return;
+    void reloadMessages();
+  }, [
+    authStatus,
+    conversation,
+    conversationKey,
+    hydrated,
+    isVisible,
+    reloadMessages,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -169,11 +243,17 @@ export default function CustomerConversationPage() {
       });
   }, [authStatus, hydrated, userId, conversationKey, notifyUnreadRefresh]);
 
+  const handleThreadScroll = useCallback(() => {
+    isNearBottomRef.current = isNearScrollBottom(scrollRef.current);
+  }, []);
+
   useEffect(() => {
     if (!scrollRef.current || loadingMore) return;
+    if (!shouldStickToBottomRef.current && !isNearBottomRef.current) return;
     const handle = requestAnimationFrame(() => {
-      if (!scrollRef.current) return;
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollToBottom(scrollRef.current);
+      shouldStickToBottomRef.current = false;
+      isNearBottomRef.current = true;
     });
     return () => cancelAnimationFrame(handle);
   }, [messages.length, loadingMore]);
@@ -193,9 +273,10 @@ export default function CustomerConversationPage() {
           (payload) => {
             const next = payload.new;
             if (!next?.id) return;
+            shouldStickToBottomRef.current =
+              next.type === "order_status_update" ? false : isNearBottomRef.current;
             setMessages((prev) => {
-              if (prev.some((item) => item.id === next.id)) return prev;
-              return [...prev, next];
+              return appendMessageDedup(prev, next);
             });
             if (next.recipient_id === userId) {
               markConversationRead({
@@ -217,6 +298,43 @@ export default function CustomerConversationPage() {
     enabled: hydrated && authStatus === "authenticated" && Boolean(conversationKey),
     buildChannel: buildThreadChannel,
     diagLabel: "customer-thread",
+  });
+
+  const buildOrderChannel = useCallback(
+    (activeClient) => {
+      let channel = activeClient.channel(`orders-for-thread-${conversationKey}`);
+      const orderIds = trackedOrderKey ? trackedOrderKey.split(",") : [];
+      orderIds.forEach((orderId) => {
+        channel = channel.on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${orderId}`,
+          },
+          (payload) => {
+            const nextOrder = payload.new;
+            if (!nextOrder?.id) return;
+            shouldStickToBottomRef.current = false;
+            setMessages((prev) => patchOrderStatusMessage(prev, nextOrder));
+          }
+        );
+      });
+      return channel;
+    },
+    [conversationKey, trackedOrderKey]
+  );
+
+  useRealtimeChannel({
+    supabase,
+    enabled:
+      hydrated &&
+      authStatus === "authenticated" &&
+      Boolean(conversationKey) &&
+      Boolean(trackedOrderKey),
+    buildChannel: buildOrderChannel,
+    diagLabel: `customer-thread-orders-${trackedOrderKey}`,
   });
 
   const loadOlder = useCallback(async () => {
@@ -248,7 +366,8 @@ export default function CustomerConversationPage() {
       if (older.length === 0) {
         setHasMore(false);
       } else {
-        setMessages((prev) => [...older, ...prev]);
+        shouldStickToBottomRef.current = false;
+        setMessages((prev) => prependMessagesDedup(prev, older));
         if (older.length < MESSAGE_PAGE_SIZE) setHasMore(false);
       }
     } catch (err) {
@@ -282,9 +401,9 @@ export default function CustomerConversationPage() {
           session,
         });
         if (sent?.id) {
+          shouldStickToBottomRef.current = true;
           setMessages((prev) => {
-            if (prev.some((item) => item.id === sent.id)) return prev;
-            return [...prev, sent];
+            return appendMessageDedup(prev, sent);
           });
         }
       } catch (err) {
@@ -364,7 +483,11 @@ export default function CustomerConversationPage() {
                     {loadingMore ? "Loading..." : "Load older messages"}
                   </button>
                 ) : null}
-                <div className="mt-4 flex-1 overflow-y-auto pr-2" ref={scrollRef}>
+                <div
+                  className="mt-4 flex-1 overflow-y-auto pr-2"
+                  ref={scrollRef}
+                  onScroll={handleThreadScroll}
+                >
                   <MessageThread messages={messages} currentUserId={userId} />
                 </div>
               </div>
