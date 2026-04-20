@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import SafeImage from "@/components/SafeImage";
+import SafeAvatar from "@/components/SafeAvatar";
 import useBodyScrollLock from "@/components/nav/useBodyScrollLock";
 
 let portalVersion = 0;
@@ -61,16 +61,23 @@ export default function AccountSidebar({
   title = "Your Account",
   showTitle = true,
   profileFirst = false,
+  premiumCustomer = false,
+  premiumBusiness = false,
+  avatarShape = "circle",
   displayName,
+  businessName,
   email,
   avatar,
   children,
   shieldActive = false,
+  scrollLockMode = "fixed",
+  backgroundRootSelector,
 }) {
   const reactId = useId();
   const panelId = `account-sidebar-${reactId}`;
   const titleId = `${panelId}-title`;
   const panelRef = useRef(null);
+  const sidebarRef = useRef(null);
   const closeButtonRef = useRef(null);
   const lastActiveRef = useRef(null);
   const wasOpenRef = useRef(open);
@@ -86,7 +93,10 @@ export default function AccountSidebar({
     getPortalServerSnapshot
   );
 
-  useBodyScrollLock(open);
+  useBodyScrollLock(open, {
+    disableBackgroundScroll: false,
+    mode: scrollLockMode,
+  });
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -135,6 +145,20 @@ export default function AccountSidebar({
 
   useEffect(() => {
     if (!open) return undefined;
+    const handlePointerDown = (event) => {
+      if (event.button !== 0) return;
+      const sidebarEl = sidebarRef.current;
+      if (!sidebarEl) return;
+      if (!sidebarEl.contains(event.target)) {
+        onOpenChange?.(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open, onOpenChange]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -169,7 +193,7 @@ export default function AccountSidebar({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onOpenChange]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || typeof document === "undefined") return undefined;
     accountSidebarOpenCount += 1;
     document.documentElement.dataset.sidebarOpen = "1";
@@ -183,13 +207,17 @@ export default function AccountSidebar({
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
+    const selectedBackgroundRoot = backgroundRootSelector
+      ? document.querySelector(backgroundRootSelector)
+      : null;
     const backgroundRoot =
+      selectedBackgroundRoot ||
       document.querySelector('[data-testid="customer-page-root"]') ||
       document.querySelector(".app-shell-root") ||
       document.querySelector("main");
     if (!backgroundRoot) return undefined;
 
-    const shouldInertBackground = open || shieldActive;
+    const shouldInertBackground = shieldActive;
     if (shouldInertBackground) {
       backgroundRoot.setAttribute("inert", "");
       backgroundRoot.setAttribute("aria-hidden", "true");
@@ -202,31 +230,55 @@ export default function AccountSidebar({
     backgroundRoot.removeAttribute("inert");
     backgroundRoot.removeAttribute("aria-hidden");
     return undefined;
-  }, [open, shieldActive]);
+  }, [backgroundRootSelector, open, shieldActive]);
 
   if (!isClient || typeof document === "undefined") return null;
   void portalStoreVersion;
   const portalHost = document.querySelector("div[data-account-sidebar=\"1\"]");
   if (!portalHost) return null;
+  const fallbackSrc = premiumCustomer ? "/customer-placeholder.png" : "/business-placeholder.png";
+  const polishedIdentity = premiumCustomer || premiumBusiness;
+  const avatarNode = (
+    <SafeAvatar
+      src={avatar}
+      name={displayName}
+      displayName={displayName}
+      businessName={businessName}
+      email={email}
+      shape={avatarShape}
+      identityType={premiumBusiness ? "business" : "person"}
+      alt="Profile avatar"
+      fallbackSrc={fallbackSrc}
+      className={`object-cover object-center ${
+        premiumBusiness ? "h-[52px] w-[52px]" : "h-12 w-12"
+      } ${
+        polishedIdentity
+          ? "border border-gray-100 bg-gray-200 shadow-sm ring-1 ring-gray-300"
+          : "border border-[var(--yb-border)]"
+      }`}
+      initialsClassName="text-[15px]"
+      width={premiumBusiness ? 52 : 48}
+      height={premiumBusiness ? 52 : 48}
+    />
+  );
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] ${
-        open || shieldActive ? "pointer-events-auto" : "pointer-events-none"
-      }`}
+      className="fixed inset-0 z-[9999] pointer-events-none"
       aria-hidden={!open}
     >
       <div
-        className={`absolute inset-0 bg-black/60 md:bg-black/0 transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-black/60 md:bg-black/0 transition-opacity duration-200 pointer-events-none ${
           open ? "opacity-100" : "opacity-0"
         }`}
         data-testid="account-sidebar-overlay"
-        onClick={() => onOpenChange?.(false)}
       />
       <div
-        className={`absolute inset-y-0 right-0 w-[380px] max-w-[90vw] transform transition-transform duration-300 ease-out ${
+        ref={sidebarRef}
+        className={`pointer-events-auto absolute inset-y-0 right-0 w-[380px] max-w-[90vw] transform overflow-y-auto transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -240,7 +292,11 @@ export default function AccountSidebar({
         >
           {profileFirst ? (
             <>
-              <div className="yb-sidebar-header flex items-center justify-start px-6 py-3">
+              <div
+                className={`yb-sidebar-header flex items-center justify-start px-6 py-3 ${
+                  polishedIdentity ? "border-b border-gray-100 bg-white/80 backdrop-blur" : ""
+                }`}
+              >
                 <span id={titleId} className="sr-only">
                   {title}
                 </span>
@@ -248,39 +304,76 @@ export default function AccountSidebar({
                   ref={closeButtonRef}
                   type="button"
                   onClick={() => onOpenChange?.(false)}
-                  className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+                  className={`rounded-full border bg-white p-2 transition hover:bg-black/5 ${
+                    polishedIdentity
+                      ? "border-gray-200 text-gray-500 hover:text-gray-900"
+                      : "border-[var(--yb-border)] text-[var(--yb-text)]"
+                  }`}
                   aria-label="Close account menu"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-3 border-b border-[var(--yb-border)] px-6 py-5">
-                <SafeImage
-                  src={avatar}
-                  alt="Profile avatar"
-                  className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
-                  width={48}
-                  height={48}
-                  sizes="48px"
-                  useNextImage
-                />
+              <div
+                className={`flex items-center gap-3 border-b px-6 pb-6 pt-5 ${
+                  polishedIdentity ? "border-gray-100" : "border-[var(--yb-border)]"
+                }`}
+              >
+                {avatarNode}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{displayName}</p>
-                  {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
+                  <p
+                    className={
+                      polishedIdentity
+                        ? "truncate text-[15px] font-semibold text-gray-900"
+                        : "truncate text-sm font-semibold"
+                    }
+                  >
+                    {displayName}
+                  </p>
+                  {email ? (
+                    <p
+                      className={
+                        polishedIdentity
+                          ? "truncate text-[13px] text-gray-500"
+                          : "truncate text-xs yb-dropdown-muted"
+                      }
+                    >
+                      {email}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </>
           ) : (
             <>
-              <div className="yb-sidebar-header flex items-start justify-between px-6 py-5">
+              <div
+                className={`yb-sidebar-header flex items-start justify-between px-6 py-5 ${
+                  polishedIdentity ? "border-b border-gray-100 bg-white/80 backdrop-blur" : ""
+                }`}
+              >
                 <div>
                   {showTitle ? (
                     <>
-                      <div id={titleId} className="text-sm font-semibold">
+                      <div
+                        id={titleId}
+                        className={
+                          polishedIdentity
+                            ? "text-[15px] font-semibold text-gray-900"
+                            : "text-sm font-semibold"
+                        }
+                      >
                         {title}
                       </div>
-                      <div className="mt-1 text-xs yb-dropdown-muted">YourBarrio</div>
+                      <div
+                        className={
+                          polishedIdentity
+                            ? "mt-1 text-[13px] text-gray-500"
+                            : "mt-1 text-xs yb-dropdown-muted"
+                        }
+                      >
+                        YourBarrio
+                      </div>
                     </>
                   ) : (
                     <span id={titleId} className="sr-only">
@@ -292,26 +385,44 @@ export default function AccountSidebar({
                   ref={closeButtonRef}
                   type="button"
                   onClick={() => onOpenChange?.(false)}
-                  className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+                  className={`rounded-full border bg-white p-2 transition hover:bg-black/5 ${
+                    polishedIdentity
+                      ? "border-gray-200 text-gray-500 hover:text-gray-900"
+                      : "border-[var(--yb-border)] text-[var(--yb-text)]"
+                  }`}
                   aria-label="Close account menu"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-3 border-b border-[var(--yb-border)] px-6 py-4">
-                <SafeImage
-                  src={avatar}
-                  alt="Profile avatar"
-                  className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
-                  width={48}
-                  height={48}
-                  sizes="48px"
-                  useNextImage
-                />
+              <div
+                className={`flex items-center gap-3 border-b px-6 py-4 ${
+                  polishedIdentity ? "border-gray-100" : "border-[var(--yb-border)]"
+                }`}
+              >
+                {avatarNode}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{displayName}</p>
-                  {email ? <p className="text-xs yb-dropdown-muted truncate">{email}</p> : null}
+                  <p
+                    className={
+                      polishedIdentity
+                        ? "truncate text-[15px] font-semibold text-gray-900"
+                        : "truncate text-sm font-semibold"
+                    }
+                  >
+                    {displayName}
+                  </p>
+                  {email ? (
+                    <p
+                      className={
+                        polishedIdentity
+                          ? "truncate text-[13px] text-gray-500"
+                          : "truncate text-xs yb-dropdown-muted"
+                      }
+                    >
+                      {email}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </>

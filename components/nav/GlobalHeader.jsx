@@ -84,6 +84,7 @@ export default function GlobalHeader({
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
   const locationRef = useRef(null);
+  const navRef = useRef(null);
   const locationPrefillRef = useRef(false);
   const locationSuggestAbortRef = useRef(null);
   const locationSuggestReqIdRef = useRef(0);
@@ -477,8 +478,49 @@ export default function GlobalHeader({
     return () => window.removeEventListener(AUTH_UI_RESET_EVENT, handleReset);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const nav = navRef.current || document.getElementById("yb-navbar");
+    if (!nav) return undefined;
+
+    const setHeight = () => {
+      const height = nav.offsetHeight;
+      const position = window.getComputedStyle(nav).position;
+      const occupiesLayout = position !== "fixed" && position !== "absolute";
+
+      document.documentElement.style.setProperty(
+        "--yb-nav-h",
+        `${height}px`
+      );
+      document.documentElement.style.setProperty(
+        "--yb-nav-content-offset",
+        occupiesLayout ? "0px" : `${height}px`
+      );
+      document.documentElement.style.setProperty(
+        "--yb-nav-layout-h",
+        occupiesLayout ? `${height}px` : "0px"
+      );
+    };
+
+    setHeight();
+    window.addEventListener("resize", setHeight);
+
+    let observer = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(setHeight);
+      observer.observe(nav);
+    }
+
+    return () => {
+      window.removeEventListener("resize", setHeight);
+      observer?.disconnect();
+    };
+  }, []);
+
   return (
     <nav
+      id="yb-navbar"
+      ref={navRef}
       className="fixed top-0 left-0 right-0 w-full z-50 theme-lock pointer-events-auto yb-navbar yb-navbar-bordered"
       data-nav-surface={surface}
       data-nav-sticky={isStickyRoute ? "1" : undefined}

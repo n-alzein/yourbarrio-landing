@@ -925,8 +925,8 @@ header[data-business-marketing-header="1"] [class*="border-white"] {
   border-color: rgba(15, 23, 42, 0.2) !important;
 }
 
-/* Light theme — soften business placeholder contrast */
-.theme-light img[data-placeholder="true"],
+/* Light theme — soften only the business placeholder; the customer avatar
+   placeholder has its own artwork and gets washed out by this solid fill. */
 .theme-light img[src="/business-placeholder.png"],
 .theme-light img[src*="business-placeholder.png"] {
   background: #c4b5fd;

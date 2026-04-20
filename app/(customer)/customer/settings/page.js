@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import FastImage from "@/components/FastImage";
+import SafeAvatar from "@/components/SafeAvatar";
 import { useRouter } from "next/navigation";
 import {
   getAuthProviderLabel,
@@ -480,18 +480,20 @@ export default function SettingsPage() {
             <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
               <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
                 <div className="flex flex-col items-start gap-4">
-                  <FastImage
+                  <SafeAvatar
                     src={
                       form?.profile_photo_url ||
                       effectiveProfile?.profile_photo_url ||
-                      "/customer-placeholder.png"
+                      ""
                     }
+                    fullName={form?.full_name || effectiveProfile?.full_name}
+                    displayName={form?.full_name || effectiveProfile?.full_name}
+                    email={userEmail}
                     alt="Profile photo"
                     width={144}
                     height={144}
-                    className="h-28 w-28 rounded-3xl border border-slate-200 object-cover shadow-sm sm:h-36 sm:w-36"
-                    sizes="144px"
-                    priority
+                    className="h-28 w-28 border border-slate-200 object-cover shadow-sm sm:h-36 sm:w-36"
+                    initialsClassName="text-3xl sm:text-4xl"
                   />
                   <div className="space-y-1.5">
                     <p className="text-sm font-semibold text-slate-900">

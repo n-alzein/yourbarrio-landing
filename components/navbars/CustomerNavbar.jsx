@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
-import SafeImage from "@/components/SafeImage";
+import SafeAvatar from "@/components/SafeAvatar";
 import {
   Bookmark,
   ChevronDown,
@@ -45,6 +45,8 @@ import {
 import { getCustomerListingUrl } from "@/lib/ids/publicRefs";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+// Keep resolved placeholder paths aligned so SafeAvatar can switch to initials.
+const CUSTOMER_AVATAR_FALLBACK = "/customer-placeholder.png";
 
 const SEARCH_CATEGORIES = ["All", ...BUSINESS_CATEGORIES.map((cat) => cat.name)];
 
@@ -697,7 +699,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   const avatar = resolveImageSrc(
     profile?.profile_photo_url?.trim() || googleAvatar || "",
-    "/customer-placeholder.png"
+    CUSTOMER_AVATAR_FALLBACK
   );
 
   const displayName =
@@ -1407,15 +1409,17 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 border border-white/10 hover:border-white/30 transition"
               >
                 <div className="relative">
-                  <SafeImage
+                  <SafeAvatar
                     src={avatar}
+                    name={displayName}
+                    displayName={displayName}
+                    email={email}
                     alt="Profile avatar"
-                    className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                    fallbackSrc={CUSTOMER_AVATAR_FALLBACK}
+                    className="h-[42px] w-[42px] bg-gray-200 object-cover border border-gray-100 shadow-sm ring-1 ring-gray-300"
+                    initialsClassName="text-xs"
                     width={40}
                     height={40}
-                    sizes="40px"
-                    useNextImage
-                    priority
                   />
                   {badgeReady && unreadCount > 0 ? (
                     <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
@@ -1438,14 +1442,17 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 >
                   <div className="rounded-[26px]">
                     <div className="flex items-center gap-3 px-4 py-4">
-                      <SafeImage
+                      <SafeAvatar
                         src={avatar}
+                        name={displayName}
+                        displayName={displayName}
+                        email={email}
                         alt="Profile avatar"
-                        className="h-12 w-12 rounded-2xl object-cover border border-white/20"
+                        fallbackSrc={CUSTOMER_AVATAR_FALLBACK}
+                        className="h-[50px] w-[50px] bg-gray-200 object-cover border border-gray-100 shadow-sm ring-1 ring-gray-300"
+                        initialsClassName="text-[13px]"
                         width={48}
                         height={48}
-                        sizes="48px"
-                        useNextImage
                       />
                       <div>
                         <p className="text-sm font-semibold">{displayName}</p>
@@ -1624,14 +1631,17 @@ function CustomerNavbarInner({ pathname, searchParams }) {
           {hasAuth && (
             <>
               <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                <SafeImage
+                <SafeAvatar
                   src={avatar}
+                  name={displayName}
+                  displayName={displayName}
+                  email={email}
                   alt="Profile avatar"
-                  className="h-11 w-11 rounded-2xl object-cover border border-white/20"
+                  fallbackSrc={CUSTOMER_AVATAR_FALLBACK}
+                  className="h-[46px] w-[46px] bg-gray-200 object-cover border border-gray-100 shadow-sm ring-1 ring-gray-300"
+                  initialsClassName="text-[13px]"
                   width={44}
                   height={44}
-                  sizes="44px"
-                  useNextImage
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{displayName}</p>

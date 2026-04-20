@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import useBodyScrollLock from "./useBodyScrollLock";
 
@@ -66,6 +66,7 @@ export default function MobileSidebarDrawer({
   const panelId = id || `mobile-drawer-${reactId}`;
   const titleId = `${panelId}-title`;
   const panelRef = useRef(null);
+  const sidebarRef = useRef(null);
   const closeButtonRef = useRef(null);
   const lastActiveRef = useRef(null);
   const portalNodeRef = useRef(null);
@@ -81,7 +82,7 @@ export default function MobileSidebarDrawer({
     getPortalServerSnapshot
   );
 
-  useBodyScrollLock(open);
+  useBodyScrollLock(open, { disableBackgroundScroll: false });
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -131,6 +132,20 @@ export default function MobileSidebarDrawer({
 
   useEffect(() => {
     if (!open) return undefined;
+    const handlePointerDown = (event) => {
+      if (event.button !== 0) return;
+      const sidebarEl = sidebarRef.current;
+      if (!sidebarEl) return;
+      if (!sidebarEl.contains(event.target)) {
+        onClose?.();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -165,7 +180,7 @@ export default function MobileSidebarDrawer({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || typeof document === "undefined") return undefined;
     mobileSidebarOpenCount += 1;
     document.documentElement.dataset.sidebarOpen = "1";
@@ -185,7 +200,7 @@ export default function MobileSidebarDrawer({
       document.querySelector("main");
     if (!backgroundRoot) return undefined;
 
-    const shouldInertBackground = open || shieldActive;
+    const shouldInertBackground = shieldActive;
     if (shouldInertBackground) {
       backgroundRoot.setAttribute("inert", "");
       backgroundRoot.setAttribute("aria-hidden", "true");
@@ -209,22 +224,21 @@ export default function MobileSidebarDrawer({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] ${
-        open || shieldActive ? "pointer-events-auto" : "pointer-events-none"
-      }`}
+      className="fixed inset-0 z-[9999] pointer-events-none"
       aria-hidden={!open}
     >
       <div
-        className={`absolute inset-0 bg-black/60 md:bg-black/0 transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-black/60 md:bg-black/0 transition-opacity duration-200 pointer-events-none ${
           open ? "opacity-100" : "opacity-0"
         }`}
         data-testid="mobile-sidebar-overlay"
-        onClick={onClose}
       />
       <div
-        className={`absolute inset-y-0 left-0 w-[88vw] max-w-[360px] transform transition-transform duration-300 ease-out ${
+        ref={sidebarRef}
+        className={`pointer-events-auto absolute inset-y-0 left-0 w-[88vw] max-w-[360px] transform overflow-y-auto transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
         onClick={(event) => event.stopPropagation()}
       >
         <div

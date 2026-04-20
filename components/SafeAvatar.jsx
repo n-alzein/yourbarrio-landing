@@ -1,37 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserRound } from "lucide-react";
+import { getAvatarInitials } from "@/lib/avatarInitials";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
-
-function getInitials(name = "") {
-  const normalized = String(name || "")
-    .trim()
-    .replace(/\s+/g, " ");
-
-  if (!normalized || normalized.toLowerCase() === "unknown") {
-    return "";
-  }
-
-  const parts = normalized.split(" ").filter(Boolean);
-  if (parts.length === 0) return "";
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
-}
 
 export default function SafeAvatar({
   src,
+  fullName = "",
   name = "",
+  displayName = "",
+  businessName = "",
+  email = "",
   fallbackSrc = "/business-placeholder.png",
   alt,
   className = "",
   initialsClassName = "",
   iconClassName = "",
+  shape = "circle",
+  identityType = "person",
+  style = undefined,
+  ...imgProps
 }) {
+  void iconClassName;
   const resolvedFallback = useMemo(
     () => fallbackSrc || "/business-placeholder.png",
     [fallbackSrc]
@@ -41,42 +31,88 @@ export default function SafeAvatar({
     [resolvedFallback, src]
   );
   const initialFallback = !src || resolvedSrc === resolvedFallback;
-  const key = `${resolvedSrc}:${name}:${initialFallback ? "fallback" : "image"}`;
+  const label = fullName || displayName || name || businessName || email || "";
+  const key = `${resolvedSrc}:${label}:${initialFallback ? "fallback" : "image"}`;
 
   return (
     <SafeAvatarInner
       key={key}
       src={resolvedSrc}
+      fullName={fullName}
       name={name}
+      displayName={displayName}
+      businessName={businessName}
+      email={email}
       alt={alt}
       className={className}
       initialsClassName={initialsClassName}
-      iconClassName={iconClassName}
+      shape={shape}
+      identityType={identityType}
+      style={style}
       showFallbackInitially={initialFallback}
+      imgProps={imgProps}
     />
   );
 }
 
 function SafeAvatarInner({
   src,
+  fullName,
   name,
+  displayName,
+  businessName,
+  email,
   alt,
   className,
   initialsClassName,
-  iconClassName,
+  shape,
+  identityType,
+  style,
   showFallbackInitially,
+  imgProps,
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
   const [showFallback, setShowFallback] = useState(showFallbackInitially);
+  const { onError, onLoad, ...avatarImgProps } = imgProps || {};
 
-  const initials = useMemo(() => getInitials(name), [name]);
+  const initials = useMemo(
+    () =>
+      getAvatarInitials(
+        identityType === "business"
+          ? {
+              fullName: businessName,
+              displayName: displayName || name,
+              email,
+            }
+          : {
+              fullName,
+              displayName: displayName || name,
+              businessName,
+              email,
+            }
+      ) || "YB",
+    [businessName, displayName, email, fullName, identityType, name]
+  );
+  const label = alt || fullName || displayName || name || businessName || email || "Avatar";
+  const borderRadius = shape === "square" || shape === "rounded-square" ? "1rem" : "9999px";
+  const avatarStyle = {
+    ...style,
+    borderRadius,
+  };
+  const fallbackStyle = {
+    ...avatarStyle,
+    borderColor: "#e5e7eb",
+  };
 
   if (showFallback) {
     return (
       <div
-        aria-label={alt || name || "Avatar"}
+        role="img"
+        aria-label={label}
+        data-avatar-fallback="initials"
+        style={fallbackStyle}
         className={[
-          "flex items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.2),_rgba(255,255,255,0.08)_45%,_rgba(15,23,42,0.65)_100%)] text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]",
+          "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-100 bg-gray-200 text-slate-800 shadow-sm ring-1 ring-gray-300",
           className,
         ]
           .filter(Boolean)
@@ -86,7 +122,7 @@ function SafeAvatarInner({
           <span
             aria-hidden="true"
             className={[
-              "select-none text-sm font-semibold uppercase tracking-[0.08em]",
+              "select-none text-sm font-semibold uppercase leading-none tracking-normal text-slate-800",
               initialsClassName,
             ]
               .filter(Boolean)
@@ -94,23 +130,24 @@ function SafeAvatarInner({
           >
             {initials}
           </span>
-        ) : (
-          <UserRound
-            aria-hidden="true"
-            className={["h-5 w-5 text-white/70", iconClassName].filter(Boolean).join(" ")}
-          />
-        )}
+        ) : null}
       </div>
     );
   }
 
   return (
     <img
+      {...avatarImgProps}
       src={currentSrc}
-      alt={alt || name || "Avatar"}
+      alt={label}
       className={className}
-      onError={() => {
+      style={avatarStyle}
+      onLoad={onLoad}
+      onError={(event) => {
         markImageFailed(currentSrc);
+        if (typeof onError === "function") {
+          onError(event);
+        }
         setShowFallback(true);
       }}
     />

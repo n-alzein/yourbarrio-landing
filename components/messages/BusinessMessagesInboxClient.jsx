@@ -146,45 +146,46 @@ export default function BusinessMessagesInboxClient({
   });
 
   return (
-    <div className="space-y-8">
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 md:p-8 backdrop-blur">
-        <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">
-          Inbox
-        </p>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-semibold text-white">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 pb-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+            Inbox
+          </p>
+          <div className="mt-2">
+            <h1 className="text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">
               Messages
             </h1>
-            <p className="text-sm text-white/60 mt-2 max-w-2xl">{intro}</p>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">{intro}</p>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
-            {conversations.length} chats
-          </div>
+        </div>
+        <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm">
+          {conversations.length} chats
         </div>
       </div>
 
       {error ? (
-        <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           <span>{error}</span>
           <button
             type="button"
             onClick={() => {
               void loadConversations();
             }}
-            className="rounded-full border border-rose-200/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-rose-100 hover:text-white"
+            className="rounded-full border border-rose-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700 hover:text-rose-900"
           >
             Try again
           </button>
         </div>
       ) : null}
 
-      <div className="mt-4 md:mt-6">
+      <div className="mt-2 md:mt-3">
         <InboxList
           conversations={conversations}
           role="business"
           basePath="/business/messages"
           loading={showLoading}
+          variant="business-flat"
         />
       </div>
     </div>

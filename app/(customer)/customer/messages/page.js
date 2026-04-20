@@ -156,51 +156,46 @@ export default function CustomerMessagesPage() {
   const conversationCount = conversations.length;
 
   return (
-    <section className="relative w-full min-h-screen pt-6 md:pt-8 text-white overflow-hidden -mt-8 md:-mt-12 pb-12 md:pb-16">
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0b0720] via-[#0a0816] to-black" />
-        <div className="absolute -top-32 -left-20 h-[360px] w-[360px] rounded-full bg-purple-600/20 blur-[120px]" />
-        <div className="absolute top-10 right-10 h-[300px] w-[300px] rounded-full bg-pink-500/15 blur-[120px]" />
-      </div>
-
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
-        <div className="max-w-5xl mx-auto space-y-8">
-          <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 md:p-8 backdrop-blur">
-            <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">
-              Inbox
-            </p>
-            <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="text-3xl md:text-4xl font-semibold text-white">
+    <section className="w-full min-h-screen px-4 pb-10 pt-6 text-slate-950 sm:px-5 md:px-6 md:pb-14 md:pt-8 lg:px-8">
+      <div className="w-full">
+        <div className="mx-auto max-w-7xl space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 pb-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                Inbox
+              </p>
+              <div className="mt-2">
+                <h1 className="text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">
                   Messages
                 </h1>
-                <p className="text-sm text-white/60 mt-2 max-w-2xl">{intro}</p>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500">{intro}</p>
               </div>
-              <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
-                {conversationCount} chats
-              </div>
+            </div>
+            <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm">
+              {conversationCount} chats
             </div>
           </div>
 
           {error ? (
-            <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               <span>{error}</span>
               <button
                 type="button"
                 onClick={loadConversations}
-                className="rounded-full border border-rose-200/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-rose-100 hover:text-white"
+                className="rounded-full border border-rose-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700 hover:text-rose-900"
               >
                 Try again
               </button>
             </div>
           ) : null}
 
-          <div className="mt-4 md:mt-6">
+          <div className="mt-2 md:mt-3">
             <InboxList
               conversations={conversations}
               role="customer"
               basePath="/customer/messages"
               loading={loading}
+              variant="customer-flat"
             />
           </div>
         </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, LogOut, MapPin } from "lucide-react";
-import SafeImage from "@/components/SafeImage";
+import SafeAvatar from "@/components/SafeAvatar";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import { useModal } from "@/components/modals/ModalProvider";
@@ -20,6 +20,8 @@ import { useLocation } from "@/components/location/LocationProvider";
 import { getLocationLabel, isZipLike, normalizeSelectedLocation } from "@/lib/location";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+// Keep resolved placeholder paths aligned so SafeAvatar can switch to initials.
+const CUSTOMER_AVATAR_FALLBACK = "/customer-placeholder.png";
 
 export default function HeaderAccountWidget({
   surface = "public",
@@ -95,7 +97,7 @@ export default function HeaderAccountWidget({
     accountProfile?.profile_photo_url?.trim() ||
       accountUser?.user_metadata?.avatar_url ||
       "",
-    "/customer-placeholder.png"
+    CUSTOMER_AVATAR_FALLBACK
   );
 
   const displayName = isBusiness
@@ -618,15 +620,20 @@ export default function HeaderAccountWidget({
             aria-expanded={useSidebarDesktop ? accountSidebarOpen : profileMenuOpen}
           >
             <span className="relative">
-              <SafeImage
+              <SafeAvatar
                 src={avatar}
+                name={displayName}
+                displayName={displayName}
+                businessName={accountBusiness?.business_name}
+                email={email}
+                shape={isBusiness ? "rounded-square" : "circle"}
+                identityType={isBusiness ? "business" : "person"}
                 alt="Profile avatar"
-                className="h-10 w-10 rounded-2xl object-cover border border-white/20"
+                fallbackSrc={isBusiness ? "/business-placeholder.png" : CUSTOMER_AVATAR_FALLBACK}
+                className="h-[42px] w-[42px] bg-gray-200 object-cover border border-gray-100 shadow-sm ring-1 ring-gray-300"
+                initialsClassName="text-xs"
                 width={40}
                 height={40}
-                sizes="40px"
-                useNextImage
-                priority
               />
               {unreadCount > 0 ? (
                 <span className="absolute -bottom-1 -left-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
@@ -647,14 +654,20 @@ export default function HeaderAccountWidget({
             >
               <div className="rounded-[26px]">
                 <div className="flex items-center gap-3 px-4 py-4">
-                  <SafeImage
+                  <SafeAvatar
                     src={avatar}
+                    name={displayName}
+                    displayName={displayName}
+                    businessName={accountBusiness?.business_name}
+                    email={email}
+                    shape={isBusiness ? "rounded-square" : "circle"}
+                    identityType={isBusiness ? "business" : "person"}
                     alt="Profile avatar"
-                    className="h-12 w-12 rounded-2xl object-cover border border-white/20"
+                    fallbackSrc={isBusiness ? "/business-placeholder.png" : CUSTOMER_AVATAR_FALLBACK}
+                    className="h-[50px] w-[50px] bg-gray-200 object-cover border border-gray-100 shadow-sm ring-1 ring-gray-300"
+                    initialsClassName="text-[13px]"
                     width={48}
                     height={48}
-                    sizes="48px"
-                    useNextImage
                   />
                   <div>
                     {supportModeActive ? (
@@ -693,9 +706,19 @@ export default function HeaderAccountWidget({
             open={accountSidebarOpen}
             onOpenChange={setAccountSidebarOpen}
             anchorRef={accountTriggerRef}
+            premiumCustomer={isCustomer}
+            premiumBusiness={isBusiness}
+            avatarShape={isBusiness ? "rounded-square" : "circle"}
             displayName={displayName}
+            businessName={accountBusiness?.business_name}
             email={email}
             avatar={avatar}
+            scrollLockMode={isCustomer ? "stable-gutter" : "fixed"}
+            backgroundRootSelector={
+              isCustomer
+                ? '[data-testid="customer-shell-content"], [data-app-shell-main="1"]'
+                : undefined
+            }
           >
             <AccountMenuItems
               variant="sidebar"
@@ -705,7 +728,11 @@ export default function HeaderAccountWidget({
               onNavigate={handleAccountNavigate}
               logout={(
                 <LogoutButton
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                  className={
+                    isCustomer || isBusiness
+                      ? "flex w-full items-center justify-center gap-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200"
+                      : "flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                  }
                   onSuccess={() => setAccountSidebarOpen(false)}
                 >
                   <LogOut className="h-4 w-4" />
@@ -734,14 +761,20 @@ export default function HeaderAccountWidget({
       >
         {hasAuth ? (
           <div className="flex items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-3">
-            <SafeImage
+            <SafeAvatar
               src={avatar}
+              name={displayName}
+              displayName={displayName}
+              businessName={accountBusiness?.business_name}
+              email={email}
+              shape={isBusiness ? "rounded-square" : "circle"}
+              identityType={isBusiness ? "business" : "person"}
               alt="Profile avatar"
-              className="h-11 w-11 rounded-2xl object-cover border border-[var(--yb-border)]"
+              fallbackSrc={isBusiness ? "/business-placeholder.png" : CUSTOMER_AVATAR_FALLBACK}
+              className="h-[46px] w-[46px] bg-gray-200 object-cover border border-gray-100 shadow-sm ring-1 ring-gray-300"
+              initialsClassName="text-[13px]"
               width={44}
               height={44}
-              sizes="44px"
-              useNextImage
             />
             <div className="min-w-0">
               {supportModeActive ? (

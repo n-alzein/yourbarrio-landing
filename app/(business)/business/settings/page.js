@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import SafeImage from "@/components/SafeImage";
+import SafeAvatar from "@/components/SafeAvatar";
 import { useRouter } from "next/navigation";
 import { getBusinessByUserId } from "@/lib/business/getBusinessByUserId";
 import {
@@ -697,16 +697,21 @@ export default function SettingsPage() {
             <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
               <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
                 <div className="flex flex-col items-start gap-4">
-                  <SafeImage
+                  <SafeAvatar
                     src={
                       form.profile_photo_url ||
                       profile?.profile_photo_url ||
-                      "/customer-placeholder.png"
+                      ""
                     }
+                    name={form.full_name || profile?.business_name || profile?.full_name}
+                    displayName={form.full_name || profile?.full_name}
+                    businessName={form.full_name || profile?.business_name}
+                    email={userEmail}
                     alt="Business profile photo"
                     width={144}
                     height={144}
-                    className="h-28 w-28 rounded-3xl border border-slate-200 object-cover shadow-sm sm:h-36 sm:w-36"
+                    className="h-28 w-28 border border-slate-200 object-cover shadow-sm sm:h-36 sm:w-36"
+                    initialsClassName="text-3xl sm:text-4xl"
                   />
                   <div className="space-y-1.5">
                     <p className="text-sm font-semibold text-slate-900">

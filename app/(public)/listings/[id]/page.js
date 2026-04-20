@@ -598,7 +598,6 @@ export default function ListingDetails({ params }) {
   const inventory = normalizeInventory(listing);
   const badgeStyle = getAvailabilityBadgeStyle(inventory.availability, isLight);
   const isOutOfStock = inventory.availability === "out" || maxPurchasableQuantity <= 0;
-  const isCustomerListingRoute = pathname?.startsWith("/customer/listings");
   const businessProfileHref = business?.id ? getCustomerBusinessUrl(business) : null;
   const isBusinessVerified = ["auto_verified", "manually_verified"].includes(
     String(business?.verification_status || "").trim().toLowerCase()
@@ -617,11 +616,7 @@ export default function ListingDetails({ params }) {
   return (
     <>
       <div
-        className={`px-4 md:px-8 lg:px-12 ${
-          isCustomerListingRoute
-            ? "pt-0 pb-2 md:pt-0 -mt-24 md:-mt-16"
-            : "pt-4 pb-3 md:pt-3 md:pb-2"
-        }`}
+        className="px-4 pb-3 pt-4 md:px-8 md:pb-2 md:pt-3 lg:px-12"
         style={{
           background: "var(--background)",
           color: "var(--text)",
@@ -630,9 +625,7 @@ export default function ListingDetails({ params }) {
       >
         <div className="max-w-6xl mx-auto space-y-4">
         <div
-          className={`flex flex-wrap items-center justify-between gap-3 opacity-80 mb-2 ${
-            isCustomerListingRoute ? "mt-10 md:mt-12" : "mt-2"
-          }`}
+          className="mb-2 mt-2 flex flex-wrap items-center justify-between gap-3 opacity-80"
         >
           <Link
             href="/customer/home"

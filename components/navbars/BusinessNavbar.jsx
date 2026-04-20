@@ -23,7 +23,7 @@ import { openBusinessAuthPopup } from "@/lib/openBusinessAuthPopup";
 import { fetchUnreadTotal } from "@/lib/messages";
 import { resolveImageSrc } from "@/lib/safeImage";
 import { getBusinessDisplayName } from "@/lib/auth/displayName";
-import SafeImage from "@/components/SafeImage";
+import SafeAvatar from "@/components/SafeAvatar";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import { AUTH_UI_RESET_EVENT } from "@/components/AuthProvider";
 
@@ -103,6 +103,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
   const mobileDrawerId = useId();
   const accountTriggerRef = useRef(null);
   const notificationsRef = useRef(null);
+  const navRef = useRef(null);
   const resolvedUser = forcedAuth?.user ?? user;
   const resolvedProfile = forcedAuth?.profile ?? profile;
   const resolvedBusiness = forcedAuth?.business ?? business;
@@ -193,6 +194,42 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
+    const nav = navRef.current;
+    if (!nav) return undefined;
+
+    const setHeight = () => {
+      const height = nav.offsetHeight;
+      const position = window.getComputedStyle(nav).position;
+      const occupiesLayout = position !== "fixed" && position !== "absolute";
+
+      document.documentElement.style.setProperty("--yb-nav-h", `${height}px`);
+      document.documentElement.style.setProperty(
+        "--yb-nav-content-offset",
+        occupiesLayout ? "0px" : `${height}px`
+      );
+      document.documentElement.style.setProperty(
+        "--yb-nav-layout-h",
+        occupiesLayout ? `${height}px` : "0px"
+      );
+    };
+
+    setHeight();
+    window.addEventListener("resize", setHeight);
+
+    let observer = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(setHeight);
+      observer.observe(nav);
+    }
+
+    return () => {
+      window.removeEventListener("resize", setHeight);
+      observer?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
     const media = window.matchMedia("(min-width: 768px)");
     const handleChange = () => {
       if (media.matches) setMobileMenuOpen(false);
@@ -209,7 +246,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
   const quickActions = [
     {
       href: "/go/dashboard",
-      title: "Open dashboard",
+      title: "Dashboard",
       description: "Monitor performance & leads",
       icon: LayoutDashboard,
     },
@@ -622,6 +659,8 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
   --------------------------------------------------- */
   return (
     <nav
+      id="yb-business-navbar"
+      ref={navRef}
       className="fixed top-0 left-0 right-0 w-full z-50 theme-lock yb-navbar yb-navbar-bordered"
       data-business-navbar="1"
     >
@@ -878,15 +917,19 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
                   aria-haspopup="dialog"
                   aria-expanded={accountSidebarOpen}
                 >
-                  <SafeImage
+                  <SafeAvatar
                     src={avatar}
+                    name={displayName}
+                    displayName={displayName}
+                    businessName={resolvedBusiness?.business_name}
+                    email={email}
+                    shape="rounded-square"
+                    identityType="business"
                     alt="Avatar"
-                    className="h-10 w-10 rounded-2xl object-cover border border-white/20"
-                    width={40}
-                    height={40}
-                    sizes="40px"
-                    useNextImage
-                    priority
+                    className="h-11 w-11 bg-gray-200 object-cover object-center border border-gray-100 shadow-sm ring-1 ring-gray-300"
+                    initialsClassName="text-xs"
+                    width={44}
+                    height={44}
                   />
                   <span className="hidden sm:block text-sm font-semibold text-white/90 max-w-[140px] truncate">
                     {displayName}
@@ -907,7 +950,10 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
           title="Business Account"
           showTitle={false}
           profileFirst
+          premiumBusiness
+          avatarShape="rounded-square"
           displayName={displayName}
+          businessName={resolvedBusiness?.business_name}
           email={email}
           avatar={avatar}
         >
@@ -917,7 +963,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
             onNavigate={() => setAccountSidebarOpen(false)}
             logout={(
               <LogoutButton
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200"
                 onSuccess={() => setAccountSidebarOpen(false)}
               >
                 <LogOut className="h-4 w-4" /> Logout
@@ -936,14 +982,19 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
     >
       {isBusinessAuthed && (
         <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-3 py-3">
-          <SafeImage
+          <SafeAvatar
             src={avatar}
+            name={displayName}
+            displayName={displayName}
+            businessName={resolvedBusiness?.business_name}
+            email={email}
+            shape="rounded-square"
+            identityType="business"
             alt="Avatar"
-            className="h-12 w-12 rounded-2xl object-cover border border-[var(--yb-border)]"
-            width={48}
-            height={48}
-            sizes="48px"
-            useNextImage
+            className="h-[52px] w-[52px] bg-gray-200 object-cover object-center border border-gray-100 shadow-sm ring-1 ring-gray-300"
+            initialsClassName="text-[13px]"
+            width={52}
+            height={52}
           />
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">

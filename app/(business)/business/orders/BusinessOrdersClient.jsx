@@ -450,8 +450,12 @@ export default function BusinessOrdersClient() {
 
   return (
     <div
-      className="min-h-screen px-4 md:px-8 lg:px-12 pt-1 pb-12"
-      style={{ background: "var(--background)", color: "var(--text)" }}
+      className="min-h-screen px-4 pb-12 md:px-8 lg:px-12"
+      style={{
+        background: "var(--background)",
+        color: "var(--text)",
+        paddingTop: "calc(var(--yb-nav-content-offset, 0px) + 16px)",
+      }}
     >
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="space-y-2">

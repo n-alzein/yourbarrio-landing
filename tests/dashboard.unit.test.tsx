@@ -76,6 +76,9 @@ describe("DateRangeControls", () => {
   it("keeps the initials fallback for whitespace-only avatar values", () => {
     render(<DateRangeControls {...baseProps} businessAvatarUrl="   " />);
 
+    expect(screen.getByRole("img", { name: "Samsung Store profile image" })).toHaveStyle({
+      borderRadius: "1rem",
+    });
     expect(screen.getByText("SS")).toBeInTheDocument();
     expect(screen.queryByAltText("Samsung Store profile image")).not.toBeInTheDocument();
   });

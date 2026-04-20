@@ -33,7 +33,7 @@ function CustomerRouteShell({ children = null, className = "" }) {
 
   return (
     <div
-      className={`customer-shell-content pt-0 md:pt-12 min-h-screen bg-[var(--yb-bg)] text-[var(--yb-text)]${className ? ` ${className}` : ""}`}
+      className={`customer-shell-content pt-0 min-h-screen bg-[var(--yb-bg)] text-[var(--yb-text)]${className ? ` ${className}` : ""}`}
       data-testid="customer-shell-content"
       data-theme="light"
       data-route-theme="light"

@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Building2, CheckCircle2, Eye, PackagePlus, SlidersHorizontal } from "lucide-react";
-import SafeImage from "@/components/SafeImage";
+import { useMemo, useState } from "react";
+import { CheckCircle2, Eye, PackagePlus, SlidersHorizontal } from "lucide-react";
+import SafeAvatar from "@/components/SafeAvatar";
 import type { DashboardFilters, DateRangeKey } from "@/lib/dashboardTypes";
-import { resolveImageSrc } from "@/lib/safeImage";
 
 const DATE_RANGES: { value: DateRangeKey; label: string }[] = [
   { value: "7d", label: "7d" },
@@ -33,16 +32,6 @@ type DateRangeControlsProps = {
 const actionBaseClass =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-[10px] px-4 py-2 text-sm font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900";
 
-const DASHBOARD_AVATAR_INVALID = "__dashboard-avatar-invalid__";
-
-function normalizeDashboardAvatarUrl(value?: string | null) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const resolved = resolveImageSrc(trimmed, DASHBOARD_AVATAR_INVALID);
-  return resolved === DASHBOARD_AVATAR_INVALID ? null : resolved;
-}
-
 const DateRangeControls = ({
   dateRange,
   filters,
@@ -55,16 +44,7 @@ const DateRangeControls = ({
   onFiltersChange,
 }: DateRangeControlsProps) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const displayName = businessName || "YourBarrio";
-  const normalizedBusinessAvatarUrl = useMemo(
-    () => normalizeDashboardAvatarUrl(businessAvatarUrl),
-    [businessAvatarUrl]
-  );
-
-  useEffect(() => {
-    setAvatarLoadFailed(false);
-  }, [normalizedBusinessAvatarUrl]);
 
   const activeFilters = useMemo(() => filters.categories.length, [filters]);
   const completedCount = useMemo(
@@ -78,16 +58,6 @@ const DateRangeControls = ({
     () => setupItems.find((item) => !item.complete)?.label ?? "All setup steps finished",
     [setupItems]
   );
-  const businessInitials = useMemo(() => {
-    const parts = displayName
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2);
-    const initials = parts.map((part) => part[0]?.toUpperCase() || "").join("");
-    return initials || "YB";
-  }, [displayName]);
-
   const toggleFilter = (value: string) => {
     const next = new Set(filters.categories);
     if (next.has(value)) {
@@ -111,26 +81,17 @@ const DateRangeControls = ({
               Business dashboard
             </p>
             <div className="mt-6 flex items-start gap-4 sm:gap-5">
-              <div className="relative mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[12px] border border-slate-200/70 bg-white shadow-[0_5px_14px_rgba(15,23,42,0.04)]">
-                {normalizedBusinessAvatarUrl && !avatarLoadFailed ? (
-                  <SafeImage
-                    src={normalizedBusinessAvatarUrl}
-                    alt={`${displayName} profile image`}
-                    fallbackSrc={DASHBOARD_AVATAR_INVALID}
-                    onError={() => setAvatarLoadFailed(true)}
-                    useNextImage
-                    fill
-                    sizes="56px"
-                    className="object-cover"
-                  />
-                ) : businessInitials ? (
-                  <span className="text-[0.9rem] font-semibold tracking-[0.08em] text-slate-700">
-                    {businessInitials}
-                  </span>
-                ) : (
-                  <Building2 className="h-[1.05rem] w-[1.05rem] text-slate-500" />
-                )}
-              </div>
+              <SafeAvatar
+                src={businessAvatarUrl || ""}
+                businessName={displayName}
+                shape="rounded-square"
+                identityType="business"
+                alt={`${displayName} profile image`}
+                className="mt-0.5 h-14 w-14 overflow-hidden border border-gray-100 bg-gray-200 object-cover object-center shadow-sm ring-1 ring-gray-300"
+                initialsClassName="text-[0.9rem]"
+                width={56}
+                height={56}
+              />
               <div className="min-w-0">
                 <h1 className="min-w-0 text-[2rem] font-semibold tracking-[-0.055em] text-slate-950 sm:text-[2.35rem]">
                   <span className="block truncate">{displayName}</span>
@@ -320,4 +281,3 @@ const DateRangeControls = ({
 };
 
 export default DateRangeControls;
-export { normalizeDashboardAvatarUrl };
