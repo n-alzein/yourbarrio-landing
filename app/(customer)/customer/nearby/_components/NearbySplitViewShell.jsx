@@ -3,11 +3,13 @@
 export default function NearbySplitViewShell({
   mobileView,
   onMobileViewChange,
-  renderMobileToggle = true,
+  renderMobileToggle = false,
   controls,
   resultsPane,
   mapPane,
 }) {
+  const viewMode = mobileView === "map" ? "map" : "list";
+
   return (
     <section
       className="relative flex min-h-[calc(100dvh-96px)] flex-col md:min-h-[calc(100dvh-108px)]"
@@ -41,32 +43,39 @@ export default function NearbySplitViewShell({
 
       {controls ? <div className="mb-3 shrink-0" data-testid="nearby-header">{controls}</div> : null}
 
-      <div className="hidden min-h-0 flex-1 md:grid md:grid-cols-[minmax(340px,400px)_minmax(0,1fr)] md:gap-4" data-testid="nearby-split-desktop">
-        <div className="min-h-0 rounded-2xl border border-white/10 bg-white/[0.02] p-3 shadow-2xl shadow-black/20">
+      <div
+        className={`hidden min-h-0 flex-1 md:grid ${
+          viewMode === "map" ? "md:grid-cols-1" : "md:grid-cols-[minmax(0,1fr)]"
+        }`}
+        data-testid="nearby-split-desktop"
+      >
+        <div
+          className={`${viewMode === "list" ? "block" : "hidden"} min-h-0 rounded-3xl border border-slate-200/80 bg-white p-3 shadow-[0_24px_80px_rgba(15,23,42,0.08)]`}
+        >
           <div className="h-full overflow-y-auto pr-1" data-testid="nearby-results-scroll-pane">
             {resultsPane}
           </div>
         </div>
 
         <div
-          className="relative min-h-0 rounded-2xl border border-white/15 bg-white/[0.03] p-2.5 shadow-2xl shadow-black/20"
+          className={`${viewMode === "map" ? "block" : "hidden"} relative min-h-0 rounded-3xl border border-slate-200/80 bg-white p-2.5 shadow-[0_24px_80px_rgba(15,23,42,0.08)]`}
           data-testid="nearby-map-pane"
         >
-          <div className="h-full overflow-hidden rounded-xl border border-white/10">{mapPane}</div>
+          <div className="h-full overflow-hidden rounded-2xl border border-slate-200">{mapPane}</div>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 md:hidden">
-        {mobileView === "list" ? (
-          <div className="h-full min-h-0 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+        {viewMode === "list" ? (
+          <div className="h-full min-h-0 rounded-3xl border border-slate-200/80 bg-white p-3 shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
             <div className="h-full overflow-y-auto pr-1">{resultsPane}</div>
           </div>
         ) : (
           <div
-            className="h-[60vh] min-h-[360px] rounded-2xl border border-white/10 bg-white/[0.02] p-2"
+            className="h-[72vh] min-h-[480px] rounded-3xl border border-slate-200/80 bg-white p-2 shadow-[0_18px_55px_rgba(15,23,42,0.08)]"
             data-testid="nearby-map-mobile-pane"
           >
-            <div className="h-full overflow-hidden rounded-xl border border-white/10">{mapPane}</div>
+            <div className="h-full overflow-hidden rounded-2xl border border-slate-200">{mapPane}</div>
           </div>
         )}
       </div>

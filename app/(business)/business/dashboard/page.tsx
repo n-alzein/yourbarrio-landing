@@ -32,6 +32,13 @@ const ProfileViewsChart = dynamic(
 
 type StripeConnectStatus = BusinessStripeStatus;
 type DashboardFetchState = "idle" | "loading" | "refreshing" | "error";
+type PayoutCardState = "ready" | "needs_action" | "issue";
+type PayoutCardViewModel = {
+  state: PayoutCardState;
+  title: string;
+  body: string;
+  actionLabel: string;
+};
 type SetupItem = {
   id: string;
   label: string;
@@ -282,6 +289,45 @@ function InsightCard({
   );
 }
 
+function getPayoutViewModel(
+  stripeStatus: StripeConnectStatus | null
+): PayoutCardViewModel {
+  const isPayoutReady =
+    stripeStatus?.uiStatus === "active" ||
+    (stripeStatus?.hasStripeAccount &&
+      stripeStatus.chargesEnabled &&
+      stripeStatus.payoutsEnabled &&
+      stripeStatus.detailsSubmitted);
+
+  if (isPayoutReady) {
+    return {
+      state: "ready",
+      title: "Payouts enabled",
+      body: "You're all set to receive payouts from your sales.",
+      actionLabel: "Manage payouts",
+    };
+  }
+
+  if (
+    stripeStatus?.hasStripeAccount &&
+    stripeStatus.uiStatus !== "restricted"
+  ) {
+    return {
+      state: "needs_action",
+      title: "Finish setup to get paid",
+      body: "Complete your payout setup to start receiving money from customers.",
+      actionLabel: "Complete payout setup",
+    };
+  }
+
+  return {
+    state: "issue",
+    title: "Payout setup incomplete",
+    body: "There's an issue with your payment setup.",
+    actionLabel: "Fix setup",
+  };
+}
+
 function StripeStatusCard({
   status,
   loading,
@@ -297,51 +343,60 @@ function StripeStatusCard({
   onAction: () => void;
   onRetry: () => void;
 }) {
-  const label = status?.badgeLabel || "Not connected";
+  const viewModel = getPayoutViewModel(status);
   const showAction = !loading;
-  const actionLabel = status?.hasStripeAccount ? "Continue Stripe onboarding" : "Connect Stripe";
-  const isPositive = status?.uiStatus === "active" || status?.uiStatus === "connected_for_testing";
-  const bodyCopy =
-    status?.helpText ||
-    "Connect Stripe to accept customer payments and route payouts to your business account.";
+  const isReady = viewModel.state === "ready";
+  const statusLabel = loading
+    ? "Checking setup"
+    : isReady
+      ? "Ready to get paid"
+      : "Action needed";
 
   return (
     <section className="dashboard-panel p-5 sm:p-6">
-      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-slate-200 bg-slate-50 text-slate-700">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-slate-200 bg-slate-50 text-slate-700">
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            ) : isReady ? (
+              <BadgeCheck className="h-5 w-5 text-emerald-600" />
+            ) : (
               <Landmark className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-400/85">
-                Stripe
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950">
-                Marketplace payouts
+            )}
+          </div>
+          <div>
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-400/85">
+              Payouts
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold text-slate-950">
+                {loading ? "Checking payout setup" : viewModel.title}
               </h2>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] ${
+                  isReady
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-violet-100 bg-violet-50 text-[#5b21b6]"
+                }`}
+              >
+                {statusLabel}
+              </span>
             </div>
-          </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700">
-            {isPositive ? <BadgeCheck className="h-4 w-4 text-emerald-600" /> : null}
-            {loading ? "Loading Stripe status..." : label}
-          </div>
-          <p className="max-w-2xl text-sm leading-6 text-slate-500">
-            {bodyCopy}
-          </p>
-          {status?.isTestMode && status?.hasStripeAccount ? (
-            <p className="max-w-2xl text-sm leading-6 text-slate-400">
-              Stripe test verification may still appear incomplete in Stripe dashboard, but sandbox testing is enabled.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              {loading
+                ? "We're checking whether your payout setup is ready."
+                : viewModel.body}
             </p>
-          ) : null}
-          {status?.accountId ? (
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
-              Account {status.accountId}
+            <p className="mt-3 text-xs font-medium text-slate-400">
+              Powered by Stripe
             </p>
-          ) : null}
-          {error ? (
-            <p className="text-sm text-rose-600">{error}</p>
-          ) : null}
+            {error ? (
+              <p className="mt-2 text-sm text-rose-600">
+                We couldn&apos;t refresh your payout status. Try again.
+              </p>
+            ) : null}
+          </div>
         </div>
         <div className="flex shrink-0 flex-col gap-2 md:items-end">
           {showAction ? (
@@ -349,17 +404,17 @@ function StripeStatusCard({
               type="button"
               onClick={onAction}
               disabled={loading || actionLoading}
-              className="yb-primary-button inline-flex min-w-[180px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="yb-primary-button inline-flex min-w-[190px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold !text-white hover:!text-white focus-visible:!text-white active:!text-white disabled:cursor-not-allowed disabled:!text-white disabled:opacity-60"
             >
               {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {actionLoading ? "Opening Stripe..." : actionLabel}
+              {actionLoading ? "Opening Stripe..." : viewModel.actionLabel}
             </button>
           ) : null}
           <button
             type="button"
             onClick={onRetry}
             disabled={loading || actionLoading}
-            className="dashboard-toolbar-button px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-50 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Refresh status
           </button>

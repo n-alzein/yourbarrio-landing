@@ -160,6 +160,19 @@ export default function GlobalHeader({
     navigateToSearch(next, selectedCategory);
   };
 
+  const closeSearchDropdown = () => {
+    setSuggestionsOpen(false);
+    searchInputRef.current?.blur();
+  };
+
+  const handleBusinessSuggestionKeyDown = (event, businessId) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    if (!businessId) return;
+    closeSearchDropdown();
+    router.push(`/b/${encodeURIComponent(businessId)}`);
+  };
+
   const categorySelectWidth = Math.max(selectedCategory.length, 3) + 6;
 
   // Hybrid search — fetch AI-style blend of items + businesses
@@ -713,7 +726,7 @@ export default function GlobalHeader({
                   );
                 }}
                 className="min-w-0 flex-1 bg-transparent pr-12 text-base md:text-sm placeholder:text-white/60 focus:outline-none"
-                placeholder="Search YourBarrio"
+                placeholder="Search local makers, shops, and pickup favorites..."
                 type="search"
               />
               <button
@@ -789,7 +802,7 @@ export default function GlobalHeader({
                       );
                     }}
                     className="h-full w-full bg-transparent pl-11 pr-4 text-sm text-white placeholder:text-white/60 focus:outline-none"
-                    placeholder="Search tacos, coffee, salons, groceries..."
+                    placeholder="Search local makers, shops, and pickup favorites..."
                     type="search"
                   />
                 </div>
@@ -868,11 +881,13 @@ export default function GlobalHeader({
                         </div>
                         <div className="space-y-2">
                           {(searchResults.businesses || []).slice(0, 3).map((biz) => (
-                            <button
+                            <Link
                               key={`biz-${biz.id}`}
-                              type="button"
-                              onClick={() => handleSuggestionSelect(biz.name)}
-                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item"
+                              href={`/b/${encodeURIComponent(biz.id)}`}
+                              onClick={closeSearchDropdown}
+                              onKeyDown={(event) => handleBusinessSuggestionKeyDown(event, biz.id)}
+                              tabIndex={0}
+                              className="w-full text-left rounded-xl border border-white/10 bg-white/5 px-3 py-3 transition flex items-start gap-3 yb-dropdown-item cursor-pointer"
                             >
                               <div className="h-10 w-10 rounded-lg bg-emerald-500/20 border border-emerald-200/30 flex items-center justify-center">
                                 <Store className="h-4 w-4 text-emerald-200" />
@@ -884,7 +899,7 @@ export default function GlobalHeader({
                                   {biz.city ? ` · ${biz.city}` : ""}
                                 </div>
                               </div>
-                            </button>
+                            </Link>
                           ))}
 
                           {(searchResults.places || []).slice(0, 3).map((place) => (
