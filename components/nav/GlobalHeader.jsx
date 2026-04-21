@@ -105,6 +105,18 @@ export default function GlobalHeader({
   const baseSearchPath = surface === "customer" ? "/customer/home" : "/listings";
   const listingPath = surface === "customer" ? "/customer/listings" : "/listings";
   const logoHref = surface === "customer" && user?.id ? "/customer/home" : "/";
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_AUTH_DIAG !== "1") return;
+    console.info("[AUTH_HEADER_RENDER]", {
+      source: "GlobalHeader",
+      surface,
+      pathname,
+      contextHasUser: Boolean(user?.id),
+      forcedHasUser: Boolean(forcedAuth?.user?.id),
+      forcedUserId: forcedAuth?.user?.id || null,
+      forcedRole: forcedAuth?.role || null,
+    });
+  }, [forcedAuth?.role, forcedAuth?.user?.id, pathname, surface, user?.id]);
   const isNearbyPage =
     pathname === "/nearby" || pathname.startsWith("/customer/nearby");
   const isStickyRoute =

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Footer from "@/components/Footer";
 import ModalMount from "@/components/modals/ModalMount";
@@ -30,6 +30,17 @@ export default function AppShell({
   initialAuth = null,
 }) {
   const pathname = usePathname();
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_AUTH_DIAG !== "1") return;
+    console.info("[AUTH_CLIENT_BOOTSTRAP]", {
+      source: "AppShell",
+      pathname,
+      hasInitialUser: Boolean(initialAuth?.user?.id),
+      initialUserId: initialAuth?.user?.id || null,
+      initialRole: initialAuth?.role || null,
+      hasInitialProfile: Boolean(initialAuth?.profile?.id),
+    });
+  }, [initialAuth?.profile?.id, initialAuth?.role, initialAuth?.user?.id, pathname]);
   const flushFooterOnHome = pathname === "/" || pathname === "/customer/home";
   const flushFooterOnPublicListings = pathname === "/listings";
   const flushFooterOnPublicBusinessProfile = pathname?.startsWith("/b/");

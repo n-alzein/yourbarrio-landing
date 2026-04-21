@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import GlobalHeaderGate from "@/components/nav/GlobalHeaderGate";
 import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
+import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
+import { normalizeAuthUser } from "@/lib/auth/normalizeAuthUser";
 
 export const metadata = {
   other: {
@@ -9,7 +11,26 @@ export const metadata = {
   },
 };
 
-export default function PublicLayout({ children }) {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function PublicLayout({ children }) {
+  const accountContext = await getCurrentAccountContext({
+    source: "public-layout",
+  });
+  const forcedAuth = accountContext?.isAuthenticated
+    ? {
+        role:
+          accountContext.role ||
+          accountContext.profile?.role ||
+          accountContext.user?.app_metadata?.role ||
+          accountContext.user?.user_metadata?.role ||
+          null,
+        user: normalizeAuthUser(accountContext.user),
+        profile: accountContext.profile ?? null,
+      }
+    : null;
+
   const lightThemeVars = {
     "--bg-solid": "#ffffff",
     "--bg-gradient-start": "#f7f7f8",
@@ -27,7 +48,7 @@ export default function PublicLayout({ children }) {
     >
       <Suspense fallback={null}>
         <GlobalHeaderGate>
-          <GlobalHeader surface="public" />
+          <GlobalHeader surface="public" forcedAuth={forcedAuth} />
         </GlobalHeaderGate>
       </Suspense>
       <BusinessAuthRedirector />

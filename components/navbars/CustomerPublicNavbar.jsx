@@ -29,8 +29,8 @@ export default function CustomerPublicNavbar() {
   const pathname = usePathname();
   const { openModal } = useModal();
   const [open, setOpen] = useState(false);
-  const { authStatus } = useAuth();
-  const hasSession = authStatus === "authenticated";
+  const { user } = useAuth();
+  const hasSession = Boolean(user?.id);
   const mobileDrawerId = useId();
 
   useEffect(() => {

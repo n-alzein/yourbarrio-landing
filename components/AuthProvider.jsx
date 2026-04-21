@@ -1544,6 +1544,28 @@ export function AuthProvider({
     getAuthStateSnapshot
   );
 
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_AUTH_DIAG !== "1") return;
+    console.info("[AUTH_CLIENT_BOOTSTRAP]", {
+      source: "AuthProvider:first-snapshot",
+      pathname,
+      authStatus: authState.authStatus,
+      authInitialized: authState.authInitialized,
+      hasUser: Boolean(authState.user?.id),
+      userId: authState.user?.id || null,
+      role: authState.role || null,
+      hasInitialUser: Boolean(initialUser?.id),
+      initialUserId: initialUser?.id || null,
+    });
+  }, [
+    authState.authInitialized,
+    authState.authStatus,
+    authState.role,
+    authState.user?.id,
+    initialUser?.id,
+    pathname,
+  ]);
+
   const mountedRef = useRef(true);
   const fetchWrappedRef = useRef(false);
   const redirectStateNormalizedRef = useRef(false);

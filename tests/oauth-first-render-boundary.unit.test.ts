@@ -9,6 +9,7 @@ function read(relPath: string) {
 describe("OAuth first render auth boundary", () => {
   it("server-seeds root auth before the public client shell renders", () => {
     const rootLayout = read("app/layout.js");
+    const publicLayout = read("app/(public)/layout.js");
     const appShell = read("components/AppShell.jsx");
     const authProvider = read("components/AuthProvider.jsx");
 
@@ -16,6 +17,12 @@ describe("OAuth first render auth boundary", () => {
     expect(rootLayout).toContain('source: "root-layout"');
     expect(rootLayout).toContain("initialAuth={initialAuth}");
     expect(rootLayout).toContain("[AUTH_SERVER_RENDER]");
+    expect(rootLayout).toContain('export const dynamic = "force-dynamic"');
+
+    expect(publicLayout).toContain("getCurrentAccountContext");
+    expect(publicLayout).toContain('source: "public-layout"');
+    expect(publicLayout).toContain("forcedAuth={forcedAuth}");
+    expect(publicLayout).toContain('export const dynamic = "force-dynamic"');
 
     expect(appShell).toContain("initialAuth = null");
     expect(appShell).toContain("initialUser={initialAuth?.user ?? null}");

@@ -50,8 +50,7 @@ export default function HeaderAccountWidget({
   const { openModal } = useModal();
   const { location, setLocation } = useLocation();
   const authDiagEnabled =
-    process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
-    process.env.NODE_ENV !== "production";
+    process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
   const loading = authStatus === "loading";
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [accountSidebarOpen, setAccountSidebarOpen] = useState(false);
@@ -80,7 +79,10 @@ export default function HeaderAccountWidget({
   const mobileLocationSuggestShownAtRef = useRef(0);
 
   const supportModeActive = Boolean(forcedAuth?.supportMode);
-  const accountUser = forcedAuth?.user || user;
+  const forcedAuthUser = forcedAuth?.user?.id ? forcedAuth.user : null;
+  const contextAuthUser = user?.id ? user : null;
+  const accountUser = forcedAuthUser || contextAuthUser;
+  const chosenUserSource = forcedAuthUser ? "forced" : contextAuthUser ? "context" : "none";
   const accountProfile = forcedAuth?.profile || profile;
   const accountBusiness = forcedAuth?.business || business;
   const effectiveRole = forcedAuth?.role || role;
@@ -113,9 +115,47 @@ export default function HeaderAccountWidget({
       "Account";
 
   const email = accountProfile?.email || accountUser?.email || null;
-  const hasAuth = Boolean(accountUser);
+  // Guest/account rendering must depend only on authenticated user presence.
+  // Profile, metadata, and avatar readiness are display details and must never
+  // downgrade an authenticated user to the public CTA branch.
+  const hasAuth = Boolean(accountUser?.id);
   const disableCtas = authBusy || loading;
   const showRateLimit = rateLimited && hasAuth;
+  const branchChosen = hasAuth ? "account" : loading ? "loading" : "guest";
+
+  useEffect(() => {
+    if (!authDiagEnabled) return;
+    const payload = {
+      surface,
+      variant,
+      authStatus,
+      hasForcedAuthUser: Boolean(forcedAuthUser?.id),
+      hasContextUser: Boolean(contextAuthUser?.id),
+      chosenUserSource,
+      chosenHasUser: hasAuth,
+      chosenUserId: accountUser?.id || null,
+      hasProfile: Boolean(accountProfile?.id),
+      resolvedAvatarSrc: avatar || null,
+      branchChosen,
+    };
+    console.info("[AUTH_HEADER_RENDER]", payload);
+    if (branchChosen === "guest" && (forcedAuthUser?.id || contextAuthUser?.id)) {
+      console.warn("[AUTH_HEADER_RENDER] guest_selected_with_auth_user", payload);
+    }
+  }, [
+    accountProfile?.id,
+    accountUser?.id,
+    authDiagEnabled,
+    authStatus,
+    avatar,
+    branchChosen,
+    chosenUserSource,
+    contextAuthUser?.id,
+    forcedAuthUser?.id,
+    hasAuth,
+    surface,
+    variant,
+  ]);
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const canLoadUnread =
