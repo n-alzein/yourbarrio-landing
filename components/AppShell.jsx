@@ -24,7 +24,11 @@ import UrlLocationMigratorClient from "@/components/location/UrlLocationMigrator
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 import AutoRefreshGuardBanner from "@/components/auth/AutoRefreshGuardBanner";
 
-export default function AppShell({ children, initialLocation = null }) {
+export default function AppShell({
+  children,
+  initialLocation = null,
+  initialAuth = null,
+}) {
   const pathname = usePathname();
   const flushFooterOnHome = pathname === "/" || pathname === "/customer/home";
   const flushFooterOnPublicListings = pathname === "/listings";
@@ -77,7 +81,11 @@ export default function AppShell({ children, initialLocation = null }) {
         <Suspense fallback={null}>
           <LocationProvider initialLocation={initialLocation}>
             <UrlLocationMigratorClient />
-            <AuthProvider>
+            <AuthProvider
+              initialUser={initialAuth?.user ?? null}
+              initialProfile={initialAuth?.profile ?? null}
+              initialRole={initialAuth?.role ?? null}
+            >
               <AutoRefreshGuardBanner />
               <RealtimeProvider>
                 <CartProvider>

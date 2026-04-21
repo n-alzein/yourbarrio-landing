@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getAvatarInitials } from "@/lib/avatarInitials";
-import { resolveAvatarUrl } from "@/lib/avatarUrl";
+import { getValidAvatarUrls, resolveAvatarUrl } from "@/lib/avatarUrl";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 
 const EMPTY_AVATAR_CANDIDATES = [];
+
+const authAvatarDiagEnabled =
+  process.env.NEXT_PUBLIC_AUTH_DIAG === "1" ||
+  process.env.NEXT_PUBLIC_AUTH_AVATAR_DIAG === "1";
 
 export default function SafeAvatar({
   src,
@@ -46,8 +50,37 @@ export default function SafeAvatar({
       ),
     [authAvatarUrl, authMetadata, avatarCandidates, avatarUrl, src, userMetadata]
   );
+  const realAvatarUrls = useMemo(
+    () =>
+      getValidAvatarUrls(
+        avatarUrl,
+        src,
+        authAvatarUrl,
+        userMetadata,
+        authMetadata,
+        avatarCandidates
+      ),
+    [authAvatarUrl, authMetadata, avatarCandidates, avatarUrl, src, userMetadata]
+  );
+  const [failedAvatarSources, setFailedAvatarSources] = useState(() => new Set());
   const [lastValidAvatarUrl, setLastValidAvatarUrl] = useState(() => realAvatarUrl);
-  const stableAvatarUrl = realAvatarUrl || lastValidAvatarUrl;
+  const availableAvatarUrls = useMemo(
+    () =>
+      realAvatarUrls.filter((candidate) => {
+        const resolvedCandidate = resolveImageSrc(candidate, resolvedFallback);
+        return (
+          resolvedCandidate !== resolvedFallback &&
+          !failedAvatarSources.has(candidate) &&
+          !failedAvatarSources.has(resolvedCandidate)
+        );
+      }),
+    [failedAvatarSources, realAvatarUrls, resolvedFallback]
+  );
+  const stableAvatarUrl =
+    availableAvatarUrls[0] ||
+    (lastValidAvatarUrl && !failedAvatarSources.has(lastValidAvatarUrl)
+      ? lastValidAvatarUrl
+      : null);
   const resolvedSrc = useMemo(
     () => resolveImageSrc(stableAvatarUrl, resolvedFallback),
     [stableAvatarUrl, resolvedFallback]
@@ -55,6 +88,26 @@ export default function SafeAvatar({
   const initialFallback = !stableAvatarUrl || resolvedSrc === resolvedFallback;
   const label = fullName || displayName || name || businessName || email || "";
   const key = `${resolvedSrc}:${label}:${initialFallback ? "fallback" : "image"}`;
+
+  useEffect(() => {
+    if (!authAvatarDiagEnabled) return;
+    console.info("[AUTH_AVATAR_RESOLVE]", {
+      label: label || alt || null,
+      candidateCount: realAvatarUrls.length,
+      availableCount: availableAvatarUrls.length,
+      hasUserMetadata: Boolean(userMetadata),
+      chosen: initialFallback ? null : stableAvatarUrl,
+      fallback: initialFallback,
+    });
+  }, [
+    alt,
+    availableAvatarUrls.length,
+    initialFallback,
+    label,
+    realAvatarUrls.length,
+    stableAvatarUrl,
+    userMetadata,
+  ]);
 
   return (
     <SafeAvatarInner
@@ -77,6 +130,15 @@ export default function SafeAvatar({
           setLastValidAvatarUrl(loadedSrc);
         }
       }}
+      onResolvedError={(failedSrc) => {
+        setFailedAvatarSources((prev) => {
+          const next = new Set(prev);
+          if (stableAvatarUrl) next.add(stableAvatarUrl);
+          if (failedSrc) next.add(failedSrc);
+          return next;
+        });
+      }}
+      hasNextAvatarCandidate={availableAvatarUrls.length > 1}
       imgProps={imgProps}
     />
   );
@@ -97,6 +159,8 @@ function SafeAvatarInner({
   style,
   showFallbackInitially,
   onResolvedLoad,
+  onResolvedError,
+  hasNextAvatarCandidate,
   imgProps,
 }) {
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -185,6 +249,10 @@ function SafeAvatarInner({
         markImageFailed(currentSrc);
         if (typeof onError === "function") {
           onError(event);
+        }
+        onResolvedError?.(currentSrc);
+        if (hasNextAvatarCandidate) {
+          return;
         }
         setShowFallback(true);
       }}

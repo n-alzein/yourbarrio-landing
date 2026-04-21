@@ -1422,6 +1422,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                 <div className="relative">
                   <SafeAvatar
                     src={avatar}
+                    userMetadata={user?.user_metadata}
                     name={displayName}
                     displayName={displayName}
                     email={email}
@@ -1455,6 +1456,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     <div className="flex items-center gap-3 px-4 py-4">
                       <SafeAvatar
                         src={avatar}
+                        userMetadata={user?.user_metadata}
                         name={displayName}
                         displayName={displayName}
                         email={email}
@@ -1644,6 +1646,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
               <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                 <SafeAvatar
                   src={avatar}
+                  userMetadata={user?.user_metadata}
                   name={displayName}
                   displayName={displayName}
                   email={email}

@@ -922,6 +922,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
                 >
                   <SafeAvatar
                     src={avatar}
+                    userMetadata={resolvedUser?.user_metadata || user?.user_metadata}
                     name={displayName}
                     displayName={displayName}
                     businessName={resolvedBusiness?.business_name}
@@ -959,6 +960,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
           businessName={resolvedBusiness?.business_name}
           email={email}
           avatar={avatar}
+          userMetadata={resolvedUser?.user_metadata || user?.user_metadata}
         >
           <BusinessAccountMenuItems
             items={quickActions}
@@ -987,6 +989,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
         <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-3 py-3">
           <SafeAvatar
             src={avatar}
+            userMetadata={resolvedUser?.user_metadata || user?.user_metadata}
             name={displayName}
             displayName={displayName}
             businessName={resolvedBusiness?.business_name}

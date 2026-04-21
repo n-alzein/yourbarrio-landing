@@ -153,6 +153,64 @@ describe("auth state consistency", () => {
     );
   });
 
+  it("normalizes server-seeded top-level Google picture into metadata for first render", () => {
+    render(
+      <AuthProvider
+        initialUser={{
+          id: "user-1",
+          email: "user-1@example.com",
+          picture: "https://lh3.googleusercontent.com/google.jpg",
+          user_metadata: {
+            full_name: "Google User",
+          },
+          app_metadata: {
+            role: "customer",
+          },
+        }}
+        initialRole="customer"
+      >
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId("status")).toHaveTextContent("authenticated");
+    expect(screen.getByTestId("avatar")).toHaveTextContent(
+      "https://lh3.googleusercontent.com/google.jpg"
+    );
+  });
+
+  it("keeps seeded Google avatar through equivalent client hydration", async () => {
+    render(
+      <AuthProvider initialUser={googleUser()} initialRole="customer">
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      authStateCallback?.(
+        "TOKEN_REFRESHED",
+        makeSession({
+          id: "user-1",
+          email: "user-1@example.com",
+          picture: "https://lh3.googleusercontent.com/google.jpg",
+          user_metadata: {
+            full_name: "Google User",
+          },
+          app_metadata: {
+            role: "customer",
+          },
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("authenticated");
+      expect(screen.getByTestId("avatar")).toHaveTextContent(
+        "https://lh3.googleusercontent.com/google.jpg"
+      );
+    });
+  });
+
   it("does not clear auth or Google avatar when a profile refresh is partial", async () => {
     render(
       <AuthProvider initialUser={googleUser()} initialRole="customer">

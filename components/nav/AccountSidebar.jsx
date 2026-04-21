@@ -68,6 +68,8 @@ export default function AccountSidebar({
   businessName,
   email,
   avatar,
+  userMetadata,
+  authMetadata,
   children,
   shieldActive = false,
   scrollLockMode = "fixed",
@@ -241,6 +243,8 @@ export default function AccountSidebar({
   const avatarNode = (
     <SafeAvatar
       src={avatar}
+      userMetadata={userMetadata}
+      authMetadata={authMetadata}
       name={displayName}
       displayName={displayName}
       businessName={businessName}

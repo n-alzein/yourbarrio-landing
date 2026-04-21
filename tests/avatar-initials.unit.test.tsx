@@ -2,7 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import SafeAvatar from "@/components/SafeAvatar";
 import { getAvatarInitials } from "@/lib/avatarInitials";
-import { getValidAvatarUrl, mergeAvatarState } from "@/lib/avatarUrl";
+import { getValidAvatarUrl, getValidAvatarUrls, mergeAvatarState } from "@/lib/avatarUrl";
+import { normalizeAuthUser } from "@/lib/auth/normalizeAuthUser";
 
 describe("getAvatarInitials", () => {
   it("uses first and last word initials for full names", () => {
@@ -40,6 +41,30 @@ describe("getValidAvatarUrl", () => {
     ).toBe("https://lh3.googleusercontent.com/google.jpg");
   });
 
+  it("reads Google avatar metadata from a full Supabase user shape", () => {
+    expect(
+      getValidAvatarUrl({
+        id: "user-1",
+        user_metadata: {
+          picture: "https://lh3.googleusercontent.com/google.jpg",
+        },
+      })
+    ).toBe("https://lh3.googleusercontent.com/google.jpg");
+  });
+
+  it("keeps DB avatar ahead of Google metadata in ordered candidates", () => {
+    expect(
+      getValidAvatarUrls("https://cdn.example.com/db-avatar.jpg", {
+        user_metadata: {
+          picture: "https://lh3.googleusercontent.com/google.jpg",
+        },
+      })
+    ).toEqual([
+      "https://cdn.example.com/db-avatar.jpg",
+      "https://lh3.googleusercontent.com/google.jpg",
+    ]);
+  });
+
   it("returns null when no valid avatar exists", () => {
     expect(getValidAvatarUrl("", " null ", "undefined", "/customer-placeholder.png")).toBeNull();
   });
@@ -48,6 +73,24 @@ describe("getValidAvatarUrl", () => {
     expect(mergeAvatarState("https://lh3.googleusercontent.com/google.jpg", "")).toBe(
       "https://lh3.googleusercontent.com/google.jpg"
     );
+  });
+});
+
+describe("normalizeAuthUser", () => {
+  it("preserves Google avatar candidates in the serialized auth snapshot shape", () => {
+    const normalized = normalizeAuthUser({
+      id: "user-1",
+      email: "test@example.com",
+      picture: "https://lh3.googleusercontent.com/google.jpg",
+      user_metadata: {
+        full_name: "Google User",
+      },
+    });
+
+    expect(normalized?.user_metadata?.avatar_url).toBe(
+      "https://lh3.googleusercontent.com/google.jpg"
+    );
+    expect(getValidAvatarUrl(normalized)).toBe("https://lh3.googleusercontent.com/google.jpg");
   });
 });
 
@@ -102,6 +145,25 @@ describe("SafeAvatar", () => {
       "src",
       "https://cdn.example.com/db-avatar.jpg"
     );
+  });
+
+  it("tries Google metadata when the first profile avatar candidate fails", async () => {
+    render(
+      <SafeAvatar
+        src="https://cdn.example.com/stale-profile-avatar.jpg"
+        userMetadata={{ picture: "https://lh3.googleusercontent.com/google.jpg" }}
+        fullName="Test Account"
+        alt="Profile avatar"
+      />
+    );
+
+    fireEvent.error(screen.getByAltText("Profile avatar"));
+
+    expect(await screen.findByAltText("Profile avatar")).toHaveAttribute(
+      "src",
+      "https://lh3.googleusercontent.com/google.jpg"
+    );
+    expect(screen.queryByText("TA")).not.toBeInTheDocument();
   });
 
   it("renders initials when initial render has no avatar or metadata", () => {

@@ -622,6 +622,7 @@ export default function HeaderAccountWidget({
             <span className="relative">
               <SafeAvatar
                 src={avatar}
+                userMetadata={accountUser?.user_metadata || user?.user_metadata}
                 name={displayName}
                 displayName={displayName}
                 businessName={accountBusiness?.business_name}
@@ -656,6 +657,7 @@ export default function HeaderAccountWidget({
                 <div className="flex items-center gap-3 px-4 py-4">
                   <SafeAvatar
                     src={avatar}
+                    userMetadata={accountUser?.user_metadata || user?.user_metadata}
                     name={displayName}
                     displayName={displayName}
                     businessName={accountBusiness?.business_name}
@@ -713,6 +715,7 @@ export default function HeaderAccountWidget({
             businessName={accountBusiness?.business_name}
             email={email}
             avatar={avatar}
+            userMetadata={accountUser?.user_metadata || user?.user_metadata}
             scrollLockMode={isCustomer ? "stable-gutter" : "fixed"}
             backgroundRootSelector={
               isCustomer
@@ -763,6 +766,7 @@ export default function HeaderAccountWidget({
           <div className="flex items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-3">
             <SafeAvatar
               src={avatar}
+              userMetadata={accountUser?.user_metadata || user?.user_metadata}
               name={displayName}
               displayName={displayName}
               businessName={accountBusiness?.business_name}

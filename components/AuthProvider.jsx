@@ -44,6 +44,7 @@ import {
 import { shouldSuppressAuthUiReset } from "@/lib/auth/loginErrors";
 import { normalizePublicUserRole } from "@/lib/auth/currentAccountContext";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
+import { normalizeAuthUser } from "@/lib/auth/normalizeAuthUser";
 
 const AuthContext = createContext({
   supabase: null,
@@ -175,20 +176,24 @@ const buildSignedInState = ({ user, profile, business }) => ({
 });
 
 function mergeAuthUser(prevUser, nextUser) {
-  if (!nextUser) return nextUser ?? null;
-  if (!prevUser || prevUser.id !== nextUser.id) return nextUser;
-  return {
-    ...prevUser,
-    ...nextUser,
+  const normalizedNextUser = normalizeAuthUser(nextUser);
+  if (!normalizedNextUser) return normalizedNextUser ?? null;
+  const normalizedPrevUser = normalizeAuthUser(prevUser);
+  if (!normalizedPrevUser || normalizedPrevUser.id !== normalizedNextUser.id) {
+    return normalizedNextUser;
+  }
+  return normalizeAuthUser({
+    ...normalizedPrevUser,
+    ...normalizedNextUser,
     app_metadata: {
-      ...(prevUser.app_metadata || {}),
-      ...(nextUser.app_metadata || {}),
+      ...(normalizedPrevUser.app_metadata || {}),
+      ...(normalizedNextUser.app_metadata || {}),
     },
     user_metadata: {
-      ...(prevUser.user_metadata || {}),
-      ...(nextUser.user_metadata || {}),
+      ...(normalizedPrevUser.user_metadata || {}),
+      ...(normalizedNextUser.user_metadata || {}),
     },
-  };
+  });
 }
 
 function mergeProfileAvatar(prevProfile, nextProfile, user) {
@@ -738,6 +743,42 @@ function subscribeAuthState(listener) {
 
 function getAuthStateSnapshot() {
   return authStore.state;
+}
+
+function primeAuthStateForInitialRender({
+  initialUser,
+  initialProfile,
+  initialBusiness = null,
+  initialRole,
+  supportModeActive = false,
+}) {
+  if (supportModeActive) return;
+  if (!initialUser?.id) return;
+  const currentUserId = authStore.state.user?.id || null;
+  if (
+    currentUserId &&
+    currentUserId !== initialUser.id &&
+    authStore.state.authStatus === "authenticated"
+  ) {
+    return;
+  }
+  const nextUser = mergeAuthUser(authStore.state.user, initialUser);
+  const nextProfile = initialProfile
+    ? mergeProfileAvatar(keepProfileForUser(authStore.state.profile, nextUser), initialProfile, nextUser)
+    : keepProfileForUser(authStore.state.profile, nextUser);
+  const nextBusiness =
+    initialBusiness ||
+    (authStore.state.user?.id === initialUser.id ? authStore.state.business : null);
+  authStore.state = {
+    ...authStore.state,
+    authStatus: "authenticated",
+    authInitialized: true,
+    user: nextUser,
+    profile: nextProfile,
+    business: nextBusiness,
+    role: resolveRole(nextProfile, nextUser, initialRole || authStore.state.role),
+    error: null,
+  };
 }
 
 export function __resetAuthStoreForTests() {
@@ -1487,6 +1528,12 @@ export function AuthProvider({
     []
   );
   const allowBootstrap = !pathname?.startsWith("/business-auth");
+  primeAuthStateForInitialRender({
+    initialUser,
+    initialProfile,
+    initialRole,
+    supportModeActive: Boolean(initialSupportModeActive),
+  });
   const supabase = useMemo(
     () => (allowBootstrap ? getSupabaseBrowserClient() : null),
     [allowBootstrap]
