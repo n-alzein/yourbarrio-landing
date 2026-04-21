@@ -260,6 +260,12 @@ const authStore = {
   bootstrapAbortController: null,
 };
 
+const AUTH_EVENT_NO_USER_VERIFY_EVENTS = new Set([
+  "INITIAL_SESSION",
+  "TOKEN_REFRESHED",
+  "USER_UPDATED",
+]);
+
 let handledTokenInvalidAt = 0;
 const authDiagEnabled =
   process.env.NEXT_PUBLIC_AUTH_DIAG === "1" &&
@@ -403,6 +409,42 @@ function logAuthDiag(event, payload = {}) {
     userId: authStore.state.user?.id ?? null,
     ...payload,
   });
+}
+
+function logAuthConsistency(event, payload = {}) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PUBLIC_AUTH_DIAG !== "1"
+  ) {
+    return;
+  }
+  if (typeof window === "undefined") return;
+  console.info("[AUTH_CONSISTENCY]", {
+    event,
+    tabId: getAuthTabId(),
+    pathname: window.location.pathname,
+    authStatus: authStore.state.authStatus,
+    initialized: authStore.state.authInitialized,
+    userId: authStore.state.user?.id ?? null,
+    profileId: authStore.state.profile?.id ?? null,
+    hasSession: Boolean(authStore.state.session),
+    ...payload,
+  });
+}
+
+function getAuthTabId() {
+  if (typeof window === "undefined") return "server";
+  try {
+    const key = "yb_auth_tab_id";
+    let id = window.sessionStorage.getItem(key);
+    if (!id) {
+      id = `tab-${Math.random().toString(36).slice(2, 10)}`;
+      window.sessionStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return "tab-unavailable";
+  }
 }
 
 function emitAuthUiReset(reason) {
@@ -698,6 +740,54 @@ function getAuthStateSnapshot() {
   return authStore.state;
 }
 
+export function __resetAuthStoreForTests() {
+  if (process.env.NODE_ENV === "production") return;
+  authStore.state = {
+    authStatus: "loading",
+    authInitialized: false,
+    session: null,
+    user: null,
+    profile: null,
+    business: null,
+    role: null,
+    error: null,
+    lastAuthEvent: null,
+    lastError: null,
+    rateLimited: false,
+    rateLimitUntil: 0,
+    rateLimitMessage: null,
+    tokenInvalidAt: 0,
+    refreshDisabledUntil: 0,
+    refreshDisabledReason: null,
+    authBusy: false,
+    authAction: null,
+    authAttemptId: 0,
+    authActionStartedAt: 0,
+    supportModeActive: false,
+  };
+  authStore.listeners.clear();
+  authStore.supabase = null;
+  authStore.bootstrapPromise = null;
+  authStore.profilePromise = null;
+  authStore.profileUserId = null;
+  authStore.businessPromise = null;
+  authStore.businessUserId = null;
+  authStore.providerCount = 0;
+  authStore.guardSubscribed = false;
+  if (authStore.authUnsubscribe) {
+    authStore.authUnsubscribe();
+  }
+  authStore.authUnsubscribe = null;
+  authStore.loggingOut = false;
+  authStore.logoutRedirectInFlight = false;
+  authStore.providerInstanceId = null;
+  authStore.bootstrapAbortController = null;
+  profileFetchInFlight = null;
+  profileFetchInFlightUserId = null;
+  profileFetchBlockedUntil = 0;
+  profileFetchFailureTimestamps = [];
+}
+
 function seedAuthState({
   initialUser,
   initialProfile,
@@ -968,6 +1058,12 @@ async function getProfileForUser(user) {
   return authStore.profilePromise;
 }
 
+function keepProfileForUser(profile, user) {
+  if (!profile || !user?.id) return null;
+  if (!profile.id || profile.id === user.id) return profile;
+  return null;
+}
+
 async function getBusinessForUser(user) {
   if (!user?.id) return { business: null, error: null };
   if (authStore.businessPromise && authStore.businessUserId === user.id) {
@@ -1024,16 +1120,35 @@ async function applyUserUpdate(user) {
 
   if (currentId !== nextId || statusChanged) {
     const mergedUser = mergeAuthUser(authStore.state.user, user);
+    const retainedProfile =
+      currentId === nextId ? keepProfileForUser(authStore.state.profile, mergedUser) : null;
     updateAuthState({
       ...withGuardState(buildSignedInState({ user: mergedUser })),
-      profile: authStore.state.profile,
+      profile: retainedProfile,
       business: currentId === nextId ? authStore.state.business : null,
-      role: resolveRole(authStore.state.profile, mergedUser, authStore.state.role),
+      role: resolveRole(retainedProfile, mergedUser, authStore.state.role),
+    });
+    logAuthConsistency("user:update:accepted", {
+      nextUserId: mergedUser?.id ?? null,
+      retainedProfile: Boolean(retainedProfile),
+      statusChanged,
     });
   }
 
-  const { profile } = await getProfileForUser(user);
+  const { profile, error: profileError } = await getProfileForUser(user);
   if (authStore.state.user?.id !== user.id) return;
+  if (profileError && !profile) {
+    logAuthConsistency("profile:fetch:deferred", {
+      userId: user.id,
+      error: profileError?.message || String(profileError),
+    });
+    updateAuthState({
+      authStatus: "authenticated",
+      user: mergeAuthUser(authStore.state.user, user),
+      role: resolveRole(authStore.state.profile, authStore.state.user || user, authStore.state.role),
+    });
+    return;
+  }
   const accountStatus = normalizeAccountStatus(profile?.account_status);
   if (isBlockedAccountStatus(accountStatus)) {
     clearVerifiedUserCache();
@@ -1059,7 +1174,11 @@ async function applyUserUpdate(user) {
     }
     return;
   }
-  const nextProfile = mergeProfileAvatar(authStore.state.profile, profile, authStore.state.user || user);
+  const previousProfile = keepProfileForUser(authStore.state.profile, user);
+  const fetchedProfile = keepProfileForUser(profile, user);
+  const nextProfile = fetchedProfile
+    ? mergeProfileAvatar(previousProfile, fetchedProfile, authStore.state.user || user)
+    : previousProfile;
   const nextUser = mergeAuthUser(authStore.state.user, user);
   const nextRole = resolveRole(nextProfile, nextUser, authStore.state.role);
   let business = null;
@@ -1072,10 +1191,79 @@ async function applyUserUpdate(user) {
     authStore.businessUserId = null;
   }
   updateAuthState({
+    authStatus: "authenticated",
     user: nextUser,
     profile: nextProfile,
     business,
     role: nextRole,
+  });
+  logAuthConsistency("profile:merged", {
+    userId: nextUser?.id ?? null,
+    hasProfile: Boolean(nextProfile),
+    avatarSource: resolveAvatarUrl(
+      nextProfile?.profile_photo_url,
+      nextUser?.user_metadata
+    )
+      ? "resolved"
+      : "none",
+  });
+}
+
+async function handleMissingUserAuthEvent(event) {
+  const isExplicitSignOut = event === "SIGNED_OUT" || event === "USER_DELETED";
+  if (isExplicitSignOut) {
+    if (!shouldSuppressAuthUiReset()) {
+      emitAuthUiReset("auth_event:signed_out");
+    }
+    clearVerifiedUserCache();
+    applySignedOutState("auth_event:signed_out", {
+      resetGuardState: true,
+      clearAuthSuppression: false,
+      extraState: {
+        lastAuthEvent: event,
+        lastError: null,
+      },
+    });
+    return;
+  }
+
+  if (
+    AUTH_EVENT_NO_USER_VERIFY_EVENTS.has(event) &&
+    (authStore.bootstrapPromise || !authStore.state.authInitialized)
+  ) {
+    logAuthConsistency("auth_event:no_user:bootstrap_wait", { event });
+    return;
+  }
+
+  try {
+    const { data, error } = await authStore.supabase.auth.getSession();
+    const session = data?.session ?? null;
+    if (session?.user) {
+      logAuthConsistency("auth_event:no_user:session_recovered", {
+        event,
+        recoveredUserId: session.user.id,
+        error: error?.message ?? null,
+      });
+      updateAuthState({ session, authInitialized: true, lastAuthEvent: event });
+      await applyUserUpdate(session.user);
+      return;
+    }
+  } catch (error) {
+    logAuthConsistency("auth_event:no_user:verify_failed", {
+      event,
+      error: error?.message || String(error),
+    });
+    if (authStore.state.user?.id) return;
+  }
+
+  if (authStore.state.user?.id && authStore.state.authStatus === "authenticated") {
+    logAuthConsistency("auth_event:no_user:ignored_authenticated", { event });
+    return;
+  }
+
+  applySignedOutState("auth_event:no_user", {
+    resetGuardState: false,
+    clearAuthSuppression: true,
   });
 }
 
@@ -1117,7 +1305,9 @@ async function bootstrapAuth() {
       } catch (err) {
         sessionError = err;
         setAuthError(err);
-        updateAuthState({ session: null });
+        if (!authStore.state.user?.id) {
+          updateAuthState({ session: null });
+        }
         logAuthDiag("auth:getSession:result", {
           ok: false,
           hasUser: false,
@@ -1134,6 +1324,14 @@ async function bootstrapAuth() {
 
     if (sessionChecked) {
       if (!user || sessionError) {
+        if (authStore.state.user?.id && authStore.state.authStatus === "authenticated") {
+          logAuthConsistency("bootstrap:no_session:kept_authenticated", {
+            reason: sessionError ? "session_error" : "empty_session",
+            error: sessionError?.message || null,
+          });
+          updateAuthState({ authInitialized: true });
+          return;
+        }
         applySignedOutState("bootstrap:no_session", {
           resetGuardState: false,
           clearAuthSuppression: true,
@@ -1160,6 +1358,12 @@ async function bootstrapAuth() {
       await applyUserUpdate(user);
     } catch (error) {
       setAuthError(error);
+      if (authStore.state.user?.id) {
+        logAuthConsistency("bootstrap:error:kept_authenticated", {
+          error: error?.message || String(error),
+        });
+        return;
+      }
       applySignedOutState("bootstrap:error", {
         resetGuardState: false,
         clearAuthSuppression: true,
@@ -1198,27 +1402,13 @@ function ensureAuthListener() {
       });
 
       if (event === "SIGNED_OUT" || event === "USER_DELETED") {
-        if (!shouldSuppressAuthUiReset()) {
-          emitAuthUiReset("auth_event:signed_out");
-        }
-        clearVerifiedUserCache();
-        applySignedOutState("auth_event:signed_out", {
-          resetGuardState: true,
-          clearAuthSuppression: false,
-          extraState: {
-            lastAuthEvent: event,
-            lastError: null,
-          },
-        });
+        await handleMissingUserAuthEvent(event);
         return;
       }
 
       updateAuthState({ lastAuthEvent: event });
       if (!user) {
-        applySignedOutState("auth_event:no_user", {
-          resetGuardState: false,
-          clearAuthSuppression: true,
-        });
+        await handleMissingUserAuthEvent(event);
         return;
       }
       authStore.loggingOut = false;
