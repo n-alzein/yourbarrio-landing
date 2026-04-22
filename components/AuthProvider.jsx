@@ -81,6 +81,7 @@ const AuthContext = createContext({
 });
 
 const AUTH_HANDOFF_PARAM = "yb_auth_handoff";
+const AUTH_FRESH_PARAM = "yb_auth_fresh";
 
 const resolveRole = (profile, user = null, fallbackRole = null) => {
   return (
@@ -1855,6 +1856,7 @@ export function AuthProvider({
     const url = new URL(window.location.href);
     if (!url.searchParams.has(AUTH_HANDOFF_PARAM)) return;
     url.searchParams.delete(AUTH_HANDOFF_PARAM);
+    url.searchParams.delete(AUTH_FRESH_PARAM);
     const nextUrl = `${url.pathname}${url.search}${url.hash}`;
     window.history.replaceState(window.history.state, "", nextUrl || url.pathname);
   }, [authState.authInitialized, isAuthHandoff]);

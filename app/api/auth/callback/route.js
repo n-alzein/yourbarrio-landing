@@ -19,6 +19,7 @@ import {
 
 const AUTH_CALLBACK_HANDLER_MARKER = "app/api/auth/callback/route.js";
 const AUTH_HANDOFF_PARAM = "yb_auth_handoff";
+const AUTH_HANDOFF_PATH = "/auth/handoff";
 
 function firstHeaderValue(value) {
   return String(value || "")
@@ -262,15 +263,17 @@ export async function GET(request) {
     if (shouldLogCallback) {
       console.info("[auth-next] callback final redirect:", chosenDestination);
     }
-    const finalUrl = new URL(chosenDestination, redirectOrigin);
-    finalUrl.searchParams.set(AUTH_HANDOFF_PARAM, "1");
+    const handoffUrl = new URL(AUTH_HANDOFF_PATH, redirectOrigin);
+    handoffUrl.searchParams.set("next", chosenDestination);
+    handoffUrl.searchParams.set(AUTH_HANDOFF_PARAM, "1");
     const { response: redirectResponse, hasSupabaseCookies } = attachSupabaseCookies(
-      NextResponse.redirect(finalUrl, 303)
+      NextResponse.redirect(handoffUrl, 303)
     );
     if (shouldLogCallback) {
       const setCookieHeader = redirectResponse.headers.get("set-cookie") || "";
       console.info("[AUTH_CALLBACK_TRACE] final_response", {
-        destination: `${finalUrl.pathname}${finalUrl.search}`,
+        destination: `${handoffUrl.pathname}${handoffUrl.search}`,
+        finalDestination: chosenDestination,
         redirectOrigin,
         hasSupabaseCookies,
         hasSetCookieHeader: Boolean(setCookieHeader),
@@ -284,7 +287,7 @@ export async function GET(request) {
     redirectResponse.headers.set("x-auth-callback-handler", AUTH_CALLBACK_HANDLER_MARKER);
     redirectResponse.headers.set(
       "x-auth-callback-destination",
-      `${finalUrl.pathname}${finalUrl.search}`
+      `${handoffUrl.pathname}${handoffUrl.search}`
     );
     redirectResponse.headers.set(
       "x-auth-callback-has-cookies",
@@ -297,7 +300,7 @@ export async function GET(request) {
     if (shouldLogCallback) {
       console.warn(
         "[AUTH_CALLBACK_TRACE] destination",
-        `${finalUrl.pathname}${finalUrl.search}`,
+        `${handoffUrl.pathname}${handoffUrl.search}`,
         "rawNext",
         rawNext,
         "reason",
@@ -306,7 +309,7 @@ export async function GET(request) {
       redirectResponse.headers.set("X-YB-Auth-NextRaw", rawNext ?? "");
       redirectResponse.headers.set(
         "X-YB-Auth-NextChosen",
-        `${finalUrl.pathname}${finalUrl.search}`
+        `${handoffUrl.pathname}${handoffUrl.search}`
       );
       redirectResponse.headers.set("X-YB-Auth-Role", role ?? "");
     }

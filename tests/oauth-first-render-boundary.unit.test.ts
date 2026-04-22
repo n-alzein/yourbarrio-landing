@@ -10,6 +10,7 @@ describe("OAuth first render auth boundary", () => {
   it("server-seeds root auth before the public client shell renders", () => {
     const rootLayout = read("app/layout.js");
     const publicLayout = read("app/(public)/layout.js");
+    const handoffRoute = read("app/auth/handoff/route.js");
     const appShell = read("components/AppShell.jsx");
     const authProvider = read("components/AuthProvider.jsx");
 
@@ -23,6 +24,11 @@ describe("OAuth first render auth boundary", () => {
     expect(publicLayout).toContain('source: "public-layout"');
     expect(publicLayout).toContain("forcedAuth={forcedAuth}");
     expect(publicLayout).toContain('export const dynamic = "force-dynamic"');
+
+    expect(handoffRoute).toContain('export const dynamic = "force-dynamic"');
+    expect(handoffRoute).toContain("getCurrentAccountContext");
+    expect(handoffRoute).toContain('source: "auth-handoff"');
+    expect(handoffRoute).toContain("yb_auth_fresh");
 
     expect(appShell).toContain("initialAuth = null");
     expect(appShell).toContain("initialUser={initialAuth?.user ?? null}");
