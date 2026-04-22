@@ -137,6 +137,69 @@ describe("auth callback session handoff", () => {
     expect(response.headers.get("set-cookie")).toContain("SameSite=lax");
   });
 
+  it("does not redirect to login when app-profile provisioning fails after a valid session exchange", async () => {
+    ensureUserProvisionedForUserMock.mockRejectedValueOnce(
+      new Error("Missing service role Supabase client")
+    );
+    createServerClientMock.mockImplementation((_url, _key, options) => ({
+      auth: {
+        exchangeCodeForSession: vi.fn(async () => {
+          options.cookies.setAll([
+            {
+              name: "sb-crskbfbleiubpkvyvvlf-auth-token",
+              value: "persisted-session",
+              options: { httpOnly: true, sameSite: "lax", path: "/", maxAge: 3600 },
+            },
+          ]);
+          return {
+            data: {
+              session: { access_token: "access" },
+              user: { id: "user-1", email: "user@example.com" },
+            },
+            error: null,
+          };
+        }),
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access" } },
+          error: null,
+        }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "user@example.com" } },
+          error: null,
+        }),
+      },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          })),
+        })),
+      })),
+    }));
+    getBusinessPasswordGateStateMock.mockResolvedValueOnce({
+      role: null,
+      accountStatus: "active",
+      userRow: null,
+      businessRow: null,
+      passwordSet: false,
+      onboardingComplete: false,
+    });
+    resolvePostAuthDestinationMock.mockReturnValueOnce("/customer/home");
+    const { GET } = await importRoute();
+
+    const response = await GET(
+      makeRequest("https://yourbarrio.com/api/auth/callback?code=oauth-code&next=/customer/home")
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://www.yourbarrio.com/customer/home");
+    expect(response.headers.get("location")).not.toContain("/login");
+    expect(response.headers.get("x-auth-callback-has-cookies")).toBe("1");
+    expect(response.headers.get("set-cookie")).toContain(
+      "sb-crskbfbleiubpkvyvvlf-auth-token=persisted-session"
+    );
+  });
+
   it("fails invalid code exchange safely without setting auth cookies", async () => {
     createServerClientMock.mockReturnValue({
       auth: {

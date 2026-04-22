@@ -466,11 +466,11 @@ export async function GET(request) {
         userId: user.id,
         safeNext,
         error: provisionError?.message || String(provisionError),
+        continuingWithAuthenticatedSession: true,
       });
-      return buildLoginRedirectResponse({
-        reason: "user_provisioning_failed",
-        authError: "auth_callback_failed",
-      });
+      // A public.users bootstrap failure must not discard a successfully
+      // exchanged Supabase session. Server account-context recovery can retry,
+      // and the navbar/auth shell treats auth.user as authoritative.
     }
 
     if (businessIntent) {
