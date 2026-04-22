@@ -265,10 +265,13 @@ export async function GET(request) {
       NextResponse.redirect(new URL(chosenDestination, redirectOrigin), 303)
     );
     if (shouldLogCallback) {
+      const setCookieHeader = redirectResponse.headers.get("set-cookie") || "";
       console.info("[AUTH_CALLBACK_TRACE] final_response", {
         destination: chosenDestination,
         redirectOrigin,
         hasSupabaseCookies,
+        hasSetCookieHeader: Boolean(setCookieHeader),
+        setCookieHeaderHasSupabaseCookie: setCookieHeader.includes("sb-"),
         cookieNames: redirectResponse.cookies
           .getAll()
           .filter((cookie) => cookie.name.startsWith("sb-"))
@@ -280,6 +283,10 @@ export async function GET(request) {
     redirectResponse.headers.set(
       "x-auth-callback-has-cookies",
       hasSupabaseCookies ? "1" : "0"
+    );
+    redirectResponse.headers.set(
+      "x-auth-callback-has-set-cookie",
+      redirectResponse.headers.get("set-cookie") ? "1" : "0"
     );
     if (shouldLogCallback) {
       console.warn(
@@ -310,10 +317,13 @@ export async function GET(request) {
       NextResponse.redirect(redirectUrl, 303)
     );
     if (shouldLogCallback) {
+      const setCookieHeader = redirectResponse.headers.get("set-cookie") || "";
       console.info("[AUTH_CALLBACK_TRACE] final_response", {
         destination: `${redirectUrl.pathname}${redirectUrl.search}`,
         redirectOrigin,
         hasSupabaseCookies,
+        hasSetCookieHeader: Boolean(setCookieHeader),
+        setCookieHeaderHasSupabaseCookie: setCookieHeader.includes("sb-"),
         cookieNames: redirectResponse.cookies
           .getAll()
           .filter((cookie) => cookie.name.startsWith("sb-"))
@@ -324,6 +334,10 @@ export async function GET(request) {
     redirectResponse.headers.set(
       "x-auth-callback-has-cookies",
       hasSupabaseCookies ? "1" : "0"
+    );
+    redirectResponse.headers.set(
+      "x-auth-callback-has-set-cookie",
+      redirectResponse.headers.get("set-cookie") ? "1" : "0"
     );
     redirectResponse.headers.set(
       "x-auth-callback-destination",

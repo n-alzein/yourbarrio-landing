@@ -130,6 +130,7 @@ describe("auth callback session handoff", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("https://www.yourbarrio.com/customer/home");
     expect(response.headers.get("x-auth-callback-has-cookies")).toBe("1");
+    expect(response.headers.get("x-auth-callback-has-set-cookie")).toBe("1");
     expect(response.headers.get("set-cookie")).toContain(
       "sb-crskbfbleiubpkvyvvlf-auth-token=persisted-session"
     );
@@ -195,6 +196,7 @@ describe("auth callback session handoff", () => {
     expect(response.headers.get("location")).toBe("https://www.yourbarrio.com/customer/home");
     expect(response.headers.get("location")).not.toContain("/login");
     expect(response.headers.get("x-auth-callback-has-cookies")).toBe("1");
+    expect(response.headers.get("x-auth-callback-has-set-cookie")).toBe("1");
     expect(response.headers.get("set-cookie")).toContain(
       "sb-crskbfbleiubpkvyvvlf-auth-token=persisted-session"
     );
@@ -222,6 +224,7 @@ describe("auth callback session handoff", () => {
       "https://www.yourbarrio.com/login?next=%2Fcustomer%2Fhome&auth=magic_link_expired"
     );
     expect(response.headers.get("x-auth-callback-has-cookies")).toBe("0");
+    expect(response.headers.get("x-auth-callback-has-set-cookie")).toBe("0");
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 });

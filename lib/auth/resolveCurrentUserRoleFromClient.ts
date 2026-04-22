@@ -53,19 +53,26 @@ export async function resolveCurrentUserRoleFromClient(
       .from("users")
       .select("role")
       .eq("id", user.id)
-      .maybeSingle();
+      .maybeSingle()
+      .catch((error: unknown) => ({ data: null, error }));
     if (!profileError) {
       const profileRole = normalizeRole(profile?.role);
       if (profileRole) {
         if (log) console.warn("[AUTH_ROLE] resolved", { userId: user.id, role: profileRole, source: "users.role" });
         return { user, role: profileRole };
       }
+    } else if (log) {
+      console.warn("[AUTH_ROLE] profile_lookup_failed", {
+        userId: user.id,
+        message: profileError instanceof Error ? profileError.message : String(profileError),
+      });
     }
 
     const { data: adminRows, error: adminError } = await supabase
       .from("admin_role_members")
       .select("role_key")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .catch((error: unknown) => ({ data: null, error }));
 
     if (!adminError && Array.isArray(adminRows)) {
       const hasAdminRole = adminRows.some((row) => ADMIN_ROLE_KEYS.has(String(row?.role_key || "")));
@@ -73,11 +80,24 @@ export async function resolveCurrentUserRoleFromClient(
         if (log) console.warn("[AUTH_ROLE] resolved", { userId: user.id, role: "admin", source: "admin_role_members" });
         return { user, role: "admin" };
       }
+    } else if (log) {
+      console.warn("[AUTH_ROLE] admin_lookup_failed", {
+        userId: user.id,
+        message: adminError instanceof Error ? adminError.message : String(adminError),
+      });
     }
 
-    if (log) console.warn("[AUTH_ROLE] resolved", { userId: user.id, role: "unknown", source: "fallback" });
-    return { user, role: "unknown" };
-  } catch {
+    // A valid Supabase auth user without an app profile yet is still an
+    // authenticated customer. Provisioning/profile recovery must not make the
+    // first post-OAuth customer request look logged out or forbidden.
+    if (log) console.warn("[AUTH_ROLE] resolved", { userId: user.id, role: "customer", source: "authenticated_default_customer" });
+    return { user, role: "customer" };
+  } catch (error) {
+    if (log) {
+      console.warn("[AUTH_ROLE] resolve_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     return { user: null, role: "unknown" };
   }
 }

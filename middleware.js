@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getCookieBaseOptions } from "@/lib/authCookies";
+import {
+  findDuplicateSbCookieNames,
+  getCookieBaseOptions,
+  getSbCookieNamesFromRequest,
+} from "@/lib/authCookies";
 import { resolveCurrentUserRoleFromClient } from "@/lib/auth/resolveCurrentUserRoleFromClient";
 import {
   BUSINESS_CREATE_PASSWORD_PATH,
@@ -221,6 +225,8 @@ export async function middleware(request) {
     nextUrlString.includes("_rsc=");
   const canRedirect = isDocumentNavigation && !isRscQuery;
   if (shouldLogCanonicalHostDiagnostics()) {
+    const authCookieNames = getSbCookieNamesFromRequest(request);
+    const duplicateAuthCookieNames = findDuplicateSbCookieNames(request);
     console.info("[CANONICAL_HOST_DIAG]", {
       href: request.nextUrl.href,
       nextUrlHostname: request.nextUrl.hostname,
@@ -233,6 +239,8 @@ export async function middleware(request) {
       isRscQuery,
       redirectBranchTaken: false,
       finalRedirectTarget: null,
+      authCookieNames,
+      duplicateAuthCookieNames,
     });
   }
   const isBusinessLandingRoute = pathname === "/business" || pathname === "/business/";
@@ -456,6 +464,8 @@ export async function middleware(request) {
       pathname,
       host: request.headers.get("host") || request.nextUrl.host,
       hasAuthCookies,
+      authCookieNames: getSbCookieNamesFromRequest(request),
+      duplicateAuthCookieNames: findDuplicateSbCookieNames(request),
       userId: user?.id || null,
       role: role || null,
       canRedirect,
