@@ -43,7 +43,7 @@ describe("auth handoff route", () => {
       source: "auth-handoff",
     });
     expect(response.status).toBe(303);
-    expect(parsed.origin).toBe("https://www.yourbarrio.com");
+    expect(parsed.origin).toBe("https://yourbarrio.com");
     expect(parsed.pathname).toBe("/customer/home");
     expect(parsed.searchParams.get("yb_auth_handoff")).toBe("1");
     expect(parsed.searchParams.get("yb_auth_fresh")).toBeTruthy();
@@ -66,7 +66,7 @@ describe("auth handoff route", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://www.yourbarrio.com/login?next=%2Fcustomer%2Fhome&auth=session_missing"
+      "https://yourbarrio.com/login?next=%2Fcustomer%2Fhome&auth=session_missing"
     );
     expect(response.headers.get("x-auth-handoff-user")).toBe("0");
   });
@@ -85,7 +85,7 @@ describe("auth handoff route", () => {
     );
     const parsed = new URL(response.headers.get("location") || "");
 
-    expect(parsed.origin).toBe("https://www.yourbarrio.com");
+    expect(parsed.origin).toBe("https://yourbarrio.com");
     expect(parsed.pathname).toBe("/");
     expect(parsed.searchParams.get("yb_auth_handoff")).toBe("1");
   });

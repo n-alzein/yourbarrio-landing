@@ -27,7 +27,11 @@ function toNormalizedUrl(value: string): string | null {
   const input = String(value || "").trim();
   if (!input) return null;
   try {
-    return new URL(input).toString().replace(/\/$/, "");
+    const url = new URL(input);
+    if (url.hostname === "yourbarrio.com" || url.hostname.endsWith(".yourbarrio.com")) {
+      return "https://yourbarrio.com";
+    }
+    return url.toString().replace(/\/$/, "");
   } catch {
     return null;
   }

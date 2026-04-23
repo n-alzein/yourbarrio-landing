@@ -38,6 +38,16 @@ function addFreshAuthParams(path) {
   return `${parsed.pathname}${parsed.search}`;
 }
 
+function getRedirectOrigin(requestUrl) {
+  if (
+    requestUrl.hostname === "yourbarrio.com" ||
+    requestUrl.hostname.endsWith(".yourbarrio.com")
+  ) {
+    return "https://yourbarrio.com";
+  }
+  return requestUrl.origin;
+}
+
 export async function GET(request) {
   noStore();
   const requestUrl = new URL(request.url);
@@ -49,7 +59,7 @@ export async function GET(request) {
   const targetPath = hasUser
     ? addFreshAuthParams(nextPath)
     : `/login?next=${encodeURIComponent(nextPath)}&auth=session_missing`;
-  const response = NextResponse.redirect(new URL(targetPath, request.url), 303);
+  const response = NextResponse.redirect(new URL(targetPath, getRedirectOrigin(requestUrl)), 303);
   response.headers.set("Cache-Control", "no-store, max-age=0");
   response.headers.set("x-auth-handoff-user", hasUser ? "1" : "0");
   response.headers.set("x-auth-handoff-destination", targetPath);
