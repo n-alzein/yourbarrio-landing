@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { isUuid } from "@/lib/ids/isUuid";
 import { getPublicBusinessByOwnerId } from "@/lib/business/getPublicBusinessByOwnerId";
+import {
+  canViewerAccessPublicTarget,
+  getCurrentViewerVisibilityGate,
+} from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
 
 export async function GET(request) {
@@ -47,9 +51,24 @@ export async function GET(request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const business = await getPublicBusinessByOwnerId(listing.business_id);
+  const gate = await getCurrentViewerVisibilityGate(supabase);
+  const business = await getPublicBusinessByOwnerId(listing.business_id, {
+    client: supabase,
+    viewerCanSeeInternalContent: gate.viewerCanSeeInternalContent,
+  });
   if (!business) {
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
+  }
+  if (
+    !canViewerAccessPublicTarget(
+      {
+        businessIsInternal: business?.is_internal,
+        listingIsInternal: listing?.is_internal === true,
+      },
+      gate
+    )
+  ) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const { data: profile } = await supabase

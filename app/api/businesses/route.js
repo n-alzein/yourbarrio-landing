@@ -121,6 +121,11 @@ export async function POST(req) {
       .select("public_id,is_internal")
       .eq("id", user.id)
       .maybeSingle();
+    const { data: existingBusiness } = await supabase
+      .from("businesses")
+      .select("is_internal")
+      .eq("owner_user_id", user.id)
+      .maybeSingle();
 
     if (userReadError) {
       console.warn("business onboarding users read failed", {
@@ -183,7 +188,7 @@ export async function POST(req) {
       postal_code: postal_code || "",
       latitude: geo?.lat ?? null,
       longitude: geo?.lng ?? null,
-      is_internal: existingUser?.is_internal === true,
+      is_internal: existingBusiness?.is_internal === true,
       verification_status: "pending",
       updated_at: new Date().toISOString(),
     };

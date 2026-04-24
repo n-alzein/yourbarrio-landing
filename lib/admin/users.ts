@@ -122,6 +122,37 @@ function normalizeRows(
   });
 }
 
+async function getBusinessInternalByOwnerId(client: any, ownerIds: string[]) {
+  const uniqueOwnerIds = Array.from(new Set(ownerIds.filter(Boolean)));
+  if (uniqueOwnerIds.length === 0) return new Map<string, boolean>();
+
+  const { data, error } = await client
+    .from("businesses")
+    .select("owner_user_id,is_internal")
+    .in("owner_user_id", uniqueOwnerIds);
+
+  if (error || !Array.isArray(data)) {
+    return new Map<string, boolean>();
+  }
+
+  return new Map(
+    data
+      .map((row: any) => [String(row?.owner_user_id || ""), row?.is_internal === true] as const)
+      .filter(([ownerId]) => Boolean(ownerId))
+  );
+}
+
+function applyBusinessInternalState(rows: AdminUserRow[], businessInternalByOwnerId: Map<string, boolean>) {
+  return rows.map((row) =>
+    row.account_role === "business"
+      ? {
+          ...row,
+          is_internal: businessInternalByOwnerId.get(row.id) === true,
+        }
+      : row
+  );
+}
+
 async function getAdminRoleMembers(client: any) {
   const roleKeysByUserId = new Map<string, string[]>();
   const { data, error } = await client
@@ -284,6 +315,19 @@ export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<Ad
     });
   }
 
+  if (role === "business" || typeof includeInternal === "boolean") {
+    return fetchViaRpc({
+      client,
+      role,
+      includeInternal,
+      q,
+      from,
+      to,
+      usingServiceRole: true,
+      path: "service-rpc-fallback",
+    });
+  }
+
   const { roleKeysByUserId, adminIds, error: adminRoleMembersError } =
     await getAdminRoleMembers(client);
 
@@ -344,8 +388,16 @@ export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<Ad
     diag.probes = await runZeroRowProbes(client);
   }
 
+  const normalized = normalizeRows(data, roleKeysByUserId);
+  const businessInternalByOwnerId = await getBusinessInternalByOwnerId(
+    client,
+    normalized
+      .filter((row) => row.account_role === "business")
+      .map((row) => row.id)
+  );
+
   return {
-    rows: normalizeRows(data, roleKeysByUserId),
+    rows: applyBusinessInternalState(normalized, businessInternalByOwnerId),
     count: count || 0,
     fallbackUsed: false,
     diag,

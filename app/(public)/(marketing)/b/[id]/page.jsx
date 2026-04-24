@@ -1,7 +1,10 @@
 import { unstable_cache } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
+import { getPublicBusinessByPublicId } from "@/lib/business/getPublicBusinessByPublicId";
 import { getPublicBusinessByOwnerId } from "@/lib/business/getPublicBusinessByOwnerId";
+import { PUBLIC_VERIFIED_BUSINESS_STATUSES } from "@/lib/business/publicBusinessQuery";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
+import { getSupabaseServerClient } from "@/lib/supabaseServer";
 import BusinessProfileView from "@/components/publicBusinessProfile/BusinessProfileView";
 import PublicBusinessPreviewClient from "@/components/publicBusinessProfile/PublicBusinessPreviewClient";
 import ProfileViewTracker from "@/components/publicBusinessProfile/ProfileViewTracker";
@@ -13,6 +16,7 @@ import {
   sanitizeReviews,
 } from "@/lib/publicBusinessProfile/normalize";
 import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
+import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
 
 const PUBLIC_CACHE_SECONDS = 300;
@@ -61,8 +65,8 @@ async function safeQuery(promise, fallback, label) {
   }
 }
 
-async function fetchPublicProfile(id) {
-  const profile = await getPublicBusinessByOwnerId(id);
+async function fetchPublicProfileByOwnerId(id, options = {}) {
+  const profile = await getPublicBusinessByOwnerId(id, options);
   if (!profile) {
     console.warn("[monitor] public_business_not_found_or_unverified", {
       ownerUserId: id,
@@ -72,27 +76,48 @@ async function fetchPublicProfile(id) {
   return profile;
 }
 
-async function resolveBusinessRef(idOrPublicId) {
+async function fetchPublicProfileByPublicId(idOrPublicId, options = {}) {
+  return getPublicBusinessByPublicId(idOrPublicId, options);
+}
+
+async function resolveBusinessRef(idOrPublicId, client = getPublicSupabaseServerClient(), options = {}) {
   const normalizedRef = String(idOrPublicId || "").trim();
   if (!normalizedRef) return null;
 
   const isUuidLookup = UUID_ANY_RE.test(normalizedRef);
-  const supabase = getPublicSupabaseServerClient();
   const logEnabled =
     process.env.NODE_ENV !== "production" &&
     process.env[LOOKUP_DEBUG_ENV_FLAG] === "1";
   let lookupKey = isUuidLookup ? "id" : "public_id";
 
-  let { data, error } = await supabase
-    .from("businesses")
-    .select("id,owner_user_id,public_id")
-    .eq(lookupKey, normalizedRef)
-    .maybeSingle();
+  let directProfile = null;
+  let data = null;
+  let error = null;
+
+  if (!isUuidLookup) {
+    directProfile = await fetchPublicProfileByPublicId(normalizedRef, {
+      client,
+      viewerCanSeeInternalContent: options.viewerCanSeeInternalContent,
+    });
+    data = directProfile
+      ? {
+          id: directProfile.business_row_id,
+          owner_user_id: directProfile.owner_user_id,
+          public_id: directProfile.public_id,
+        }
+      : null;
+  } else {
+    ({ data, error } = await client
+      .from("businesses")
+      .select("id,owner_user_id,public_id")
+      .eq(lookupKey, normalizedRef)
+      .maybeSingle());
+  }
 
   // Backward compatibility for older UUID links that may have used owner_user_id.
   if (!data && !error && isUuidLookup) {
     lookupKey = "owner_user_id";
-    const ownerLookup = await supabase
+    const ownerLookup = await client
       .from("businesses")
       .select("id,owner_user_id,public_id")
       .eq("owner_user_id", normalizedRef)
@@ -105,6 +130,7 @@ async function resolveBusinessRef(idOrPublicId) {
     console.log("[public business] route lookup", {
       idOrPublicId: normalizedRef,
       key: lookupKey,
+      usedOwnerLookup: lookupKey === "owner_user_id",
       found: Boolean(data && !error),
     });
   }
@@ -128,11 +154,51 @@ async function resolveBusinessRef(idOrPublicId) {
   };
 }
 
-function buildListingsQuery(supabase, businessId, limit, filters) {
+async function logProfileNotFoundDiagnostics({
+  routeParam,
+  client,
+  viewerCanSeeInternalContent,
+  lookupUsedOwnerUserId = false,
+}) {
+  if (process.env.NODE_ENV === "production") return;
+
+  const normalizedRef = String(routeParam || "").trim();
+  if (!normalizedRef) return;
+
+  const { data: rawPublicRow, error: publicRowError } = await client
+    .from("businesses")
+    .select("id,owner_user_id,public_id,verification_status,account_status,deleted_at,is_internal")
+    .eq("public_id", normalizedRef)
+    .maybeSingle();
+
+  const rawRow = rawPublicRow || null;
+  const excludedByVerificationStatus = Boolean(
+    rawRow && !PUBLIC_VERIFIED_BUSINESS_STATUSES.includes(String(rawRow.verification_status || ""))
+  );
+  const excludedByAccountStatus = Boolean(rawRow && String(rawRow.account_status || "") !== "active");
+  const excludedByDeletedAt = Boolean(rawRow?.deleted_at);
+  const excludedByInternalVisibility = Boolean(
+    rawRow?.is_internal === true && !viewerCanSeeInternalContent
+  );
+
+  console.warn("[public business] profile not found diagnostics", {
+    routeParam: normalizedRef,
+    rowExistsByPublicId: Boolean(rawRow),
+    excludedByVerificationStatus,
+    excludedByAccountStatus,
+    excludedByDeletedAt,
+    excludedByInternalVisibility,
+    lookupUsedOwnerUserId,
+    publicIdLookupErrorCode: publicRowError?.code || null,
+    publicIdLookupErrorMessage: publicRowError?.message || null,
+  });
+}
+
+function buildListingsQuery(supabase, businessId, limit, filters, viewerCanSeeInternalContent = false) {
   let query = supabase
     .from("listings")
     .select(
-      "id,public_id,business_id,title,price,category,listing_category,category_id,city,photo_url,created_at"
+      "id,public_id,business_id,title,price,category,listing_category,category_id,city,photo_url,created_at,is_internal"
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })
@@ -146,6 +212,9 @@ function buildListingsQuery(supabase, businessId, limit, filters) {
   }
   if (filters.is_test) {
     query = query.eq("is_test", false);
+  }
+  if (!viewerCanSeeInternalContent) {
+    query = query.eq("is_internal", false);
   }
 
   return query;
@@ -164,7 +233,38 @@ async function fetchListingsWithFallback(supabase, businessId, limit) {
 
   for (const filters of filterSets) {
     const result = await safeQuery(
-      buildListingsQuery(supabase, businessId, limit, filters),
+      buildListingsQuery(supabase, businessId, limit, filters, false),
+      [],
+      "listings"
+    );
+    if (result.data?.length) {
+      return result.data.map((listing) => withListingPricing(listing));
+    }
+  }
+
+  return [];
+}
+
+async function fetchListingsForViewer(supabase, businessId, limit, viewerCanSeeInternalContent = false) {
+  const filterSets = [
+    { status: true, is_published: true, is_test: true },
+    { status: true, is_published: true },
+    { is_published: true, is_test: true },
+    { status: true },
+    { is_published: true },
+    { is_test: true },
+    {},
+  ];
+
+  for (const filters of filterSets) {
+    const result = await safeQuery(
+      buildListingsQuery(
+        supabase,
+        businessId,
+        limit,
+        filters,
+        viewerCanSeeInternalContent
+      ),
       [],
       "listings"
     );
@@ -228,7 +328,7 @@ function descriptionSnippet(value) {
 
 const getPublicProfileCached = unstable_cache(
   async (businessId) => {
-    return fetchPublicProfile(businessId);
+    return fetchPublicProfileByOwnerId(businessId);
   },
   ["public-business-profile"],
   { revalidate: PUBLIC_CACHE_SECONDS }
@@ -307,21 +407,20 @@ function createPerfLogger({ enabled, label, businessId }) {
 export async function generateMetadata({ params }) {
   const resolvedParams = await Promise.resolve(params);
   const idOrPublicId = resolvedParams?.id;
-  const resolvedRef = await resolveBusinessRef(idOrPublicId);
+  const publicClient = getPublicSupabaseServerClient();
+  const resolvedRef = await resolveBusinessRef(idOrPublicId, publicClient, {
+    viewerCanSeeInternalContent: false,
+  });
   const businessId = resolvedRef?.id || null;
   const businessPublicId = resolvedRef?.public_id || null;
-  const profile = businessId ? await getPublicProfileCached(businessId) : null;
+  const profile = !idOrPublicId
+    ? null
+    : (await fetchPublicProfileByPublicId(idOrPublicId, {
+        client: publicClient,
+        viewerCanSeeInternalContent: false,
+      })) ||
+      (businessId ? await getPublicProfileCached(businessId) : null);
   if (!profile) {
-    return {
-      title: "Business profile unavailable",
-      description: "This business profile is not available yet.",
-    };
-  }
-
-  const listingPreview = await getPublicListingsCached(businessId, 1);
-  const isEligible = listingPreview.length > 0;
-
-  if (!isEligible) {
     return {
       title: "Business profile unavailable",
       description: "This business profile is not available yet.",
@@ -356,8 +455,28 @@ export default async function PublicBusinessProfilePage({
   const resolvedSearch = await Promise.resolve(searchParams);
   const idOrPublicId = String(resolvedParams?.id || "").trim();
   if (!idOrPublicId) notFound();
-  const resolvedRef = await resolveBusinessRef(idOrPublicId);
-  if (!resolvedRef?.id) notFound();
+  const authedClient = await getSupabaseServerClient();
+  const { viewerCanSeeInternalContent } = await getCurrentViewerVisibilityGate(authedClient);
+  const viewerClient = viewerCanSeeInternalContent ? authedClient : getPublicSupabaseServerClient();
+  const publicIdProfile = await fetchPublicProfileByPublicId(idOrPublicId, {
+    client: viewerClient,
+    viewerCanSeeInternalContent,
+  });
+  const resolvedRef =
+    publicIdProfile
+      ? { id: publicIdProfile.owner_user_id, public_id: publicIdProfile.public_id || null }
+      : await resolveBusinessRef(idOrPublicId, viewerClient, {
+          viewerCanSeeInternalContent,
+        });
+  if (!resolvedRef?.id) {
+    await logProfileNotFoundDiagnostics({
+      routeParam: idOrPublicId,
+      client: viewerClient,
+      viewerCanSeeInternalContent,
+      lookupUsedOwnerUserId: UUID_ANY_RE.test(idOrPublicId),
+    });
+    notFound();
+  }
   const businessId = resolvedRef.id;
   const businessPublicId = String(resolvedRef.public_id || "").trim();
   if (UUID_ANY_RE.test(idOrPublicId) && businessPublicId) {
@@ -378,23 +497,24 @@ export default async function PublicBusinessProfilePage({
   }
 
   const profileResult = await perf.time("profile", () =>
-    getPublicProfileCached(businessId)
+    publicIdProfile ||
+    (viewerCanSeeInternalContent
+      ? fetchPublicProfileByOwnerId(businessId, {
+          client: viewerClient,
+          viewerCanSeeInternalContent,
+        })
+      : getPublicProfileCached(businessId))
   );
   const profile = sanitizePublicProfile(profileResult);
 
   if (!profile) {
     perf.end({ outcome: "missing-profile" });
-    notFound();
-  }
-
-  const publicReadClient = getPublicSupabaseServerClient();
-  const listingPreview = await perf.time("listings-preview", () =>
-    getPublicListingsCached(businessId, 1)
-  );
-  const isEligible = listingPreview.length > 0;
-
-  if (!isEligible) {
-    perf.end({ outcome: "unpublished" });
+    await logProfileNotFoundDiagnostics({
+      routeParam: idOrPublicId,
+      client: viewerClient,
+      viewerCanSeeInternalContent,
+      lookupUsedOwnerUserId: UUID_ANY_RE.test(idOrPublicId),
+    });
     notFound();
   }
 
@@ -407,7 +527,9 @@ export default async function PublicBusinessProfilePage({
         getPublicAnnouncementsCached(businessId)
       ),
       perf.time("listings", () =>
-        getPublicListingsCached(businessId, 24)
+        viewerCanSeeInternalContent
+          ? fetchListingsForViewer(viewerClient, businessId, 24, viewerCanSeeInternalContent)
+          : getPublicListingsCached(businessId, 24)
       ),
       perf.time("reviews", () =>
         getPublicReviewsCached(businessId)

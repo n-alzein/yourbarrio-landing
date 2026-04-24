@@ -3,15 +3,21 @@ import { findBusinessesForLocation } from "@/lib/location/businessLocationSearch
 
 function createSupabaseMock(rows) {
   const limit = vi.fn().mockResolvedValue({ data: rows, error: null });
-  const inFn = vi.fn(() => ({ limit }));
-  const select = vi.fn(() => ({ in: inFn }));
+  const query = {
+    eq: vi.fn(() => query),
+    in: vi.fn(() => query),
+    is: vi.fn(() => query),
+    order: vi.fn(() => query),
+    limit,
+  };
+  const select = vi.fn(() => query);
   const from = vi.fn(() => ({ select }));
 
   return {
     from,
     __mocks: {
+      query,
       select,
-      inFn,
       limit,
     },
   };

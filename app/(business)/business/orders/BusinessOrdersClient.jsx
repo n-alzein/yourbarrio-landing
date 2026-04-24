@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import OrderStatusBadge from "@/components/orders/OrderStatusBadge";
 import {
@@ -118,6 +118,8 @@ function ItemThumbnail({ item }) {
 }
 
 export default function BusinessOrdersClient() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialTab = searchParams?.get("tab") || "new";
   const orderParam = searchParams?.get("order") || "";
@@ -132,6 +134,7 @@ export default function BusinessOrdersClient() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
   const [statusMenuOrder, setStatusMenuOrder] = useState(null);
+  const [dismissedOrderParam, setDismissedOrderParam] = useState("");
   const [acknowledgedOrderIds, setAcknowledgedOrderIds] = useState(() => new Set());
   const deliveryInstructions = selectedOrder?.delivery_instructions?.trim();
   const deliveryNotesSnapshot = selectedOrder?.delivery_notes_snapshot?.trim();
@@ -200,16 +203,22 @@ export default function BusinessOrdersClient() {
   }, [orderParam]);
 
   useEffect(() => {
+    if (dismissedOrderParam && dismissedOrderParam !== orderParam) {
+      setDismissedOrderParam("");
+    }
+  }, [dismissedOrderParam, orderParam]);
+
+  useEffect(() => {
     setStatusMenuOrder(null);
   }, [activeTab, orderParam]);
 
   useEffect(() => {
-    if (!orderParam || selectedOrder?.id) return;
+    if (!orderParam || orderParam === dismissedOrderParam || selectedOrder?.id) return;
     const matched = orders.find((order) => order.order_number === orderParam);
     if (matched) {
       setSelectedOrder(matched);
     }
-  }, [orderParam, orders, selectedOrder?.id]);
+  }, [dismissedOrderParam, orderParam, orders, selectedOrder?.id]);
 
   useEffect(() => {
     const orderId = selectedOrder?.id;
@@ -448,6 +457,59 @@ export default function BusinessOrdersClient() {
       ? "New orders will show up here when customers submit requests."
       : "Try clearing filters or searching with a different keyword.";
 
+  const closeSelectedOrder = () => {
+    if (orderParam) {
+      setDismissedOrderParam(orderParam);
+    }
+
+    setSelectedOrder(null);
+
+    if (!orderParam) return;
+
+    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    nextParams.delete("order");
+    const nextQuery = nextParams.toString();
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+
+    router.replace(nextUrl, { scroll: false });
+  };
+
+  const openOrderDetails = (order) => {
+    if (!order?.order_number) return;
+
+    setDismissedOrderParam("");
+    setSelectedOrder(order);
+
+    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    nextParams.set("tab", activeTab);
+    nextParams.set("order", order.order_number);
+    const nextQuery = nextParams.toString();
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+
+    router.replace(nextUrl, { scroll: false });
+  };
+
+  const handleOrderActivationKeyDown = (event, order) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openOrderDetails(order);
+  };
+
+  useEffect(() => {
+    if (!selectedOrder) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeSelectedOrder();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedOrder, orderParam, pathname, router, searchParams]);
+
   return (
     <div
       className="min-h-screen px-4 pb-12 md:px-8 lg:px-12"
@@ -661,7 +723,15 @@ export default function BusinessOrdersClient() {
                           : order.pickup_time;
                       const { primaryAction, hasMenu } = getOrderActions(order);
                       return (
-                        <tr key={order.id} className="hover:bg-[var(--overlay)]">
+                        <tr
+                          key={order.id}
+                          className="cursor-pointer transition hover:bg-[var(--overlay)] focus-within:bg-[var(--overlay)]"
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Open order ${order.order_number}`}
+                          onClick={() => openOrderDetails(order)}
+                          onKeyDown={(event) => handleOrderActivationKeyDown(event, order)}
+                        >
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-3">
                               <OrderThumbnail order={order} />
@@ -707,7 +777,10 @@ export default function BusinessOrdersClient() {
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => setSelectedOrder(order)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openOrderDetails(order);
+                                }}
                                 className={`${baseButton} border`}
                                 style={{ borderColor: "var(--border)" }}
                               >
@@ -716,7 +789,10 @@ export default function BusinessOrdersClient() {
                               {hasMenu ? (
                                 <button
                                   type="button"
-                                  onClick={() => setStatusMenuOrder(order)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setStatusMenuOrder(order);
+                                  }}
                                   disabled={updatingId === order.id}
                                   className={`${baseButton} border`}
                                   style={{
@@ -732,9 +808,10 @@ export default function BusinessOrdersClient() {
                               {primaryAction ? (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleStatusUpdate(order.id, primaryAction.status)
-                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleStatusUpdate(order.id, primaryAction.status);
+                                  }}
                                   disabled={updatingId === order.id}
                                   className={baseButton}
                                   style={{
@@ -768,8 +845,13 @@ export default function BusinessOrdersClient() {
                 return (
                   <div
                     key={order.id}
-                    className="rounded-3xl p-5 space-y-5"
+                    className="cursor-pointer rounded-3xl p-5 space-y-5 transition hover:bg-[var(--overlay)] focus-within:bg-[var(--overlay)]"
                     style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Open order ${order.order_number}`}
+                    onClick={() => openOrderDetails(order)}
+                    onKeyDown={(event) => handleOrderActivationKeyDown(event, order)}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-start gap-3">
@@ -816,7 +898,10 @@ export default function BusinessOrdersClient() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSelectedOrder(order)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openOrderDetails(order);
+                          }}
                           className={`${baseButton} border`}
                           style={{ borderColor: "var(--border)" }}
                         >
@@ -825,7 +910,10 @@ export default function BusinessOrdersClient() {
                         {hasMenu ? (
                           <button
                             type="button"
-                            onClick={() => setStatusMenuOrder(order)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setStatusMenuOrder(order);
+                            }}
                             disabled={updatingId === order.id}
                             className={`${baseButton} border`}
                             style={{
@@ -841,9 +929,10 @@ export default function BusinessOrdersClient() {
                         {primaryAction ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              handleStatusUpdate(order.id, primaryAction.status)
-                            }
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleStatusUpdate(order.id, primaryAction.status);
+                            }}
                             disabled={updatingId === order.id}
                             className={baseButton}
                             style={{
@@ -873,6 +962,7 @@ export default function BusinessOrdersClient() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="order-detail-title"
+          onClick={closeSelectedOrder}
         >
           <div
             className="order-detail-surface w-full max-w-3xl rounded-3xl p-6 max-h-[85vh] overflow-y-auto"
@@ -880,6 +970,7 @@ export default function BusinessOrdersClient() {
               background: "var(--order-detail-bg)",
               border: "1px solid var(--border)",
             }}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2 w-full max-w-[35%] flex-none">
@@ -898,7 +989,7 @@ export default function BusinessOrdersClient() {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedOrder(null)}
+                onClick={closeSelectedOrder}
                 className="rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-2"
                 aria-label="Close order details"
               >

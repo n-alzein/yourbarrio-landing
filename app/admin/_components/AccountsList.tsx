@@ -117,6 +117,7 @@ export default async function AccountsList({
     to,
   });
   const isBusinessList = presetRole === "business";
+  const internalColumnLabel = isBusinessList ? "Internal/test business" : "Internal tester access";
   const businessVerificationByOwnerId = new Map<string, string>();
   let pendingVerificationCount = 0;
   if (isBusinessList) {
@@ -221,7 +222,7 @@ export default async function AccountsList({
                 <th className="px-3 py-2">Email</th>
                 <th className="px-3 py-2">Role</th>
                 {isBusinessList ? <th className="px-3 py-2">Verification status</th> : null}
-                <th className="px-3 py-2">Internal</th>
+                <th className="px-3 py-2">{internalColumnLabel}</th>
                 <th className="px-3 py-2">City</th>
                 <th className="px-3 py-2">Created</th>
               </tr>

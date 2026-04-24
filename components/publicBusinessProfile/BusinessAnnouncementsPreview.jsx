@@ -5,6 +5,23 @@ import {
 } from "@/components/business/profile-system/ProfileSystem";
 import { cx } from "@/lib/utils/cx";
 
+const ANNOUNCEMENT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "numeric",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatAnnouncementDate(value) {
+  if (!value) return "";
+
+  try {
+    return ANNOUNCEMENT_DATE_FORMATTER.format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
 export default function BusinessAnnouncementsPreview({
   announcements,
   className = "",
@@ -43,9 +60,7 @@ export default function BusinessAnnouncementsPreview({
                         {item.title || "Announcement"}
                       </h3>
                       <p className="text-xs text-slate-500">
-                        {item.created_at
-                          ? new Date(item.created_at).toLocaleDateString()
-                          : ""}
+                        {formatAnnouncementDate(item.created_at)}
                       </p>
                     </div>
                   </div>

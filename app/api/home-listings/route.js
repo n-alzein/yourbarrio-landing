@@ -10,6 +10,7 @@ import {
 import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { getNormalizedLocation, hasUsableLocationFilter } from "@/lib/location/filter";
+import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
 
 async function attachBusinessNames(client, listings) {
@@ -195,6 +196,7 @@ export async function GET(request) {
   const sessionPresent = cookieStore.getAll().length > 0;
   const sessionClient = await getSupabaseServerClient();
   const serviceClient = getSupabaseServiceClient();
+  const { viewerCanSeeInternalContent } = await getCurrentViewerVisibilityGate(sessionClient);
 
   const errors = [];
   let listings = [];
@@ -235,6 +237,7 @@ export async function GET(request) {
 
   const businessIds = await findBusinessOwnerIdsForLocation(serviceClient || sessionClient, location, {
     limit: 1000,
+    viewerCanSeeInternalContent,
   });
 
   try {
@@ -312,7 +315,13 @@ export async function GET(request) {
   }
 
   const headers =
-    listings.length === 0
+    viewerCanSeeInternalContent
+      ? {
+          "Cache-Control": "private, no-store",
+          "x-home-listings-count": String(listings.length || 0),
+          "x-home-listings-source": source,
+        }
+      : listings.length === 0
       ? {
           "Cache-Control": "no-store",
           "x-home-listings-count": "0",

@@ -38,6 +38,7 @@ export default function AccountsFiltersClient({
   const urlInternal = (searchParams.get("internal") || initialInternal) as InternalFilter;
   const urlPageSize = normalizePageSize(searchParams.get("pageSize"), initialPageSize);
   const effectiveRole = presetRole || urlRole;
+  const internalLabel = presetRole === "business" ? "Internal/test business" : "Internal tester access";
 
   useEffect(() => {
     setQueryInput(urlQuery);
@@ -105,7 +106,7 @@ export default function AccountsFiltersClient({
           )}
 
           <label className="flex items-center gap-2 rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm">
-            <span className="text-neutral-400">Internal:</span>
+            <span className="text-neutral-400">{internalLabel}:</span>
             <select
               value={urlInternal}
               onChange={(event) =>

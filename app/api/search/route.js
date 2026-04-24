@@ -18,6 +18,7 @@ import {
   getNormalizedLocation,
   hasUsableLocationFilter,
 } from "@/lib/location/filter";
+import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -292,7 +293,7 @@ export async function GET(request) {
     lng: searchParams.get("lng") || cookieLocation?.lng,
   });
   const locationKey = getLocationCacheKey(location);
-  const cacheKey = `${query.toLowerCase()}::${category.toLowerCase()}::${locationKey}`;
+  const cacheKeyBase = `${query.toLowerCase()}::${category.toLowerCase()}::${locationKey}`;
 
   if (!query) {
     return NextResponse.json({
@@ -323,10 +324,7 @@ export async function GET(request) {
     );
   }
 
-  const cached = getCachedResponse(cacheKey);
-  if (cached) {
-    return NextResponse.json(cached);
-  }
+  let viewerCanSeeInternalContent = false;
 
   let supabase = null;
   try {
@@ -335,8 +333,21 @@ export async function GET(request) {
     console.error("Failed to init Supabase client", err);
   }
 
+  ({ viewerCanSeeInternalContent } = supabase
+    ? await getCurrentViewerVisibilityGate(supabase)
+    : { viewerCanSeeInternalContent: false });
+  const cacheKey = `${cacheKeyBase}::${viewerCanSeeInternalContent ? "internal" : "public"}`;
+  if (!viewerCanSeeInternalContent) {
+    const publicCached = getCachedResponse(cacheKey);
+    if (publicCached) {
+      return NextResponse.json(publicCached);
+    }
+  }
   const businessIds = supabase
-    ? await findBusinessOwnerIdsForLocation(supabase, location, { limit: 1000 })
+    ? await findBusinessOwnerIdsForLocation(supabase, location, {
+        limit: 1000,
+        viewerCanSeeInternalContent,
+      })
     : [];
 
   const [items, businesses, places] = await Promise.all([
@@ -351,7 +362,11 @@ export async function GET(request) {
     places,
   };
 
-  setCachedResponse(cacheKey, payload);
+  if (!viewerCanSeeInternalContent) {
+    setCachedResponse(cacheKey, payload);
+  }
 
-  return NextResponse.json(payload);
+  return NextResponse.json(payload, {
+    headers: viewerCanSeeInternalContent ? { "Cache-Control": "private, no-store" } : undefined,
+  });
 }

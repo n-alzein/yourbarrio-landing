@@ -112,6 +112,11 @@ export async function updateUserRoleAction(formData: FormData) {
   }
 
   if (nextRole === "business") {
+    const { data: existingBusiness } = await client
+      .from("businesses")
+      .select("is_internal")
+      .eq("owner_user_id", parsed.data.userId)
+      .maybeSingle();
     const { data: businessSeed } = await client
       .from("users")
       .select(
@@ -142,7 +147,7 @@ export async function updateUserRoleAction(formData: FormData) {
           longitude: businessSeed.longitude ?? null,
           hours_json: businessSeed.hours_json || {},
           social_links_json: businessSeed.social_links_json || {},
-          is_internal: businessSeed.is_internal === true,
+          is_internal: existingBusiness?.is_internal === true,
         },
         { onConflict: "owner_user_id", ignoreDuplicates: false }
       );
@@ -213,7 +218,71 @@ export async function toggleUserInternalAction(formData: FormData) {
   });
 
   revalidatePath(targetPath);
-  redirect(withMessage(targetPath, "success", "Internal flag updated"));
+  redirect(withMessage(targetPath, "success", "Internal tester access updated"));
+}
+
+export async function toggleBusinessInternalAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const parsed = toggleInternalSchema.safeParse({
+    userId: formData.get("userId"),
+    isInternal: formData.get("isInternal"),
+  });
+
+  if (!parsed.success) {
+    redirect(withMessage("/admin/businesses", "error", "Invalid business internal toggle payload"));
+  }
+
+  const fallbackTargetPath = `/admin/users/${parsed.data.userId}`;
+  requireCapabilityOrRedirect(admin, "toggle_internal_user", fallbackTargetPath);
+
+  const nextValue = parsed.data.isInternal === "true";
+  const { client } = await getAdminDataClient({ mode: "service" });
+  const targetPath = await resolveAdminUserPath(client, parsed.data.userId);
+  const { data: existingBusiness } = await client
+    .from("businesses")
+    .select("owner_user_id,is_internal")
+    .eq("owner_user_id", parsed.data.userId)
+    .maybeSingle();
+
+  if (!existingBusiness?.owner_user_id) {
+    redirect(withMessage(targetPath, "error", "Business row not found"));
+  }
+
+  if (nextValue) {
+    const { error: userError } = await client
+      .from("users")
+      .update({ is_internal: true, updated_at: new Date().toISOString() })
+      .eq("id", parsed.data.userId);
+
+    if (userError) {
+      redirect(withMessage(targetPath, "error", userError.message));
+    }
+  }
+
+  const { error } = await client
+    .from("businesses")
+    .update({ is_internal: nextValue, updated_at: new Date().toISOString() })
+    .eq("owner_user_id", parsed.data.userId);
+
+  if (error) {
+    redirect(withMessage(targetPath, "error", error.message));
+  }
+
+  await audit({
+    action: "business_internal_toggled",
+    targetType: "business",
+    targetId: parsed.data.userId,
+    actorUserId: admin.user.id,
+    meta: {
+      previous_is_internal: existingBusiness?.is_internal ?? null,
+      is_internal: nextValue,
+      owner_internal_tester_access_granted: nextValue ? true : undefined,
+    },
+  });
+
+  revalidatePath("/admin/businesses");
+  revalidatePath(targetPath);
+  redirect(withMessage(targetPath, "success", "Internal/test business updated"));
 }
 
 const internalNoteSchema = z.object({

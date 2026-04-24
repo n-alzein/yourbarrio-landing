@@ -192,7 +192,7 @@ function mapFromBusinesses(row: any, userRow: any | null): UnifiedBusiness {
     hours_json: asRecord(row?.hours_json || userRow?.hours_json || null),
     social_links_json: asRecord(row?.social_links_json || userRow?.social_links_json || null),
     role: userRow?.role ?? null,
-    is_internal: row?.is_internal === true || userRow?.is_internal === true,
+    is_internal: row?.is_internal === true,
     verification_status: normalizeVerificationStatus(row?.verification_status),
     stripe_connected: row?.stripe_connected === true,
     verified_at: row?.verified_at ?? null,

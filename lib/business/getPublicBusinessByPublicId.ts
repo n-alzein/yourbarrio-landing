@@ -7,11 +7,8 @@ import {
   type PublicBusinessRow,
 } from "@/lib/business/publicBusinessQuery";
 
-const UUID_ANY_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export async function getPublicBusinessByOwnerId(
-  ownerUserId: string,
+export async function getPublicBusinessByPublicId(
+  publicId: string,
   options: {
     client?: {
       from: (table: string) => any;
@@ -19,23 +16,23 @@ export async function getPublicBusinessByOwnerId(
     viewerCanSeeInternalContent?: boolean;
   } = {}
 ): Promise<PublicBusiness | null> {
-  const trimmedOwnerUserId = String(ownerUserId || "").trim();
-  if (!trimmedOwnerUserId || !UUID_ANY_RE.test(trimmedOwnerUserId)) return null;
+  const trimmedPublicId = String(publicId || "").trim();
+  if (!trimmedPublicId) return null;
 
   const supabase = options.client ?? getPublicSupabaseServerClient();
   const query = applyPublicBusinessVisibility(
     supabase
-    .from("businesses")
-    .select(PUBLIC_BUSINESS_SELECT)
-    .eq("owner_user_id", trimmedOwnerUserId),
+      .from("businesses")
+      .select(PUBLIC_BUSINESS_SELECT)
+      .eq("public_id", trimmedPublicId),
     options
   );
 
   const { data, error } = await query.maybeSingle<PublicBusinessRow>();
 
   if (error) {
-    console.warn("[public-business] businesses lookup failed", {
-      ownerUserId: trimmedOwnerUserId,
+    console.warn("[public-business] businesses public_id lookup failed", {
+      publicId: trimmedPublicId,
       code: error.code || null,
       message: error.message || null,
     });
@@ -43,8 +40,7 @@ export async function getPublicBusinessByOwnerId(
   }
 
   if (!data) return null;
-
   return mapPublicBusinessRow(data);
 }
 
-export default getPublicBusinessByOwnerId;
+export default getPublicBusinessByPublicId;

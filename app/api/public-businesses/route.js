@@ -7,6 +7,7 @@ import {
   hasUsableLocationFilter,
   haversineDistanceKm,
 } from "@/lib/location/filter";
+import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
 import { getBusinessTypeLabel } from "@/lib/taxonomy/compat";
 
 const CACHE_SECONDS = 120;
@@ -171,6 +172,7 @@ export async function GET(request) {
     });
 
     const supabase = await createSupabaseClient();
+    const { viewerCanSeeInternalContent } = await getCurrentViewerVisibilityGate(supabase);
     const categories = await fetchBusinessCategories(supabase);
 
     if (!hasUsableLocationFilter(location)) {
@@ -180,7 +182,10 @@ export async function GET(request) {
       );
     }
 
-    const rows = await findBusinessesForLocation(supabase, location, { limit: 1000 });
+    const rows = await findBusinessesForLocation(supabase, location, {
+      limit: 1000,
+      viewerCanSeeInternalContent,
+    });
 
     const parseNum = (val) => {
       if (typeof val === "number" && Number.isFinite(val)) return val;
@@ -267,7 +272,10 @@ export async function GET(request) {
       { businesses, categories: usedCategories },
       {
         headers: {
-          "Cache-Control": `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}`,
+          "Cache-Control":
+            viewerCanSeeInternalContent
+              ? "private, no-store"
+              : `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}`,
         },
       }
     );

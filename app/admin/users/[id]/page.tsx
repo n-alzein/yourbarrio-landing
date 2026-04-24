@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import {
   startImpersonationAction,
+  toggleBusinessInternalAction,
   toggleUserInternalAction,
 } from "@/app/admin/actions";
 import AdminPage from "@/app/admin/_components/AdminPage";
@@ -134,7 +135,6 @@ export default async function AdminUserDetailPage({
           city: business.city ?? userDetail?.city ?? null,
           state: business.state ?? userDetail?.state ?? null,
           postal_code: business.postal_code ?? userDetail?.postal_code ?? null,
-          is_internal: business.is_internal ?? userDetail?.is_internal ?? false,
           verification_status: business.verification_status,
           stripe_connected: business.stripe_connected,
         }
@@ -201,7 +201,16 @@ export default async function AdminUserDetailPage({
     <AdminUserDetailLayout
       header={<AdminUserHeaderBar user={mergedUser} />}
       flash={<AdminFlash searchParams={resolvedSearch} />}
-      aside={<AdminUserAside user={mergedUser} canImpersonate={canImpersonate} />}
+      aside={
+        <AdminUserAside
+          user={{
+            ...mergedUser,
+            is_internal: isBusinessAccount && business ? business.is_internal : mergedUser.is_internal,
+          }}
+          internalLabel={isBusinessAccount && business ? "Internal/test business" : "Internal tester access"}
+          canImpersonate={canImpersonate}
+        />
+      }
       canSeePermissionsTab={canSeePermissionsTab}
       canSeeSecurityTab={canSuper}
     >
@@ -245,7 +254,16 @@ export default async function AdminUserDetailPage({
                     : "-"
                 }
               />
-              <Field label="Internal" value={String(Boolean(mergedUser.is_internal))} />
+              <Field
+                label={isBusinessAccount && business ? "Internal/test business" : "Internal tester access"}
+                value={String(
+                  Boolean(
+                    isBusinessAccount && business
+                      ? business.is_internal
+                      : (userDetail?.is_internal ?? mergedUser.is_internal)
+                  )
+                )}
+              />
               <Field label="Verification" value={mergedUser.verification_status || "-"} />
               <Field label="Stripe connected" value={String(Boolean(mergedUser.stripe_connected))} />
               <Field label="Created" value={mergedUser.created_at ? new Date(mergedUser.created_at).toLocaleString() : "-"} />
@@ -273,7 +291,7 @@ export default async function AdminUserDetailPage({
                   </div>
                   <Field label="Verified at" value={business.verified_at ? new Date(business.verified_at).toLocaleString() : "-"} />
                   <Field label="Stripe connected" value={business.stripe_connected ? "Yes" : "No"} />
-                  <Field label="Internal" value={business.is_internal ? "Yes" : "No"} />
+                  <Field label="Internal/test business" value={business.is_internal ? "Yes" : "No"} />
                 </div>
                 <BusinessVerificationActionsClient
                   ownerUserId={user.id}
@@ -336,18 +354,37 @@ export default async function AdminUserDetailPage({
         <div className="space-y-3">
           {canRoleFixes ? <AdminUserRoleEditor userId={user.id} initialRole={user.role || "customer"} /> : null}
 
-          {canOps ? (
+          {canOps && !isBusinessAccount ? (
             <form action={toggleUserInternalAction} className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-              <h3 className="mb-2 font-medium">Toggle internal user</h3>
+              <h3 className="mb-2 font-medium">Toggle internal tester access</h3>
               <input type="hidden" name="userId" value={user.id} />
-              <input type="hidden" name="isInternal" value={String(!mergedUser.is_internal)} />
+              <input
+                type="hidden"
+                name="isInternal"
+                value={String(!(userDetail?.is_internal ?? mergedUser.is_internal))}
+              />
               <button type="submit" className="yb-primary-button rounded px-3 py-2 text-sm text-white">
-                Set is_internal = {String(!mergedUser.is_internal)}
+                Set Internal tester access = {String(!(userDetail?.is_internal ?? mergedUser.is_internal))}
               </button>
             </form>
-          ) : (
+          ) : !isBusinessAccount ? (
             <PlaceholderMessage message="You do not have permission to change internal-user flags." />
-          )}
+          ) : null}
+
+          {canOps && isBusinessAccount && business ? (
+            <form action={toggleBusinessInternalAction} className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+              <h3 className="mb-2 font-medium">Toggle internal/test business</h3>
+              <p className="mb-3 text-sm text-neutral-400">
+                Hidden from normal public users. Turning this on also grants the owner internal
+                tester access so they can view internal/test content.
+              </p>
+              <input type="hidden" name="userId" value={user.id} />
+              <input type="hidden" name="isInternal" value={String(!business.is_internal)} />
+              <button type="submit" className="rounded border border-neutral-700 px-3 py-2 text-sm hover:border-neutral-500">
+                Set Internal/test business = {String(!business.is_internal)}
+              </button>
+            </form>
+          ) : null}
         </div>
 
         <div className="space-y-3">
@@ -424,6 +461,7 @@ export default async function AdminUserDetailPage({
 
 function AdminUserAside({
   user,
+  internalLabel = "Internal tester access",
   canImpersonate,
 }: {
   user: {
@@ -436,6 +474,7 @@ function AdminUserAside({
     created_at: string | null;
     updated_at: string | null;
   };
+  internalLabel?: string;
   canImpersonate: boolean;
 }) {
   return (
@@ -451,7 +490,7 @@ function AdminUserAside({
       <SectionCard title="Status">
         <dl className="space-y-2 text-sm">
           <Field label="Role" value={user.role} compact />
-          <Field label="Internal" value={user.is_internal ? "true" : "false"} compact />
+          <Field label={internalLabel} value={user.is_internal ? "true" : "false"} compact />
           <Field label="Created" value={user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"} compact />
           <Field label="Updated" value={user.updated_at ? new Date(user.updated_at).toLocaleDateString() : "-"} compact />
         </dl>
