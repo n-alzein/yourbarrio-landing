@@ -34,7 +34,7 @@ async function getSavedData() {
 
   if (ids.length > 0) {
     const { data, error: listingsError } = await client
-      .from("listings")
+      .from("public_listings_v")
       .select("*")
       .in("id", ids);
 

@@ -11,6 +11,7 @@ import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { getNormalizedLocation, hasUsableLocationFilter } from "@/lib/location/filter";
 import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
+import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { withListingPricing } from "@/lib/pricing";
 
 async function attachBusinessNames(client, listings) {
@@ -51,7 +52,7 @@ async function attachBusinessNames(client, listings) {
 }
 
 const LISTING_SELECT =
-  "id,public_id,title,price,category,category_id,city,photo_url,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at";
+  "id,public_id,title,price,category,category_id,city,photo_url,photo_variants,cover_image_id,business_id,created_at,inventory_status,inventory_quantity,low_stock_threshold,inventory_last_updated_at";
 
 function buildBaseHomeListingsQuery(client, { limit, searchQuery, businessIds }) {
   if (!Array.isArray(businessIds) || businessIds.length === 0) {
@@ -297,7 +298,12 @@ export async function GET(request) {
 
   if (listings.length > 0) {
     listings = await attachBusinessNames(serviceClient || sessionClient, listings);
-    listings = listings.map((listing) => withListingPricing(listing));
+    listings = listings.map((listing) =>
+      withListingPricing({
+        ...listing,
+        photo_url: resolveListingCoverImageUrl(listing) || listing.photo_url || null,
+      })
+    );
   }
 
   if (!listings.length && errors.length) {

@@ -8,7 +8,7 @@ import {
   LISTING_FULFILLMENT_SELECT,
   PICKUP_FULFILLMENT_TYPE,
 } from "@/lib/fulfillment";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 import {
   clampOrderQuantity,
@@ -267,7 +267,7 @@ export async function POST(request) {
   const { data: listing, error: listingError } = await supabase
     .from("listings")
     .select(
-      `id,business_id,title,price,photo_url,category,listing_category,category_id,inventory_status,inventory_quantity,low_stock_threshold,${LISTING_FULFILLMENT_SELECT}`
+      `id,business_id,title,price,photo_url,photo_variants,cover_image_id,category,listing_category,category_id,inventory_status,inventory_quantity,low_stock_threshold,${LISTING_FULFILLMENT_SELECT}`
     )
     .eq("id", listingId)
     .maybeSingle();
@@ -393,7 +393,7 @@ export async function POST(request) {
     quantity: nextQuantity,
     title: listing.title,
     unit_price: selectedUnitPrice,
-    image_url: primaryPhotoUrl(listing.photo_url),
+    image_url: resolveListingCoverImageUrl(listing),
     updated_at: new Date().toISOString(),
   };
 

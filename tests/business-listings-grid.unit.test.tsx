@@ -24,6 +24,11 @@ const listings = [
     category: "food-beverage",
     city: "Los Angeles",
     photo_url: "/cold-brew.jpg",
+    photo_variants: [
+      { id: "photo-1", original: { url: "/cold-brew.jpg", path: null } },
+      { id: "photo-2", original: { url: "/cold-brew-cover.jpg", path: null } },
+    ],
+    cover_image_id: "photo-2",
     public_id: "listing-1",
   },
   {
@@ -57,5 +62,18 @@ describe("BusinessListingsGrid", () => {
     expect(cards[0]).toHaveClass("shrink-0", "snap-start");
     expect(cards[0].className).toContain("w-[calc((100%-1rem)/2)]");
     expect(cards[0].className).toContain("sm:w-[18.5rem]");
+  });
+
+  it("uses cover_image_id for the visible listing image and falls back when absent", () => {
+    render(
+      <BusinessListingsGrid
+        listings={listings}
+        itemHrefResolver={(item) => `/listings/${item.public_id}`}
+      />
+    );
+
+    const images = screen.getAllByRole("img");
+    expect(images[0]).toHaveAttribute("src", "/cold-brew-cover.jpg");
+    expect(images[1]).toHaveAttribute("src", "/pan-dulce.jpg");
   });
 });

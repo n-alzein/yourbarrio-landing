@@ -9,16 +9,19 @@ import { useAuth } from "@/components/AuthProvider";
 import RichTextDescriptionEditor from "@/components/editor/RichTextDescriptionEditor";
 import {
   buildListingPhotoPayloadFromDrafts,
+  convertPhotoDraftsToSavedState,
   createLocalPhotoDraft,
+  getCoverPhotoDraft,
   getDraftDisplayUrl,
   hydratePhotoDrafts,
+  orderPhotoDraftsWithCoverFirst,
+  resolveCoverImageId,
 } from "@/lib/listingPhotoDrafts";
 import {
   describeImageFile,
   normalizeImageUpload,
   prepareEnhancementImage,
 } from "@/lib/normalizeImageUpload";
-import { stripHtmlToText } from "@/lib/listingDescription";
 import { retry } from "@/lib/retry";
 import { validateImageFile } from "@/lib/storageUpload";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -32,8 +35,15 @@ import {
   deriveListingInventoryFromVariants,
   getActiveVariantQuantityTotal,
   saveListingVariants,
-  validateListingOptions,
 } from "@/lib/listingOptions";
+import {
+  buildListingPublicationState,
+  formatListingPriceInput,
+  getListingPublishDisabledReason,
+  getListingDraftTitle,
+  getListingSaveErrorMessage,
+  validateListingForPublish,
+} from "@/lib/listingEditor";
 import {
   buildListingTaxonomyPayload,
   getListingCategorySlug,
@@ -69,6 +79,7 @@ export default function EditListingPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveAction, setSaveAction] = useState(null);
   const MAX_PHOTOS = 10;
   const columnSurface = "rounded-[30px] bg-white px-5 py-5 shadow-sm ring-1 ring-slate-200 sm:px-6";
   const sectionCard = "border-t border-slate-100 pt-8 first:border-t-0 first:pt-0";
@@ -100,11 +111,14 @@ export default function EditListingPage() {
   });
 
   const [photos, setPhotos] = useState([]);
+  const [coverImageId, setCoverImageId] = useState(null);
   const photosRef = useRef([]);
   const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
   const [internalListingId, setInternalListingId] = useState(null);
+  const [listingStatus, setListingStatus] = useState("draft");
   const [listingOptions, setListingOptions] = useState(createEmptyVariantPayload());
   const [listingOptionsErrors, setListingOptionsErrors] = useState(null);
   const variantsEnabled = Boolean(listingOptions?.hasOptions);
@@ -113,10 +127,34 @@ export default function EditListingPage() {
     listingOptions?.variants,
     form.lowStockThreshold
   );
+  const publishValidation = useMemo(
+    () =>
+      validateListingForPublish({
+        form,
+        photos,
+        businessFulfillmentDefaults,
+        listingOptions,
+        dollarsInputToCents,
+      }),
+    [form, photos, businessFulfillmentDefaults, listingOptions]
+  );
+  const publishDisabledReason = getListingPublishDisabledReason(publishValidation);
 
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
+
+  useEffect(() => {
+    setCoverImageId((current) => resolveCoverImageId(photos, current));
+  }, [photos]);
+
+  useEffect(() => {
+    if (!submitSuccess) return undefined;
+    const timeoutId = setTimeout(() => {
+      setSubmitSuccess("");
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [submitSuccess]);
 
   useEffect(() => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -176,11 +214,16 @@ export default function EditListingPage() {
         const data = payload?.listing;
         if (!data) throw new Error("Listing not found");
         setInternalListingId(data.id || null);
+        setListingStatus(
+          String(data.status || "").trim().toLowerCase() === "published" || data.is_published === true
+            ? "published"
+            : "draft"
+        );
 
         setForm({
           title: data.title || "",
           description: data.description || "",
-          price: data.price || "",
+          price: formatListingPriceInput(data.price),
           category: getListingCategorySlug(data, ""),
           city: data.city || "",
           inventoryQuantity: data.inventory_quantity ?? "",
@@ -191,7 +234,9 @@ export default function EditListingPage() {
           useBusinessDeliveryDefaults: data.use_business_delivery_defaults !== false,
           deliveryFee: centsToDollarsInput(data.delivery_fee_cents),
         });
-        setPhotos(hydratePhotoDrafts(data.photo_url, data.photo_variants));
+        const hydratedPhotos = hydratePhotoDrafts(data.photo_url, data.photo_variants);
+        setPhotos(hydratedPhotos);
+        setCoverImageId(resolveCoverImageId(hydratedPhotos, data.cover_image_id));
         setListingOptions(payload?.listingOptions || createEmptyVariantPayload());
       } catch (err) {
         console.error("❌ Fetch listing error:", err);
@@ -260,6 +305,11 @@ export default function EditListingPage() {
 
     setPhotoError("");
     setPhotos((prev) => [...prev, ...accepted]);
+    setCoverImageId((current) => current || accepted[0]?.id || null);
+  };
+
+  const handleSetCoverPhoto = (photoId) => {
+    setCoverImageId(photoId || null);
   };
 
   async function uploadNewPhotos() {
@@ -521,156 +571,149 @@ export default function EditListingPage() {
     }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setSubmitError("");
-
+  async function persistListing(targetStatus) {
     const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) {
       setSubmitError("Connection not ready. Please try again.");
-      return;
+      return { ok: false };
     }
+
+    const isPublish = targetStatus === "published";
+    if (!publishValidation.listingOptionsValidation.ok) {
+      setListingOptionsErrors(publishValidation.listingOptionsValidation.errors);
+      setSubmitError(
+        publishValidation.fieldErrors.options ||
+          "Finish the product options section before saving."
+      );
+      return { ok: false };
+    }
+    if (isPublish && !publishValidation.ok) {
+      setSubmitError(
+        publishValidation.formError || "Complete the required fields before publishing."
+      );
+      return { ok: false };
+    }
+
+    setListingOptionsErrors(null);
+    setSubmitError("");
+    setSubmitSuccess("");
+    setSaving(true);
+    setSaveAction(targetStatus);
+    const resetTimer = setTimeout(() => setSaving(false), 20000);
 
     try {
-      if (!photos.length) {
-        setSubmitError("Please keep at least one photo.");
-        return;
+      const uploaded = await uploadNewPhotos();
+      const savedPhotos = convertPhotoDraftsToSavedState(uploaded);
+      const resolvedCoverImageId = resolveCoverImageId(savedPhotos, coverImageId);
+      const orderedSavedPhotos = orderPhotoDraftsWithCoverFirst(savedPhotos, resolvedCoverImageId);
+      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(orderedSavedPhotos);
+      const taxonomy = buildListingTaxonomyPayload({
+        listing_category: form.category,
+      });
+      const inventoryStatus = publishValidation.listingOptionsValidation.normalized.hasOptions
+        ? derivedVariantInventory.inventoryStatus
+        : form.inventoryStatus;
+      const inventoryQuantity = publishValidation.listingOptionsValidation.normalized.hasOptions
+        ? derivedVariantInventory.inventoryQuantity
+        : form.inventoryStatus === "out_of_stock"
+          ? 0
+          : form.inventoryQuantity === ""
+            ? null
+            : Number(form.inventoryQuantity);
+      const publicationState = buildListingPublicationState(targetStatus);
+      const payload = {
+        title: isPublish ? (form.title || "").trim() : getListingDraftTitle(form.title),
+        description: form.description || "",
+        price: form.price === "" ? null : form.price,
+        listing_category: taxonomy.listing_category,
+        category: taxonomy.category,
+        category_id: null,
+        city: form.city,
+        ...publicationState,
+        cover_image_id: resolvedCoverImageId,
+        inventory_status: inventoryStatus,
+        inventory_quantity: inventoryQuantity,
+        low_stock_threshold:
+          (inventoryStatus === "in_stock" || inventoryStatus === "low_stock") &&
+          form.lowStockThreshold !== ""
+            ? Number(form.lowStockThreshold)
+            : null,
+        inventory_last_updated_at: new Date().toISOString(),
+        photo_url: photoUrls.length ? JSON.stringify(photoUrls) : null,
+        photo_variants: photoVariants.length ? photoVariants : null,
+        pickup_enabled: form.pickupEnabled,
+        local_delivery_enabled: form.localDeliveryEnabled,
+        use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
+        delivery_fee_cents:
+          form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
+            ? publishValidation.listingDeliveryFeeCents
+            : null,
+      };
+
+      const { data, error } = await retry(
+        async () => {
+          if (!internalListingId) {
+            throw new Error("Listing reference could not be resolved.");
+          }
+          const result = await client
+            .from("listings")
+            .update(payload)
+            .eq("id", internalListingId)
+            .eq("business_id", accountId)
+            .select("id")
+            .single();
+          if (result.error) throw result.error;
+          return result;
+        },
+        { retries: 1, delayMs: 600 }
+      );
+
+      if (error) {
+        throw error;
+      }
+      if (!data?.id) {
+        throw new Error("Save did not complete. Please retry.");
       }
 
-      if (!form.category) {
-        setSubmitError("Please select a category.");
-        return;
-      }
-      if (!stripHtmlToText(form.description || "").trim()) {
-        setSubmitError("Please add a description.");
-        return;
-      }
-      if (
-        form.localDeliveryEnabled &&
-        form.useBusinessDeliveryDefaults &&
-        businessFulfillmentDefaults.default_delivery_fee_cents == null
-      ) {
-        setSubmitError("Add a default delivery fee in business settings before enabling delivery.");
-        return;
-      }
-      const listingDeliveryFeeCents = dollarsInputToCents(form.deliveryFee);
-      if (
-        form.localDeliveryEnabled &&
-        !form.useBusinessDeliveryDefaults &&
-        (Number.isNaN(listingDeliveryFeeCents) || listingDeliveryFeeCents === null)
-      ) {
-        setSubmitError("Enter a valid listing delivery fee.");
-        return;
-      }
+      await saveListingVariants(
+        data.id,
+        publishValidation.listingOptionsValidation.normalized,
+        client,
+        { businessId: accountId }
+      );
 
-      const listingOptionsValidation = validateListingOptions(listingOptions);
-      if (!listingOptionsValidation.ok) {
-        setListingOptionsErrors(listingOptionsValidation.errors);
-        setSubmitError(
-          listingOptionsValidation.errors.form[0] ||
-            "Finish the product options section before saving."
-        );
-        return;
-      }
-      setListingOptionsErrors(null);
-
-      setSaving(true);
-      const resetTimer = setTimeout(() => setSaving(false), 20000);
-
-      try {
-        const uploaded = await uploadNewPhotos();
-        const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(uploaded);
-
-        if (!photoUrls.length) {
-          setSubmitError("Please keep at least one photo.");
-          return;
-        }
-
-        const taxonomy = buildListingTaxonomyPayload({
-          listing_category: form.category,
-        });
-        const inventoryStatus = listingOptionsValidation.normalized.hasOptions
-          ? derivedVariantInventory.inventoryStatus
-          : form.inventoryStatus;
-        const inventoryQuantity = listingOptionsValidation.normalized.hasOptions
-          ? derivedVariantInventory.inventoryQuantity
-          : form.inventoryStatus === "out_of_stock"
-            ? 0
-            : form.inventoryQuantity === ""
-              ? null
-              : Number(form.inventoryQuantity);
-        const payload = {
-          title: (form.title || "").trim(),
-          description: form.description || "",
-          price: form.price,
-          listing_category: taxonomy.listing_category,
-          category: taxonomy.category,
-          category_id: null,
-          city: form.city,
-          inventory_status: inventoryStatus,
-          inventory_quantity: inventoryQuantity,
-          low_stock_threshold:
-            (inventoryStatus === "in_stock" || inventoryStatus === "low_stock") &&
-            form.lowStockThreshold !== ""
-              ? Number(form.lowStockThreshold)
-              : null,
-          inventory_last_updated_at: new Date().toISOString(),
-          photo_url: JSON.stringify(photoUrls),
-          photo_variants: photoVariants.length ? photoVariants : null,
-          pickup_enabled: form.pickupEnabled,
-          local_delivery_enabled: form.localDeliveryEnabled,
-          use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
-          delivery_fee_cents:
-            form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
-              ? listingDeliveryFeeCents
-              : null,
-        };
-
-        const { data, error } = await retry(
-          async () => {
-            if (!internalListingId) {
-              throw new Error("Listing reference could not be resolved.");
-            }
-            const result = await client
-              .from("listings")
-              .update(payload)
-              .eq("id", internalListingId)
-              .eq("business_id", accountId)
-              .select("id")
-              .single();
-            if (result.error) throw result.error;
-            return result;
-          },
-          { retries: 1, delayMs: 600 }
-        );
-
-        if (error) {
-          throw error;
-        }
-
-        if (!data?.id) {
-          throw new Error("Save did not complete. Please retry.");
-        }
-
-        await saveListingVariants(
-          data.id,
-          listingOptionsValidation.normalized,
-          client,
-          { businessId: accountId }
-        );
-
+      setPhotos(orderedSavedPhotos);
+      setCoverImageId(resolvedCoverImageId);
+      setListingStatus(targetStatus);
+      if (isPublish) {
+        setSubmitSuccess("Listing published! Redirecting...");
         router.push("/business/listings");
-      } catch (err) {
-        console.error("❌ Update error:", err);
-        setSubmitError(err.message || "Failed to save changes. Please try again.");
-      } finally {
-        clearTimeout(resetTimer);
-        setSaving(false);
+      } else {
+        setSubmitSuccess("Saved");
       }
+      return { ok: true };
     } catch (err) {
-      console.error("❌ Update validation error:", err);
-      setSubmitError(err.message || "Failed to save changes. Please try again.");
+      const fallbackMessage = isPublish
+        ? "Failed to publish listing. Please try again."
+        : "Failed to save changes. Please try again.";
+      const errorMessage = getListingSaveErrorMessage(err, fallbackMessage);
+      console.error("❌ Update error:", err, { errorMessage });
+      setSubmitError(errorMessage);
+      return { ok: false };
+    } finally {
+      clearTimeout(resetTimer);
+      setSaving(false);
+      setSaveAction(null);
     }
+  }
+
+  async function handleSaveDraft() {
+    await persistListing("draft");
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    await persistListing("published");
   }
 
   if (loading) {
@@ -701,7 +744,7 @@ export default function EditListingPage() {
       : form.inventoryQuantity === ""
         ? null
         : Number(form.inventoryQuantity);
-  const previewImageUrl = photos[0] ? getDraftDisplayUrl(photos[0]) : null;
+  const previewImageUrl = getDraftDisplayUrl(getCoverPhotoDraft(photos, coverImageId));
 
   // -------------------------------------------------------------------------
   // UI
@@ -714,9 +757,16 @@ export default function EditListingPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-700">
             Business listings
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Edit listing
-          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+              Edit listing
+            </h1>
+            {listingStatus === "draft" ? (
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                Draft
+              </span>
+            ) : null}
+          </div>
           <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
             Refine the listing on the left and manage photos on the right.
           </p>
@@ -728,14 +778,16 @@ export default function EditListingPage() {
               <div className={`space-y-8 lg:sticky lg:top-24 ${columnSurface}`}>
                 <ListingPhotoManager
                   photos={photos}
+                  coverImageId={coverImageId}
                   maxPhotos={MAX_PHOTOS}
-                  helperText={`Add up to ${MAX_PHOTOS} photos. The first photo is your cover.`}
+                  helperText={`Choose a cover photo — this is what customers see first.`}
                   error={photoError}
                   onAddFiles={handleAddNewPhotos}
                   onRemovePhoto={handleRemovePhoto}
                   onEnhancePhoto={handleEnhancePhoto}
                   onChooseVariant={handleChooseVariant}
                   onBackgroundChange={handleBackgroundChange}
+                  onSetCoverPhoto={handleSetCoverPhoto}
                   canAddMore={photos.length < MAX_PHOTOS}
                 />
                 <div className="pt-1 sm:pt-2">
@@ -1071,31 +1123,57 @@ export default function EditListingPage() {
           </div>
 
           <div className="border-t border-slate-200 pt-4">
-            {submitError ? (
-              <p role="alert" className="text-sm text-rose-600">
-                {submitError}
-              </p>
-            ) : null}
-          </div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => router.push("/business/listings")}
+                  className="text-sm font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                  disabled={saving}
+                  data-testid="listing-editor-exit"
+                >
+                  Exit
+                </button>
+              </div>
+              <div className="flex flex-col items-stretch gap-3 sm:items-end">
+                <div
+                  className="min-h-[1.25rem] text-sm text-right"
+                  data-testid="listing-editor-action-status"
+                >
+                  {submitError ? (
+                    <p role="alert" className="text-rose-600">
+                      {submitError}
+                    </p>
+                  ) : null}
+                  {!submitError && saving ? (
+                    <p className="text-slate-500">Saving...</p>
+                  ) : null}
+                  {!submitError && !saving && submitSuccess ? (
+                    <p className="text-emerald-600">{submitSuccess}</p>
+                  ) : null}
+                  {!submitError && !saving && !submitSuccess && !publishValidation.ok ? (
+                    <p className="text-slate-500">{publishDisabledReason}</p>
+                  ) : null}
+                </div>
+                <div className="flex flex-col-reverse gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    disabled={saving}
+                    className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Save draft
+                  </button>
 
-          <div className="border-t border-slate-200 pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              <button
-                type="button"
-                onClick={() => router.push("/business/listings")}
-                className="rounded-full px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white"
-              >
-                {saving ? "Saving..." : "Save changes"}
-              </button>
+                  <button
+                    type="submit"
+                    disabled={saving || !publishValidation.ok}
+                    className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving && saveAction === "published" ? "Publishing..." : "Publish listing"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </form>

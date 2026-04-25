@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
 import ListingOptionsSection from "@/components/business/listings/ListingOptionsSection";
 import ListingPreviewCard from "@/components/business/listings/ListingPreviewCard";
 import RichTextDescriptionEditor from "@/components/editor/RichTextDescriptionEditor";
 import { useAuth } from "@/components/AuthProvider";
-import { stripHtmlToText } from "@/lib/listingDescription";
 import {
   buildListingPhotoPayloadFromDrafts,
+  convertPhotoDraftsToSavedState,
   createLocalPhotoDraft,
+  getCoverPhotoDraft,
   getDraftDisplayUrl,
+  orderPhotoDraftsWithCoverFirst,
+  resolveCoverImageId,
 } from "@/lib/listingPhotoDrafts";
 import {
   describeImageFile,
@@ -29,8 +32,16 @@ import {
   deriveListingInventoryFromVariants,
   getActiveVariantQuantityTotal,
   saveListingVariants,
-  validateListingOptions,
 } from "@/lib/listingOptions";
+import {
+  buildListingPublicationState,
+  buildListingSaveSignature,
+  getListingPublishDisabledReason,
+  getListingSaveErrorMessage,
+  getListingDraftTitle,
+  hasMeaningfulDraftContent,
+  validateListingForPublish,
+} from "@/lib/listingEditor";
 import { buildListingTaxonomyPayload } from "@/lib/taxonomy/compat";
 import { getListingCategoryOptions } from "@/lib/taxonomy/listingCategories";
 
@@ -74,14 +85,22 @@ export default function NewListingPage() {
   });
 
   const [photos, setPhotos] = useState([]);
+  const [coverImageId, setCoverImageId] = useState(null);
   const photosRef = useRef([]);
   const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveAction, setSaveAction] = useState(null);
+  const [saveState, setSaveState] = useState("idle");
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const [internalListingId, setInternalListingId] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [hasInteracted, setHasInteracted] = useState(false);
   const [listingOptions, setListingOptions] = useState(createEmptyVariantPayload());
   const [listingOptionsErrors, setListingOptionsErrors] = useState(null);
+  const autosaveTimeoutRef = useRef(null);
+  const lastSavedSignatureRef = useRef(null);
   const variantsEnabled = Boolean(listingOptions?.hasOptions);
   const activeVariantTotal = getActiveVariantQuantityTotal(listingOptions?.variants);
   const derivedVariantInventory = deriveListingInventoryFromVariants(
@@ -104,6 +123,18 @@ export default function NewListingPage() {
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
+
+  useEffect(() => {
+    setCoverImageId((current) => resolveCoverImageId(photos, current));
+  }, [photos]);
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -140,6 +171,61 @@ export default function NewListingPage() {
       cancelled = true;
     };
   }, [accountId, supabase]);
+
+  const publishValidation = useMemo(
+    () =>
+      validateListingForPublish({
+        form,
+        photos,
+        businessFulfillmentDefaults,
+        listingOptions,
+        dollarsInputToCents,
+      }),
+    [form, photos, businessFulfillmentDefaults, listingOptions]
+  );
+  const draftSignature = useMemo(
+    () => buildListingSaveSignature({ form, photos, listingOptions, coverImageId }),
+    [form, photos, listingOptions, coverImageId]
+  );
+  const hasDraftContent = useMemo(
+    () => hasMeaningfulDraftContent({ form, photos, listingOptions }),
+    [form, photos, listingOptions]
+  );
+  const shouldShowFieldErrors = hasInteracted || Boolean(submitError);
+  const visibleFieldErrors = shouldShowFieldErrors ? publishValidation.fieldErrors : fieldErrors;
+  const publishDisabledReason = getListingPublishDisabledReason(publishValidation);
+
+  useEffect(() => {
+    if (saveState !== "saved") return undefined;
+    const timeoutId = setTimeout(() => {
+      setSaveState("idle");
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [saveState]);
+
+  useEffect(() => {
+    if (!submitSuccess) return undefined;
+    const timeoutId = setTimeout(() => {
+      setSubmitSuccess("");
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [submitSuccess]);
+
+  function markDirty() {
+    setHasInteracted(true);
+    setSubmitError("");
+    setSubmitSuccess("");
+    if (saveState === "saved") {
+      setSaveState("idle");
+    }
+  }
+
+  function updateForm(nextValue) {
+    markDirty();
+    setForm((prev) =>
+      typeof nextValue === "function" ? nextValue(prev) : nextValue
+    );
+  }
 
   const handleAddPhotos = async (files, inputMeta = {}) => {
     const incoming = Array.from(files || []);
@@ -193,11 +279,14 @@ export default function NewListingPage() {
 
     if (!accepted.length) return;
 
+    markDirty();
     setPhotoError("");
     setPhotos((prev) => [...prev, ...accepted].slice(0, MAX_PHOTOS));
+    setCoverImageId((current) => current || accepted[0]?.id || null);
   };
 
   const handleRemovePhoto = (photoId) => {
+    markDirty();
     enhancementAttemptsRef.current.delete(photoId);
     setPhotos((prev) => {
       const target = prev.find((photo) => photo.id === photoId);
@@ -208,7 +297,13 @@ export default function NewListingPage() {
     });
   };
 
+  const handleSetCoverPhoto = (photoId) => {
+    markDirty();
+    setCoverImageId(photoId || null);
+  };
+
   const handleBackgroundChange = (photoId, background) => {
+    markDirty();
     setPhotos((prev) =>
       prev.map((photo) =>
         photo.id === photoId
@@ -226,6 +321,7 @@ export default function NewListingPage() {
   };
 
   const handleChooseVariant = (photoId, selectedVariant) => {
+    markDirty();
     setPhotos((prev) =>
       prev.map((photo) =>
         photo.id === photoId
@@ -307,6 +403,203 @@ export default function NewListingPage() {
 
     return uploaded;
   }
+
+  async function persistListing({ targetStatus, source }) {
+    const client = getSupabaseBrowserClient() ?? supabase;
+    if (!client || !accountId) {
+      if (source !== "autosave") {
+        setSubmitError("Connection not ready. Please try again.");
+      }
+      return { ok: false };
+    }
+
+    const isPublish = targetStatus === "published";
+    const validation = publishValidation;
+
+    if (!validation.listingOptionsValidation.ok) {
+      setListingOptionsErrors(validation.listingOptionsValidation.errors);
+      if (source !== "autosave" || isPublish) {
+        setFieldErrors(validation.fieldErrors);
+        setSubmitError(
+          validation.fieldErrors.options || "Finish the product options section."
+        );
+      }
+      return { ok: false };
+    }
+
+    if (isPublish && !validation.ok) {
+      setFieldErrors(validation.fieldErrors);
+      setSubmitError(validation.formError || "Complete the required fields before publishing.");
+      return { ok: false };
+    }
+
+    setFieldErrors(isPublish ? validation.fieldErrors : {});
+    setListingOptionsErrors(null);
+    setSaving(true);
+    setSaveAction(source);
+    setSaveState("saving");
+    setSubmitError("");
+    if (source !== "autosave") {
+      setSubmitSuccess("");
+    }
+
+    try {
+      const uploadedPhotos = await withTimeout(
+        uploadPhotos(),
+        UPLOAD_TIMEOUT_MS * Math.max(1, photos.length),
+        "Photo upload timed out. Please try again."
+      );
+      const savedPhotos = convertPhotoDraftsToSavedState(uploadedPhotos);
+      const resolvedCoverImageId = resolveCoverImageId(savedPhotos, coverImageId);
+      const orderedSavedPhotos = orderPhotoDraftsWithCoverFirst(savedPhotos, resolvedCoverImageId);
+      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(orderedSavedPhotos);
+
+      const businessQuery = client
+        .from("users")
+        .select("city")
+        .eq("id", accountId)
+        .single();
+      const { data: business, error: bizError } = await withTimeout(
+        businessQuery,
+        PUBLISH_TIMEOUT_MS,
+        "Fetching business details timed out. Please try again."
+      );
+
+      if (bizError) {
+        throw bizError;
+      }
+
+      const taxonomy = buildListingTaxonomyPayload({
+        listing_category: form.category,
+      });
+      const inventoryStatus = validation.listingOptionsValidation.normalized.hasOptions
+        ? derivedVariantInventory.inventoryStatus
+        : form.inventoryStatus;
+      const inventoryQuantity = validation.listingOptionsValidation.normalized.hasOptions
+        ? derivedVariantInventory.inventoryQuantity
+        : form.inventoryStatus === "out_of_stock"
+          ? 0
+          : form.inventoryQuantity === ""
+            ? null
+            : Number(form.inventoryQuantity);
+      const publicationState = buildListingPublicationState(targetStatus);
+      const listingPayload = {
+        business_id: accountId,
+        title: isPublish ? form.title.trim() : getListingDraftTitle(form.title),
+        description: form.description || null,
+        price: form.price === "" ? null : form.price,
+        listing_category: taxonomy.listing_category,
+        category: taxonomy.category,
+        category_id: null,
+        ...publicationState,
+        inventory_status: inventoryStatus,
+        inventory_quantity: inventoryQuantity,
+        low_stock_threshold:
+          (inventoryStatus === "in_stock" || inventoryStatus === "low_stock") &&
+          form.lowStockThreshold !== ""
+            ? Number(form.lowStockThreshold)
+            : null,
+        inventory_last_updated_at: new Date().toISOString(),
+        city: business?.city || null,
+        cover_image_id: resolvedCoverImageId,
+        photo_url: photoUrls.length ? JSON.stringify(photoUrls) : null,
+        photo_variants: photoVariants.length ? photoVariants : null,
+        pickup_enabled: form.pickupEnabled,
+        local_delivery_enabled: form.localDeliveryEnabled,
+        use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
+        delivery_fee_cents:
+          form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
+            ? validation.listingDeliveryFeeCents
+            : null,
+      };
+
+      const mutation = internalListingId
+        ? client
+            .from("listings")
+            .update(listingPayload)
+            .eq("id", internalListingId)
+            .eq("business_id", accountId)
+            .select("id")
+            .single()
+        : client.from("listings").insert(listingPayload).select("id").single();
+
+      const { data: savedListing, error } = await withTimeout(
+        mutation,
+        PUBLISH_TIMEOUT_MS,
+        isPublish ? "Publishing timed out. Please try again." : "Saving timed out. Please try again."
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!savedListing?.id) {
+        throw new Error(isPublish ? "Listing publish did not complete." : "Draft save did not complete.");
+      }
+
+      await saveListingVariants(
+        savedListing.id,
+        validation.listingOptionsValidation.normalized,
+        client,
+        { businessId: accountId }
+      );
+
+      setInternalListingId(savedListing.id);
+      setPhotos(orderedSavedPhotos);
+      setCoverImageId(resolvedCoverImageId);
+      lastSavedSignatureRef.current = buildListingSaveSignature({
+        form,
+        photos: orderedSavedPhotos,
+        listingOptions,
+        coverImageId: resolvedCoverImageId,
+      });
+      setSaveState("saved");
+
+      if (isPublish) {
+        setSubmitSuccess("Listing published! Redirecting...");
+        router.push("/business/listings");
+      } else if (source === "manual") {
+        setSubmitSuccess("Saved");
+      }
+
+      return { ok: true, id: savedListing.id };
+    } catch (err) {
+      const fallbackMessage = isPublish
+        ? "Failed to publish listing. Please try again."
+        : "Failed to save draft. Please try again.";
+      const errorMessage = getListingSaveErrorMessage(err, fallbackMessage);
+      console.error(isPublish ? "Publish listing failed" : "Save draft failed", err, {
+        errorMessage,
+      });
+      setSaveState("error");
+      setSubmitError(errorMessage);
+      return { ok: false };
+    } finally {
+      setSaving(false);
+      setSaveAction(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!hasDraftContent) return;
+    if (!accountId) return;
+    if (saving) return;
+    if (draftSignature === lastSavedSignatureRef.current) return;
+
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    autosaveTimeoutRef.current = setTimeout(() => {
+      persistListing({ targetStatus: "draft", source: "autosave" });
+    }, 1500);
+
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [accountId, draftSignature, hasDraftContent, saving]);
 
   async function handleEnhancePhoto(photoId) {
     const target = photosRef.current.find((photo) => photo.id === photoId);
@@ -465,163 +758,14 @@ export default function NewListingPage() {
     }
   }
 
+  async function handleSaveDraft() {
+    await persistListing({ targetStatus: "draft", source: "manual" });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
-    setSubmitError("");
-    setSubmitSuccess("");
-
-    const client = getSupabaseBrowserClient() ?? supabase;
-    if (!client || !accountId) {
-      setSubmitError("Connection not ready. Please try again.");
-      return;
-    }
-
-    if (!photos.length) {
-      setSubmitError("Please add at least one photo (up to 10).");
-      return;
-    }
-
-    if (!form.category) {
-      setSubmitError("Please select a category.");
-      return;
-    }
-    if (!stripHtmlToText(form.description || "").trim()) {
-      setSubmitError("Please add a description.");
-      return;
-    }
-    if (
-      form.localDeliveryEnabled &&
-      form.useBusinessDeliveryDefaults &&
-      businessFulfillmentDefaults.default_delivery_fee_cents == null
-    ) {
-      setSubmitError("Add a default delivery fee in business settings before enabling delivery.");
-      return;
-    }
-    const listingDeliveryFeeCents = dollarsInputToCents(form.deliveryFee);
-    if (
-      form.localDeliveryEnabled &&
-      !form.useBusinessDeliveryDefaults &&
-      (Number.isNaN(listingDeliveryFeeCents) || listingDeliveryFeeCents === null)
-    ) {
-      setSubmitError("Enter a valid listing delivery fee.");
-      return;
-    }
-
-    const listingOptionsValidation = validateListingOptions(listingOptions);
-    if (!listingOptionsValidation.ok) {
-      setListingOptionsErrors(listingOptionsValidation.errors);
-      setSubmitError(listingOptionsValidation.errors.form[0] || "Finish the product options section.");
-      return;
-    }
-    setListingOptionsErrors(null);
-
-    setSaving(true);
-
-    try {
-      const uploadedPhotos = await withTimeout(
-        uploadPhotos(),
-        UPLOAD_TIMEOUT_MS * Math.max(1, photos.length),
-        "Photo upload timed out. Please try again."
-      );
-      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(uploadedPhotos);
-
-      const businessQuery = client
-        .from("users")
-        .select("city")
-        .eq("id", accountId)
-        .single();
-      const { data: business, error: bizError } = await withTimeout(
-        businessQuery,
-        PUBLISH_TIMEOUT_MS,
-        "Fetching business details timed out. Please try again."
-      );
-
-      if (bizError) {
-        throw bizError;
-      }
-
-      const taxonomy = buildListingTaxonomyPayload({
-        listing_category: form.category,
-      });
-      const inventoryStatus = listingOptionsValidation.normalized.hasOptions
-        ? derivedVariantInventory.inventoryStatus
-        : form.inventoryStatus;
-      const inventoryQuantity = listingOptionsValidation.normalized.hasOptions
-        ? derivedVariantInventory.inventoryQuantity
-        : form.inventoryStatus === "out_of_stock"
-          ? 0
-          : form.inventoryQuantity === ""
-            ? null
-            : Number(form.inventoryQuantity);
-      const listingPayload = {
-        // public_id is intentionally omitted; DB default/trigger generates it.
-        business_id: accountId,
-        title: form.title,
-        description: form.description,
-        price: form.price,
-        listing_category: taxonomy.listing_category,
-        category: taxonomy.category,
-        category_id: null,
-        inventory_status: inventoryStatus,
-        inventory_quantity: inventoryQuantity,
-        low_stock_threshold:
-          (inventoryStatus === "in_stock" || inventoryStatus === "low_stock") &&
-          form.lowStockThreshold !== ""
-            ? Number(form.lowStockThreshold)
-            : null,
-        inventory_last_updated_at: new Date().toISOString(),
-        city: business?.city || null,
-        photo_url: photoUrls.length ? JSON.stringify(photoUrls) : null,
-        photo_variants: photoVariants.length ? photoVariants : null,
-        pickup_enabled: form.pickupEnabled,
-        local_delivery_enabled: form.localDeliveryEnabled,
-        use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
-        delivery_fee_cents:
-          form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
-            ? listingDeliveryFeeCents
-            : null,
-      };
-      const insertQuery = client.from("listings").insert(listingPayload).select("id").single();
-      const { data: insertedListing, error } = await withTimeout(
-        insertQuery,
-        PUBLISH_TIMEOUT_MS,
-        "Publishing timed out. Please try again."
-      );
-
-      if (error) {
-        throw error;
-      }
-
-      if (!insertedListing?.id) {
-        throw new Error("Listing publish did not complete.");
-      }
-
-      try {
-        await saveListingVariants(
-          insertedListing.id,
-          listingOptionsValidation.normalized,
-          client,
-          { businessId: accountId }
-        );
-      } catch (optionsError) {
-        if (listingOptionsValidation.normalized.hasOptions) {
-          await client
-            .from("listings")
-            .delete()
-            .eq("id", insertedListing.id)
-            .eq("business_id", accountId);
-        }
-        throw optionsError;
-      }
-
-      setSubmitSuccess("Listing published! Redirecting...");
-      router.push("/business/listings");
-    } catch (err) {
-      console.error("Publish listing failed", err);
-      setSubmitError(err.message || "Failed to publish listing. Please try again.");
-    } finally {
-      setSaving(false);
-    }
+    setHasInteracted(true);
+    await persistListing({ targetStatus: "published", source: "publish" });
   }
 
   if (loadingUser && !accountId) {
@@ -660,7 +804,7 @@ export default function NewListingPage() {
       : form.inventoryQuantity === ""
         ? null
         : Number(form.inventoryQuantity);
-  const previewImageUrl = photos[0] ? getDraftDisplayUrl(photos[0]) : null;
+  const previewImageUrl = getDraftDisplayUrl(getCoverPhotoDraft(photos, coverImageId));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -683,16 +827,21 @@ export default function NewListingPage() {
               <div className={`space-y-8 lg:sticky lg:top-24 ${columnSurface}`}>
                 <ListingPhotoManager
                   photos={photos}
+                  coverImageId={coverImageId}
                   maxPhotos={MAX_PHOTOS}
-                  helperText={`Add up to ${MAX_PHOTOS} photos. The first photo becomes the cover.`}
+                  helperText={`Choose a cover photo — this is what customers see first.`}
                   error={photoError}
                   onAddFiles={handleAddPhotos}
                   onRemovePhoto={handleRemovePhoto}
                   onEnhancePhoto={handleEnhancePhoto}
                   onChooseVariant={handleChooseVariant}
                   onBackgroundChange={handleBackgroundChange}
+                  onSetCoverPhoto={handleSetCoverPhoto}
                   canAddMore={photos.length < MAX_PHOTOS}
                 />
+                {visibleFieldErrors.photos ? (
+                  <p className="text-sm text-rose-600">{visibleFieldErrors.photos}</p>
+                ) : null}
                 <div className="pt-1 sm:pt-2">
                   <ListingPreviewCard
                     title={form.title}
@@ -724,9 +873,13 @@ export default function NewListingPage() {
                       className={inputBase}
                       placeholder="Ex: House-made cold brew concentrate"
                       value={form.title}
-                      onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      required
+                      onChange={(e) =>
+                        updateForm((prev) => ({ ...prev, title: e.target.value }))
+                      }
                     />
+                    {visibleFieldErrors.title ? (
+                      <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.title}</p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -734,12 +887,15 @@ export default function NewListingPage() {
                       label="Description"
                       value={form.description}
                       onChange={(nextDescription) =>
-                        setForm({ ...form, description: nextDescription })
+                        updateForm((prev) => ({ ...prev, description: nextDescription }))
                       }
                       minHeight={180}
                       placeholder=""
                       helpText="Use headings, bullets, and links to make details easy to scan."
                     />
+                    {visibleFieldErrors.description ? (
+                      <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.description}</p>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
@@ -752,9 +908,8 @@ export default function NewListingPage() {
                         className={selectBase}
                         value={form.category}
                         onChange={(e) =>
-                          setForm({ ...form, category: e.target.value })
+                          updateForm((prev) => ({ ...prev, category: e.target.value }))
                         }
-                        required
                       >
                         <option value="" className="text-black">
                           Select category
@@ -769,6 +924,9 @@ export default function NewListingPage() {
                           </option>
                         ))}
                       </select>
+                      {visibleFieldErrors.category ? (
+                        <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.category}</p>
+                      ) : null}
                     </div>
 
                     <div>
@@ -781,10 +939,14 @@ export default function NewListingPage() {
                         type="number"
                         placeholder="Ex: 49.99"
                         value={form.price}
-                        onChange={(e) => setForm({ ...form, price: e.target.value })}
-                        required
+                        onChange={(e) =>
+                          updateForm((prev) => ({ ...prev, price: e.target.value }))
+                        }
                       />
                       <p className={helperBase}>Use numbers only. Currency is USD.</p>
+                      {visibleFieldErrors.price ? (
+                        <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.price}</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -795,6 +957,7 @@ export default function NewListingPage() {
                   value={listingOptions}
                   basePrice={form.price}
                   onChange={(nextValue) => {
+                    markDirty();
                     setListingOptions(nextValue);
                     if (listingOptionsErrors) {
                       setListingOptionsErrors(null);
@@ -810,6 +973,9 @@ export default function NewListingPage() {
                   }}
                   errors={listingOptionsErrors}
                 />
+                {visibleFieldErrors.options ? (
+                  <p className="mt-3 text-sm text-rose-600">{visibleFieldErrors.options}</p>
+                ) : null}
               </section>
 
               <section className={sectionCard}>
@@ -836,7 +1002,7 @@ export default function NewListingPage() {
                         value={form.inventoryStatus}
                         onChange={(e) => {
                           const nextStatus = e.target.value;
-                          setForm((prev) => ({
+                          updateForm((prev) => ({
                             ...prev,
                             inventoryStatus: nextStatus,
                             inventoryQuantity:
@@ -886,7 +1052,10 @@ export default function NewListingPage() {
                           placeholder="Ex: 20"
                           value={form.inventoryQuantity}
                           onChange={(e) =>
-                            setForm({ ...form, inventoryQuantity: e.target.value })
+                            updateForm((prev) => ({
+                              ...prev,
+                              inventoryQuantity: e.target.value,
+                            }))
                           }
                         />
                       </>
@@ -908,7 +1077,10 @@ export default function NewListingPage() {
                       placeholder="Ex: 5"
                       value={form.lowStockThreshold}
                       onChange={(e) =>
-                        setForm({ ...form, lowStockThreshold: e.target.value })
+                        updateForm((prev) => ({
+                          ...prev,
+                          lowStockThreshold: e.target.value,
+                        }))
                       }
                     />
                     <p className={helperBase}>
@@ -930,7 +1102,7 @@ export default function NewListingPage() {
                         type="checkbox"
                         checked={form.pickupEnabled}
                         onChange={(e) =>
-                          setForm((prev) => ({
+                          updateForm((prev) => ({
                             ...prev,
                             pickupEnabled: e.target.checked,
                           }))
@@ -949,7 +1121,7 @@ export default function NewListingPage() {
                         type="checkbox"
                         checked={form.localDeliveryEnabled}
                         onChange={(e) =>
-                          setForm((prev) => ({
+                          updateForm((prev) => ({
                             ...prev,
                             localDeliveryEnabled: e.target.checked,
                             useBusinessDeliveryDefaults: e.target.checked
@@ -976,7 +1148,7 @@ export default function NewListingPage() {
                           type="checkbox"
                           checked={form.useBusinessDeliveryDefaults}
                           onChange={(e) =>
-                            setForm((prev) => ({
+                            updateForm((prev) => ({
                               ...prev,
                               useBusinessDeliveryDefaults: e.target.checked,
                             }))
@@ -1007,7 +1179,7 @@ export default function NewListingPage() {
                           placeholder="Ex: 5.00"
                           value={form.deliveryFee}
                           onChange={(e) =>
-                            setForm((prev) => ({
+                            updateForm((prev) => ({
                               ...prev,
                               deliveryFee: e.target.value,
                             }))
@@ -1016,6 +1188,9 @@ export default function NewListingPage() {
                         <p className={helperBase}>
                           This fee is added on top of the item subtotal at checkout.
                         </p>
+                        {visibleFieldErrors.deliveryFee ? (
+                          <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.deliveryFee}</p>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -1026,38 +1201,59 @@ export default function NewListingPage() {
           </div>
 
           <div className="border-t border-slate-200 pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                {(submitError || submitSuccess) && (
-                  <>
-                    {submitError ? (
-                      <p role="alert" className="text-sm text-rose-600">
-                        {submitError}
-                      </p>
-                    ) : null}
-                    {!submitError && submitSuccess ? (
-                      <p className="text-sm text-emerald-600">{submitSuccess}</p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-              <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => router.push("/business/listings")}
-                  className="rounded-full px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="text-sm font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   disabled={saving}
+                  data-testid="listing-editor-exit"
                 >
-                  Cancel
+                  Exit
                 </button>
+              </div>
+              <div className="flex flex-col items-stretch gap-3 sm:items-end">
+                <div
+                  className="min-h-[1.25rem] text-sm text-right"
+                  data-testid="listing-editor-action-status"
+                >
+                  {submitError ? (
+                    <p role="alert" className="text-rose-600">
+                      {submitError}
+                    </p>
+                  ) : null}
+                  {!submitError && saveState === "saving" ? (
+                    <p className="text-slate-500">Saving...</p>
+                  ) : null}
+                  {!submitError && saveState !== "saving" && submitSuccess ? (
+                    <p className="text-emerald-600">{submitSuccess}</p>
+                  ) : null}
+                  {!submitError && !submitSuccess && saveState === "saved" ? (
+                    <p className="text-emerald-600">Saved</p>
+                  ) : null}
+                  {!submitError && saveState !== "saving" && !submitSuccess && saveState !== "saved" && !publishValidation.ok ? (
+                    <p className="text-slate-500">{publishDisabledReason}</p>
+                  ) : null}
+                </div>
+                <div className="flex flex-col-reverse gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    disabled={saving}
+                    className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Save draft
+                  </button>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white"
-                >
-                  {saving ? "Publishing..." : "Publish listing"}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={saving || !publishValidation.ok}
+                    className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving && saveAction === "publish" ? "Publishing..." : "Publish listing"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

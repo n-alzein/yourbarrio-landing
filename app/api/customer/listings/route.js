@@ -36,7 +36,7 @@ export async function GET(request) {
   }
 
   const { data: listing, error: listingError } = await supabase
-    .from("listings")
+    .from("public_listings_v")
     .select("*")
     .eq("id", resolvedListingId)
     .maybeSingle();

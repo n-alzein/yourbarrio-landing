@@ -175,14 +175,17 @@ function computeListingStatus(row: Record<string, any>) {
   if (status === "draft") {
     return { status: "draft", reason: "status is draft" };
   }
-  if (status && status !== "active") {
-    return { status, reason: `status is ${status}` };
-  }
   if (isPublished === false) {
     return { status: "hidden", reason: "is_published is false" };
   }
   if (isActive === false) {
     return { status: "hidden", reason: "is_active is false" };
+  }
+  if (status === "published") {
+    return { status: "active", reason: "status is published" };
+  }
+  if (status && status !== "active") {
+    return { status, reason: `status is ${status}` };
   }
   return { status: "active", reason: null };
 }
@@ -422,7 +425,7 @@ export async function setAdminListingVisibility({
   }
   if ("status" in current) {
     const currentStatus = String(current.status || "").trim().toLowerCase();
-    updates.status = hidden ? "hidden" : currentStatus === "draft" ? "draft" : "active";
+    updates.status = hidden ? "hidden" : currentStatus === "draft" ? "draft" : "published";
   }
   if ("updated_at" in current) {
     updates.updated_at = nowIso;

@@ -52,6 +52,23 @@ export async function POST(request) {
     return NextResponse.json({ error: "Missing listing id" }, { status: 400 });
   }
 
+  const { data: listing, error: listingError } = await access.supabase
+    .from("public_listings_v")
+    .select("id")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (listingError) {
+    return NextResponse.json(
+      { error: listingError.message || "Failed to verify listing visibility" },
+      { status: 500 }
+    );
+  }
+
+  if (!listing?.id) {
+    return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+  }
+
   const { error } = await access.supabase
     .from("saved_listings")
     .insert({ user_id: access.user.id, listing_id: listingId });

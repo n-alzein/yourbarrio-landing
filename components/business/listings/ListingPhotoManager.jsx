@@ -29,6 +29,7 @@ function PhotoSurface({ src, alt, className = "" }) {
 
 export default function ListingPhotoManager({
   photos,
+  coverImageId,
   maxPhotos,
   helperText,
   error,
@@ -37,10 +38,12 @@ export default function ListingPhotoManager({
   onEnhancePhoto,
   onChooseVariant,
   onBackgroundChange,
+  onSetCoverPhoto,
   canAddMore,
 }) {
   const inputId = useId();
   const [selectedPhotoId, setSelectedPhotoId] = useState(null);
+  const [enhancementOptionsPhotoId, setEnhancementOptionsPhotoId] = useState(null);
 
   const selectedPhoto = useMemo(() => {
     if (!photos?.length) return null;
@@ -48,9 +51,26 @@ export default function ListingPhotoManager({
   }, [photos, selectedPhotoId]);
   const isUnsavedSelectedPhoto =
     selectedPhoto?.status === "new" && Boolean(selectedPhoto?.original?.file);
+  const isSessionAddedDraftPhoto =
+    Boolean(selectedPhoto?.source) &&
+    selectedPhoto?.status === "existing" &&
+    !selectedPhoto?.original?.file;
   const hasUnsavedEnhancedPhoto =
-    isUnsavedSelectedPhoto && Boolean(selectedPhoto?.enhanced?.publicUrl);
-  const canConfigureEnhancement = isUnsavedSelectedPhoto && !hasUnsavedEnhancedPhoto;
+    (isUnsavedSelectedPhoto || isSessionAddedDraftPhoto) &&
+    Boolean(selectedPhoto?.enhanced?.publicUrl);
+  // Keep enhancement available for photos added in the current editor session even after draft autosave
+  // converts them into persisted draft rows. Hydrated pre-existing photos do not carry `source`.
+  const canConfigureEnhancement =
+    (isUnsavedSelectedPhoto || isSessionAddedDraftPhoto) && !hasUnsavedEnhancedPhoto;
+  const resolvedCoverImageId =
+    (typeof coverImageId === "string" && photos?.some((photo) => photo?.id === coverImageId)
+      ? coverImageId
+      : photos?.[0]?.id) || null;
+  const shouldShowHelperText = Boolean(helperText) && !resolvedCoverImageId;
+  const shouldShowEnhancementOptions =
+    Boolean(selectedPhoto) &&
+    (hasUnsavedEnhancedPhoto ||
+      (canConfigureEnhancement && enhancementOptionsPhotoId === selectedPhoto?.id));
 
   const handleFileChange = (event) => {
     const files = event.target.files;
@@ -65,10 +85,12 @@ export default function ListingPhotoManager({
 
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="space-y-2">
           <h2 className="text-lg font-semibold text-slate-900">Photos</h2>
-          {helperText ? <p className="text-sm leading-6 text-slate-600">{helperText}</p> : null}
+          {shouldShowHelperText ? (
+            <p className="text-sm leading-6 text-slate-600">{helperText}</p>
+          ) : null}
         </div>
 
         {canAddMore ? (
@@ -93,12 +115,14 @@ export default function ListingPhotoManager({
       ) : null}
 
       {selectedPhoto ? (
-          <div className="space-y-4">
-          <div className="overflow-hidden rounded-[18px] bg-slate-100 ring-1 ring-slate-200">
+          <div className="space-y-6">
+          <div className="mb-6 overflow-hidden rounded-[18px] bg-slate-100 ring-1 ring-slate-200">
             <div className="relative">
-              <div className="absolute left-3 top-3 z-10 rounded-md bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm">
-                {photos[0]?.id === selectedPhoto.id ? "Cover" : "Selected"}
-              </div>
+              {resolvedCoverImageId === selectedPhoto.id ? (
+                <div className="absolute left-3 top-3 z-10 rounded-md border border-violet-200 bg-white/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-violet-700 shadow-sm">
+                  COVER
+                </div>
+              ) : null}
               <PhotoSurface
                 src={getDraftDisplayUrl(selectedPhoto)}
                 alt="Selected listing photo"
@@ -107,8 +131,8 @@ export default function ListingPhotoManager({
             </div>
           </div>
 
-          <div className="space-y-3 border-t border-slate-100 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-6 mb-6 space-y-4 border-t border-slate-100 pt-6">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-900">Selected photo</p>
               </div>
@@ -124,7 +148,10 @@ export default function ListingPhotoManager({
                 {canConfigureEnhancement ? (
                   <button
                     type="button"
-                    onClick={() => onEnhancePhoto?.(selectedPhoto.id)}
+                    onClick={() => {
+                      setEnhancementOptionsPhotoId(selectedPhoto.id);
+                      onEnhancePhoto?.(selectedPhoto.id);
+                    }}
                     disabled={selectedPhoto?.enhancement?.isProcessing}
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
@@ -135,10 +162,10 @@ export default function ListingPhotoManager({
               </div>
             </div>
 
-            {canConfigureEnhancement ? (
+            {shouldShowEnhancementOptions ? (
               <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                  <span className="font-medium text-slate-700">Background:</span>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">Enhance options</p>
                   <div className="inline-flex flex-wrap overflow-hidden rounded-md border border-slate-200 bg-white">
                     {ENHANCEABLE_BACKGROUND_OPTIONS.map((option) => {
                       const isSelected = selectedPhoto?.enhancement?.background === option.value;
@@ -149,7 +176,7 @@ export default function ListingPhotoManager({
                           onClick={() => onBackgroundChange?.(selectedPhoto.id, option.value)}
                           className={`border-r border-slate-200 px-3 py-1.5 text-xs font-medium transition last:border-r-0 ${
                             isSelected
-                              ? "bg-violet-600 text-white"
+                              ? "bg-violet-100 text-violet-700"
                               : "bg-white text-slate-700 hover:bg-slate-50"
                           }`}
                         >
@@ -163,7 +190,7 @@ export default function ListingPhotoManager({
             ) : null}
 
             {hasUnsavedEnhancedPhoto ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5">
                   <div className="flex items-center gap-2 text-sm text-slate-600">
                     <Sparkles className="h-4 w-4 text-violet-600" />
@@ -190,33 +217,43 @@ export default function ListingPhotoManager({
             ) : null}
           </div>
 
-          <div className="space-y-3 border-t border-slate-100 pt-4">
+          <div className="mb-6 space-y-4 border-t border-slate-100 pt-6">
             <div className="flex items-center justify-end gap-3">
               <p className="text-xs uppercase tracking-[0.12em] text-slate-400">
                 {photos.length} / {maxPhotos}
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-4 px-1 sm:grid-cols-4">
               {photos.map((photo, index) => {
                 const isSelected = selectedPhoto?.id === photo.id;
-                const isCover = index === 0;
+                const isCover = photo.id === resolvedCoverImageId;
                 return (
-                  <div key={photo.id} className="space-y-2">
+                  <div key={photo.id} className="group relative">
+                    {!isCover ? (
+                      <button
+                        type="button"
+                        onClick={() => onSetCoverPhoto?.(photo.id)}
+                        className="absolute left-2 top-2 z-10 rounded-md border border-violet-200/90 bg-white/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-700 shadow-sm transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                        aria-label={`Set cover for photo ${index + 1}`}
+                      >
+                        Set cover
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setSelectedPhotoId(photo.id)}
                       aria-label={isCover ? "Select cover photo" : `Select photo ${index + 1}`}
                       className={`block w-full overflow-hidden rounded-xl transition ${
                         isSelected
-                          ? "scale-[1.02] shadow-md ring-2 ring-violet-500 ring-offset-1 ring-offset-white"
+                          ? "scale-[1.01] shadow-sm ring-2 ring-violet-300 ring-offset-1 ring-offset-white"
                           : "hover:scale-[1.01]"
                       }`}
                     >
                       <div className="relative overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
                         {isCover ? (
-                          <div className="absolute left-2 top-2 z-10 rounded-md bg-white/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700 shadow-sm">
-                            Cover
+                          <div className="absolute left-2 top-2 z-10 rounded-md border border-violet-200 bg-white/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-700 shadow-sm">
+                            COVER
                           </div>
                         ) : null}
                         <PhotoSurface
@@ -226,11 +263,6 @@ export default function ListingPhotoManager({
                         />
                       </div>
                     </button>
-                    <div className="space-y-1">
-                      <p className="truncate text-xs font-medium text-slate-700">
-                        {isCover ? "Cover" : `Photo ${index + 1}`}
-                      </p>
-                    </div>
                   </div>
                 );
               })}

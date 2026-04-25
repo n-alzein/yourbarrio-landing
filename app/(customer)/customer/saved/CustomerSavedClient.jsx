@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { BookmarkCheck, Heart, Sparkles, Star } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
@@ -398,7 +398,7 @@ export default function CustomerSavedClient({
           });
         }
         let listingQuery = client
-          .from("listings")
+          .from("public_listings_v")
           .select("*")
           .in("id", ids);
         if (typeof listingQuery.abortSignal === "function") {
@@ -783,7 +783,7 @@ export default function CustomerSavedClient({
                 >
                   <div className="relative h-48 w-full overflow-hidden">
                     <SafeImage
-                      src={primaryPhotoUrl(item.photo_url)}
+                      src={resolveListingCoverImageUrl(item)}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
                       fallbackSrc="/business-placeholder.png"

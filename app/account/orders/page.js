@@ -38,7 +38,7 @@ export default async function AccountOrdersPage({ searchParams }) {
   const { data: orders, error } = await client
     .from("orders")
     .select(
-      "id,order_number,created_at,updated_at,status,fulfillment_type,delivery_time,pickup_time,total, vendor:users!orders_vendor_id_fkey (business_name, full_name), order_items(id,title,image_url,created_at, listing:listings!order_items_listing_id_fkey(photo_url,photo_variants))"
+      "id,order_number,created_at,updated_at,status,fulfillment_type,delivery_time,pickup_time,total, vendor:users!orders_vendor_id_fkey (business_name, full_name), order_items(id,title,image_url,created_at, listing:listings!order_items_listing_id_fkey(photo_url,photo_variants,cover_image_id))"
     )
     .eq("user_id", effectiveUserId)
     .in("status", PENDING_STATUSES)

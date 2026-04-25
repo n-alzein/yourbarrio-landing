@@ -221,6 +221,28 @@ describe("NewListingPage", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("keeps the enhancement option visible after draft autosave persists a new photo", async () => {
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+    await addPhoto(container);
+
+    await waitFor(
+      () => {
+        expect(insertMock).toHaveBeenCalled();
+      },
+      { timeout: 3000 }
+    );
+
+    expect(screen.getByRole("button", { name: "Enhance photo" })).toBeInTheDocument();
+  });
+
   it("normalizes HEIC uploads before preview and publish", async () => {
     const normalizedFile = new File(["jpeg"], "photo.jpg", { type: "image/jpeg" });
     normalizeImageUploadMock.mockResolvedValue(normalizedFile);
@@ -508,6 +530,23 @@ describe("NewListingPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Insert failed");
   });
 
+  it("shows a concise publish helper when required fields are missing", async () => {
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    render(<NewListingPage />);
+
+    expect(screen.getByRole("button", { name: "Publish listing" })).toBeDisabled();
+    expect(
+      screen.getByText("Add a title, a price, a category, and a photo to publish.")
+    ).toBeInTheDocument();
+  });
+
   it("still publishes with the original photo when enhancement fails", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -564,5 +603,155 @@ describe("NewListingPage", () => {
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/business/listings");
     });
+
+    const payload = insertMock.mock.calls[0][0];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        status: "published",
+      })
+    );
+    expect(payload).not.toHaveProperty("is_published");
+  });
+
+  it("saves drafts with draft status and without publishing", async () => {
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+
+    await fillRequiredFields();
+    await addPhoto(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    await waitFor(() => {
+      expect(insertMock).toHaveBeenCalled();
+    });
+
+    const payload = insertMock.mock.calls[0][0];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        status: "draft",
+      })
+    );
+    expect(payload).not.toHaveProperty("is_published");
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("persists an explicitly selected cover photo", async () => {
+    global.crypto.randomUUID
+      .mockImplementationOnce(() => "uuid-1")
+      .mockImplementationOnce(() => "uuid-2");
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+
+    await fillRequiredFields();
+    await addPhoto(container);
+    await addPhoto(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set cover for photo 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    await waitFor(() => {
+      expect(insertMock).toHaveBeenCalled();
+    });
+
+    const payload = insertMock.mock.calls.at(-1)[0];
+    expect(payload.cover_image_id).toBe("draft-uuid-2");
+    expect(payload.photo_variants[0].id).toBe("draft-uuid-2");
+  });
+
+  it("falls back to the next available photo when the current cover is removed", async () => {
+    global.crypto.randomUUID
+      .mockImplementationOnce(() => "uuid-1")
+      .mockImplementationOnce(() => "uuid-2");
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+
+    await fillRequiredFields();
+    await addPhoto(container);
+    await addPhoto(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set cover for photo 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select cover photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    await waitFor(() => {
+      expect(insertMock).toHaveBeenCalled();
+    });
+
+    const payload = insertMock.mock.calls.at(-1)[0];
+    expect(payload.cover_image_id).toBe("draft-uuid-1");
+    expect(payload.photo_variants[0].id).toBe("draft-uuid-1");
+  });
+
+  it("renders transient saved feedback in the action area after saving a draft", async () => {
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+
+    await fillRequiredFields();
+    await addPhoto(container);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    const actionStatus = await screen.findByTestId("listing-editor-action-status");
+    await waitFor(() => {
+      expect(actionStatus).toHaveTextContent("Saved");
+    });
+    expect(screen.getByTestId("listing-editor-exit")).not.toHaveTextContent("Saved");
+
+    await waitFor(
+      () => {
+        expect(actionStatus).not.toHaveTextContent("Saved");
+      },
+      { timeout: 3000 }
+    );
+  });
+
+  it("enables publish when all required fields are present", async () => {
+    mockSupabase = makeSupabaseMock();
+    mockAuth = {
+      supabase: mockSupabase,
+      user: { id: "user-1" },
+      profile: null,
+      loadingUser: false,
+    };
+
+    const { container } = render(<NewListingPage />);
+
+    await fillRequiredFields();
+    await addPhoto(container);
+
+    expect(screen.getByRole("button", { name: "Publish listing" })).toBeEnabled();
+    expect(
+      screen.queryByText("Add a title, a price, a category, and a photo to publish.")
+    ).not.toBeInTheDocument();
   });
 });

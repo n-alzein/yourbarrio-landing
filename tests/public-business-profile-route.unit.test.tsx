@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const { notFoundMock, permanentRedirectMock } = vi.hoisted(() => ({
   notFoundMock: vi.fn(() => {
@@ -87,7 +89,7 @@ vi.mock("@/lib/supabasePublicServer", () => ({
     from: vi.fn((table: string) => ({
       select: vi.fn(() => {
         if (table === "business_reviews") return createQuery([]);
-        if (table === "listings") return createQuery([]);
+        if (table === "public_listings_v") return createQuery([]);
         if (table === "business_announcements") return createQuery([]);
         if (table === "business_gallery_photos") return createQuery([]);
         if (table === "businesses") return createQuery(null);
@@ -145,6 +147,11 @@ vi.mock("@/lib/pricing", () => ({
 
 import PublicBusinessProfilePage from "@/app/(public)/(marketing)/b/[id]/page";
 
+const publicBusinessProfileSource = readFileSync(
+  path.join(process.cwd(), "app/(public)/(marketing)/b/[id]/page.jsx"),
+  "utf8"
+);
+
 describe("PublicBusinessProfilePage", () => {
   it("opens by public_id without requiring coordinates or listings", async () => {
     const result = await PublicBusinessProfilePage({
@@ -155,5 +162,10 @@ describe("PublicBusinessProfilePage", () => {
     expect(result).toBeTruthy();
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(permanentRedirectMock).not.toHaveBeenCalled();
+  });
+
+  it("reads public business listings from public_listings_v instead of base listings", () => {
+    expect(publicBusinessProfileSource).toContain('.from("public_listings_v")');
+    expect(publicBusinessProfileSource).not.toContain('.from("listings")');
   });
 });

@@ -1,6 +1,6 @@
 import { DELIVERY_FULFILLMENT_TYPE, PICKUP_FULFILLMENT_TYPE } from "@/lib/fulfillment";
 import { getMaxPurchasableQuantity, MAX_ORDER_QUANTITY } from "@/lib/inventory";
-import { primaryPhotoUrl } from "@/lib/listingPhotos";
+import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 
 export const GUEST_CART_STORAGE_KEY = "yb:guestCart:v1";
 export const GUEST_CART_UPDATED_EVENT = "yb:guest-cart-updated";
@@ -235,7 +235,7 @@ export function addToGuestCart({
     existingItem.quantity = Math.min(existingItem.quantity + nextQuantity, maxQuantity);
     existingItem.title = String(listing?.title || existingItem.title || "Untitled listing");
     existingItem.unit_price = normalizePrice(listing?.price ?? existingItem.unit_price);
-    existingItem.image_url = primaryPhotoUrl(listing?.photo_url) || existingItem.image_url || null;
+    existingItem.image_url = resolveListingCoverImageUrl(listing) || existingItem.image_url || null;
     existingItem.variant_id = variantId;
     existingItem.variant_label = variantLabel || existingItem.variant_label || null;
     existingItem.selected_options = selectedOptions || existingItem.selected_options || null;
@@ -254,7 +254,7 @@ export function addToGuestCart({
       quantity: nextQuantity,
       title: String(listing?.title || "Untitled listing"),
       unit_price: normalizePrice(listing?.price),
-      image_url: primaryPhotoUrl(listing?.photo_url) || null,
+      image_url: resolveListingCoverImageUrl(listing) || null,
       business_name: businessName,
       available_fulfillment_methods: methods,
       max_order_quantity: maxQuantity,

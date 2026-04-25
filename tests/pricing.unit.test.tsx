@@ -93,7 +93,12 @@ describe("public listing all-in display", () => {
           business_id: "business-1",
           business_name: "Barrio Kitchen",
           city: "Los Angeles",
-          photo_url: null,
+          photo_url: "/fallback.jpg",
+          photo_variants: [
+            { id: "photo-1", original: { url: "/fallback.jpg", path: null } },
+            { id: "photo-2", original: { url: "/cover.jpg", path: null } },
+          ],
+          cover_image_id: "photo-2",
           inventory_status: "in_stock",
           inventory_quantity: 5,
         }}
@@ -102,5 +107,9 @@ describe("public listing all-in display", () => {
 
     expect(screen.getByText("$10.50")).toBeInTheDocument();
     expect(screen.queryByText("$10.00")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Salsa sampler" })).toHaveAttribute(
+      "src",
+      "/cover.jpg"
+    );
   });
 });

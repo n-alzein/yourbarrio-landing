@@ -196,7 +196,7 @@ async function logProfileNotFoundDiagnostics({
 
 function buildListingsQuery(supabase, businessId, limit, filters, viewerCanSeeInternalContent = false) {
   let query = supabase
-    .from("listings")
+    .from("public_listings_v")
     .select(
       "id,public_id,business_id,title,price,category,listing_category,category_id,city,photo_url,created_at,is_internal"
     )
@@ -204,16 +204,10 @@ function buildListingsQuery(supabase, businessId, limit, filters, viewerCanSeeIn
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (filters.status) {
-    query = query.eq("status", "active");
-  }
-  if (filters.is_published) {
-    query = query.eq("is_published", true);
-  }
   if (filters.is_test) {
     query = query.eq("is_test", false);
   }
-  if (!viewerCanSeeInternalContent) {
+  if (!viewerCanSeeInternalContent && filters.is_internal !== false) {
     query = query.eq("is_internal", false);
   }
 

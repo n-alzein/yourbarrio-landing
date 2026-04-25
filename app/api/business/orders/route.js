@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
+import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import {
   markOrderAcknowledged,
   markOrderAcknowledgedForStatusChange,
@@ -40,7 +41,7 @@ function normalizeOrderMessageItems(items = []) {
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
     name: item?.title || "Order item",
-    image_url: item?.image_url || item?.listing?.photo_url || null,
+    image_url: item?.image_url || resolveListingCoverImageUrl(item?.listing) || item?.listing?.photo_url || null,
   }));
 }
 
@@ -115,7 +116,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from("orders")
-    .select("*, order_items(*, listing:listings!order_items_listing_id_fkey(photo_url,photo_variants))")
+    .select("*, order_items(*, listing:listings!order_items_listing_id_fkey(photo_url,photo_variants,cover_image_id))")
     .eq("vendor_id", effectiveUserId)
     .in("status", statusList)
     .order("created_at", { ascending: false });

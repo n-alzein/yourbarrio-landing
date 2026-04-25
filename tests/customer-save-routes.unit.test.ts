@@ -26,6 +26,10 @@ function createRequest(path: string, body: Record<string, unknown>) {
 function createSupabaseMock(role: string) {
   const savedInsert = vi.fn().mockResolvedValue({ error: null });
   const usersMaybeSingle = vi.fn().mockResolvedValue({ data: { role }, error: null });
+  const publicListingMaybeSingle = vi.fn().mockResolvedValue({
+    data: { id: "listing-1" },
+    error: null,
+  });
 
   return {
     from: vi.fn((table: string) => {
@@ -34,6 +38,15 @@ function createSupabaseMock(role: string) {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
               maybeSingle: usersMaybeSingle,
+            })),
+          })),
+        };
+      }
+      if (table === "public_listings_v") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: publicListingMaybeSingle,
             })),
           })),
         };
@@ -48,6 +61,7 @@ function createSupabaseMock(role: string) {
     }),
     __mocks: {
       savedInsert,
+      publicListingMaybeSingle,
     },
   };
 }
@@ -104,6 +118,25 @@ describe("customer save API routes", () => {
       user_id: "user-1",
       listing_id: "listing-1",
     });
+  });
+
+  it("does not allow customers to save draft listings", async () => {
+    const supabase = createSupabaseMock("customer");
+    supabase.__mocks.publicListingMaybeSingle.mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    getSupabaseServerClientMock.mockResolvedValue(supabase);
+
+    const response = await saveListing(
+      createRequest("/api/customer/saved-listings", { listingId: "listing-1" })
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Listing not found",
+    });
+    expect(supabase.__mocks.savedInsert).not.toHaveBeenCalled();
   });
 
   it("rejects business users unsaving listings", async () => {

@@ -16,7 +16,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
 import { useCurrentAccountContext } from "@/lib/auth/useCurrentAccountContext";
-import { extractPhotoUrls, primaryPhotoUrl } from "@/lib/listingPhotos";
+import { extractPhotoUrls, resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useParams, usePathname, useRouter } from "next/navigation";
@@ -184,7 +184,7 @@ export default function ListingDetailsClient({
           setIsSaved(Boolean(payload?.isSaved));
           setListingOptions(payload?.listingOptions || null);
           setHeroSrc(
-            primaryPhotoUrl(payload?.listing?.photo_url) ||
+            resolveListingCoverImageUrl(payload?.listing) ||
               getListingCategoryPlaceholder(payload?.listing)
           );
           return;
@@ -198,7 +198,7 @@ export default function ListingDetailsClient({
         }
 
         const { data: item, error: listingError } = await client
-          .from("listings")
+          .from("public_listings_v")
           .select("*")
           .eq(isUuid(listingRef) ? "id" : "public_id", listingRef)
           .maybeSingle();
@@ -210,7 +210,7 @@ export default function ListingDetailsClient({
         setListing(item);
         setListingOptions(await getListingVariants(client, item.id));
         setHeroSrc(
-          primaryPhotoUrl(item.photo_url) || getListingCategoryPlaceholder(item)
+          resolveListingCoverImageUrl(item) || getListingCategoryPlaceholder(item)
         );
 
         const { data: biz } = await client
