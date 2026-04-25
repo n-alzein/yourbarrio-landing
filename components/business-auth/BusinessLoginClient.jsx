@@ -459,7 +459,7 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
         return;
       }
       if (!didCompleteRef.current && attemptRef.current === attemptId) {
-        if (!isGenericInvalidCredentialsError(err)) {
+        if (!isGenericInvalidCredentialsError(err) && !isTimeoutError(err)) {
           console.error("Business login failed", err);
         }
         const message = isTimeoutError(err)

@@ -7,7 +7,9 @@ import {
   BadgeCheck,
   Heart,
   MapPin,
+  Minus,
   MoreHorizontal,
+  Plus,
   ShoppingBag,
   Truck,
 } from "lucide-react";
@@ -29,6 +31,7 @@ import { useCart } from "@/components/cart/CartProvider";
 import { useModal } from "@/components/modals/ModalProvider";
 import ReportModal from "@/components/moderation/ReportModal";
 import ListingDescription from "@/components/listings/ListingDescription";
+import ListingOptionSelectors from "@/components/listings/ListingOptionSelectors";
 import { isUuid } from "@/lib/ids/isUuid";
 import { setAuthIntent } from "@/lib/auth/authIntent";
 import {
@@ -42,6 +45,13 @@ import {
   formatCents,
   PICKUP_FULFILLMENT_TYPE,
 } from "@/lib/fulfillment";
+import { getPickupAvailabilityLabel } from "@/lib/pickupAvailability";
+import {
+  buildVariantLabel,
+  getListingVariants,
+  getMatchingVariant,
+  getVariantInventoryListing,
+} from "@/lib/listingOptions";
 import { formatEntityId } from "@/lib/entityIds";
 import { calculateListingPricing } from "@/lib/pricing";
 import { getCustomerBusinessUrl, getListingUrl } from "@/lib/ids/publicRefs";
@@ -63,7 +73,11 @@ function writePendingAuthAction(intent) {
   } catch {}
 }
 
-export default function ListingDetailsClient({ params, backHref = "/" }) {
+export default function ListingDetailsClient({
+  params,
+  backHref = "/",
+  renderedAt = null,
+}) {
   const { supabase, user } = useAuth();
   const accountContext = useCurrentAccountContext();
   const gateBusinessProfileAccess = useBusinessProfileAccessGate();
@@ -106,6 +120,8 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportToast, setReportToast] = useState(null);
   const [listingMenuOpen, setListingMenuOpen] = useState(false);
+  const [listingOptions, setListingOptions] = useState(null);
+  const [selectedVariantOptions, setSelectedVariantOptions] = useState({});
   const toastTimerRef = useRef(null);
   const listingMenuRef = useRef(null);
   const getCurrentPath = useCallback(() => {
@@ -166,6 +182,7 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
           setListing(payload?.listing ?? null);
           setBusiness(payload?.business ?? null);
           setIsSaved(Boolean(payload?.isSaved));
+          setListingOptions(payload?.listingOptions || null);
           setHeroSrc(
             primaryPhotoUrl(payload?.listing?.photo_url) ||
               getListingCategoryPlaceholder(payload?.listing)
@@ -191,6 +208,7 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
 
         if (!isMounted) return;
         setListing(item);
+        setListingOptions(await getListingVariants(client, item.id));
         setHeroSrc(
           primaryPhotoUrl(item.photo_url) || getListingCategoryPlaceholder(item)
         );
@@ -198,7 +216,7 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
         const { data: biz } = await client
           .from("businesses")
           .select(
-            "id,owner_user_id,public_id,business_name,business_type,category,city,address,website,phone,profile_photo_url,verification_status,pickup_enabled_default,local_delivery_enabled_default,default_delivery_fee_cents,delivery_radius_miles,delivery_min_order_cents,delivery_notes"
+            "id,owner_user_id,public_id,business_name,business_type,category,city,address,website,phone,profile_photo_url,verification_status,pickup_enabled_default,local_delivery_enabled_default,default_delivery_fee_cents,delivery_radius_miles,delivery_min_order_cents,delivery_notes,hours_json"
           )
           .eq("owner_user_id", item.business_id)
           .maybeSingle();
@@ -335,9 +353,80 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
     }
   };
 
+  const activeVariants = useMemo(
+    () =>
+      (Array.isArray(listingOptions?.variants) ? listingOptions.variants : []).filter(
+        (variant) => variant?.is_active !== false
+      ),
+    [listingOptions?.variants]
+  );
+  const hasVariantOptions = Boolean(listingOptions?.hasOptions && activeVariants.length > 0);
+  const selectedVariant = useMemo(
+    () =>
+      hasVariantOptions
+        ? getMatchingVariant(activeVariants, selectedVariantOptions)
+        : null,
+    [activeVariants, hasVariantOptions, selectedVariantOptions]
+  );
+  const purchasableListing = useMemo(
+    () =>
+      hasVariantOptions && selectedVariant
+        ? getVariantInventoryListing(listing, selectedVariant)
+        : listing,
+    [hasVariantOptions, listing, selectedVariant]
+  );
+  const fulfillmentSummary = useMemo(
+    () =>
+      deriveFulfillmentSummary({
+        listings: purchasableListing ? [purchasableListing] : [],
+        business,
+        subtotalCents:
+          Math.round(
+            Number(
+              selectedVariant?.price !== null && selectedVariant?.price !== undefined
+                ? selectedVariant.price
+                : listing?.price || 0
+            ) * 100
+          ) * quantity,
+        currentFulfillmentType: fulfillmentType,
+      }),
+    [business, fulfillmentType, listing, purchasableListing, quantity, selectedVariant?.price]
+  );
+  const maxPurchasableQuantity = useMemo(
+    () =>
+      hasVariantOptions
+        ? selectedVariant
+          ? getMaxPurchasableQuantity(purchasableListing)
+          : 0
+        : getMaxPurchasableQuantity(listing),
+    [hasVariantOptions, listing, purchasableListing, selectedVariant]
+  );
+  const pickupAvailabilityLabel = useMemo(
+    () =>
+      getPickupAvailabilityLabel({
+        pickupAvailable: fulfillmentSummary.pickupAvailable,
+        hours: business?.hours_json,
+        timeZone: business?.timezone || listing?.timezone || null,
+        now: renderedAt || undefined,
+      }),
+    [
+      business?.hours_json,
+      business?.timezone,
+      fulfillmentSummary.pickupAvailable,
+      listing?.timezone,
+      renderedAt,
+    ]
+  );
   const formattedPrice = useMemo(() => {
-    if (!listing?.price) return null;
-    const finalPriceCents = Number(listing?.finalPriceCents);
+    const priceSource =
+      selectedVariant?.price !== null && selectedVariant?.price !== undefined
+        ? selectedVariant.price
+        : listing?.price;
+    if (!priceSource) return null;
+    const finalPriceCents =
+      selectedVariant?.price !== null && selectedVariant?.price !== undefined
+        ? Math.round(Number(selectedVariant.price || 0) * 100)
+        : Number(listing?.finalPriceCents);
     if (Number.isFinite(finalPriceCents) && finalPriceCents > 0) {
       return (finalPriceCents / 100).toLocaleString("en-US", {
         minimumFractionDigits: 2,
@@ -345,28 +434,14 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
       });
     }
     try {
-      return (calculateListingPricing(listing.price).finalPriceCents / 100).toLocaleString("en-US", {
+      return (calculateListingPricing(priceSource).finalPriceCents / 100).toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
     } catch {
-      return listing.price;
+      return priceSource;
     }
-  }, [listing?.finalPriceCents, listing?.price]);
-  const fulfillmentSummary = useMemo(
-    () =>
-      deriveFulfillmentSummary({
-        listings: listing ? [listing] : [],
-        business,
-        subtotalCents: Math.round(Number(listing?.price || 0) * 100) * quantity,
-        currentFulfillmentType: fulfillmentType,
-      }),
-    [business, fulfillmentType, listing, quantity]
-  );
-  const maxPurchasableQuantity = useMemo(
-    () => getMaxPurchasableQuantity(listing),
-    [listing]
-  );
+  }, [listing?.finalPriceCents, listing?.price, selectedVariant?.price]);
 
   useEffect(() => {
     if (!listing) return;
@@ -376,6 +451,16 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
     }
     setQuantity((current) => Math.max(1, Math.min(maxPurchasableQuantity, Number(current || 1))));
   }, [listing, maxPurchasableQuantity]);
+
+  useEffect(() => {
+    setSelectedVariantOptions({});
+  }, [listing?.id]);
+
+  useEffect(() => {
+    if (!hasVariantOptions) {
+      setSelectedVariantOptions({});
+    }
+  }, [hasVariantOptions, listing?.id]);
 
   useEffect(() => {
     if (
@@ -436,11 +521,18 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
           fulfillmentType: selectedFulfillmentType,
           listing: listing
             ? {
-                ...listing,
+                ...purchasableListing,
+                price:
+                  selectedVariant?.price !== null && selectedVariant?.price !== undefined
+                    ? selectedVariant.price
+                    : listing.price,
                 available_fulfillment_methods: fulfillmentSummary.availableMethods,
               }
             : null,
           business,
+          variantId: selectedVariant?.id || null,
+          variantLabel: selectedVariant ? buildVariantLabel(selectedVariant.options) : null,
+          selectedOptions: selectedVariant?.options || null,
         });
 
         if (result?.error) {
@@ -480,7 +572,16 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
         setCartActionLoading(false);
       }
     },
-    [addItem, business, fulfillmentSummary.availableMethods, listing, router, updateCartFulfillmentType]
+    [
+      addItem,
+      business,
+      fulfillmentSummary.availableMethods,
+      listing,
+      purchasableListing,
+      router,
+      selectedVariant,
+      updateCartFulfillmentType,
+    ]
   );
 
   const handleAddToCart = async () => {
@@ -493,6 +594,10 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
     }
     if (accountContext.rolePending) {
       setStatusMessage("We’re still confirming your account. Try again.");
+      return;
+    }
+    if (hasVariantOptions && !selectedVariant?.id) {
+      setStatusMessage("Select each product option before adding this item to your cart.");
       return;
     }
     if (!fulfillmentSummary.availableMethods.includes(fulfillmentType)) {
@@ -600,9 +705,14 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
     0
   );
   const inventory = normalizeInventory(listing);
-  const isOutOfStock = inventory.availability === "out" || maxPurchasableQuantity <= 0;
+  const selectedInventory = normalizeInventory(purchasableListing);
+  const isOutOfStock =
+    (hasVariantOptions ? selectedInventory.availability === "out" : inventory.availability === "out") ||
+    maxPurchasableQuantity <= 0;
   const availabilityText =
-    inventory.availability === "out"
+    hasVariantOptions && !selectedVariant
+      ? "Select options"
+      : (hasVariantOptions ? selectedInventory.availability : inventory.availability) === "out"
       ? "Out of stock"
       : fulfillmentSummary.pickupAvailable
         ? "Available today"
@@ -623,6 +733,18 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
     Number(fulfillmentSummary.deliveryFeeCents || 0) > 0
       ? `$${formatCents(fulfillmentSummary.deliveryFeeCents)} delivery`
       : "Delivery available";
+  const quantityControlsDisabled =
+    isOutOfStock ||
+    purchaseRestricted ||
+    purchaseEligibilityPending ||
+    (hasVariantOptions && !selectedVariant?.id);
+  const canDecreaseQuantity = quantity > 1 && !quantityControlsDisabled;
+  const canIncreaseQuantity =
+    quantity < Math.max(1, maxPurchasableQuantity) && !quantityControlsDisabled;
+  const addToCartDisabled =
+    isOutOfStock ||
+    cartActionLoading ||
+    (hasVariantOptions && !selectedVariant?.id);
 
   return (
     <>
@@ -1005,27 +1127,26 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
                 </div>
               </div>
 
-              <div className="mt-5 border-t pt-5" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
+              <div className="mt-4 border-t pt-4" style={{ borderColor: "rgba(15,23,42,0.04)" }}>
                 <div>
-                  <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
-                    Fulfillment
-                  </div>
                   {pickupOnly ? (
                     <div
                       className="rounded-2xl px-4 py-3 text-left"
                       style={{
-                        background: "rgba(79,70,229,0.08)",
-                        border: "1px solid rgba(79,70,229,0.18)",
+                        background: "rgba(15,23,42,0.025)",
+                        border: "1px solid rgba(15,23,42,0.08)",
                         color: "var(--text)",
                       }}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(15,23,42,0.05)] text-[var(--yb-focus)]">
                           <ShoppingBag className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold">Pickup</div>
-                          <div className="mt-1 truncate text-xs opacity-70">Pick up today</div>
+                          <div className="mt-1 truncate text-xs opacity-70">
+                            {pickupAvailabilityLabel}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1033,13 +1154,13 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
                     <div
                       className="rounded-2xl px-4 py-3 text-left"
                       style={{
-                        background: "rgba(79,70,229,0.08)",
-                        border: "1px solid rgba(79,70,229,0.18)",
+                        background: "rgba(15,23,42,0.025)",
+                        border: "1px solid rgba(15,23,42,0.08)",
                         color: "var(--text)",
                       }}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(15,23,42,0.05)] text-[var(--yb-focus)]">
                           <Truck className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
@@ -1056,7 +1177,7 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
                         {
                           id: PICKUP_FULFILLMENT_TYPE,
                           label: "Pickup",
-                          meta: "Pick up today",
+                          meta: pickupAvailabilityLabel,
                           icon: ShoppingBag,
                           available: fulfillmentSummary.pickupAvailable,
                           hidden:
@@ -1092,19 +1213,19 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
                               onClick={() => setFulfillmentType(option.id)}
                               disabled={disabled}
                               className={`rounded-2xl px-4 py-3 text-left transition ${
-                                active ? "ring-2 ring-indigo-500/20" : ""
-                              } ${disabled && !active ? "cursor-not-allowed" : ""}`}
+                                disabled && !active ? "cursor-not-allowed" : ""
+                              }`}
                               style={{
-                                background: active ? "rgba(79,70,229,0.08)" : "rgba(15,23,42,0.02)",
+                                background: active ? "rgba(124,58,237,0.08)" : "rgba(15,23,42,0.02)",
                                 border: active
-                                  ? "1px solid rgba(79,70,229,0.18)"
+                                  ? "1px solid rgba(124,58,237,0.20)"
                                   : "1px solid rgba(15,23,42,0.08)",
                                 color: "var(--text)",
                                 opacity: option.available ? 1 : 0.55,
                               }}
                             >
                               <div className="flex items-start gap-3">
-                                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(111,52,255,0.08)] text-[var(--yb-focus)]">
+                                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(15,23,42,0.05)] text-[var(--yb-focus)]">
                                   <Icon className="h-3.5 w-3.5" />
                                 </div>
                                 <div className="min-w-0">
@@ -1120,36 +1241,75 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
                   {fulfillmentType === DELIVERY_FULFILLMENT_TYPE &&
                     fulfillmentSummary.deliveryAvailable &&
                     fulfillmentSummary.deliveryNotes ? (
-                    <p className="text-xs leading-5 opacity-65">
+                    <p className="mt-3 text-xs leading-5 opacity-65">
                       {fulfillmentSummary.deliveryNotes}
                     </p>
                   ) : null}
                 </div>
               </div>
 
-              <div className="mt-5 border-t pt-5" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
+              <div className="mt-5 border-t pt-5" style={{ borderColor: "rgba(15,23,42,0.04)" }}>
+                <div className="space-y-6">
+                  {hasVariantOptions ? (
+                    <ListingOptionSelectors
+                      attributes={listingOptions?.attributes}
+                      variants={activeVariants}
+                      selectedOptions={selectedVariantOptions}
+                      onChange={(attributeName, value) => {
+                        setStatusMessage("");
+                        setSelectedVariantOptions((current) => ({
+                          ...current,
+                          [attributeName]: value,
+                        }));
+                      }}
+                    />
+                  ) : null}
+
+                  <div className="mt-7">
+                    <label className="block text-xs font-medium tracking-[0.04em] opacity-70">
                       Quantity
                     </label>
-                    <select
-                      value={quantity}
-                      onChange={(e) => setQuantity(Number(e.target.value))}
-                      disabled={isOutOfStock || purchaseRestricted || purchaseEligibilityPending}
-                      className="w-full rounded-2xl px-3 py-3 text-base font-semibold md:text-sm"
+                    <div className="mt-3">
+                    <div
+                      className="flex items-center overflow-hidden rounded-2xl"
                       style={{
-                        background: "rgba(15,23,42,0.02)",
-                        border: "1px solid rgba(15,23,42,0.08)",
-                        color: "var(--text)",
+                        background: "#ffffff",
+                        border: "1px solid rgba(209,213,219,1)",
                       }}
                     >
-                      {Array.from({ length: Math.max(1, maxPurchasableQuantity) }).map((_, idx) => (
-                        <option key={idx + 1} value={idx + 1}>
-                          {idx + 1}
-                        </option>
-                      ))}
-                    </select>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                        disabled={!canDecreaseQuantity}
+                        className="flex h-11 w-11 items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <div
+                        className="flex h-11 min-w-0 flex-1 items-center justify-center border-x text-sm font-medium"
+                        style={{
+                          borderColor: "rgba(209,213,219,1)",
+                          color: "var(--text)",
+                        }}
+                      >
+                        {quantity}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuantity((current) =>
+                            Math.min(Math.max(1, maxPurchasableQuantity), current + 1)
+                          )
+                        }
+                        disabled={!canIncreaseQuantity}
+                        className="flex h-11 w-11 items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    </div>
                   </div>
 
                   {purchaseEligibilityPending ? (
@@ -1181,17 +1341,21 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
                       </p>
                     </div>
                   ) : (
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-7 space-y-3">
                       <button
                         type="button"
                         onClick={handleAddToCart}
-                        disabled={isOutOfStock || cartActionLoading}
-                        className="yb-auth-cta flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-semibold transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(111,52,255,0.24)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={addToCartDisabled}
+                        className="yb-auth-cta flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-semibold transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(111,52,255,0.24)] focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                         style={{
-                          background: isOutOfStock ? "rgba(15,23,42,0.12)" : "var(--yb-focus)",
-                          color: isOutOfStock ? "rgba(15,23,42,0.46)" : "#ffffff",
-                          boxShadow: isOutOfStock
-                            ? "none"
+                          background: addToCartDisabled
+                            ? "rgba(124,58,237,0.14)"
+                            : "var(--yb-focus)",
+                          color: addToCartDisabled
+                            ? "rgba(76,29,149,0.88)"
+                            : "#ffffff",
+                          boxShadow: addToCartDisabled
+                            ? "0 8px 16px -16px rgba(124,58,237,0.28)"
                             : "0 12px 24px -20px rgba(110,52,255,0.38)",
                         }}
                       >
@@ -1202,7 +1366,9 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
 
                   {isOutOfStock ? (
                     <div className="text-xs leading-5 opacity-75">
-                      This item is currently out of stock
+                      {hasVariantOptions && !selectedVariant?.id
+                        ? "Select each option to see availability."
+                        : "This item is currently out of stock"}
                     </div>
                   ) : statusMessage ? (
                     <div
@@ -1220,7 +1386,7 @@ export default function ListingDetailsClient({ params, backHref = "/" }) {
               </div>
 
               {fulfillmentSummary.deliveryAvailable || fulfillmentSummary.pickupAvailable ? (
-                <div className="mt-5 border-t pt-5" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
+                <div className="mt-10 border-t pt-7" style={{ borderColor: "rgba(15,23,42,0.08)" }}>
                   <div className="text-sm font-semibold">
                     <span className="opacity-80">What to expect</span>
                   </div>

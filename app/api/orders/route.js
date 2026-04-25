@@ -17,6 +17,7 @@ import {
 } from "@/lib/orders/inventoryReservations";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
 import { MAX_ORDER_QUANTITY, validateOrderQuantity } from "@/lib/inventory";
+import { getVariantInventoryListing } from "@/lib/listingOptions";
 
 function jsonError(message, status = 400, extra = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
@@ -53,6 +54,21 @@ async function getActiveCart(supabase, userId, { cartId, businessId } = {}) {
 
   if (error) throw error;
   return data || null;
+}
+
+async function getListingVariantsByIds(client, variantIds) {
+  if (!variantIds.length) return new Map();
+
+  const { data, error } = await client
+    .from("listing_variants")
+    .select("id,listing_id,price,quantity,is_active")
+    .in("id", variantIds);
+
+  if (error) {
+    throw new Error(error.message || "Failed to load listing variants");
+  }
+
+  return new Map((Array.isArray(data) ? data : []).map((variant) => [variant.id, variant]));
 }
 
 export async function POST(request) {
@@ -174,8 +190,15 @@ export async function POST(request) {
   }
 
   const listingsById = new Map((Array.isArray(listingRows) ? listingRows : []).map((row) => [row.id, row]));
+  const variantsById = await getListingVariantsByIds(
+    serviceClient,
+    items.map((item) => item?.variant_id).filter(Boolean)
+  );
   let orderItems = items.map((item) => ({
     listing_id: item.listing_id,
+    variant_id: item.variant_id || null,
+    variant_label: item.variant_label || null,
+    selected_options: item.selected_options || null,
     title: item.title,
     unit_price: item.unit_price,
     image_url: item.image_url,
@@ -184,7 +207,14 @@ export async function POST(request) {
 
   for (const item of orderItems) {
     const listing = listingsById.get(item.listing_id);
-    const validation = validateOrderQuantity(item.quantity, listing);
+    const variant = item.variant_id ? variantsById.get(item.variant_id) : null;
+    if (item.variant_id && (!variant || variant.is_active === false)) {
+      return jsonError("A selected product option is no longer available.", 409);
+    }
+    const validation = validateOrderQuantity(
+      item.quantity,
+      variant ? getVariantInventoryListing(listing, variant) : listing
+    );
     if (!validation.ok) {
       return jsonError(validation.message, 409, {
         code: validation.code,

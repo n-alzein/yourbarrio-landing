@@ -7,6 +7,7 @@ import {
   getCurrentViewerVisibilityGate,
 } from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
+import { getListingVariants } from "@/lib/listingOptions";
 
 export async function GET(request) {
   const supabase = await getSupabaseServerClient();
@@ -91,6 +92,7 @@ export async function GET(request) {
       listing: withListingPricing(listing),
       business,
       isSaved: Boolean(saved),
+      listingOptions: await getListingVariants(supabase, resolvedListingId),
     },
     { status: 200 }
   );

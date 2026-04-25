@@ -6,6 +6,9 @@ export type CartItem = {
   cart_id: string;
   listing_id: string;
   vendor_id: string;
+  variant_id?: string | null;
+  variant_label?: string | null;
+  selected_options?: Record<string, string> | null;
   quantity: number;
   title: string;
   unit_price: number | null;

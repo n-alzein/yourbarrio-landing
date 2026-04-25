@@ -16,6 +16,7 @@ import {
   MAX_ORDER_QUANTITY,
   validateOrderQuantity,
 } from "@/lib/inventory";
+import { getVariantInventoryListing } from "@/lib/listingOptions";
 
 async function getActiveCarts(supabase, userId) {
   const { data, error } = await supabase
@@ -83,16 +84,36 @@ async function getListingFulfillmentById(supabase, listingIds) {
   }, {});
 }
 
-function enrichCartsWithFulfillment(carts, businessByVendorId, listingById) {
+async function getVariantsById(supabase, variantIds) {
+  if (!variantIds.length) return {};
+
+  const { data, error } = await supabase
+    .from("listing_variants")
+    .select("id,listing_id,price,quantity,is_active")
+    .in("id", variantIds);
+
+  if (error) throw error;
+
+  return (data || []).reduce((acc, row) => {
+    if (row?.id) {
+      acc[row.id] = row;
+    }
+    return acc;
+  }, {});
+}
+
+function enrichCartsWithFulfillment(carts, businessByVendorId, listingById, variantById = {}) {
   return carts.map((cart) => {
     const cartItems = Array.isArray(cart?.cart_items)
       ? cart.cart_items.map((item) => {
           const listing = listingById[item?.listing_id] || null;
-          const maxQuantity = listing ? getMaxPurchasableQuantity(listing) : 0;
+          const variant = item?.variant_id ? variantById[item.variant_id] || null : null;
+          const purchasable = variant ? getVariantInventoryListing(listing, variant) : listing;
+          const maxQuantity = purchasable ? getMaxPurchasableQuantity(purchasable) : 0;
           return {
             ...item,
-            inventory_status: listing?.inventory_status ?? null,
-            inventory_quantity: listing?.inventory_quantity ?? null,
+            inventory_status: purchasable?.inventory_status ?? null,
+            inventory_quantity: purchasable?.inventory_quantity ?? null,
             max_order_quantity: maxQuantity,
             stock_error:
               maxQuantity <= 0
@@ -156,10 +177,20 @@ async function getCartPayload(supabase, userId) {
       )
     ),
   ];
+  const variantIds = [
+    ...new Set(
+      carts.flatMap((cart) =>
+        Array.isArray(cart?.cart_items)
+          ? cart.cart_items.map((item) => item?.variant_id).filter(Boolean)
+          : []
+      )
+    ),
+  ];
   const vendors = await getVendorsById(supabase, vendorIds);
   const businesses = await getBusinessFulfillmentByVendorId(supabase, vendorIds);
   const listings = await getListingFulfillmentById(supabase, listingIds);
-  return buildCartPayload(enrichCartsWithFulfillment(carts, businesses, listings), vendors);
+  const variants = await getVariantsById(supabase, variantIds);
+  return buildCartPayload(enrichCartsWithFulfillment(carts, businesses, listings, variants), vendors);
 }
 
 function jsonError(message, status = 400, extra = {}) {
@@ -218,6 +249,12 @@ export async function POST(request) {
   }
 
   const listingId = body?.listing_id;
+  const variantId = body?.variant_id || null;
+  const variantLabel = body?.variant_label || null;
+  const selectedOptions =
+    body?.selected_options && typeof body.selected_options === "object"
+      ? body.selected_options
+      : null;
   const quantity = Number(body?.quantity || 1);
 
   if (!listingId) {
@@ -242,13 +279,47 @@ export async function POST(request) {
     return jsonError("Listing not found", 404);
   }
 
+  const { data: firstActiveVariant } = await supabase
+    .from("listing_variants")
+    .select("id")
+    .eq("listing_id", listing.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  let activeVariant = null;
+  if (variantId) {
+    const { data: variant, error: variantError } = await supabase
+      .from("listing_variants")
+      .select("id,listing_id,price,quantity,is_active")
+      .eq("id", variantId)
+      .maybeSingle();
+
+    if (variantError) {
+      return jsonError(variantError.message || "Failed to load variant", 500);
+    }
+    if (!variant?.id || variant.listing_id !== listing.id || variant.is_active === false) {
+      return jsonError("Select a valid product option before adding this item to your cart.", 400);
+    }
+    activeVariant = variant;
+  } else if (firstActiveVariant?.id) {
+    return jsonError("Select a product option before adding this item to your cart.", 400);
+  }
+
   const businessFulfillmentByVendorId = await getBusinessFulfillmentByVendorId(supabase, [
     listing.business_id,
   ]);
+  const purchasableListing = activeVariant
+    ? getVariantInventoryListing(listing, activeVariant)
+    : listing;
+  const selectedUnitPrice =
+    activeVariant?.price !== null && activeVariant?.price !== undefined
+      ? Number(activeVariant.price)
+      : Number(listing.price || 0);
   const listingSummary = deriveFulfillmentSummary({
-    listings: [listing],
+    listings: [purchasableListing],
     business: businessFulfillmentByVendorId[listing.business_id] || null,
-    subtotalCents: Math.round(Number(listing.price || 0) * 100) * quantity,
+    subtotalCents: Math.round(selectedUnitPrice * 100) * quantity,
     currentFulfillmentType: PICKUP_FULFILLMENT_TYPE,
   });
 
@@ -285,19 +356,26 @@ export async function POST(request) {
     activeCart = newCart;
   }
 
-  const { data: existingItem, error: existingError } = await supabase
+  const existingItemQuery = supabase
     .from("cart_items")
     .select("id,quantity")
     .eq("cart_id", activeCart.id)
-    .eq("listing_id", listing.id)
-    .maybeSingle();
+    .eq("listing_id", listing.id);
+
+  if (activeVariant?.id) {
+    existingItemQuery.eq("variant_id", activeVariant.id);
+  } else {
+    existingItemQuery.is("variant_id", null);
+  }
+
+  const { data: existingItem, error: existingError } = await existingItemQuery.maybeSingle();
 
   if (existingError) {
     return jsonError(existingError.message || "Failed to check cart", 500);
   }
 
   const nextQuantity = existingItem ? Number(existingItem.quantity || 0) + quantity : quantity;
-  const quantityValidation = validateOrderQuantity(nextQuantity, listing);
+  const quantityValidation = validateOrderQuantity(nextQuantity, purchasableListing);
   if (!quantityValidation.ok) {
     return jsonError(quantityValidation.message, 409, {
       code: quantityValidation.code,
@@ -309,9 +387,12 @@ export async function POST(request) {
     cart_id: activeCart.id,
     vendor_id: listing.business_id,
     listing_id: listing.id,
+    variant_id: activeVariant?.id || null,
+    variant_label: variantLabel || null,
+    selected_options: selectedOptions || {},
     quantity: nextQuantity,
     title: listing.title,
-    unit_price: listing.price,
+    unit_price: selectedUnitPrice,
     image_url: primaryPhotoUrl(listing.photo_url),
     updated_at: new Date().toISOString(),
   };
@@ -319,7 +400,13 @@ export async function POST(request) {
   if (existingItem) {
     const { error: updateError } = await supabase
       .from("cart_items")
-      .update({ quantity: itemPayload.quantity, updated_at: itemPayload.updated_at })
+      .update({
+        quantity: itemPayload.quantity,
+        unit_price: itemPayload.unit_price,
+        variant_label: itemPayload.variant_label,
+        selected_options: itemPayload.selected_options,
+        updated_at: itemPayload.updated_at,
+      })
       .eq("id", existingItem.id);
 
     if (updateError) {
@@ -474,7 +561,24 @@ export async function PATCH(request) {
         return jsonError(listingError.message || "Failed to load listing", 500);
       }
 
-      const quantityValidation = validateOrderQuantity(quantity, listing);
+      let purchasableListing = listing;
+      if (cartItem?.variant_id) {
+        const { data: variant, error: variantError } = await supabase
+          .from("listing_variants")
+          .select("id,listing_id,price,quantity,is_active")
+          .eq("id", cartItem.variant_id)
+          .maybeSingle();
+
+        if (variantError) {
+          return jsonError(variantError.message || "Failed to load variant", 500);
+        }
+        if (!variant?.id || variant.is_active === false) {
+          return jsonError("This option is no longer available.", 409);
+        }
+        purchasableListing = getVariantInventoryListing(listing, variant);
+      }
+
+      const quantityValidation = validateOrderQuantity(quantity, purchasableListing);
       if (!quantityValidation.ok) {
         return jsonError(quantityValidation.message, 409, {
           code: quantityValidation.code,

@@ -477,10 +477,23 @@ export function CartProvider({ children }) {
   }, [purchaseRestricted]);
 
   const addItem = useCallback(
-    async ({ listingId, quantity = 1, clearExisting, listing = null, business = null, fulfillmentType = null }) => {
+    async ({
+      listingId,
+      variantId = null,
+      variantLabel = null,
+      selectedOptions = null,
+      quantity = 1,
+      clearExisting,
+      listing = null,
+      business = null,
+      fulfillmentType = null,
+    }) => {
       if (!user?.id) {
         const result = addToGuestCart({
           listingId,
+          variantId,
+          variantLabel,
+          selectedOptions,
           quantity,
           listing,
           business,
@@ -504,6 +517,9 @@ export function CartProvider({ children }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           listing_id: listingId,
+          variant_id: variantId,
+          variant_label: variantLabel,
+          selected_options: selectedOptions,
           quantity,
           clear_existing: clearExisting,
         }),

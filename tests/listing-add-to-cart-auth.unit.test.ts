@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const listingPageSource = readFileSync(
-  path.join(process.cwd(), "app/(public)/listings/[id]/page.js"),
+  path.join(process.cwd(), "app/(public)/listings/[id]/ListingDetailsClient.jsx"),
   "utf8"
 );
 const listingTileSource = readFileSync(
@@ -47,6 +47,10 @@ describe("public listing guest add-to-cart flow", () => {
     expect(listingPageSource).toContain("listingId,");
     expect(listingPageSource).toContain("quantity: selectedQuantity");
     expect(listingPageSource).toContain("await updateCartFulfillmentType(selectedFulfillmentType");
+    expect(listingPageSource).toContain('aria-label="Decrease quantity"');
+    expect(listingPageSource).toContain('aria-label="Increase quantity"');
+    expect(listingPageSource).toContain("const addToCartDisabled =");
+    expect(listingPageSource).toContain("rgba(124,58,237,0.14)");
   });
 
   it("revalidates cart price and stock before payment", () => {

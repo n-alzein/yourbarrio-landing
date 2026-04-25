@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
+import ListingOptionsSection from "@/components/business/listings/ListingOptionsSection";
+import ListingPreviewCard from "@/components/business/listings/ListingPreviewCard";
 import { useAuth } from "@/components/AuthProvider";
 import RichTextDescriptionEditor from "@/components/editor/RichTextDescriptionEditor";
 import {
   buildListingPhotoPayloadFromDrafts,
   createLocalPhotoDraft,
+  getDraftDisplayUrl,
   hydratePhotoDrafts,
 } from "@/lib/listingPhotoDrafts";
 import {
@@ -24,6 +27,13 @@ import {
   dollarsInputToCents,
   centsToDollarsInput,
 } from "@/lib/fulfillment";
+import {
+  createEmptyVariantPayload,
+  deriveListingInventoryFromVariants,
+  getActiveVariantQuantityTotal,
+  saveListingVariants,
+  validateListingOptions,
+} from "@/lib/listingOptions";
 import {
   buildListingTaxonomyPayload,
   getListingCategorySlug,
@@ -60,14 +70,14 @@ export default function EditListingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const MAX_PHOTOS = 10;
-  const sectionCard =
-    "rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-lg backdrop-blur-xl";
-  const labelBase = "text-sm font-semibold text-white/80";
-  const helperBase = "text-xs text-white/50";
+  const columnSurface = "rounded-[30px] bg-white px-5 py-5 shadow-sm ring-1 ring-slate-200 sm:px-6";
+  const sectionCard = "border-t border-slate-100 pt-8 first:border-t-0 first:pt-0";
+  const labelBase = "text-sm font-semibold text-slate-900";
+  const helperBase = "mt-2 text-xs text-slate-500";
   const inputBase =
-    "w-full mt-2 px-4 py-3 h-12 rounded-xl bg-white/10 text-white placeholder-white/40 border border-white/10 focus:border-white/30 focus:ring-4 focus:ring-blue-500/30 outline-none transition";
+    "mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100";
   const selectBase =
-    "w-full mt-2 px-4 py-3 h-12 rounded-xl bg-white/10 text-white border border-white/10 focus:border-white/30 focus:ring-4 focus:ring-blue-500/30 outline-none transition appearance-none";
+    "mt-2 h-11 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100";
 
   const [form, setForm] = useState({
     title: "",
@@ -93,7 +103,16 @@ export default function EditListingPage() {
   const photosRef = useRef([]);
   const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [internalListingId, setInternalListingId] = useState(null);
+  const [listingOptions, setListingOptions] = useState(createEmptyVariantPayload());
+  const [listingOptionsErrors, setListingOptionsErrors] = useState(null);
+  const variantsEnabled = Boolean(listingOptions?.hasOptions);
+  const activeVariantTotal = getActiveVariantQuantityTotal(listingOptions?.variants);
+  const derivedVariantInventory = deriveListingInventoryFromVariants(
+    listingOptions?.variants,
+    form.lowStockThreshold
+  );
 
   useEffect(() => {
     photosRef.current = photos;
@@ -173,6 +192,7 @@ export default function EditListingPage() {
           deliveryFee: centsToDollarsInput(data.delivery_fee_cents),
         });
         setPhotos(hydratePhotoDrafts(data.photo_url, data.photo_variants));
+        setListingOptions(payload?.listingOptions || createEmptyVariantPayload());
       } catch (err) {
         console.error("❌ Fetch listing error:", err);
       } finally {
@@ -503,31 +523,26 @@ export default function EditListingPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setSubmitError("");
 
     const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) {
-      alert("Connection not ready. Please try again.");
+      setSubmitError("Connection not ready. Please try again.");
       return;
     }
 
-    const resetTimer = setTimeout(() => setSaving(false), 20000);
     try {
-      setSaving(true);
-
-      const uploaded = await uploadNewPhotos();
-      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(uploaded);
-
-      if (!photoUrls.length) {
-        alert("Please keep at least one photo.");
+      if (!photos.length) {
+        setSubmitError("Please keep at least one photo.");
         return;
       }
 
       if (!form.category) {
-        alert("Please select a category.");
+        setSubmitError("Please select a category.");
         return;
       }
       if (!stripHtmlToText(form.description || "").trim()) {
-        alert("Please add a description.");
+        setSubmitError("Please add a description.");
         return;
       }
       if (
@@ -535,7 +550,7 @@ export default function EditListingPage() {
         form.useBusinessDeliveryDefaults &&
         businessFulfillmentDefaults.default_delivery_fee_cents == null
       ) {
-        alert("Add a default delivery fee in business settings before enabling delivery.");
+        setSubmitError("Add a default delivery fee in business settings before enabling delivery.");
         return;
       }
       const listingDeliveryFeeCents = dollarsInputToCents(form.deliveryFee);
@@ -544,427 +559,547 @@ export default function EditListingPage() {
         !form.useBusinessDeliveryDefaults &&
         (Number.isNaN(listingDeliveryFeeCents) || listingDeliveryFeeCents === null)
       ) {
-        alert("Enter a valid listing delivery fee.");
+        setSubmitError("Enter a valid listing delivery fee.");
         return;
       }
 
-      const taxonomy = buildListingTaxonomyPayload({
-        listing_category: form.category,
-      });
-      const payload = {
-        title: (form.title || "").trim(),
-        description: form.description || "",
-        price: form.price,
-        listing_category: taxonomy.listing_category,
-        category: taxonomy.category,
-        category_id: null,
-        city: form.city,
-        inventory_status: form.inventoryStatus,
-        inventory_quantity:
-          form.inventoryStatus === "out_of_stock"
+      const listingOptionsValidation = validateListingOptions(listingOptions);
+      if (!listingOptionsValidation.ok) {
+        setListingOptionsErrors(listingOptionsValidation.errors);
+        setSubmitError(
+          listingOptionsValidation.errors.form[0] ||
+            "Finish the product options section before saving."
+        );
+        return;
+      }
+      setListingOptionsErrors(null);
+
+      setSaving(true);
+      const resetTimer = setTimeout(() => setSaving(false), 20000);
+
+      try {
+        const uploaded = await uploadNewPhotos();
+        const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(uploaded);
+
+        if (!photoUrls.length) {
+          setSubmitError("Please keep at least one photo.");
+          return;
+        }
+
+        const taxonomy = buildListingTaxonomyPayload({
+          listing_category: form.category,
+        });
+        const inventoryStatus = listingOptionsValidation.normalized.hasOptions
+          ? derivedVariantInventory.inventoryStatus
+          : form.inventoryStatus;
+        const inventoryQuantity = listingOptionsValidation.normalized.hasOptions
+          ? derivedVariantInventory.inventoryQuantity
+          : form.inventoryStatus === "out_of_stock"
             ? 0
             : form.inventoryQuantity === ""
-            ? null
-            : Number(form.inventoryQuantity),
-        low_stock_threshold:
-          form.inventoryStatus === "in_stock" && form.lowStockThreshold !== ""
-            ? Number(form.lowStockThreshold)
-            : null,
-        inventory_last_updated_at: new Date().toISOString(),
-        photo_url: JSON.stringify(photoUrls),
-        photo_variants: photoVariants.length ? photoVariants : null,
-        pickup_enabled: form.pickupEnabled,
-        local_delivery_enabled: form.localDeliveryEnabled,
-        use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
-        delivery_fee_cents:
-          form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
-            ? listingDeliveryFeeCents
-            : null,
-      };
+              ? null
+              : Number(form.inventoryQuantity);
+        const payload = {
+          title: (form.title || "").trim(),
+          description: form.description || "",
+          price: form.price,
+          listing_category: taxonomy.listing_category,
+          category: taxonomy.category,
+          category_id: null,
+          city: form.city,
+          inventory_status: inventoryStatus,
+          inventory_quantity: inventoryQuantity,
+          low_stock_threshold:
+            (inventoryStatus === "in_stock" || inventoryStatus === "low_stock") &&
+            form.lowStockThreshold !== ""
+              ? Number(form.lowStockThreshold)
+              : null,
+          inventory_last_updated_at: new Date().toISOString(),
+          photo_url: JSON.stringify(photoUrls),
+          photo_variants: photoVariants.length ? photoVariants : null,
+          pickup_enabled: form.pickupEnabled,
+          local_delivery_enabled: form.localDeliveryEnabled,
+          use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
+          delivery_fee_cents:
+            form.localDeliveryEnabled && !form.useBusinessDeliveryDefaults
+              ? listingDeliveryFeeCents
+              : null,
+        };
 
-      const { data, error } = await retry(
-        async () => {
-          if (!internalListingId) {
-            throw new Error("Listing reference could not be resolved.");
-          }
-          const result = await client
-            .from("listings")
-            .update(payload)
-            .eq("id", internalListingId)
-            .eq("business_id", accountId)
-            .select("id")
-            .single();
-          if (result.error) throw result.error;
-          return result;
-        },
-        { retries: 1, delayMs: 600 }
-      );
+        const { data, error } = await retry(
+          async () => {
+            if (!internalListingId) {
+              throw new Error("Listing reference could not be resolved.");
+            }
+            const result = await client
+              .from("listings")
+              .update(payload)
+              .eq("id", internalListingId)
+              .eq("business_id", accountId)
+              .select("id")
+              .single();
+            if (result.error) throw result.error;
+            return result;
+          },
+          { retries: 1, delayMs: 600 }
+        );
 
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+
+        if (!data?.id) {
+          throw new Error("Save did not complete. Please retry.");
+        }
+
+        await saveListingVariants(
+          data.id,
+          listingOptionsValidation.normalized,
+          client,
+          { businessId: accountId }
+        );
+
+        router.push("/business/listings");
+      } catch (err) {
+        console.error("❌ Update error:", err);
+        setSubmitError(err.message || "Failed to save changes. Please try again.");
+      } finally {
+        clearTimeout(resetTimer);
+        setSaving(false);
       }
-
-      if (!data?.id) {
-        throw new Error("Save did not complete. Please retry.");
-      }
-
-      setSaving(false);
-      router.push("/business/listings");
     } catch (err) {
-      console.error("❌ Update error:", err);
-      alert(err.message || "Failed to save changes. Please try again.");
-    } finally {
-      clearTimeout(resetTimer);
-      setSaving(false);
+      console.error("❌ Update validation error:", err);
+      setSubmitError(err.message || "Failed to save changes. Please try again.");
     }
   }
 
   if (loading) {
-    return <div className="text-white text-center py-20">Loading listing...</div>;
+    return <div className="py-20 text-center text-slate-600">Loading listing...</div>;
   }
 
   if (loadingUser && !accountId) {
-    return <div className="text-white text-center py-20">Loading account...</div>;
+    return <div className="py-20 text-center text-slate-600">Loading account...</div>;
   }
 
   if (!accountId) {
-    return <div className="text-white text-center py-20">Redirecting to login...</div>;
+    return <div className="py-20 text-center text-slate-600">Redirecting to login...</div>;
   }
 
   if (!supabase && !getSupabaseBrowserClient()) {
-    return <div className="text-white text-center py-20">Connecting to your account...</div>;
+    return <div className="py-20 text-center text-slate-600">Connecting to your account...</div>;
   }
+
+  const previewCategoryLabel =
+    CATEGORY_OPTIONS.find((category) => category.slug === form.category)?.label || "";
+  const previewInventoryStatus = variantsEnabled
+    ? derivedVariantInventory.inventoryStatus
+    : form.inventoryStatus;
+  const previewInventoryQuantity = variantsEnabled
+    ? derivedVariantInventory.inventoryQuantity
+    : form.inventoryStatus === "out_of_stock"
+      ? 0
+      : form.inventoryQuantity === ""
+        ? null
+        : Number(form.inventoryQuantity);
+  const previewImageUrl = photos[0] ? getDraftDisplayUrl(photos[0]) : null;
 
   // -------------------------------------------------------------------------
   // UI
   // -------------------------------------------------------------------------
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-16">
-      <div className="mb-12 text-center space-y-3">
-        <p className="text-xs uppercase tracking-[0.32em] text-white/50">
-          Business listings
-        </p>
-        <h1 className="text-4xl md:text-5xl font-semibold text-white">
-          Edit listing
-        </h1>
-        <p className="text-white/60 text-base md:text-lg">
-          Update details and availability to keep customers informed.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <ListingPhotoManager
-          photos={photos}
-          maxPhotos={MAX_PHOTOS}
-          helperText={`Add up to ${MAX_PHOTOS} photos. The first photo is your cover.`}
-          error={photoError}
-          onAddFiles={handleAddNewPhotos}
-          onRemovePhoto={handleRemovePhoto}
-          onEnhancePhoto={handleEnhancePhoto}
-          onChooseVariant={handleChooseVariant}
-          onBackgroundChange={handleBackgroundChange}
-          canAddMore={photos.length < MAX_PHOTOS}
-        />
-
-        <section className={sectionCard}>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-white">Listing details</h2>
-            <p className="text-sm text-white/60">
-              Keep your title and description aligned with what is in stock.
-            </p>
-          </div>
-          <div className="grid gap-6">
-            <div>
-              <label className={labelBase} htmlFor="listing-title">
-                Listing title
-              </label>
-              <input
-                id="listing-title"
-                className={inputBase}
-                placeholder="Ex: House-made cold brew concentrate"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                required
-              />
-              <p className={helperBase}>Keep it short and descriptive.</p>
-            </div>
-
-            <div>
-              <RichTextDescriptionEditor
-                label="Description"
-                value={form.description}
-                onChange={(nextDescription) =>
-                  setForm({ ...form, description: nextDescription })
-                }
-                minHeight={180}
-                placeholder="Share materials, flavors, or what makes it special."
-                helpText="Use headings, bullets, and links to make details easy to scan."
-              />
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className={labelBase} htmlFor="listing-category">
-                  Category
-                </label>
-                <select
-                  id="listing-category"
-                  className={selectBase}
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm({ ...form, category: e.target.value })
-                  }
-                  required
-                >
-                  <option value="" className="text-black">
-                    Select category
-                  </option>
-                  {CATEGORY_OPTIONS.map((category) => (
-                    <option
-                      key={category.slug}
-                      value={category.slug}
-                      className="text-black"
-                    >
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-                <p className={helperBase}>Choose the best fit for this item.</p>
-              </div>
-
-              <div>
-                <label className={labelBase} htmlFor="listing-price">
-                  Price
-                </label>
-                <input
-                  id="listing-price"
-                  className={inputBase}
-                  type="number"
-                  placeholder="Ex: 49.99"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  required
-                />
-                <p className={helperBase}>Use numbers only. Currency is USD.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className={sectionCard}>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-white">Inventory</h2>
-            <p className="text-sm text-white/60">
-              Update quantities and availability as inventory changes.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className={labelBase} htmlFor="listing-status">
-                Availability
-              </label>
-              <select
-                id="listing-status"
-                className={selectBase}
-                value={form.inventoryStatus}
-                onChange={(e) => {
-                  const nextStatus = e.target.value;
-                  setForm((prev) => ({
-                    ...prev,
-                    inventoryStatus: nextStatus,
-                    inventoryQuantity:
-                      nextStatus === "out_of_stock" ? "0" : prev.inventoryQuantity,
-                    lowStockThreshold:
-                      nextStatus === "in_stock" ? prev.lowStockThreshold : "",
-                  }));
-                }}
-              >
-                <option value="always_available" className="text-black">
-                  Always available
-                </option>
-                <option value="in_stock" className="text-black">
-                  Limited stock (default)
-                </option>
-                <option value="seasonal" className="text-black">
-                  Seasonal or temporary
-                </option>
-                <option value="out_of_stock" className="text-black">
-                  Out of stock
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label className={labelBase} htmlFor="listing-quantity">
-                Quantity on hand
-              </label>
-              <input
-                id="listing-quantity"
-                className={inputBase}
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Ex: 20"
-                value={form.inventoryQuantity}
-                onChange={(e) =>
-                  setForm({ ...form, inventoryQuantity: e.target.value })
-                }
-              />
-              <p className={helperBase}>Leave blank if not tracking quantity.</p>
-            </div>
-          </div>
-
-          {form.inventoryStatus === "in_stock" && (
-            <div className="mt-6">
-              <label className={labelBase} htmlFor="listing-threshold">
-                Low stock alert
-              </label>
-              <input
-                id="listing-threshold"
-                className={inputBase}
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Ex: 5"
-                value={form.lowStockThreshold}
-                onChange={(e) =>
-                  setForm({ ...form, lowStockThreshold: e.target.value })
-                }
-              />
-              <p className={helperBase}>
-                Get a nudge when inventory drops below this number.
-              </p>
-            </div>
-          )}
-        </section>
-
-        <section className={sectionCard}>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-white">Fulfillment</h2>
-            <p className="text-sm text-white/60">
-              Pickup stays straightforward. Offer delivery only when the fee is explicit.
-            </p>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <label className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-              <span className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={form.pickupEnabled}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      pickupEnabled: e.target.checked,
-                    }))
-                  }
-                />
-                Pickup available
-              </span>
-              <span className={`mt-2 block ${helperBase}`}>
-                Customers can collect this order directly from your business.
-              </span>
-            </label>
-
-            <label className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-              <span className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={form.localDeliveryEnabled}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      localDeliveryEnabled: e.target.checked,
-                      useBusinessDeliveryDefaults: e.target.checked
-                        ? prev.useBusinessDeliveryDefaults
-                        : true,
-                    }))
-                  }
-                />
-                Local delivery available
-              </span>
-              <span className={`mt-2 block ${helperBase}`}>
-                {businessFulfillmentDefaults.local_delivery_enabled_default
-                  ? "Customers only see delivery when this listing and your business both support it."
-                  : "Business delivery is off in settings, so customers will only see pickup for now."}
-              </span>
-            </label>
-          </div>
-
-          {form.localDeliveryEnabled ? (
-            <div className="mt-6 space-y-5">
-              <label className="block text-sm text-white/80">
-                <span className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={form.useBusinessDeliveryDefaults}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        useBusinessDeliveryDefaults: e.target.checked,
-                      }))
-                    }
-                  />
-                  Use business default delivery settings
-                </span>
-                <span className={`mt-2 block ${helperBase}`}>
-                  Current business default fee:{" "}
-                  {businessFulfillmentDefaults.default_delivery_fee_cents == null
-                    ? "Not set"
-                    : `$${centsToDollarsInput(
-                        businessFulfillmentDefaults.default_delivery_fee_cents
-                      )}`}
-                </span>
-              </label>
-
-              {!form.useBusinessDeliveryDefaults ? (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <label className={labelBase} htmlFor="listing-delivery-fee">
-                    Listing delivery fee
-                  </label>
-                  <input
-                    id="listing-delivery-fee"
-                    className={inputBase}
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Ex: 5.00"
-                    value={form.deliveryFee}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        deliveryFee: e.target.value,
-                      }))
-                    }
-                  />
-                  <p className={helperBase}>
-                    This fee is added on top of the item subtotal at checkout.
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
-
-        <div className="flex flex-col-reverse sm:flex-row gap-4 pt-2">
-          <button
-            type="button"
-            onClick={() => router.push("/business/listings")}
-            className="flex-1 py-4 rounded-xl backdrop-blur-md bg-white/10 border border-white/20 text-white text-base font-medium hover:bg-white/20 hover:border-white/30 transition"
-            disabled={saving}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="yb-primary-button flex-1 py-4 rounded-xl text-white text-base font-semibold"
-          >
-            {saving ? "Saving..." : "Save changes"}
-          </button>
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <div className="mb-8 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-700">
+            Business listings
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+            Edit listing
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+            Refine the listing on the left and manage photos on the right.
+          </p>
         </div>
-      </form>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid gap-8 lg:grid-cols-12 lg:items-start">
+            <div className="order-1 space-y-6 lg:order-2 lg:col-span-5">
+              <div className={`space-y-8 lg:sticky lg:top-24 ${columnSurface}`}>
+                <ListingPhotoManager
+                  photos={photos}
+                  maxPhotos={MAX_PHOTOS}
+                  helperText={`Add up to ${MAX_PHOTOS} photos. The first photo is your cover.`}
+                  error={photoError}
+                  onAddFiles={handleAddNewPhotos}
+                  onRemovePhoto={handleRemovePhoto}
+                  onEnhancePhoto={handleEnhancePhoto}
+                  onChooseVariant={handleChooseVariant}
+                  onBackgroundChange={handleBackgroundChange}
+                  canAddMore={photos.length < MAX_PHOTOS}
+                />
+                <div className="pt-1 sm:pt-2">
+                  <ListingPreviewCard
+                    title={form.title}
+                    price={form.price}
+                    category={previewCategoryLabel}
+                    imageUrl={previewImageUrl}
+                    inventoryStatus={previewInventoryStatus}
+                    inventoryQuantity={previewInventoryQuantity}
+                    lowStockThreshold={form.lowStockThreshold}
+                    variants={listingOptions?.variants}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="order-2 space-y-6 lg:order-1 lg:col-span-7">
+              <div className={`${columnSurface} space-y-6`}>
+              <section className={sectionCard}>
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Basic info</h2>
+                </div>
+                <div className="grid gap-4">
+                  <div>
+                    <label className={labelBase} htmlFor="listing-title">
+                      Listing title
+                    </label>
+                    <input
+                      id="listing-title"
+                      className={inputBase}
+                      placeholder="Ex: House-made cold brew concentrate"
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <RichTextDescriptionEditor
+                      label="Description"
+                      value={form.description}
+                      onChange={(nextDescription) =>
+                        setForm({ ...form, description: nextDescription })
+                      }
+                      minHeight={180}
+                      placeholder="Share materials, flavors, or what makes it special."
+                      helpText="Use headings, bullets, and links to make details easy to scan."
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className={labelBase} htmlFor="listing-category">
+                        Category
+                      </label>
+                      <select
+                        id="listing-category"
+                        className={selectBase}
+                        value={form.category}
+                        onChange={(e) =>
+                          setForm({ ...form, category: e.target.value })
+                        }
+                        required
+                      >
+                        <option value="" className="text-black">
+                          Select category
+                        </option>
+                        {CATEGORY_OPTIONS.map((category) => (
+                          <option
+                            key={category.slug}
+                            value={category.slug}
+                            className="text-black"
+                          >
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={labelBase} htmlFor="listing-price">
+                        Price
+                      </label>
+                      <input
+                        id="listing-price"
+                        className={inputBase}
+                        type="number"
+                        placeholder="Ex: 49.99"
+                        value={form.price}
+                        onChange={(e) => setForm({ ...form, price: e.target.value })}
+                        required
+                      />
+                      <p className={helperBase}>Use numbers only. Currency is USD.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className={sectionCard}>
+                <ListingOptionsSection
+                  value={listingOptions}
+                  basePrice={form.price}
+                  onChange={(nextValue) => {
+                    setListingOptions(nextValue);
+                    if (listingOptionsErrors) {
+                      setListingOptionsErrors(null);
+                    }
+                  }}
+                  onBeforeDisable={(currentValue) => {
+                    const hasExistingVariants =
+                      Array.isArray(currentValue?.attributes) && currentValue.attributes.length > 0;
+                    if (!hasExistingVariants) return true;
+                    return window.confirm(
+                      "Turn off product options? This will remove the existing options and variants for this listing."
+                    );
+                  }}
+                  errors={listingOptionsErrors}
+                />
+              </section>
+
+              <section className={sectionCard}>
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Inventory</h2>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className={labelBase} htmlFor="listing-status">
+                      Availability
+                    </label>
+                    {variantsEnabled ? (
+                      <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                        {derivedVariantInventory.inventoryStatus === "out_of_stock"
+                          ? "Out of stock"
+                          : derivedVariantInventory.inventoryStatus === "low_stock"
+                            ? "Low stock"
+                            : "In stock"}
+                      </div>
+                    ) : (
+                      <select
+                        id="listing-status"
+                        className={selectBase}
+                        value={form.inventoryStatus}
+                        onChange={(e) => {
+                          const nextStatus = e.target.value;
+                          setForm((prev) => ({
+                            ...prev,
+                            inventoryStatus: nextStatus,
+                            inventoryQuantity:
+                              nextStatus === "out_of_stock" ? "0" : prev.inventoryQuantity,
+                            lowStockThreshold:
+                              nextStatus === "in_stock" ? prev.lowStockThreshold : "",
+                          }));
+                        }}
+                      >
+                        <option value="always_available" className="text-black">
+                          Always available
+                        </option>
+                        <option value="in_stock" className="text-black">
+                          Limited stock (default)
+                        </option>
+                        <option value="seasonal" className="text-black">
+                          Seasonal or temporary
+                        </option>
+                        <option value="out_of_stock" className="text-black">
+                          Out of stock
+                        </option>
+                      </select>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={labelBase} htmlFor="listing-quantity">
+                      Quantity on hand
+                    </label>
+                    {variantsEnabled ? (
+                      <>
+                        <div
+                          id="listing-quantity"
+                          className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                        >
+                          Inventory is managed per variant above. Total available: {activeVariantTotal}.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          id="listing-quantity"
+                          className={inputBase}
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Ex: 20"
+                          value={form.inventoryQuantity}
+                          onChange={(e) =>
+                            setForm({ ...form, inventoryQuantity: e.target.value })
+                          }
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {(variantsEnabled || form.inventoryStatus === "in_stock") && (
+                  <div className="mt-4">
+                    <label className={labelBase} htmlFor="listing-threshold">
+                      Low stock alert
+                    </label>
+                    <input
+                      id="listing-threshold"
+                      className={inputBase}
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Ex: 5"
+                      value={form.lowStockThreshold}
+                      onChange={(e) =>
+                        setForm({ ...form, lowStockThreshold: e.target.value })
+                      }
+                    />
+                    <p className={helperBase}>
+                      Get a nudge when inventory drops below this number.
+                    </p>
+                  </div>
+                )}
+              </section>
+
+              <section className={sectionCard}>
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-slate-900">Fulfillment</h2>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <span className="flex items-center gap-3 font-medium text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={form.pickupEnabled}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            pickupEnabled: e.target.checked,
+                          }))
+                        }
+                      />
+                      Pickup available
+                    </span>
+                    <span className={`block ${helperBase}`}>
+                      Customers can collect this order directly from your business.
+                    </span>
+                  </label>
+
+                  <label className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <span className="flex items-center gap-3 font-medium text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={form.localDeliveryEnabled}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            localDeliveryEnabled: e.target.checked,
+                            useBusinessDeliveryDefaults: e.target.checked
+                              ? prev.useBusinessDeliveryDefaults
+                              : true,
+                          }))
+                        }
+                      />
+                      Local delivery available
+                    </span>
+                    <span className={`block ${helperBase}`}>
+                      {businessFulfillmentDefaults.local_delivery_enabled_default
+                        ? "Customers only see delivery when this listing and your business both support it."
+                        : "Business delivery is off in settings, so customers will only see pickup for now."}
+                    </span>
+                  </label>
+                </div>
+
+                {form.localDeliveryEnabled ? (
+                  <div className="mt-4 space-y-3">
+                    <label className="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                      <span className="flex items-center gap-3 font-medium text-slate-900">
+                        <input
+                          type="checkbox"
+                          checked={form.useBusinessDeliveryDefaults}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              useBusinessDeliveryDefaults: e.target.checked,
+                            }))
+                          }
+                        />
+                        Use business default delivery settings
+                      </span>
+                      <span className={`block ${helperBase}`}>
+                        Current business default fee:{" "}
+                        {businessFulfillmentDefaults.default_delivery_fee_cents == null
+                          ? "Not set"
+                          : `$${centsToDollarsInput(
+                              businessFulfillmentDefaults.default_delivery_fee_cents
+                            )}`}
+                      </span>
+                    </label>
+
+                    {!form.useBusinessDeliveryDefaults ? (
+                      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                        <label className={labelBase} htmlFor="listing-delivery-fee">
+                          Listing delivery fee
+                        </label>
+                        <input
+                          id="listing-delivery-fee"
+                          className={inputBase}
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Ex: 5.00"
+                          value={form.deliveryFee}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              deliveryFee: e.target.value,
+                            }))
+                          }
+                        />
+                        <p className={helperBase}>
+                          This fee is added on top of the item subtotal at checkout.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 pt-4">
+            {submitError ? (
+              <p role="alert" className="text-sm text-rose-600">
+                {submitError}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="border-t border-slate-200 pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() => router.push("/business/listings")}
+                className="rounded-full px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

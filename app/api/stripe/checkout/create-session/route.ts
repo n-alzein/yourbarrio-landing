@@ -24,6 +24,7 @@ import { getSupabaseServerClient as getServiceClient } from "@/lib/supabase/serv
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
 import { calculateCheckoutPricing } from "@/lib/pricing";
+import { getVariantInventoryListing } from "@/lib/listingOptions";
 
 function jsonError(message: string, status = 400, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ error: message, ...extra }, { status });
@@ -87,6 +88,21 @@ async function getActiveCart(
   return data || null;
 }
 
+async function getListingVariantsByIds(client: any, variantIds: string[]) {
+  if (!variantIds.length) return new Map();
+
+  const { data, error } = await client
+    .from("listing_variants")
+    .select("id,listing_id,price,quantity,is_active")
+    .in("id", variantIds);
+
+  if (error) {
+    throw new Error(error.message || "Failed to load listing variants");
+  }
+
+  return new Map((Array.isArray(data) ? data : []).map((variant) => [variant.id, variant]));
+}
+
 export async function POST(request: Request) {
   const supabase = await getSupabaseServerClient();
   const { user, error: userError } = await getUserCached(supabase);
@@ -121,6 +137,12 @@ export async function POST(request: Request) {
   const listingRef = String(body?.listingId || body?.listing_id || "").trim();
   const cartId = String(body?.cart_id || "").trim() || null;
   const businessId = String(body?.business_id || "").trim() || null;
+  const variantId = String(body?.variant_id || "").trim() || null;
+  const variantLabel = String(body?.variant_label || "").trim() || null;
+  const selectedOptions =
+    body?.selected_options && typeof body.selected_options === "object"
+      ? body.selected_options
+      : null;
   const quantity = Number(body?.quantity || 1);
   const fulfillmentType =
     body?.fulfillmentType === "delivery" || body?.fulfillment_type === "delivery"
@@ -167,6 +189,9 @@ export async function POST(request: Request) {
     | null = null;
   let orderItems: Array<{
     listing_id: string | null;
+    variant_id?: string | null;
+    variant_label?: string | null;
+    selected_options?: Record<string, string> | null;
     title: string;
     unit_price: number;
     image_url: string | null;
@@ -221,11 +246,42 @@ export async function POST(request: Request) {
       return jsonError("Listing not found", 404);
     }
 
-    if (String(listing.inventory_status || "").trim() === "out_of_stock") {
+    const { data: firstActiveVariant } = await serviceClient
+      .from("listing_variants")
+      .select("id")
+      .eq("listing_id", listing.id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+
+    let activeVariant: any = null;
+    if (variantId) {
+      const { data: variant, error: variantError } = await serviceClient
+        .from("listing_variants")
+        .select("id,listing_id,price,quantity,is_active")
+        .eq("id", variantId)
+        .maybeSingle();
+
+      if (variantError) {
+        return jsonError(variantError.message || "Failed to load variant", 500);
+      }
+      if (!variant?.id || variant.listing_id !== listing.id || variant.is_active === false) {
+        return jsonError("Select a valid product option before checkout.", 400);
+      }
+      activeVariant = variant;
+    } else if (firstActiveVariant?.id) {
+      return jsonError("Select a product option before checkout.", 400);
+    }
+
+    const purchasableListing = activeVariant
+      ? getVariantInventoryListing(listing, activeVariant)
+      : listing;
+
+    if (String(purchasableListing.inventory_status || "").trim() === "out_of_stock") {
       return jsonError("This item is currently out of stock", 400);
     }
 
-    const quantityValidation = validateOrderQuantity(quantity, listing);
+    const quantityValidation = validateOrderQuantity(quantity, purchasableListing);
     if (!quantityValidation.ok) {
       return jsonError(quantityValidation.message, 409, {
         code: quantityValidation.code,
@@ -233,7 +289,11 @@ export async function POST(request: Request) {
       });
     }
 
-    const unitAmount = dollarsToCents(Number(listing.price || 0));
+    const resolvedUnitPrice =
+      activeVariant?.price !== null && activeVariant?.price !== undefined
+        ? Number(activeVariant.price)
+        : Number(listing.price || 0);
+    const unitAmount = dollarsToCents(resolvedUnitPrice);
     if (unitAmount <= 0) {
       return jsonError("This listing is not available for Stripe checkout yet", 400);
     }
@@ -266,8 +326,11 @@ export async function POST(request: Request) {
     orderItems = [
       {
         listing_id: listing.id,
+        variant_id: activeVariant?.id || null,
+        variant_label: variantLabel || null,
+        selected_options: selectedOptions || null,
         title: listing.title,
-        unit_price: Number(listing.price || 0),
+        unit_price: resolvedUnitPrice,
         image_url: listing.photo_url || null,
         quantity: quantityValidation.quantity,
       },
@@ -357,9 +420,20 @@ export async function POST(request: Request) {
 
       fulfillmentListings = Array.isArray(listingRows) ? listingRows : [];
       const listingById = new Map(fulfillmentListings.map((listing: any) => [listing.id, listing]));
+      const variantById = await getListingVariantsByIds(
+        serviceClient,
+        items.map((item: any) => item?.variant_id).filter(Boolean)
+      );
       const removedItems: any[] = [];
       const adjustedItems: any[] = [];
       const repricedItems: any[] = [];
+
+      orderItems = orderItems.map((item: any, index: number) => ({
+        ...item,
+        variant_id: items[index]?.variant_id || null,
+        variant_label: items[index]?.variant_label || null,
+        selected_options: items[index]?.selected_options || null,
+      }));
 
       for (const item of orderItems) {
         const currentListing: any = listingById.get(item.listing_id);
@@ -372,31 +446,52 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const quantityValidation = validateOrderQuantity(item.quantity, currentListing);
+        const currentVariant = item.variant_id ? variantById.get(item.variant_id) : null;
+        if (item.variant_id && (!currentVariant || currentVariant.is_active === false)) {
+          removedItems.push({
+            listing_id: item.listing_id,
+            variant_id: item.variant_id,
+            title: item.title,
+            reason: "Selected option is no longer available.",
+          });
+          continue;
+        }
+
+        const purchasableListing = currentVariant
+          ? getVariantInventoryListing(currentListing, currentVariant)
+          : currentListing;
+        const quantityValidation = validateOrderQuantity(item.quantity, purchasableListing);
 
         if (quantityValidation.code === "OUT_OF_STOCK") {
           removedItems.push({
             listing_id: item.listing_id,
+            variant_id: item.variant_id || null,
             title: item.title,
             reason: "Item is sold out.",
           });
         } else if (!quantityValidation.ok) {
           adjustedItems.push({
             listing_id: item.listing_id,
+            variant_id: item.variant_id || null,
             title: item.title,
             requestedQuantity: item.quantity,
             availableQuantity: quantityValidation.maxQuantity,
           });
         }
 
-        const currentUnitCents = dollarsToCents(Number(currentListing.price || 0));
+        const currentUnitPrice =
+          currentVariant?.price !== null && currentVariant?.price !== undefined
+            ? Number(currentVariant.price)
+            : Number(currentListing.price || 0);
+        const currentUnitCents = dollarsToCents(currentUnitPrice);
         const cartUnitCents = dollarsToCents(item.unit_price);
         if (currentUnitCents !== cartUnitCents) {
           repricedItems.push({
             listing_id: item.listing_id,
+            variant_id: item.variant_id || null,
             title: item.title,
             cartUnitPrice: item.unit_price,
-            currentUnitPrice: Number(currentListing.price || 0),
+            currentUnitPrice,
           });
         }
       }

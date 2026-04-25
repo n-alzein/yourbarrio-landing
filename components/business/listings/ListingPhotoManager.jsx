@@ -1,285 +1,267 @@
 "use client";
 
-import Image from "next/image";
-import { ENHANCEABLE_BACKGROUND_OPTIONS, getDraftDisplayUrl } from "@/lib/listingPhotoDrafts";
+import { useId, useMemo, useState } from "react";
+import { ImagePlus, Sparkles, Trash2 } from "lucide-react";
+import {
+  ENHANCEABLE_BACKGROUND_OPTIONS,
+  getDraftDisplayUrl,
+} from "@/lib/listingPhotoDrafts";
 
-function BackgroundOption({ value, label, active, onClick, disabled }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={[
-        "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-        active
-          ? "bg-white text-slate-900"
-          : "border border-white/15 bg-white/5 text-white/70 hover:bg-white/10",
-        disabled ? "cursor-not-allowed opacity-60" : "",
-      ].join(" ")}
-      aria-pressed={active}
-    >
-      {label}
-    </button>
-  );
-}
-
-function PhotoPreview({
-  src,
-  alt,
-  badge = null,
-  label,
-  containerClassName = "max-w-[460px]",
-  frameClassName = "h-[22rem]",
-}) {
-  return (
-    <div className={`mx-auto w-full ${containerClassName}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/45">{label}</p>
-        {badge}
-      </div>
+function PhotoSurface({ src, alt, className = "" }) {
+  if (!src) {
+    return (
       <div
-        className={[
-          "flex w-full items-center justify-center overflow-hidden rounded-[24px] border border-slate-200/70 bg-slate-50 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
-          frameClassName,
-        ].join(" ")}
+        className={`flex items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-400 ${className}`}
       >
-        <Image
-          src={src}
-          alt={alt}
-          width={560}
-          height={420}
-          className="max-h-full max-w-full scale-[1.08] object-contain"
-          unoptimized
-        />
+        No preview
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-function SinglePhotoPreview({ src, alt }) {
   return (
-    <div className="mx-auto w-full max-w-[540px]">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/45">Preview</p>
-      </div>
-      <div className="mx-auto w-full max-w-[480px]">
-        <div className="flex min-h-[260px] max-h-[420px] w-full items-center justify-center rounded-[22px] border border-slate-200/70 bg-slate-50 p-3 md:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-          <Image
-            src={src}
-            alt={alt}
-            width={560}
-            height={420}
-            className="h-auto max-h-[388px] w-auto max-w-full object-contain"
-            unoptimized
-          />
-        </div>
-      </div>
-    </div>
+    <img
+      src={src}
+      alt={alt}
+      className={`h-full w-full rounded-2xl object-contain ${className}`}
+    />
   );
 }
 
 export default function ListingPhotoManager({
   photos,
   maxPhotos,
+  helperText,
+  error,
   onAddFiles,
   onRemovePhoto,
   onEnhancePhoto,
   onChooseVariant,
   onBackgroundChange,
-  error = "",
-  helperText,
-  canAddMore = true,
+  canAddMore,
 }) {
-  const primaryInputId = "listing-photo-input";
+  const inputId = useId();
+  const [selectedPhotoId, setSelectedPhotoId] = useState(null);
+
+  const selectedPhoto = useMemo(() => {
+    if (!photos?.length) return null;
+    return photos.find((photo) => photo.id === selectedPhotoId) || photos[0];
+  }, [photos, selectedPhotoId]);
+  const isUnsavedSelectedPhoto =
+    selectedPhoto?.status === "new" && Boolean(selectedPhoto?.original?.file);
+  const hasUnsavedEnhancedPhoto =
+    isUnsavedSelectedPhoto && Boolean(selectedPhoto?.enhanced?.publicUrl);
+  const canConfigureEnhancement = isUnsavedSelectedPhoto && !hasUnsavedEnhancedPhoto;
+
+  const handleFileChange = (event) => {
+    const files = event.target.files;
+    if (files?.length) {
+      onAddFiles?.(files, {
+        captureAttributePresent: event.target.hasAttribute("capture"),
+        inputControl: "listing-photo-primary",
+      });
+    }
+    event.target.value = "";
+  };
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-lg backdrop-blur-xl">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Photos</h2>
-          <p className="text-sm text-white/60">{helperText}</p>
+    <section className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-slate-900">Photos</h2>
+          {helperText ? <p className="text-sm leading-6 text-slate-600">{helperText}</p> : null}
         </div>
-        <span className="text-xs text-white/60">
-          {photos.length}/{maxPhotos} total
-        </span>
+
+        {canAddMore ? (
+          <label
+            htmlFor={inputId}
+            className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-violet-400 hover:text-slate-900"
+          >
+            <ImagePlus className="h-4 w-4" />
+            Upload photos
+          </label>
+        ) : (
+          <div className="text-sm text-slate-500">
+            {photos.length} / {maxPhotos}
+          </div>
+        )}
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          className="mb-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
-        >
+        <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
 
-      <div className="space-y-4">
-        {photos.map((photo, index) => {
-          const originalUrl = getDraftDisplayUrl(photo, "original");
-          const enhancedUrl = getDraftDisplayUrl(photo, "enhanced");
-          const canEnhance = photo.status === "new";
-          const enhanceLabel = photo.enhanced ? "Enhance again" : "Enhance photo";
-          const isComparisonView = Boolean(photo.enhanced);
-          const isSinglePreview = !isComparisonView;
+      {selectedPhoto ? (
+          <div className="space-y-4">
+          <div className="overflow-hidden rounded-[18px] bg-slate-100 ring-1 ring-slate-200">
+            <div className="relative">
+              <div className="absolute left-3 top-3 z-10 rounded-md bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm">
+                {photos[0]?.id === selectedPhoto.id ? "Cover" : "Selected"}
+              </div>
+              <PhotoSurface
+                src={getDraftDisplayUrl(selectedPhoto)}
+                alt="Selected listing photo"
+                className="aspect-[4/3]"
+              />
+            </div>
+          </div>
 
-          return (
-            <div
-              key={photo.id}
-              className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4 md:p-5"
-            >
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div>
-                  <p className="text-sm font-semibold text-white">
-                    Photo {index + 1}
-                  </p>
-                  <p className="text-xs text-white/50">
-                    {index === 0 ? "Cover photo" : "Gallery photo"}
-                  </p>
-                </div>
+          <div className="space-y-3 border-t border-slate-100 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Selected photo</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onRemovePhoto(photo.id)}
-                  className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                  onClick={() => onRemovePhoto?.(selectedPhoto.id)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
+                  <Trash2 className="h-4 w-4" />
                   Remove
                 </button>
-              </div>
-
-              {isComparisonView ? (
-                <div className="grid gap-2 md:grid-cols-2">
-                  <PhotoPreview
-                    src={originalUrl}
-                    alt={`Original listing photo ${index + 1}`}
-                    label="Original"
-                    containerClassName="max-w-[460px]"
-                    frameClassName="h-[20rem] md:h-[21rem]"
-                  />
-                  <PhotoPreview
-                    src={enhancedUrl}
-                    alt={`Enhanced listing photo ${index + 1}`}
-                    label="Enhanced"
-                    containerClassName="max-w-[460px]"
-                    frameClassName="h-[20rem] md:h-[21rem]"
-                    badge={
-                      <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
-                        {photo.enhanced.background === "soft_gray"
-                          ? "Soft gray"
-                          : photo.enhanced.background === "original"
-                          ? "Original"
-                          : "White"}
-                      </span>
-                    }
-                  />
-                </div>
-              ) : isSinglePreview ? (
-                <SinglePhotoPreview
-                  src={originalUrl}
-                  alt={`Listing photo ${index + 1}`}
-                />
-              ) : null}
-
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-                    Background
-                  </span>
-                  {ENHANCEABLE_BACKGROUND_OPTIONS.map((option) => (
-                    <BackgroundOption
-                      key={option.value}
-                      value={option.value}
-                      label={option.label}
-                      active={photo.enhancement.background === option.value}
-                      disabled={!canEnhance || photo.enhancement.isProcessing}
-                      onClick={() => onBackgroundChange(photo.id, option.value)}
-                    />
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/65">
-                  <span className="rounded-full border border-white/10 px-3 py-1.5">
-                    Lighting: Auto
-                  </span>
-                  <span className="rounded-full border border-white/10 px-3 py-1.5">
-                    Shadow: Subtle
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  {canEnhance ? (
-                    <button
-                      type="button"
-                      onClick={() => onEnhancePhoto(photo.id)}
-                      disabled={photo.enhancement.isProcessing}
-                      className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {photo.enhancement.isProcessing ? "Enhancing..." : enhanceLabel}
-                    </button>
-                  ) : (
-                    <span className="text-xs text-white/45">
-                      Enhancement is available for newly added photos before you save.
-                    </span>
-                  )}
-                  {photo.enhanced ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onChooseVariant(photo.id, "enhanced")}
-                        className={[
-                          "rounded-full px-4 py-2 text-sm font-semibold transition",
-                          photo.selectedVariant === "enhanced"
-                            ? "bg-emerald-300 text-slate-950"
-                            : "border border-white/15 bg-white/5 text-white hover:bg-white/10",
-                        ].join(" ")}
-                      >
-                        Use enhanced photo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChooseVariant(photo.id, "original")}
-                        className={[
-                          "rounded-full px-4 py-2 text-sm font-semibold transition",
-                          photo.selectedVariant === "original"
-                            ? "bg-white text-slate-900"
-                            : "border border-white/15 bg-white/5 text-white hover:bg-white/10",
-                        ].join(" ")}
-                      >
-                        Keep original
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-                {photo.enhancement.error ? (
-                  <p className="mt-3 text-sm text-amber-200">{photo.enhancement.error}</p>
+                {canConfigureEnhancement ? (
+                  <button
+                    type="button"
+                    onClick={() => onEnhancePhoto?.(selectedPhoto.id)}
+                    disabled={selectedPhoto?.enhancement?.isProcessing}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {selectedPhoto?.enhancement?.isProcessing ? "Enhancing..." : "Enhance photo"}
+                  </button>
                 ) : null}
               </div>
             </div>
-          );
-        })}
 
-        {canAddMore ? (
-          <label
-            htmlFor={primaryInputId}
-            className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-[28px] border-2 border-dashed border-white/20 bg-white/[0.04] text-gray-200 transition hover:bg-white/10"
-          >
-            <span className="text-sm font-semibold">Add photo</span>
-            <span className="mt-1 text-xs text-white/70">
-              PNG, JPG, WEBP, or GIF. Take a photo or upload one.
-            </span>
-            <input
-              id={primaryInputId}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                onAddFiles(event.target.files, {
-                  inputControl: "listing-photo-primary",
-                  captureAttributePresent: event.target.hasAttribute("capture"),
-                });
-                event.target.value = "";
-              }}
-            />
-          </label>
-        ) : null}
-      </div>
+            {canConfigureEnhancement ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                  <span className="font-medium text-slate-700">Background:</span>
+                  <div className="inline-flex flex-wrap overflow-hidden rounded-md border border-slate-200 bg-white">
+                    {ENHANCEABLE_BACKGROUND_OPTIONS.map((option) => {
+                      const isSelected = selectedPhoto?.enhancement?.background === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => onBackgroundChange?.(selectedPhoto.id, option.value)}
+                          className={`border-r border-slate-200 px-3 py-1.5 text-xs font-medium transition last:border-r-0 ${
+                            isSelected
+                              ? "bg-violet-600 text-white"
+                              : "bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {hasUnsavedEnhancedPhoto ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <Sparkles className="h-4 w-4 text-violet-600" />
+                    <span className="font-medium text-slate-700">Enhanced photo</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChooseVariant?.(
+                        selectedPhoto.id,
+                        selectedPhoto.selectedVariant === "enhanced" ? "original" : "enhanced"
+                      )
+                    }
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    {selectedPhoto.selectedVariant === "enhanced" ? "Use original" : "Use enhanced"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedPhoto?.enhancement?.error ? (
+              <p className="text-sm text-rose-600">{selectedPhoto.enhancement.error}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-3 border-t border-slate-100 pt-4">
+            <div className="flex items-center justify-end gap-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-slate-400">
+                {photos.length} / {maxPhotos}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {photos.map((photo, index) => {
+                const isSelected = selectedPhoto?.id === photo.id;
+                const isCover = index === 0;
+                return (
+                  <div key={photo.id} className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhotoId(photo.id)}
+                      aria-label={isCover ? "Select cover photo" : `Select photo ${index + 1}`}
+                      className={`block w-full overflow-hidden rounded-xl transition ${
+                        isSelected
+                          ? "scale-[1.02] shadow-md ring-2 ring-violet-500 ring-offset-1 ring-offset-white"
+                          : "hover:scale-[1.01]"
+                      }`}
+                    >
+                      <div className="relative overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
+                        {isCover ? (
+                          <div className="absolute left-2 top-2 z-10 rounded-md bg-white/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700 shadow-sm">
+                            Cover
+                          </div>
+                        ) : null}
+                        <PhotoSurface
+                          src={getDraftDisplayUrl(photo)}
+                          alt={`Listing photo ${index + 1}`}
+                          className="aspect-square rounded-none"
+                        />
+                      </div>
+                    </button>
+                    <div className="space-y-1">
+                      <p className="truncate text-xs font-medium text-slate-700">
+                        {isCover ? "Cover" : `Photo ${index + 1}`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <label
+          htmlFor={inputId}
+          className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[18px] border border-dashed border-slate-300 bg-white px-6 py-10 text-center transition hover:border-violet-400"
+        >
+          <div className="rounded-full bg-slate-100 p-3">
+            <ImagePlus className="h-6 w-6 text-slate-700" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-base font-semibold text-slate-900">Add your first photo</p>
+            <p className="text-sm text-slate-600">
+              Upload product photos, then choose which one shoppers should see first.
+            </p>
+          </div>
+        </label>
+      )}
+
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        onChange={handleFileChange}
+      />
     </section>
   );
 }

@@ -6,5 +6,11 @@ export default async function ListingDetailsPage({ params }) {
   const { role } = await getCurrentUserRole();
   const backHref = role === "customer" ? "/customer/home" : "/";
 
-  return <ListingDetailsClient params={resolvedParams} backHref={backHref} />;
+  return (
+    <ListingDetailsClient
+      params={resolvedParams}
+      backHref={backHref}
+      renderedAt={new Date().toISOString()}
+    />
+  );
 }

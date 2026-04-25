@@ -9,6 +9,9 @@ export type GuestCartItem = {
   id: string;
   listing_id: string;
   vendor_id: string;
+  variant_id?: string | null;
+  variant_label?: string | null;
+  selected_options?: Record<string, string> | null;
   quantity: number;
   title: string;
   unit_price: number | null;
@@ -41,6 +44,9 @@ export type GuestCart = {
 
 type AddGuestCartInput = {
   listingId: string;
+  variantId?: string | null;
+  variantLabel?: string | null;
+  selectedOptions?: Record<string, string> | null;
   quantity?: number;
   fulfillmentType?: string | null;
   listing?: Record<string, any> | null;
@@ -88,6 +94,10 @@ function normalizeMethods(methods: unknown) {
   return normalized.length ? [...new Set(normalized)] : [PICKUP_FULFILLMENT_TYPE];
 }
 
+function buildGuestCartItemId(listingId: string, variantId?: string | null) {
+  return variantId ? `${listingId}:${variantId}` : listingId;
+}
+
 function normalizeCart(input: unknown): GuestCart {
   if (!input || typeof input !== "object") return { ...EMPTY_GUEST_CART };
   const raw = input as Partial<GuestCart>;
@@ -108,9 +118,18 @@ function normalizeCart(input: unknown): GuestCart {
                   const quantity = Number(item?.quantity || 0);
                   if (!listingId || !Number.isFinite(quantity) || quantity <= 0) return null;
                   return {
-                    id: listingId,
+                    id: buildGuestCartItemId(
+                      listingId,
+                      item?.variant_id ? String(item.variant_id) : null
+                    ),
                     listing_id: listingId,
                     vendor_id: vendorId,
+                    variant_id: item?.variant_id ? String(item.variant_id) : null,
+                    variant_label: item?.variant_label ? String(item.variant_label) : null,
+                    selected_options:
+                      item?.selected_options && typeof item.selected_options === "object"
+                        ? item.selected_options
+                        : null,
                     quantity: Math.round(quantity),
                     title: String(item?.title || "Untitled listing"),
                     unit_price: normalizePrice(item?.unit_price),
@@ -174,6 +193,9 @@ export function clearGuestCart() {
 
 export function addToGuestCart({
   listingId,
+  variantId = null,
+  variantLabel = null,
+  selectedOptions = null,
   quantity = 1,
   fulfillmentType = null,
   listing = null,
@@ -202,7 +224,8 @@ export function addToGuestCart({
       available_fulfillment_methods: methods,
       cart_items: [],
     };
-  const existingItem = existingCart.cart_items.find((item) => item.listing_id === resolvedListingId);
+  const guestItemId = buildGuestCartItemId(resolvedListingId, variantId);
+  const existingItem = existingCart.cart_items.find((item) => item.id === guestItemId);
   const maxQuantity = getMaxPurchasableQuantity(listing);
   if (maxQuantity <= 0) {
     return { error: "This item is currently out of stock." };
@@ -213,15 +236,21 @@ export function addToGuestCart({
     existingItem.title = String(listing?.title || existingItem.title || "Untitled listing");
     existingItem.unit_price = normalizePrice(listing?.price ?? existingItem.unit_price);
     existingItem.image_url = primaryPhotoUrl(listing?.photo_url) || existingItem.image_url || null;
+    existingItem.variant_id = variantId;
+    existingItem.variant_label = variantLabel || existingItem.variant_label || null;
+    existingItem.selected_options = selectedOptions || existingItem.selected_options || null;
     existingItem.business_name = businessName;
     existingItem.available_fulfillment_methods = methods;
     existingItem.max_order_quantity = maxQuantity;
     existingItem.stock_error = existingItem.quantity > maxQuantity ? `Only ${maxQuantity} available right now.` : null;
   } else {
     existingCart.cart_items.push({
-      id: resolvedListingId,
+      id: guestItemId,
       listing_id: resolvedListingId,
       vendor_id: vendorId,
+      variant_id: variantId,
+      variant_label: variantLabel || null,
+      selected_options: selectedOptions || null,
       quantity: nextQuantity,
       title: String(listing?.title || "Untitled listing"),
       unit_price: normalizePrice(listing?.price),

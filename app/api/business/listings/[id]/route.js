@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
+import { getListingVariants } from "@/lib/listingOptions";
 
 export async function GET(request, { params }) {
   const access = await getBusinessDataClientForRequest();
@@ -32,7 +33,8 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const response = NextResponse.json({ listing: data }, { status: 200 });
+  const listingOptions = await getListingVariants(supabase, data.id);
+  const response = NextResponse.json({ listing: data, listingOptions }, { status: 200 });
   response.headers.set("Cache-Control", "no-store");
   return response;
 }

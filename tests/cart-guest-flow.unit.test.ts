@@ -16,6 +16,8 @@ const listing = {
   title: "Fresh salsa",
   price: 8,
   photo_url: null,
+  inventory_status: "in_stock",
+  inventory_quantity: 10,
   available_fulfillment_methods: ["pickup", "delivery"],
 };
 
@@ -83,6 +85,41 @@ describe("guest cart utility", () => {
     setGuestCartFulfillment("business-1", "delivery");
 
     expect(getGuestCart().carts[0].fulfillment_type).toBe("delivery");
+  });
+
+  it("keeps variant cart lines distinct and stores the selected option metadata", () => {
+    addToGuestCart({
+      listingId: listing.id,
+      variantId: "variant-red",
+      variantLabel: "Small / Red",
+      selectedOptions: { Size: "Small", Color: "Red" },
+      quantity: 1,
+      listing,
+      business,
+    });
+    addToGuestCart({
+      listingId: listing.id,
+      variantId: "variant-blue",
+      variantLabel: "Small / Blue",
+      selectedOptions: { Size: "Small", Color: "Blue" },
+      quantity: 2,
+      listing,
+      business,
+    });
+
+    const cart = getGuestCart();
+    expect(cart.carts[0].cart_items).toHaveLength(2);
+    expect(cart.carts[0].cart_items[0]).toMatchObject({
+      id: "listing-1:variant-red",
+      variant_id: "variant-red",
+      variant_label: "Small / Red",
+      selected_options: { Size: "Small", Color: "Red" },
+    });
+    expect(cart.carts[0].cart_items[1]).toMatchObject({
+      id: "listing-1:variant-blue",
+      variant_id: "variant-blue",
+      quantity: 2,
+    });
   });
 
   it("falls back safely when localStorage is corrupted", () => {

@@ -291,6 +291,9 @@ export default function CartPage() {
                           />
                           <div>
                             <p className="text-sm font-semibold">{item.title}</p>
+                            {item.variant_label ? (
+                              <p className="mt-1 text-xs opacity-65">{item.variant_label}</p>
+                            ) : null}
                             <p className="text-xs opacity-70">${formatMoney(item.unit_price)}</p>
                             {item.stock_error ? (
                               <p className="mt-1 text-xs text-rose-200">{item.stock_error}</p>

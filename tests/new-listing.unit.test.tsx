@@ -97,8 +97,13 @@ function makeSupabaseMock({ insertError } = {}) {
     })),
   };
 
-  insertMock = vi.fn(async () => ({
-    error: insertError || null,
+  insertMock = vi.fn(() => ({
+    select: vi.fn(() => ({
+      single: vi.fn(async () => ({
+        data: insertError ? null : { id: "listing-1" },
+        error: insertError || null,
+      })),
+    })),
   }));
 
   return {
@@ -111,6 +116,7 @@ function makeSupabaseMock({ insertError } = {}) {
       if (table === "listings") return { insert: insertMock };
       return { insert: insertMock };
     }),
+    rpc: vi.fn(async () => ({ error: null })),
   };
 }
 
@@ -307,12 +313,9 @@ describe("NewListingPage", () => {
     fireEvent.change(fileInput, {
       target: { files: [new File(["two"], "second.heic", { type: "image/heic" })] },
     });
-    await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: "Enhance photo" })).toHaveLength(2);
-    });
-
-    const enhanceButtons = screen.getAllByRole("button", { name: "Enhance photo" });
-    fireEvent.click(enhanceButtons[1]);
+    await screen.findByRole("button", { name: "Select photo 2" });
+    fireEvent.click(screen.getByRole("button", { name: "Select photo 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enhance photo" }));
 
     await waitFor(() => {
       const [, request] = fetchMock.mock.calls.at(-1);
@@ -379,9 +382,9 @@ describe("NewListingPage", () => {
     await addPhoto(container);
 
     fireEvent.click(await screen.findByRole("button", { name: "Enhance photo" }));
-    await screen.findByRole("button", { name: "Use enhanced photo" });
+    await screen.findByRole("button", { name: "Use original" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Keep original" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use original" }));
     await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Publish listing" }));
 
@@ -425,7 +428,7 @@ describe("NewListingPage", () => {
     expect(
       await screen.findByText("We couldn't enhance this photo right now. You can keep the original and continue.")
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Use enhanced photo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use original" })).not.toBeInTheDocument();
 
     await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Publish listing" }));
@@ -466,7 +469,7 @@ describe("NewListingPage", () => {
     await addPhoto(container);
 
     fireEvent.click(await screen.findByRole("button", { name: "Enhance photo" }));
-    await screen.findByRole("button", { name: "Use enhanced photo" });
+    await screen.findByRole("button", { name: "Use original" });
 
     await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Publish listing" }));

@@ -323,7 +323,9 @@ export default function CustomerLoginForm({
         refreshControllerRef.current = null;
       } catch (err) {
         refreshControllerRef.current = null;
-        console.error("Auth refresh call failed", err);
+        if (!isTimeoutError(err)) {
+          console.error("Auth refresh call failed", err);
+        }
         setError(
           isTimeoutError(err)
             ? "Session persistence timed out. Please check your connection and try again."
@@ -346,7 +348,7 @@ export default function CustomerLoginForm({
       window.location.replace(dest);
     } catch (err) {
       if (isStale()) return;
-      if (!isGenericInvalidCredentialsError(err)) {
+      if (!isGenericInvalidCredentialsError(err) && !isTimeoutError(err)) {
         console.error("Customer login failed", err);
       }
       setError(
