@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminApiRole } from "@/lib/admin/requireAdminApiRole";
+import type { AdminApiAuthFailure } from "@/lib/admin/requireAdminApiRole";
 import { searchAdminListings } from "@/lib/admin/listings";
 
 const querySchema = z.object({
@@ -11,7 +12,8 @@ const querySchema = z.object({
 export async function GET(request: NextRequest) {
   const auth = await requireAdminApiRole("admin_readonly");
   if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const failure = auth as AdminApiAuthFailure;
+    return NextResponse.json({ error: failure.error }, { status: failure.status });
   }
 
   const parsed = querySchema.safeParse(

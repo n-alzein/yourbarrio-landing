@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminApiRole } from "@/lib/admin/requireAdminApiRole";
+import type { AdminApiAuthFailure } from "@/lib/admin/requireAdminApiRole";
 import { setAdminListingVisibility } from "@/lib/admin/listings";
 
 const paramsSchema = z.object({
@@ -17,7 +18,8 @@ export async function POST(
 ) {
   const auth = await requireAdminApiRole("admin_ops");
   if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const failure = auth as AdminApiAuthFailure;
+    return NextResponse.json({ error: failure.error }, { status: failure.status });
   }
 
   const parsedParams = paramsSchema.safeParse(await context.params);
