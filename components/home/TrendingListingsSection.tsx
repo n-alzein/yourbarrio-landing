@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Plus } from "lucide-react";
 import type { BrowseMode, ListingSummary } from "@/lib/browse/getHomeBrowseData";
 import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
@@ -21,11 +20,16 @@ type TrendingListingsSectionProps = {
   limit?: number;
 };
 
-function formatPrice(value?: number | string | null) {
+function formatPrice(value?: number | string | null): string {
   if (value === null || value === undefined || value === "") return "Price TBD";
   const number = Number(value);
-  if (Number.isNaN(number)) return String(value);
-  return `$${number.toFixed(2)}`;
+  if (Number.isNaN(number)) return "Price TBD";
+  return number.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function getDisplayPriceCents(listing: ListingSummary) {
@@ -34,9 +38,9 @@ function getDisplayPriceCents(listing: ListingSummary) {
   return calculateListingPricing(listing?.price).finalPriceCents;
 }
 
-function formatPriceCents(value: number) {
+function formatPriceCents(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "Price TBD";
-  return `$${(value / 100).toFixed(2)}`;
+  return formatPrice(value / 100);
 }
 
 export default function TrendingListingsSection({
@@ -85,16 +89,15 @@ export default function TrendingListingsSection({
           <Link
             href={viewAllHref}
             prefetch={false}
-            className="inline-flex h-9 items-center justify-center gap-1 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 shadow-sm transition-colors duration-200 hover:border-slate-300 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6a4c9340] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0]"
+            className="inline-flex items-center justify-center text-sm font-medium text-slate-600 transition-colors duration-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6a4c9340] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0]"
           >
-            View all listings
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            View all listings →
           </Link>
         </div>
 
         <div
           data-testid="homepage-listings-grid"
-          className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4"
+          className="grid grid-cols-2 gap-x-3 gap-y-5 md:grid-cols-3 md:gap-x-4 md:gap-y-6 lg:grid-cols-4 lg:gap-y-6"
         >
           {visibleListings.map((listing, index) => {
             const href =
@@ -104,13 +107,15 @@ export default function TrendingListingsSection({
             const businessName =
               String(listing?.business_name || "").trim() || "Local business";
             const displayPriceCents = getDisplayPriceCents(listing);
+            const displayPrice =
+              displayPriceCents > 0 ? formatPriceCents(displayPriceCents) : formatPrice(listing.price);
 
             return (
               <Link
                 key={listing.public_id || listing.id || `${listing.title}-${index}`}
                 href={href}
                 prefetch={false}
-                className="group flex h-full min-w-0 flex-col gap-2 transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] md:gap-2.5"
+                className="group flex h-full min-w-0 flex-col gap-1 transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] md:gap-1.5"
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[20px] bg-white">
                   <Image
@@ -120,22 +125,17 @@ export default function TrendingListingsSection({
                     sizes="(max-width: 767px) calc((100vw - 2rem - 0.75rem) / 2), (max-width: 1023px) calc((100vw - 4rem - 2rem) / 3), calc((100vw - 5rem - 3rem) / 4)"
                     className="object-contain object-center p-1.5 transition-transform duration-200 ease-out group-hover:scale-105 sm:p-2"
                   />
-                  <span className="pointer-events-none absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-700 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 md:right-3 md:top-3 md:h-8 md:w-8">
-                    <Plus className="h-3.5 w-3.5 md:h-4 md:w-4" aria-hidden="true" />
-                  </span>
                 </div>
 
-                <div className="flex min-h-[68px] flex-1 flex-col justify-start md:min-h-[74px]">
-                  <div className="space-y-0.5">
-                    <p className="whitespace-nowrap text-[0.94rem] font-semibold tracking-[-0.03em] text-slate-950 md:text-[1.02rem]">
-                      {displayPriceCents > 0
-                        ? formatPriceCents(displayPriceCents)
-                        : formatPrice(listing.price)}
+                <div className="mt-1 md:mt-1.5">
+                  <div className="space-y-0">
+                    <p className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.02em] text-slate-950 md:text-base">
+                      {displayPrice}
                     </p>
-                    <h3 className="line-clamp-2 min-h-[2rem] text-[0.82rem] font-medium leading-[1.25] tracking-[-0.01em] text-slate-700 md:min-h-[2.2rem] md:text-[0.9rem]">
+                    <h3 className="line-clamp-2 pt-px text-sm font-medium leading-tight tracking-[-0.01em] text-slate-800">
                       {listing.title || "Untitled listing"}
                     </h3>
-                    <p className="line-clamp-1 text-[11px] text-slate-500 md:text-[11.5px]">
+                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-400">
                       {businessName}
                     </p>
                   </div>

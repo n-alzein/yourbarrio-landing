@@ -16,6 +16,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
 import CartNavActionClient from "@/components/nav/CartNavActionClient";
 import HeaderAccountWidget from "@/components/nav/HeaderAccountWidget";
+import SearchCategoryDropdown from "@/components/nav/SearchCategoryDropdown";
 import { BUSINESS_CATEGORIES, normalizeCategoryName } from "@/lib/businessCategories";
 import {
   getAvailabilityBadgeStyle,
@@ -157,8 +158,7 @@ export default function GlobalHeader({
     navigateToSearch(searchTerm || "", selectedCategory);
   };
 
-  const handleCategoryChange = (event) => {
-    const next = event.target.value;
+  const handleCategoryChange = (next) => {
     setSelectedCategory(next);
     navigateToSearch(searchTerm || "", next);
   };
@@ -741,7 +741,7 @@ export default function GlobalHeader({
                   );
                 }}
                 className="min-w-0 flex-1 bg-transparent pr-12 text-base md:text-sm placeholder:text-white/60 focus:outline-none"
-                placeholder="Search local makers, shops, and pickup favorites..."
+                  placeholder="Search local shops"
                 type="search"
               />
               <button
@@ -779,20 +779,13 @@ export default function GlobalHeader({
                     Category
                   </label>
                   <div className="relative">
-                    <select
+                    <SearchCategoryDropdown
                       id="global-search-category"
                       value={selectedCategory}
                       onChange={handleCategoryChange}
-                      style={{ width: `${categorySelectWidth}ch` }}
-                      className="appearance-none bg-transparent pr-7 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
-                    >
-                      {SEARCH_CATEGORIES.map((category) => (
-                        <option key={category} value={category} className="text-black">
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-white/60 transition-colors duration-200 ease-out group-hover:text-purple-400" />
+                      options={SEARCH_CATEGORIES}
+                      widthCh={categorySelectWidth}
+                    />
                   </div>
                 </div>
                 <div className="relative flex-1">

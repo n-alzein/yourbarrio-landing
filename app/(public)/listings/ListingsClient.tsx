@@ -115,6 +115,19 @@ function FiltersModal({
   openNow: boolean;
   onOpenNowToggle: () => void;
 }) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
   if (!open) return null;
 
   const fieldClassName =
@@ -125,8 +138,12 @@ function FiltersModal({
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/28 p-3 sm:items-center"
       role="dialog"
       aria-modal="true"
+      onClick={onClose}
     >
-      <div className="w-full max-w-md rounded-[28px] bg-[#fcfcfe] p-5 shadow-[0_28px_80px_-36px_rgba(15,23,42,0.42)]">
+      <div
+        className="w-full max-w-md rounded-[28px] bg-[#fcfcfe] p-5 shadow-[0_28px_80px_-36px_rgba(15,23,42,0.42)]"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Filters</h2>
@@ -523,12 +540,12 @@ export default function ListingsClient() {
             </button>
           )}
 
-          <section className="pb-3 pt-4">
-            <h1 className="text-[2rem] font-semibold tracking-[-0.055em] text-slate-950 sm:text-[2.35rem]">
+          <section className="pb-2 pt-3 sm:pb-3 sm:pt-4">
+            <h1 className="text-[1.7rem] font-semibold leading-[0.98] tracking-[-0.05em] text-slate-950 sm:text-[2.1rem] sm:leading-[0.96] lg:text-[2.35rem]">
               {`Explore listings in ${marketCity}`}
             </h1>
 
-            <div className="mt-3">
+            <div className="mt-2.5 sm:mt-3">
               <ListingsToolbar
                 category={category}
                 onCategoryChange={(value) => updateQueryParam("category", value)}
@@ -562,8 +579,8 @@ export default function ListingsClient() {
 
           {!showLocationEmpty && !loadError ? (
             <>
-              <div className="mt-3 border-t border-black/6" />
-              <div className="pb-2 pt-3">
+              <div className="mt-2.5 border-t border-black/6 sm:mt-3" />
+              <div className="pb-1 pt-2 sm:pb-2 sm:pt-3">
                 {!loading ? (
                   <p className="text-sm text-slate-400">
                     {filteredListings.length} {filteredListings.length === 1 ? "listing" : "listings"}
@@ -581,7 +598,7 @@ export default function ListingsClient() {
             </div>
           ) : null}
 
-          <div className="pt-1">
+          <div className="pt-0.5 sm:pt-1">
             {loading && !showLocationEmpty && !loadError ? <LoadingGridSkeleton /> : null}
 
             {!loading && !loadError && !showLocationEmpty ? (

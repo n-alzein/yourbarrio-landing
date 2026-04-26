@@ -24,6 +24,7 @@ import {
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
 import MobileSidebarDrawer from "@/components/nav/MobileSidebarDrawer";
+import SearchCategoryDropdown from "@/components/nav/SearchCategoryDropdown";
 import { useTheme } from "@/components/ThemeProvider";
 import { useModal } from "../modals/ModalProvider";
 import { fetchUnreadTotal } from "@/lib/messages";
@@ -929,8 +930,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
     navigateToSearch(searchTerm || "", selectedCategory);
   };
 
-  const handleCategoryChange = (event) => {
-    const next = event.target.value;
+  const handleCategoryChange = (next) => {
     setSelectedCategory(next);
     navigateToSearch(searchTerm || "", next);
   };
@@ -981,7 +981,9 @@ function CustomerNavbarInner({ pathname, searchParams }) {
 
   useEffect(() => {
     if (canLoadUnread) return;
-    setUnreadCount(0);
+    queueMicrotask(() => {
+      setUnreadCount(0);
+    });
   }, [canLoadUnread, user?.id, authStatus]);
 
   useEffect(() => {
@@ -1170,20 +1172,13 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                   Category
                 </label>
                 <div className="relative">
-                  <select
+                  <SearchCategoryDropdown
                     id="customer-search-category"
                     value={selectedCategory}
                     onChange={handleCategoryChange}
-                    style={{ width: `${categorySelectWidth}ch` }}
-                    className="appearance-none bg-transparent pr-7 text-base md:text-xs font-semibold uppercase tracking-[0.12em] text-white/80 focus:outline-none"
-                  >
-                    {SEARCH_CATEGORIES.map((category) => (
-                      <option key={category} value={category} className="text-black">
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 text-white/60" />
+                    options={SEARCH_CATEGORIES}
+                    widthCh={categorySelectWidth}
+                  />
                 </div>
               </div>
               <div className="relative flex-1">
@@ -1208,7 +1203,7 @@ function CustomerNavbarInner({ pathname, searchParams }) {
                     );
                   }}
                   className="w-full bg-transparent py-3 pl-11 pr-3 text-sm text-white placeholder:text-white/60 focus:outline-none"
-                  placeholder="Search local makers, shops, and pickup favorites..."
+                    placeholder="Search local shops"
                   type="search"
                 />
               </div>

@@ -277,7 +277,7 @@ export default function PopularNearYouSection({
           <Link
             href={viewAllHref}
             prefetch={false}
-            className="inline-flex items-center gap-1 self-center text-sm font-medium text-purple-600 transition-all duration-300 hover:translate-x-0.5 hover:text-purple-700"
+            className="inline-flex items-center gap-1 self-center text-sm font-medium text-purple-500 transition-all duration-300 hover:translate-x-0.5 hover:text-purple-700"
           >
             View all <span aria-hidden="true">→</span>
           </Link>
