@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
 import ListingOptionsSection from "@/components/business/listings/ListingOptionsSection";
 import ListingPreviewCard from "@/components/business/listings/ListingPreviewCard";
@@ -920,6 +921,17 @@ export default function NewListingPage() {
                       minHeight={180}
                       placeholder=""
                       helpText="Use headings, bullets, and links to make details easy to scan."
+                    />
+                    <AIDescriptionAssistant
+                      type="listing"
+                      name={form.title}
+                      category={form.category}
+                      value={form.description}
+                      targetId={internalListingId || undefined}
+                      onApply={(description) =>
+                        updateForm((prev) => ({ ...prev, description }))
+                      }
+                      context="listing-editor"
                     />
                     {visibleFieldErrors.description ? (
                       <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.description}</p>

@@ -178,20 +178,23 @@ export function ProfileSection({
   children,
   className = "",
   contentClassName = "",
+  hideHeader = false,
 }) {
   return (
     <section id={id} className={cx("scroll-mt-40 border-t border-slate-100 pt-8 md:pt-10", className)}>
-      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div className="max-w-2xl">
-          <h2 className="text-[1.18rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.28rem]">
-            {title}
-          </h2>
-          {description ? (
-            <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
-          ) : null}
+      {!hideHeader ? (
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="text-[1.18rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.28rem]">
+              {title}
+            </h2>
+            {description ? (
+              <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+            ) : null}
+          </div>
+          {action ? <div className="shrink-0 self-start md:self-end">{action}</div> : null}
         </div>
-        {action ? <div className="shrink-0 self-start md:self-end">{action}</div> : null}
-      </div>
+      ) : null}
       <div className={cx("bg-transparent", contentClassName)}>{children}</div>
     </section>
   );

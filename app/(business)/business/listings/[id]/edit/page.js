@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
 import ListingOptionsSection from "@/components/business/listings/ListingOptionsSection";
 import ListingPreviewCard from "@/components/business/listings/ListingPreviewCard";
@@ -909,6 +910,17 @@ export default function EditListingPage() {
                       minHeight={180}
                       placeholder="Share materials, flavors, or what makes it special."
                       helpText="Use headings, bullets, and links to make details easy to scan."
+                    />
+                    <AIDescriptionAssistant
+                      type="listing"
+                      name={form.title}
+                      category={form.category}
+                      value={form.description}
+                      targetId={internalListingId || listingRef || undefined}
+                      onApply={(description) =>
+                        setForm((prev) => ({ ...prev, description }))
+                      }
+                      context="listing-editor"
                     />
                   </div>
 

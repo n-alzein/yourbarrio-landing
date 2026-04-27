@@ -1,59 +1,22 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  buildBusinessGeocodeAddress,
+  geocodeBusinessAddress,
+  normalizeCoordinates,
+} from "@/lib/location/businessGeocoding";
 
 const AUTH_TOKEN = process.env.ADMIN_GEOCODE_TOKEN || "";
-const GEOCODE_KEY = process.env.GOOGLE_GEOCODING_API_KEY || "";
 
 const BATCH_LIMIT =
   Number.parseInt(process.env.GEOCODE_BATCH_LIMIT || "", 10) || 15;
 
 const hasCoords = (row) => {
-  const lat =
-    typeof row?.latitude === "number"
-      ? row.latitude
-      : typeof row?.lat === "number"
-        ? row.lat
-        : null;
-  const lng =
-    typeof row?.longitude === "number"
-      ? row.longitude
-      : typeof row?.lng === "number"
-        ? row.lng
-        : null;
-  if (lat === null || lng === null) return false;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  if (lat === 0 && lng === 0) return false;
-  return true;
-};
-
-const geocodeAddress = async (address) => {
-  if (!address) return null;
-  if (!GEOCODE_KEY) throw new Error("Missing GOOGLE_GEOCODING_API_KEY");
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-    address
-  )}&key=${GEOCODE_KEY}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Geocode failed ${res.status} ${txt}`);
-  }
-  const data = await res.json();
-  if (!data || data.status !== "OK" || !data.results?.length) return null;
-  const loc = data.results[0]?.geometry?.location;
-  if (typeof loc?.lat === "number" && typeof loc?.lng === "number") {
-    if (loc.lat === 0 && loc.lng === 0) return null;
-    return { lat: loc.lat, lng: loc.lng };
-  }
-  return null;
+  return Boolean(normalizeCoordinates(row));
 };
 
 const buildAddress = (row) => {
-  const parts = [];
-  if (row.address) parts.push(row.address);
-  if (row.city) parts.push(row.city);
-  if (row.state) parts.push(row.state);
-  if (row.country) parts.push(row.country);
-  return parts.filter(Boolean).join(", ");
+  return buildBusinessGeocodeAddress(row);
 };
 
 export async function POST(request) {
@@ -119,7 +82,7 @@ export async function POST(request) {
       continue;
     }
     try {
-      const coords = await geocodeAddress(addr);
+      const coords = await geocodeBusinessAddress(addr);
       if (!coords) {
         errors.push({ id: item.row.id, table: item.table, error: "no result" });
         continue;

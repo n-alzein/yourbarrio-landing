@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock, Globe, MapPin, Phone } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import { getBusinessTypeOptions } from "@/lib/taxonomy/businessTypes";
 import {
   buildBusinessTaxonomyPayload,
@@ -131,17 +132,9 @@ function toObject(value) {
   return {};
 }
 
-function filterPayloadByProfile(payload, profile) {
-  if (!profile) return {};
-  return Object.fromEntries(
-    Object.entries(payload).filter(([key]) =>
-      Object.prototype.hasOwnProperty.call(profile, key)
-    )
-  );
-}
-
 export default function OverviewEditor({
   profile,
+  businessId,
   tone,
   editMode,
   setEditMode,
@@ -331,70 +324,33 @@ export default function OverviewEditor({
       profile_photo_url: form.profile_photo_url.trim(),
       cover_photo_url: form.cover_photo_url.trim(),
     };
-    const filteredPayload = filterPayloadByProfile(userPayload, profile);
-    if (!Object.keys(filteredPayload).length) {
-      onToast?.(
-        "error",
-        "Profile fields are not available in the users table schema."
-      );
-      return;
-    }
-
     const previous = profile;
     onProfileUpdate?.({ ...profile, ...userPayload });
     setSaving(true);
     setSavingMessage("Saving profile...");
 
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .update(filteredPayload)
-        .eq("id", user.id)
-        .select("*")
-        .maybeSingle();
+      const response = await fetch("/api/business/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userPayload),
+      });
+      const payload = await response.json().catch(() => ({}));
 
-      if (error) {
+      if (!response.ok) {
         onProfileUpdate?.(previous);
-        onToast?.("error", error.message || "Failed to save profile.");
+        onToast?.("error", payload?.error || "Failed to save profile.");
         return;
       }
-      if (!data) {
+
+      const nextProfile = payload?.profile;
+      if (!nextProfile) {
         onProfileUpdate?.(previous);
         onToast?.("error", "Profile update failed to return data.");
         return;
       }
 
-      const businessPayload = {
-        owner_user_id: user.id,
-        business_name: userPayload.business_name,
-        business_type: userPayload.business_type,
-        category: userPayload.category,
-        description: userPayload.description,
-        website: userPayload.website,
-        phone: userPayload.phone,
-        profile_photo_url: userPayload.profile_photo_url,
-        cover_photo_url: userPayload.cover_photo_url,
-        address: userPayload.address,
-        city: userPayload.city,
-        hours_json: userPayload.hours_json,
-        social_links_json: userPayload.social_links_json,
-      };
-
-      const { error: businessError } = await supabase.from("businesses").upsert(
-        businessPayload,
-        {
-          onConflict: "owner_user_id",
-          ignoreDuplicates: false,
-        }
-      );
-
-      if (businessError) {
-        onProfileUpdate?.(previous);
-        onToast?.("error", businessError.message || "Failed to sync business profile.");
-        return;
-      }
-
-      onProfileUpdate?.({ ...previous, ...data, ...userPayload });
+      onProfileUpdate?.({ ...previous, ...nextProfile });
       await refreshProfile?.();
       setEditMode(false);
       setIsDirty(false);
@@ -596,6 +552,18 @@ export default function OverviewEditor({
                 onChange={handleChange("description")}
                 rows={4}
                 className={inputClass}
+              />
+              <AIDescriptionAssistant
+                type="business"
+                name={form.business_name}
+                category={form.business_type}
+                value={form.description}
+                targetId={businessId || undefined}
+                onApply={(description) => {
+                  setForm((prev) => ({ ...prev, description }));
+                  setIsDirty(true);
+                }}
+                context="business-profile"
               />
               {errors.description ? (
                 <p className={tone.errorText}>{errors.description}</p>

@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import { getBusinessTypeOptions } from "@/lib/taxonomy/businessTypes";
 import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 import { US_STATES } from "@/lib/constants/usStates";
@@ -536,6 +537,14 @@ export default function BusinessOnboardingPage() {
                   rows={4}
                   onChange={(v) => updateField("description", v)}
                   required
+                />
+                <AIDescriptionAssistant
+                  type="business"
+                  name={form.businessName}
+                  category={form.business_type}
+                  value={form.description}
+                  onApply={(description) => updateField("description", description)}
+                  context="onboarding"
                 />
               </FormSection>
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
 import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
+import { resolveBusinessCoordinates } from "@/lib/location/businessGeocoding";
 import { buildBusinessTaxonomyPayload } from "@/lib/taxonomy/compat";
 
 function normalizeWebsite(value) {
@@ -10,33 +11,6 @@ function normalizeWebsite(value) {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (trimmed.startsWith("//")) return `https:${trimmed}`;
   return `https://${trimmed}`;
-}
-
-function buildAddressForGeocode({ address, address_2, city, state, postal_code }) {
-  return [address, address_2, city, state, postal_code]
-    .map((value) => (value || "").trim())
-    .filter(Boolean)
-    .join(", ");
-}
-
-async function geocodeAddress(address) {
-  const key = process.env.GOOGLE_GEOCODING_API_KEY;
-  if (!key || !address) return null;
-
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-    address
-  )}&key=${key}`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    console.warn("Geocode request failed:", res.status);
-    return null;
-  }
-
-  const data = await res.json();
-  const loc = data?.results?.[0]?.geometry?.location;
-  if (!loc?.lat || !loc?.lng) return null;
-  return { lat: loc.lat, lng: loc.lng };
 }
 
 export async function POST(req) {
@@ -85,8 +59,6 @@ export async function POST(req) {
       postal_code,
       phone,
       website,
-      latitude,
-      longitude,
     } = body || {};
 
     const trimmedName = String(name || "").trim();
@@ -102,28 +74,14 @@ export async function POST(req) {
 
     const normalizedWebsite = normalizeWebsite(website);
     const normalizedState = normalizeStateCode(state) || "";
-    const addressForGeocode = buildAddressForGeocode({
-      address,
-      address_2,
-      city,
-      state: normalizedState,
-      postal_code,
-    });
-
-    const prefilledGeo =
-      typeof latitude === "number" && typeof longitude === "number"
-        ? { lat: latitude, lng: longitude }
-        : null;
-    const geo = prefilledGeo || (await geocodeAddress(addressForGeocode));
-
     const { data: existingUser, error: userReadError } = await supabase
       .from("users")
-      .select("public_id,is_internal")
+      .select("public_id,is_internal,latitude,longitude")
       .eq("id", user.id)
       .maybeSingle();
     const { data: existingBusiness } = await supabase
       .from("businesses")
-      .select("is_internal")
+      .select("is_internal,latitude,longitude")
       .eq("owner_user_id", user.id)
       .maybeSingle();
 
@@ -133,6 +91,18 @@ export async function POST(req) {
         message: userReadError.message || null,
       });
     }
+
+    const { coords: geo } = await resolveBusinessCoordinates({
+      nextLocation: {
+        address,
+        address_2,
+        city,
+        state: normalizedState,
+        postal_code,
+      },
+      previousLocation: existingBusiness || existingUser || null,
+      logger: console,
+    });
 
     const usersPayload = {
       id: user.id,

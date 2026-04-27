@@ -27,6 +27,40 @@ const SOCIAL_FIELDS = [
   { key: "x", label: "X", icon: Twitter },
 ];
 
+function parseCoordinate(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function getMapboxStaticToken() {
+  return (
+    process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
+    process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
+    ""
+  );
+}
+
+function getProfileCoordinates(profile) {
+  const lat = parseCoordinate(
+    profile?.latitude ?? profile?.lat ?? profile?.location_lat ?? profile?.center?.lat
+  );
+  const lng = parseCoordinate(
+    profile?.longitude ?? profile?.lng ?? profile?.location_lng ?? profile?.center?.lng
+  );
+  if (lat === null || lng === null) return "";
+  return { lat, lng };
+}
+
+export function getStaticMapUrl(profile) {
+  const token = getMapboxStaticToken();
+  if (!token) return "";
+  const coordinates = getProfileCoordinates(profile);
+  if (!coordinates) return "";
+  const overlay = `pin-l+6d3df5(${coordinates.lng},${coordinates.lat})`;
+  const centeredLat = coordinates.lat + 0.00125;
+  return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlay}/${coordinates.lng},${centeredLat},14/900x320?access_token=${token}`;
+}
+
 function getWebsiteDisplay(value) {
   if (!value) return "";
 
@@ -39,6 +73,18 @@ function getWebsiteDisplay(value) {
       .replace(/^www\./i, "")
       .replace(/\/$/, "");
   }
+}
+
+function buildDirectionsUrl({ address, latitude, longitude }) {
+  const lat = parseCoordinate(latitude);
+  const lng = parseCoordinate(longitude);
+  if (lat !== null && lng !== null) {
+    return `https://maps.google.com/?q=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+  if (address) {
+    return `https://maps.google.com/?q=${encodeURIComponent(address)}`;
+  }
+  return "";
 }
 
 function DetailRow({ icon: Icon, label, value, href, truncate = false }) {
@@ -117,6 +163,52 @@ function DetailsCard({ address, phone, website, websiteDisplay, category }) {
   );
 }
 
+function LocationSnapshotCard({ profile, address }) {
+  const mapUrl = getStaticMapUrl(profile);
+  const directionsUrl = buildDirectionsUrl({
+    address,
+    latitude: profile?.latitude ?? profile?.lat ?? profile?.location_lat ?? profile?.center?.lat,
+    longitude:
+      profile?.longitude ?? profile?.lng ?? profile?.location_lng ?? profile?.center?.lng,
+  });
+  if (!mapUrl) return null;
+  const content = (
+    <div className="overflow-hidden rounded-[20px] border border-slate-100/70 bg-white/85 shadow-[0_14px_34px_-32px_rgba(15,23,42,0.3)] transition motion-reduce:transition-none md:hover:scale-[1.005] md:hover:shadow-[0_18px_38px_-30px_rgba(15,23,42,0.34)]">
+      <div className="relative h-[210px] bg-slate-100 sm:h-[218px] lg:h-[252px]">
+        <img
+          src={mapUrl}
+          alt={address ? `Map preview for ${address}` : "Map preview"}
+          data-static-map-src={process.env.NODE_ENV !== "production" ? mapUrl : undefined}
+          className="h-full w-full object-cover [filter:contrast(1.04)]"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-white/8" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[26%] bg-gradient-to-t from-slate-950/9 via-slate-950/[0.015] to-transparent" />
+        <div className="pointer-events-none absolute bottom-4 left-4">
+          <div className="inline-flex items-center gap-1 rounded-full border border-white/65 bg-white/68 px-2 py-0.5 text-[8.5px] font-medium text-slate-600 shadow-[0_8px_16px_-16px_rgba(15,23,42,0.28)] backdrop-blur-md">
+            <MapPin className="h-3.5 w-3.5 text-[#6a3df0]" />
+            Location
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+  if (!directionsUrl) return content;
+  return (
+    <a
+      href={directionsUrl}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Open location in maps"
+      className="block"
+    >
+      {content}
+    </a>
+  );
+}
+
 export default function BusinessAbout({
   profile,
   className = "",
@@ -137,17 +229,31 @@ export default function BusinessAbout({
   return (
     <ProfileSection
       id="about"
-      title="About"
-      description="A quick overview, contact details, and practical information."
-      action={headerAction}
+      hideHeader
       className={className}
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.58fr)_minmax(300px,0.82fr)] lg:gap-8">
-        <div className="space-y-4">
+      <div className="mb-12 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10 xl:gap-12">
+        <div className="min-w-0 max-w-[48rem] space-y-[0.625rem]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-2xl">
+              <h2 className="text-[1.18rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.28rem]">
+                About
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                A quick overview, contact details, and practical information.
+              </p>
+            </div>
+            {headerAction ? <div className="shrink-0 self-start">{headerAction}</div> : null}
+          </div>
+
           <p className="max-w-[48rem] border-l border-[#6a3df0]/20 pl-4 text-[1.06rem] leading-[2rem] text-slate-700 sm:pl-5 sm:text-[1.1rem] sm:leading-[2.08rem]">
             {profile?.description ||
               "This business has not added a full description yet."}
           </p>
+
+          <div className="pb-5">
+            <LocationSnapshotCard profile={profile} address={address} />
+          </div>
 
           {socialLinks.length ? (
             <div className="flex flex-wrap gap-2 pt-1">
@@ -167,7 +273,7 @@ export default function BusinessAbout({
           ) : null}
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 lg:w-[340px] lg:shrink-0">
           <DetailsCard
             address={address}
             phone={profile?.phone}
@@ -187,7 +293,7 @@ export default function BusinessAbout({
           )}
         </div>
       </div>
-      {supplement ? <div className="mt-4">{supplement}</div> : null}
+      {supplement ? <div className="mt-5 md:mt-6">{supplement}</div> : null}
     </ProfileSection>
   );
 }

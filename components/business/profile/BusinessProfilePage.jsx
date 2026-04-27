@@ -366,6 +366,7 @@ export default function BusinessProfilePage({
           editMode ? (
             <OverviewEditor
               profile={profile}
+              businessId={businessId}
               tone={tone}
               editMode={editMode}
               setEditMode={setEditMode}

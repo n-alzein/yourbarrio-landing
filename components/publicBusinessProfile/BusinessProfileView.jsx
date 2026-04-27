@@ -60,7 +60,7 @@ export default function BusinessProfileView({
 
       <ProfileSectionNav items={DEFAULT_NAV_ITEMS} className={navClassName} />
 
-      <div className="space-y-8">
+      <div className="space-y-10 md:space-y-12">
         <BusinessAbout
           profile={profile}
           className={sectionClassName}

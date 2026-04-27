@@ -365,25 +365,6 @@ export default function SettingsPage() {
       postal_code: normalizedAddress.postal_code || null,
       website: form.website,
       profile_photo_url: form.profile_photo_url,
-    };
-
-    const { error: userUpdateError } = await supabase
-      .from("users")
-        .update(updates)
-      .eq("id", user.id);
-
-    let businessUpdateError = null;
-    const businessesPayload = {
-      owner_user_id: user.id,
-      business_name: form.full_name || null,
-      phone: form.phone || null,
-      city: normalizedAddress.city || null,
-      address: normalizedAddress.address || null,
-      address_2: normalizedAddress.address_2 || null,
-      state: normalizedAddress.state || null,
-      postal_code: normalizedAddress.postal_code || null,
-      website: form.website || null,
-      profile_photo_url: form.profile_photo_url || null,
       pickup_enabled_default:
         fulfillmentValidation.payload.pickup_enabled_default,
       local_delivery_enabled_default:
@@ -394,64 +375,42 @@ export default function SettingsPage() {
       delivery_min_order_cents:
         fulfillmentValidation.payload.delivery_min_order_cents,
       delivery_notes: fulfillmentValidation.payload.delivery_notes,
-      is_internal: profile?.is_internal === true,
     };
 
-    if (profile?.public_id) {
-      businessesPayload.public_id = profile.public_id;
-    }
-
-    const businessResult = await supabase
-      .from("businesses")
-      .upsert(businessesPayload, { onConflict: "owner_user_id", ignoreDuplicates: false });
-
-    if (businessResult.error) {
-      const code = String(businessResult.error.code || "");
-      const isSchemaMissing = code === "42P01" || code === "42703" || code === "PGRST204";
-      if (!isSchemaMissing) {
-        businessUpdateError = businessResult.error;
+    let saveError = null;
+    let savedProfile = null;
+    try {
+      const response = await fetch("/api/business/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        saveError = { message: payload?.error || "Failed to save settings." };
+      } else {
+        savedProfile = payload?.profile || null;
       }
+    } catch (error) {
+      saveError = { message: error?.message || "Failed to save settings." };
     }
 
     setSaving(false);
     setActiveSection(null);
 
-    if (!userUpdateError && !businessUpdateError) {
+    if (!saveError && savedProfile) {
       refreshProfile();
       const nextForm = buildInitialForm({
         ...profile,
-        business_name: form.full_name,
-        full_name: form.full_name,
-        phone: form.phone,
-        city: normalizedAddress.city || null,
-        address: normalizedAddress.address || null,
-        address_2: normalizedAddress.address_2 || null,
-        state: normalizedAddress.state || null,
-        postal_code: normalizedAddress.postal_code || null,
-        website: form.website,
-        profile_photo_url: form.profile_photo_url,
-        pickup_enabled_default:
-          fulfillmentValidation.payload.pickup_enabled_default,
-        local_delivery_enabled_default:
-          fulfillmentValidation.payload.local_delivery_enabled_default,
-        default_delivery_fee_cents:
-          fulfillmentValidation.payload.default_delivery_fee_cents,
-        delivery_radius_miles: fulfillmentValidation.payload.delivery_radius_miles,
-        delivery_min_order_cents:
-          fulfillmentValidation.payload.delivery_min_order_cents,
-        delivery_notes: fulfillmentValidation.payload.delivery_notes,
+        ...savedProfile,
       });
       setInitialForm(nextForm);
+      setForm(nextForm);
       showToast("success", "Settings updated.");
       return;
     }
 
-    showToast(
-      "error",
-      userUpdateError?.message ||
-        businessUpdateError?.message ||
-        "Failed to save settings."
-    );
+    showToast("error", saveError?.message || "Failed to save settings.");
   }
 
   /* -----------------------------------------------------------

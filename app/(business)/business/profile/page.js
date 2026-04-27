@@ -132,6 +132,8 @@ export default async function BusinessProfileRoute() {
     city: rawProfile.city,
     state: rawProfile.state,
     postal_code: rawProfile.postal_code,
+    latitude: rawProfile.latitude ?? null,
+    longitude: rawProfile.longitude ?? null,
     pickup_enabled_default: rawProfile.pickup_enabled_default !== false,
     local_delivery_enabled_default:
       rawProfile.local_delivery_enabled_default === true,
@@ -159,6 +161,8 @@ export default async function BusinessProfileRoute() {
     city: "",
     state: "",
     postal_code: "",
+    latitude: null,
+    longitude: null,
     pickup_enabled_default: true,
     local_delivery_enabled_default: false,
     default_delivery_fee_cents: null,
