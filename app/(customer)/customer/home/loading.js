@@ -1,5 +1,3 @@
-"use client";
-
 export default function CustomerHomeLoading() {
   return (
     <div className="min-h-screen text-[var(--yb-text)] bg-[var(--yb-bg)] relative px-6 pt-10">

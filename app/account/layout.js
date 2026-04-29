@@ -7,11 +7,12 @@ import AccountNavPerf from "@/components/debug/AccountNavPerf";
 import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginPrompt";
 import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
 import { getServerAuth, requireRole } from "@/lib/auth/server";
+import { getRequestPath } from "@/lib/url/getRequestPath";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function AccountShell({ children = null, className = "" }) {
+function AccountShell({ children = null, className = "", compact = false }) {
   const lightThemeVars = {
     "--bg-solid": "#ffffff",
     "--bg-gradient-start": "#f7f7f8",
@@ -22,7 +23,11 @@ function AccountShell({ children = null, className = "" }) {
 
   return (
     <div
-      className={`pt-28 md:pt-20 min-h-screen bg-[var(--yb-bg)] text-[var(--yb-text)]${className ? ` ${className}` : ""}`}
+      className={`${
+        compact
+          ? "pt-[calc(var(--yb-nav-content-offset,80px)+0.75rem)] md:pt-[calc(var(--yb-nav-content-offset,80px)+1rem)]"
+          : "pt-[calc(var(--yb-nav-content-offset,80px)+1rem)] md:pt-[calc(var(--yb-nav-content-offset,80px)+1.5rem)]"
+      } min-h-screen bg-[var(--yb-bg)] text-[var(--yb-text)]${className ? ` ${className}` : ""}`}
       data-theme="light"
       data-route-theme="light"
       style={lightThemeVars}
@@ -33,6 +38,9 @@ function AccountShell({ children = null, className = "" }) {
 }
 
 export default async function AccountLayout({ children }) {
+  const requestPath = await getRequestPath("/account/orders");
+  const compactOrderSpacing =
+    requestPath === "/account/orders" || requestPath === "/account/purchase-history";
   const headerList = await headers();
   const userAgent = headerList.get("user-agent") || "";
   const isSafari =
@@ -50,7 +58,10 @@ export default async function AccountLayout({ children }) {
         <Suspense fallback={null}>
           <GlobalHeader surface="customer" />
         </Suspense>
-        <AccountShell className={`account-shell${isSafari ? " yb-safari" : ""}`}>
+        <AccountShell
+          compact={compactOrderSpacing}
+          className={`account-shell${isSafari ? " yb-safari" : ""}`}
+        >
           <div className="mx-auto max-w-5xl rounded-2xl border border-[var(--yb-border)] bg-white p-8">
             Loading your account...
           </div>
@@ -93,7 +104,10 @@ export default async function AccountLayout({ children }) {
       </Suspense>
       <InactivityLogout />
       <AccountNavPerf />
-      <AccountShell className={`account-shell${isSafari ? " yb-safari" : ""}`}>
+      <AccountShell
+        compact={compactOrderSpacing}
+        className={`account-shell${isSafari ? " yb-safari" : ""}`}
+      >
         <Suspense fallback={null}>
           <CustomerRealtimeProvider>{children}</CustomerRealtimeProvider>
         </Suspense>

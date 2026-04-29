@@ -29,6 +29,7 @@ export default async function CustomerLayout({ children }) {
     return <>{children}</>;
   }
   const requestPath = await getRequestPath("/customer/home");
+  const shellGap = requestPath === "/customer/home" ? "none" : "comfortable";
   const isNearbyRoute =
     requestPath === "/customer/nearby" || requestPath.startsWith("/customer/nearby/");
   const isNearbyPublicEnabled = isNearbyRoute
@@ -59,7 +60,10 @@ export default async function CustomerLayout({ children }) {
         <Suspense fallback={null}>
           <GlobalHeader surface="customer" />
         </Suspense>
-        <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>
+        <CustomerRouteShell
+          className={`customer-shell${isSafari ? " yb-safari" : ""}`}
+          gap={shellGap}
+        >
           <Suspense
             fallback={
               <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)] bg-[var(--yb-bg)]">
@@ -88,7 +92,10 @@ export default async function CustomerLayout({ children }) {
         <Suspense fallback={null}>
           <GlobalHeader surface="customer" />
         </Suspense>
-        <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>
+        <CustomerRouteShell
+          className={`customer-shell${isSafari ? " yb-safari" : ""}`}
+          gap={shellGap}
+        >
           <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)] bg-[var(--yb-bg)]">
             <div className="max-w-5xl mx-auto rounded-2xl border border-[var(--yb-border)] bg-white p-8">
               Loading your account...
@@ -196,7 +203,10 @@ export default async function CustomerLayout({ children }) {
           />
         </Suspense>
         <InactivityLogout />
-        <CustomerRouteShell className={`customer-shell${isSafari ? " yb-safari" : ""}`}>
+        <CustomerRouteShell
+          className={`customer-shell${isSafari ? " yb-safari" : ""}`}
+          gap={shellGap}
+        >
           <Suspense
             fallback={
               <div className="min-h-screen px-6 md:px-10 pt-24 text-[var(--yb-text)] bg-[var(--yb-bg)]">

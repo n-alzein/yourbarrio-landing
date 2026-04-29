@@ -2,8 +2,10 @@ import { Suspense } from "react";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import GlobalHeaderGate from "@/components/nav/GlobalHeaderGate";
 import BusinessAuthRedirector from "@/components/BusinessAuthRedirector";
+import PublicRouteShell from "@/components/layout/PublicRouteShell";
 import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 import { normalizeAuthUser } from "@/lib/auth/normalizeAuthUser";
+import { getRequestPath } from "@/lib/url/getRequestPath";
 
 export const metadata = {
   other: {
@@ -15,6 +17,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function PublicLayout({ children }) {
+  const requestPath = await getRequestPath("/");
+  const shellGap = requestPath === "/" ? "none" : "comfortable";
   const accountContext = await getCurrentAccountContext({
     source: "public-layout",
   });
@@ -52,7 +56,7 @@ export default async function PublicLayout({ children }) {
         </GlobalHeaderGate>
       </Suspense>
       <BusinessAuthRedirector />
-      {children}
+      <PublicRouteShell gap={shellGap}>{children}</PublicRouteShell>
     </div>
   );
 }

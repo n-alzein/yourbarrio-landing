@@ -12,7 +12,7 @@ export default function CartLayout({ children }) {
         <GlobalHeader surface="customer" />
       </Suspense>
       <CustomerRouteShell>
-        <div className="min-h-screen pt-[2.25rem] md:pt-[2.5rem]">{children}</div>
+        <div className="min-h-screen">{children}</div>
       </CustomerRouteShell>
     </>
   );

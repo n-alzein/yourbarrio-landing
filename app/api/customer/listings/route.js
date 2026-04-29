@@ -1,9 +1,49 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
-import { isUuid } from "@/lib/ids/isUuid";
 import { getPublicBusinessByOwnerId } from "@/lib/business/getPublicBusinessByOwnerId";
 import { withListingPricing } from "@/lib/pricing";
 import { getListingVariants } from "@/lib/listingOptions";
+
+const UUID_ANY_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function findPublicListingByRef(supabase, listingRef) {
+  const normalizedRef = String(listingRef || "").trim();
+  if (!normalizedRef) return { listing: null, error: null };
+
+  const isUuidLookup = UUID_ANY_REGEX.test(normalizedRef);
+  const directLookup = isUuidLookup
+    ? await supabase.from("public_listings_v").select("*").eq("id", normalizedRef).maybeSingle()
+    : await supabase
+        .from("public_listings_v")
+        .select("*")
+        .ilike("public_id", normalizedRef)
+        .maybeSingle();
+
+  if (directLookup.error || directLookup.data) {
+    return { listing: directLookup.data ?? null, error: directLookup.error ?? null };
+  }
+
+  const { data: resolvedRows, error: resolveError } = await supabase.rpc("resolve_listing_ref", {
+    p_ref: normalizedRef,
+  });
+  const resolvedRow = Array.isArray(resolvedRows) ? resolvedRows[0] : null;
+  const resolvedListingId = resolvedRow?.id || null;
+
+  if (resolveError || !resolvedListingId) {
+    return { listing: null, error: resolveError ?? null };
+  }
+
+  const resolvedLookup = await supabase
+    .from("public_listings_v")
+    .select("*")
+    .eq("id", resolvedListingId)
+    .maybeSingle();
+
+  return {
+    listing: resolvedLookup.data ?? null,
+    error: resolvedLookup.error ?? null,
+  };
+}
 
 export async function GET(request) {
   try {
@@ -16,32 +56,7 @@ export async function GET(request) {
       return NextResponse.json({ error: "Missing listing id" }, { status: 400 });
     }
 
-    const { data: resolvedRows, error: resolveError } = await supabase.rpc("resolve_listing_ref", {
-      p_ref: listingRef,
-    });
-    const resolvedRow = Array.isArray(resolvedRows) ? resolvedRows[0] : null;
-    const resolvedListingId = resolvedRow?.id || (isUuid(listingRef) ? listingRef : null);
-
-    if (resolveError) {
-      console.error("[public listings error]", resolveError);
-      console.log("[public listings]", { count: 0 });
-      const response = NextResponse.json(
-        { listing: null, business: null, isSaved: false, listingOptions: null },
-        { status: 200 }
-      );
-      response.headers.set("Cache-Control", "no-store");
-      return response;
-    }
-
-    if (!resolvedListingId) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const { data: listing, error: listingError } = await supabase
-      .from("public_listings_v")
-      .select("*")
-      .eq("id", resolvedListingId)
-      .maybeSingle();
+    const { listing, error: listingError } = await findPublicListingByRef(supabase, listingRef);
 
     if (listingError) {
       console.error("[public listings error]", listingError);
@@ -88,7 +103,7 @@ export async function GET(request) {
           .from("saved_listings")
           .select("id")
           .eq("user_id", user.id)
-          .eq("listing_id", resolvedListingId)
+          .eq("listing_id", listing.id)
           .maybeSingle();
         isSaved = Boolean(saved);
       }
@@ -96,7 +111,7 @@ export async function GET(request) {
 
     let listingOptions = null;
     try {
-      listingOptions = await getListingVariants(supabase, resolvedListingId);
+      listingOptions = await getListingVariants(supabase, listing.id);
     } catch (error) {
       console.error("[public listings error]", error);
     }

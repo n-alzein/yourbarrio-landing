@@ -41,7 +41,11 @@ export default function NearbySplitViewShell({
         </div>
       ) : null}
 
-      {controls ? <div className="mb-2.5 shrink-0" data-testid="nearby-header">{controls}</div> : null}
+      {controls ? (
+        <div className="mb-2.5 shrink-0 pt-2" data-testid="nearby-header">
+          {controls}
+        </div>
+      ) : null}
 
       <div
         className={`hidden min-h-0 flex-1 md:grid ${

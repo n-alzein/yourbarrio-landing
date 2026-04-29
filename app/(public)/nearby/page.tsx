@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default function PublicNearbyPage() {
   return (
-    <div className="pt-2">
+    <div>
       <NearbyBusinessesClient />
     </div>
   );

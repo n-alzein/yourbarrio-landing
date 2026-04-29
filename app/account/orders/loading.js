@@ -1,7 +1,7 @@
 export default function AccountOrdersLoading() {
   return (
     <div
-      className="min-h-screen -mt-16 px-4 pb-12 md:-mt-10 md:px-8 lg:px-12"
+      className="min-h-screen px-4 pb-12 md:px-8 lg:px-12"
       style={{ background: "var(--background)", color: "var(--text)" }}
     >
       <div className="mx-auto max-w-5xl space-y-7">

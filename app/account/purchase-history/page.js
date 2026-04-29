@@ -47,7 +47,7 @@ export default async function PurchaseHistoryPage({ searchParams }) {
   const error = result.error;
 
   return (
-    <div className="min-h-screen -mt-16 px-4 pb-12 md:-mt-10 md:px-8 lg:px-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+    <div className="min-h-screen px-4 pb-12 md:px-8 lg:px-12" style={{ background: "var(--background)", color: "var(--text)" }}>
       <div className="mx-auto max-w-5xl space-y-7">
         <div className="space-y-2.5">
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Orders</p>
