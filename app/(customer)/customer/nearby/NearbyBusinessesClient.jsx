@@ -42,6 +42,7 @@ const normalizeCategoryToken = (value) =>
 
 const NEW_BUSINESS_DAYS = 45;
 const SAVED_BUSINESSES_EVENT = "yb:saved-businesses-changed";
+const INITIAL_VISIBLE_BUSINESSES = 6;
 
 const VERIFIED_STATUSES = new Set(["auto_verified", "manually_verified"]);
 
@@ -137,6 +138,7 @@ export default function NearbyBusinessesClient() {
   const [mobileView, setMobileView] = useState("list");
   const [isMobile, setIsMobile] = useState(false);
   const [preciseLocationLoading, setPreciseLocationLoading] = useState(false);
+  const [visibleBusinessCount, setVisibleBusinessCount] = useState(INITIAL_VISIBLE_BUSINESSES);
 
   const [ybBusinesses, setYbBusinesses] = useState([]);
   const [ybBusinessesLoading, setYbBusinessesLoading] = useState(true);
@@ -517,6 +519,15 @@ export default function NearbyBusinessesClient() {
   }, [search, ybBusinesses, categoryFilter, sortMode]);
 
   const businessesForMap = useMemo(() => filteredBusinesses, [filteredBusinesses]);
+  const visibleBusinesses = useMemo(
+    () => filteredBusinesses.slice(0, visibleBusinessCount),
+    [filteredBusinesses, visibleBusinessCount]
+  );
+  const hasMoreBusinesses = filteredBusinesses.length > visibleBusinessCount;
+
+  useEffect(() => {
+    setVisibleBusinessCount(INITIAL_VISIBLE_BUSINESSES);
+  }, [filteredBusinesses]);
 
   useEffect(() => {
     if (!filteredBusinesses.length) {
@@ -675,39 +686,30 @@ export default function NearbyBusinessesClient() {
 
   const locationLabel = location?.label || [location?.city, location?.region].filter(Boolean).join(", ");
   const usesPreciseLocation = location?.source === "gps";
+  const controlClassName =
+    "h-11 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-normal text-slate-950 placeholder:text-slate-400 focus:border-violet-300/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70";
   const controls = (
-    <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-3 shadow-[0_16px_50px_rgba(15,23,42,0.07)] backdrop-blur-xl sm:p-4">
-      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-1.5">
+      <div className="flex flex-col gap-0.5">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">
             Discover local businesses
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
-              Explore near {locationLabel || "Long Beach"}
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-0 gap-y-1">
+            <h1 className="text-[2rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[2.35rem]">
+              Explore near {locationLabel || "Long Beach, CA"}
             </h1>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-              {filteredBusinesses.length} results
+            <span className="text-sm font-normal text-slate-500">
+              &nbsp;· {filteredBusinesses.length} businesses
             </span>
           </div>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-slate-600">
             Browse shops first. Use the map whenever you want to explore by area.
           </p>
         </div>
-
-        {!usesPreciseLocation ? (
-          <button
-            type="button"
-            onClick={onPreciseLocationClick}
-            disabled={preciseLocationLoading}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700 disabled:cursor-wait disabled:opacity-70"
-          >
-            {preciseLocationLoading ? "Checking location..." : "Improve distance accuracy"}
-          </button>
-        ) : null}
       </div>
 
-      <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(220px,1fr)_220px_180px_auto] lg:items-center lg:gap-3">
+      <div className="mt-3 flex flex-col gap-2.5 lg:grid lg:grid-cols-[minmax(260px,1fr)_210px_180px_auto_auto] lg:items-center">
         <label className="block w-full min-w-0">
           <span className="sr-only">Search nearby businesses</span>
           <input
@@ -716,7 +718,7 @@ export default function NearbyBusinessesClient() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search name, category, or address"
             data-testid="nearby-search-input"
-            className="h-11 w-full rounded-full border border-slate-200 bg-white px-4 text-sm font-normal text-slate-950 placeholder:font-normal placeholder:text-slate-400 focus:border-violet-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+            className={controlClassName}
           />
         </label>
 
@@ -726,7 +728,7 @@ export default function NearbyBusinessesClient() {
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
             data-testid="nearby-category-select"
-            className="h-11 w-full rounded-full border border-slate-200 bg-white px-4 text-sm font-normal text-slate-950 focus:border-violet-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+            className={controlClassName}
           >
             <option value="All">All categories</option>
             {businessCategoryOptions.map((category) => (
@@ -743,7 +745,7 @@ export default function NearbyBusinessesClient() {
             value={sortMode}
             onChange={(event) => setSortMode(event.target.value)}
             data-testid="nearby-sort-select"
-            className="h-11 w-full rounded-full border border-slate-200 bg-white px-4 text-sm font-normal text-slate-950 focus:border-violet-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+            className={controlClassName}
           >
             <option value="recommended">Recommended</option>
             <option value="distance">Nearest</option>
@@ -751,7 +753,7 @@ export default function NearbyBusinessesClient() {
           </select>
         </label>
 
-        <div className="inline-flex h-11 rounded-full border border-slate-200 bg-slate-100 p-1">
+        <div className="inline-flex h-11 w-fit rounded-lg border border-slate-200 bg-white p-1">
           {[
             { key: "list", label: "List" },
             { key: "map", label: "Map" },
@@ -760,10 +762,10 @@ export default function NearbyBusinessesClient() {
               key={item.key}
               type="button"
               onClick={() => setMobileView(item.key)}
-              className={`rounded-full px-4 text-sm font-semibold transition ${
+              className={`rounded-md px-4 text-sm font-medium transition ${
                 mobileView === item.key
-                  ? "bg-white text-slate-950 shadow-sm"
-                  : "text-slate-600 hover:text-slate-950"
+                  ? "bg-violet-50 text-violet-700"
+                  : "text-slate-500 hover:text-slate-900"
               }`}
               aria-pressed={mobileView === item.key}
               data-testid={`nearby-toggle-${item.key}`}
@@ -772,6 +774,17 @@ export default function NearbyBusinessesClient() {
             </button>
           ))}
         </div>
+
+        {!usesPreciseLocation ? (
+          <button
+            type="button"
+            onClick={onPreciseLocationClick}
+            disabled={preciseLocationLoading}
+            className="inline-flex h-11 w-fit shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-transparent px-4 text-sm font-medium text-slate-500 transition hover:border-violet-200 hover:text-violet-700 disabled:cursor-wait disabled:opacity-70"
+          >
+            {preciseLocationLoading ? "Checking location..." : "Improve distance accuracy"}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -780,7 +793,7 @@ export default function NearbyBusinessesClient() {
     return (
       <div className="relative min-h-screen px-6 pt-10 text-slate-950">
         <div className="absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute inset-0 bg-[#f8f5ef]" />
+          <div className="absolute inset-0 bg-[#faf6f0]" />
         </div>
         <div className="flex min-h-screen items-center justify-center">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-violet-600" />
@@ -795,13 +808,13 @@ export default function NearbyBusinessesClient() {
       data-testid="nearby-page-root"
     >
       <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-[#f8f5ef]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,245,239,0.98))]" />
+        <div className="absolute inset-0 bg-[#faf6f0]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(250,246,240,0.98))]" />
       </div>
 
-      <div className="relative z-10 w-full px-5 sm:px-6 md:px-8 lg:px-12">
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-5 sm:px-6 md:px-8 lg:px-10">
         {showLocationEmpty ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+          <div className="py-6 text-sm text-slate-600">
             Explore local businesses near Long Beach while your location finishes loading.
           </div>
         ) : (
@@ -813,6 +826,7 @@ export default function NearbyBusinessesClient() {
             resultsPane={
               <NearbyResultsPane
                 businesses={filteredBusinesses}
+                visibleBusinesses={visibleBusinesses}
                 loading={ybBusinessesLoading && !hasLoadedYb}
                 error={ybBusinessesError}
                 activeBusinessId={activeBusinessId}
@@ -827,6 +841,12 @@ export default function NearbyBusinessesClient() {
                 showSaveControls={showSaveControls}
                 isMobile={isMobile}
                 registerCard={registerCard}
+                hasMoreBusinesses={hasMoreBusinesses}
+                onLoadMore={() =>
+                  setVisibleBusinessCount((prev) =>
+                    Math.min(prev + INITIAL_VISIBLE_BUSINESSES, filteredBusinesses.length)
+                  )
+                }
                 onResetFilters={() => {
                   setSearch("");
                   setCategoryFilter("All");

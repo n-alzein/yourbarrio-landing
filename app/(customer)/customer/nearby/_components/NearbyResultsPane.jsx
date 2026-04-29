@@ -4,13 +4,13 @@ import NearbyBusinessCard from "./NearbyBusinessCard";
 
 function NearbyCardSkeleton() {
   return (
-    <div className="grid w-full animate-pulse gap-4 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-[168px_1fr]">
-      <div className="h-44 rounded-2xl bg-slate-100 sm:h-36" />
-      <div className="space-y-2">
+    <div className="w-full animate-pulse overflow-hidden rounded-[1.45rem] border border-slate-200 bg-white shadow-sm">
+      <div className="aspect-[16/9] bg-slate-100" />
+      <div className="space-y-2 p-4">
         <div className="h-5 w-3/4 rounded bg-slate-100" />
         <div className="h-4 w-2/3 rounded bg-slate-100" />
         <div className="h-4 w-full rounded bg-slate-100" />
-        <div className="h-10 w-28 rounded-full bg-slate-100" />
+        <div className="h-4 w-32 rounded bg-slate-100" />
       </div>
     </div>
   );
@@ -18,6 +18,7 @@ function NearbyCardSkeleton() {
 
 export default function NearbyResultsPane({
   businesses,
+  visibleBusinesses,
   loading,
   error,
   isMobile = false,
@@ -32,11 +33,17 @@ export default function NearbyResultsPane({
   savingBusinessIds,
   showSaveControls = true,
   registerCard,
+  hasMoreBusinesses = false,
+  onLoadMore,
   onResetFilters,
 }) {
   if (loading) {
     return (
-      <div className="space-y-3" data-testid="nearby-results-list" aria-busy="true">
+      <div
+        className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
+        data-testid="nearby-results-list"
+        aria-busy="true"
+      >
         {Array.from({ length: 6 }).map((_, index) => (
           <NearbyCardSkeleton key={`nearby-skeleton-${index}`} />
         ))}
@@ -47,7 +54,7 @@ export default function NearbyResultsPane({
   if (!businesses.length) {
     return (
       <div
-        className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center"
+        className="px-2 py-10 text-center"
         data-testid="nearby-results-empty"
       >
         <p className="text-lg font-semibold text-slate-950">
@@ -59,7 +66,7 @@ export default function NearbyResultsPane({
         <button
           type="button"
           onClick={onResetFilters}
-          className="mt-5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:border-violet-200 hover:text-violet-700"
+          className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm hover:border-violet-200 hover:text-violet-700"
         >
           Reset filters
         </button>
@@ -68,25 +75,39 @@ export default function NearbyResultsPane({
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5" data-testid="nearby-results-list">
-      {businesses.map((business) => (
-        <NearbyBusinessCard
-          key={business.id || business.name}
-          business={business}
-          active={activeBusinessId === business.id}
-          selected={selectedBusinessId === business.id}
-          onHover={onCardHover}
-          onLeave={onCardLeave}
-          onClick={onCardClick}
-          onMapFocusClick={onCardMapFocusClick}
-          onToggleSave={onToggleSaveShop}
-          isSaved={savedBusinessIds?.has?.(business.id)}
-          saveLoading={savingBusinessIds?.has?.(business.id)}
-          showSaveControl={showSaveControls}
-          isMobile={isMobile}
-          registerCard={registerCard}
-        />
-      ))}
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="nearby-results-list">
+        {(visibleBusinesses || businesses).map((business) => (
+          <NearbyBusinessCard
+            key={business.id || business.name}
+            business={business}
+            active={activeBusinessId === business.id}
+            selected={selectedBusinessId === business.id}
+            onHover={onCardHover}
+            onLeave={onCardLeave}
+            onClick={onCardClick}
+            onMapFocusClick={onCardMapFocusClick}
+            onToggleSave={onToggleSaveShop}
+            isSaved={savedBusinessIds?.has?.(business.id)}
+            saveLoading={savingBusinessIds?.has?.(business.id)}
+            showSaveControl={showSaveControls}
+            isMobile={isMobile}
+            registerCard={registerCard}
+          />
+        ))}
+      </div>
+
+      {hasMoreBusinesses ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-medium text-violet-700 transition hover:border-violet-200 hover:text-violet-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+          >
+            Load more businesses
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

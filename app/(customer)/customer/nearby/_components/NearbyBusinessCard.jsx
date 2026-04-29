@@ -75,114 +75,106 @@ export default function NearbyBusinessCard({
       ref={(node) => registerCard(business.id, node)}
       data-business-id={business.id}
       data-selected={selected ? "true" : "false"}
-      className={`group relative w-full cursor-pointer overflow-hidden rounded-3xl border transition duration-200 focus-within:ring-2 focus-within:ring-slate-300/80 md:hover:-translate-y-0.5 ${
+      className={`group relative h-full w-full overflow-hidden rounded-[1.45rem] border transition duration-200 focus-within:ring-2 focus-within:ring-slate-300/80 md:hover:-translate-y-[2px] ${
         selected
-          ? "border-slate-300 bg-white shadow-[0_18px_46px_rgba(15,23,42,0.10)]"
+          ? "border-slate-300 bg-white shadow-sm shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
           : active
-            ? "border-slate-300 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.10)]"
-            : "border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.06)] md:hover:border-slate-300 md:hover:shadow-[0_18px_48px_rgba(15,23,42,0.11)]"
+            ? "border-slate-300 bg-white shadow-sm shadow-[0_16px_34px_rgba(15,23,42,0.08)]"
+            : "border-slate-300/90 bg-white shadow-sm shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:hover:border-slate-300 md:hover:shadow-md md:hover:shadow-[0_14px_32px_rgba(15,23,42,0.065)]"
       }`}
       onMouseEnter={() => onHover(business.id)}
       onMouseLeave={onLeave}
       onFocus={() => onHover(business.id)}
       onBlur={onLeave}
     >
-      {showSaveControl ? (
+      <div className="relative">
         <button
           type="button"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onToggleSave?.(business);
-          }}
-          disabled={saveLoading}
-          className={`absolute right-2 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-600 shadow-sm backdrop-blur transition hover:border-rose-200 hover:text-rose-500 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-wait disabled:opacity-70 ${
-            isSaved ? "opacity-90" : "opacity-75"
-          }`}
-          aria-pressed={isSaved}
-          aria-label={isSaved ? "Remove saved shop" : "Save shop"}
-          title={isSaved ? "Remove saved shop" : "Save shop"}
-        >
-          <Heart
-            className={`h-5 w-5 ${isSaved ? "text-rose-500" : ""}`}
-            fill={isSaved ? "currentColor" : "none"}
-            aria-hidden="true"
-          />
-        </button>
-      ) : null}
-
-      <div className="relative p-3">
-        <button
-          type="button"
-          className="grid w-full min-w-0 cursor-pointer gap-3 text-left sm:grid-cols-[160px_minmax(0,1fr)] sm:items-stretch sm:gap-4"
+          className="flex h-full w-full min-w-0 cursor-pointer flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-inset"
           onClick={() => onClick(business)}
           aria-pressed={selected}
           data-selected={selected ? "true" : "false"}
           aria-label={`Open ${business.name || "business"} profile`}
         >
-          <div className="relative h-40 w-full overflow-hidden rounded-2xl border border-slate-100 bg-slate-100 sm:h-36 sm:w-40">
+          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-t-[1.45rem] bg-slate-100">
             <FastImage
               src={photo}
               alt={business.name || "Business"}
               fill
-              sizes="(max-width: 640px) 100vw, 160px"
+              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1535px) 33vw, 420px"
               className="object-cover"
               fallbackSrc={photo}
               decoding="async"
             />
           </div>
 
-          <div className="flex min-w-0 flex-col justify-between gap-3 py-0.5 sm:max-w-3xl">
-            <div className="min-w-0">
-              <div className="min-w-0 space-y-1">
-                <h3 className="line-clamp-2 text-lg font-semibold leading-snug tracking-normal text-slate-950 sm:text-xl">
+          <div className="flex min-w-0 flex-1 flex-col p-4">
+            <div className="min-w-0 space-y-0.5">
+              <div className="min-w-0 space-y-0.5">
+                <h3 className="line-clamp-2 text-base font-semibold leading-[1.22] tracking-[-0.015em] text-slate-950 sm:text-[1.05rem]">
                   {business.name || "Local business"}
                 </h3>
 
                 {metadataItems.length ? (
-                  <p className="line-clamp-1 text-sm font-medium text-slate-500">
+                  <p className="line-clamp-2 text-sm text-slate-500">
                     {metadataItems.join(" · ")}
                   </p>
                 ) : null}
               </div>
 
-              <p className="mt-2 line-clamp-1 text-sm font-medium text-slate-600">
+              <p className="line-clamp-1 text-sm text-slate-500">
                 {hookLine}
               </p>
+            </div>
 
-              <span
-                className="mt-2 inline-flex items-center text-sm font-semibold text-violet-700 transition duration-150 md:group-hover:text-violet-800 md:group-hover:underline md:group-hover:underline-offset-4 group-focus-visible:text-violet-800 group-focus-visible:underline group-focus-visible:underline-offset-4"
-              >
+            <div className="mt-auto flex flex-col items-start gap-1 pt-2">
+              {isMobile ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onMapFocusClick?.(business);
+                  }}
+                  className="inline-flex min-h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 md:hidden"
+                  aria-label={`Show ${business.name || "business"} on map`}
+                  title="Show on map"
+                >
+                  Show map
+                </button>
+              ) : null}
+
+              <span className="inline-flex items-center text-sm font-medium text-violet-700 transition duration-150 md:group-hover:text-violet-800 md:group-hover:underline md:group-hover:underline-offset-4 group-focus-visible:text-violet-800 group-focus-visible:underline group-focus-visible:underline-offset-4">
                 View shop
                 <span className="ml-1 transition-transform duration-150 md:group-hover:translate-x-0.5">
                   →
                 </span>
               </span>
             </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              {typeof business.open_now === "boolean" ? (
-                <span className={business.open_now ? "text-xs font-medium text-emerald-700" : "text-xs font-medium text-amber-700"}>
-                  {business.open_now ? "Open now" : "Closed"}
-                </span>
-              ) : null}
-            </div>
           </div>
         </button>
 
-        {isMobile ? (
+        {showSaveControl ? (
           <button
             type="button"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              onMapFocusClick?.(business);
+              onToggleSave?.(business);
             }}
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-violet-200 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0"
-            aria-label={`Show ${business.name || "business"} on map`}
-            title="Show on map"
+            disabled={saveLoading}
+            className={`absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/92 text-slate-600 shadow-sm backdrop-blur transition hover:border-rose-200 hover:text-rose-500 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-wait disabled:opacity-70 ${
+              isSaved ? "opacity-95" : "opacity-80"
+            }`}
+            aria-pressed={isSaved}
+            aria-label={isSaved ? "Remove saved shop" : "Save shop"}
+            title={isSaved ? "Remove saved shop" : "Save shop"}
           >
-            Show map
+            <Heart
+              className={`h-4.5 w-4.5 ${isSaved ? "text-rose-500" : ""}`}
+              fill={isSaved ? "currentColor" : "none"}
+              aria-hidden="true"
+            />
           </button>
         ) : null}
       </div>
