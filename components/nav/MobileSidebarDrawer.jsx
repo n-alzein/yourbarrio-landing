@@ -56,11 +56,13 @@ export default function MobileSidebarDrawer({
   open,
   onClose,
   title = "Menu",
+  subtitle = "YourBarrio",
   children,
   footer = null,
   id,
   showHeader = true,
   shieldActive = false,
+  closeButtonVariant = "default",
 }) {
   const reactId = useId();
   const panelId = id || `mobile-drawer-${reactId}`;
@@ -221,6 +223,22 @@ export default function MobileSidebarDrawer({
     "div[data-mobile-sidebar-drawer=\"1\"]"
   );
   if (!portalHost) return null;
+  const closeButtonClassName =
+    closeButtonVariant === "soft"
+      ? "rounded-full border border-slate-100 bg-white p-2 text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+      : "rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5";
+  const headerClassName =
+    closeButtonVariant === "soft"
+      ? "yb-sidebar-header flex items-start justify-between gap-4 px-5 py-4"
+      : "yb-sidebar-header flex items-center justify-between px-5 py-4";
+  const titleClassName =
+    closeButtonVariant === "soft"
+      ? "text-[15px] font-semibold leading-tight"
+      : "text-sm font-semibold";
+  const subtitleClassName =
+    closeButtonVariant === "soft"
+      ? "mt-1 max-w-[250px] text-[12px] leading-5 yb-dropdown-muted"
+      : "text-[11px] yb-dropdown-muted";
 
   return createPortal(
     <div
@@ -252,18 +270,23 @@ export default function MobileSidebarDrawer({
           className="yb-sidebar-panel yb-dropdown-surface flex h-full flex-col border-r border-[var(--yb-border)]"
         >
           {showHeader ? (
-            <div className="yb-sidebar-header flex items-center justify-between px-5 py-4">
-              <div>
-                <div id={titleId} className="text-sm font-semibold">
+            <div className={headerClassName}>
+              <div className="min-w-0">
+                <div id={titleId} className={titleClassName}>
                   {title}
                 </div>
-                <div className="text-[11px] yb-dropdown-muted">YourBarrio</div>
+                {subtitle ? (
+                  <div className={subtitleClassName}>
+                    {subtitle}
+                  </div>
+                ) : null}
               </div>
               <button
                 ref={closeButtonRef}
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+                className={closeButtonClassName}
+                data-mobile-drawer-close={closeButtonVariant}
                 aria-label="Close menu"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor">
@@ -276,7 +299,8 @@ export default function MobileSidebarDrawer({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="absolute right-4 top-4 z-10 rounded-full border border-[var(--yb-border)] bg-white p-2 text-[var(--yb-text)] transition hover:bg-black/5"
+              className={`absolute right-4 top-4 z-10 ${closeButtonClassName}`}
+              data-mobile-drawer-close={closeButtonVariant}
               aria-label="Close menu"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor">

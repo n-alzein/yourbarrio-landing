@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, LogOut, MapPin } from "lucide-react";
+import { CheckCircle2, ChevronDown, LogOut, MapPin } from "lucide-react";
 import SafeAvatar from "@/components/SafeAvatar";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
 import LogoutButton from "@/components/LogoutButton";
@@ -793,12 +793,19 @@ export default function HeaderAccountWidget({
     <MobileSidebarDrawer
       open={mobileMenuOpen}
       onClose={() => onCloseMobileMenu?.()}
-      title={hasAuth ? "My account" : "Welcome"}
+      title={hasAuth ? "My account" : "Discover local shops near you"}
+      subtitle={
+        hasAuth
+          ? "YourBarrio"
+          : "Save items, track orders, and support nearby businesses."
+      }
       id={mobileDrawerId}
       showHeader={!hasAuth}
+      closeButtonVariant={!hasAuth ? "soft" : "default"}
     >
       <div
         className="flex flex-col gap-6"
+        data-guest-mobile-sidebar={!hasAuth ? "1" : undefined}
         data-nav-surface={surface}
         data-nav-guard="1"
       >
@@ -839,18 +846,35 @@ export default function HeaderAccountWidget({
         ) : null}
 
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
+          <div className={hasAuth ? "flex items-center gap-3" : "flex flex-col gap-2"}>
             <button
               type="button"
               onClick={() => setMobileLocationOpen((open) => !open)}
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-3 text-left transition hover:bg-black/5"
+              className={`flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[var(--yb-border)] bg-white px-4 py-3 text-left transition ${
+                hasAuth ? "hover:bg-black/5" : "shadow-sm hover:bg-slate-50"
+              }`}
               aria-expanded={mobileLocationOpen}
               aria-controls="mobile-location-editor"
             >
-              <MapPin className="h-4 w-4" />
+              {hasAuth ? (
+                <MapPin className="h-4 w-4" />
+              ) : (
+                <span className="yb-guest-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                  <MapPin className="h-4 w-4" />
+                </span>
+              )}
               <div className="min-w-0 flex-1">
-                <p className="text-xs uppercase tracking-[0.2em] yb-dropdown-muted">Location</p>
+                {hasAuth ? (
+                  <p className="text-xs uppercase tracking-[0.2em] yb-dropdown-muted">
+                    Location
+                  </p>
+                ) : (
+                  <p className="yb-guest-muted text-xs font-medium">Shopping in</p>
+                )}
                 <p className="text-sm font-semibold truncate">{locationLabel}</p>
+                {!hasAuth ? (
+                  <p className="yb-guest-muted mt-0.5 text-xs">Used to show nearby shops.</p>
+                ) : null}
               </div>
               <ChevronDown
                 className={`h-4 w-4 yb-dropdown-muted transition ${
@@ -858,7 +882,11 @@ export default function HeaderAccountWidget({
                 }`}
               />
             </button>
-            <CartNavActionClient variant="mobile" onNavigate={onCloseMobileMenu} />
+            {hasAuth ? (
+              <CartNavActionClient variant="mobile" onNavigate={onCloseMobileMenu} />
+            ) : (
+              <CartNavActionClient variant="mobile-row" onNavigate={onCloseMobileMenu} />
+            )}
           </div>
 
           {mobileLocationOpen ? (
@@ -952,38 +980,56 @@ export default function HeaderAccountWidget({
 
         {!showRateLimit ? (
           !hasAuth ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  onCloseMobileMenu?.();
-                  openModal("customer-login");
-                }}
-                disabled={disableCtas}
-                aria-busy={disableCtas}
-                className={`w-full text-center yb-dropdown-muted hover:text-[var(--yb-text)] ${
-                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
-                }`}
-                data-public-cta="signin"
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onCloseMobileMenu?.();
-                  openModal("customer-signup");
-                }}
-                disabled={disableCtas}
-                aria-busy={disableCtas}
-                className={`rounded-xl border border-purple-300/20 bg-[linear-gradient(135deg,rgba(124,58,237,0.92),rgba(147,51,234,0.92))] px-4 py-2 text-center font-semibold text-white shadow-[0_6px_18px_rgba(124,58,237,0.18)] transition duration-200 ease-out hover:bg-[linear-gradient(135deg,rgba(124,58,237,1),rgba(168,85,247,0.98))] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-300/20 ${
-                  disableCtas ? "opacity-60 cursor-not-allowed" : ""
-                }`}
-                data-public-cta="signup"
-              >
-                Sign up
-              </button>
-            </>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCloseMobileMenu?.();
+                    openModal("customer-signup");
+                  }}
+                  disabled={disableCtas}
+                  aria-busy={disableCtas}
+                  className={`rounded-xl border border-purple-300/20 bg-[var(--color-primary)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_8px_18px_rgba(110,52,255,0.16)] transition duration-200 ease-out hover:bg-[var(--color-primary-hover)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-300/20 ${
+                    disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
+                  data-public-cta="signup"
+                >
+                  Sign up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCloseMobileMenu?.();
+                    openModal("customer-login");
+                  }}
+                  disabled={disableCtas}
+                  aria-busy={disableCtas}
+                  className={`yb-guest-signin rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold shadow-sm transition hover:bg-slate-50 ${
+                    disableCtas ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
+                  data-public-cta="signin"
+                >
+                  Sign in
+                </button>
+              </div>
+
+              <div className="px-1 pt-1">
+                <p className="yb-guest-muted text-xs font-semibold uppercase tracking-[0.16em]">
+                  Why join?
+                </p>
+                <div className="mt-3 flex flex-col gap-2.5">
+                  {["Save favorite items", "Checkout faster", "Track pickup orders"].map(
+                    (item) => (
+                      <div key={item} className="yb-guest-muted flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="yb-guest-check h-4 w-4 shrink-0" />
+                        <span>{item}</span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
           ) : (
             <>
               {isBusiness ? (

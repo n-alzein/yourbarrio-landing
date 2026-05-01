@@ -84,6 +84,7 @@ export default function GlobalHeader({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
   const locationRef = useRef(null);
   const navRef = useRef(null);
   const locationPrefillRef = useRef(false);
@@ -715,12 +716,16 @@ export default function GlobalHeader({
 
         {showSearch && !minimal ? (
           <div
-            className="flex min-w-0 flex-1 justify-center px-4 sm:px-6 lg:hidden lg:px-0"
+            className="flex min-w-0 flex-1 items-center justify-center gap-2 px-2 sm:px-4 lg:hidden lg:px-0"
             data-nav-guard="1"
           >
             <form
               onSubmit={handleSubmitSearch}
-              className="relative flex w-full max-w-full min-w-0 box-border items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2 transition-[border-color,box-shadow] duration-200 ease-out hover:border-purple-400/60 focus-within:border-purple-400/70 focus-within:ring-2 focus-within:ring-purple-500/40 md:w-full"
+              onClick={(event) => {
+                if (event.target instanceof HTMLButtonElement) return;
+                mobileSearchInputRef.current?.focus();
+              }}
+              className="relative flex w-full max-w-full min-w-0 flex-1 box-border items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-2.5 py-1.5 transition-[border-color,box-shadow] duration-200 ease-out hover:border-purple-400/60 focus-within:border-purple-400/70 focus-within:ring-2 focus-within:ring-purple-500/40 md:w-full"
               style={{
                 boxShadow: "0 0 0 0 rgba(124,58,237,0)",
               }}
@@ -728,6 +733,7 @@ export default function GlobalHeader({
               <input
                 id="global-nav-search-mobile"
                 name="search"
+                ref={mobileSearchInputRef}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onFocus={(event) => {
@@ -742,8 +748,8 @@ export default function GlobalHeader({
                     "0 0 0 0 rgba(124,58,237,0)"
                   );
                 }}
-                className="min-w-0 flex-1 bg-transparent pr-12 text-base md:text-sm placeholder:text-white/60 focus:outline-none"
-                  placeholder="Search local shops"
+                className="h-8 min-w-0 flex-1 bg-transparent py-[3px] pr-10 text-base leading-[1.3] placeholder:text-white/60 focus:outline-none md:text-sm"
+                placeholder="Search local shops"
                 type="search"
               />
               <button
@@ -754,6 +760,7 @@ export default function GlobalHeader({
                 <Search className="h-4 w-4" />
               </button>
             </form>
+            <CartNavActionClient variant="mobile-navbar" />
           </div>
         ) : null}
 
