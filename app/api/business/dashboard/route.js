@@ -5,10 +5,13 @@ import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { reconcilePendingStripeOrders } from "@/lib/orders/persistence";
 import { getSupabaseServerClient as getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
+import {
+  isPublishedSellerVisibleListing,
+  isSellerVisibleListing,
+} from "@/lib/business/sellerVisibleListings";
 
 const SALES_STATUSES = ["fulfilled", "completed"];
 const ORDER_COUNT_STATUSES = [
-  "pending_payment",
   "requested",
   "confirmed",
   "ready",
@@ -17,15 +20,12 @@ const ORDER_COUNT_STATUSES = [
   "completed",
 ];
 const BUSINESS_VISIBLE_STATUSES = [
-  "pending_payment",
-  "payment_failed",
   "requested",
   "confirmed",
   "ready",
   "out_for_delivery",
   "fulfilled",
   "completed",
-  "cancelled",
 ];
 
 const parseDate = (value, fallback) => {
@@ -196,12 +196,7 @@ export async function GET(request) {
         businessScopedIds
       ),
       applyScopedIdFilter(
-        supabase
-        .from("listings")
-        .select(
-          "id, title, category, listing_category, inventory_quantity"
-        )
-        ,
+        supabase.from("listings").select("*"),
         "business_id",
         businessScopedIds
       ),
@@ -267,8 +262,10 @@ export async function GET(request) {
   }
 
   const listingRows = listingsRes.data || [];
+  const sellerVisibleListingRows = listingRows.filter(isSellerVisibleListing);
+  const liveListingRows = sellerVisibleListingRows.filter(isPublishedSellerVisibleListing);
   const listingMap = new Map(
-    listingRows.map((row) => [
+    sellerVisibleListingRows.map((row) => [
       row.id,
       {
         title: row.title,
@@ -279,7 +276,7 @@ export async function GET(request) {
   );
   const categories = Array.from(
     new Set(
-      listingRows
+      sellerVisibleListingRows
         .map((row) => getListingCategoryLabel(row, ""))
         .filter(Boolean)
     )
@@ -503,7 +500,8 @@ export async function GET(request) {
       topProducts,
       recentOrders,
       categories,
-      listingCount: listingRows.length,
+      listingCount: sellerVisibleListingRows.length,
+      totalLiveProductsCount: liveListingRows.length,
       orderCount: (orderCountRes.data || []).length,
       viewCount: views.length,
       businessName:

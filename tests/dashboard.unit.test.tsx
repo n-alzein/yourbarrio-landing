@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import KpiCard from "@/components/KpiCard";
 import DashboardEmptyState from "@/components/DashboardEmptyState";
 import DateRangeControls from "@/components/DateRangeControls";
+import TopProductsTable from "@/components/TopProductsTable";
 import type { KpiMetric } from "@/lib/dashboardTypes";
 
 vi.mock("next/image", () => ({
@@ -21,6 +22,12 @@ vi.mock("next/link", () => ({
       {children}
     </a>
   ),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
 }));
 
 const metric: KpiMetric = {
@@ -61,6 +68,56 @@ describe("DashboardEmptyState", () => {
   });
 });
 
+describe("TopProductsTable", () => {
+  it("shows the no-products empty state when no live products exist", () => {
+    render(<TopProductsTable products={[]} totalLiveProductsCount={0} />);
+
+    expect(screen.getByText("No products yet")).toBeInTheDocument();
+    expect(screen.getByText("Add your first product to start selling.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add product" })).toHaveAttribute(
+      "href",
+      "/business/listings/new"
+    );
+  });
+
+  it("shows the no-sales empty state when live products have no orders", () => {
+    render(<TopProductsTable products={[]} totalLiveProductsCount={5} />);
+
+    expect(screen.getByText("No sales yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Your products are live — once customers place orders, your top products will appear here."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View listings" })).toHaveAttribute(
+      "href",
+      "/business/listings"
+    );
+  });
+
+  it("renders top products when order-backed product data exists", () => {
+    render(
+      <TopProductsTable
+        totalLiveProductsCount={5}
+        products={[
+          {
+            id: "p1",
+            name: "Cedar Candle",
+            category: "Home Decor",
+            revenue: 12840,
+            orders: 240,
+            inventoryQty: 120,
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("Cedar Candle")).toBeInTheDocument();
+    expect(screen.getByText("$12,840")).toBeInTheDocument();
+    expect(screen.queryByText("No sales yet")).not.toBeInTheDocument();
+  });
+});
+
 describe("DateRangeControls", () => {
   const baseProps = {
     dateRange: "30d" as const,
@@ -76,10 +133,10 @@ describe("DateRangeControls", () => {
   it("keeps the initials fallback for whitespace-only avatar values", () => {
     render(<DateRangeControls {...baseProps} businessAvatarUrl="   " />);
 
-    expect(screen.getByRole("img", { name: "Samsung Store profile image" })).toHaveStyle({
+    expect(screen.getAllByRole("img", { name: "Samsung Store profile image" })[0]).toHaveStyle({
       borderRadius: "1rem",
     });
-    expect(screen.getByText("SS")).toBeInTheDocument();
+    expect(screen.getAllByText("SS")[0]).toBeInTheDocument();
     expect(screen.queryByAltText("Samsung Store profile image")).not.toBeInTheDocument();
   });
 
@@ -91,7 +148,7 @@ describe("DateRangeControls", () => {
       />
     );
 
-    const avatar = screen.getByAltText("Samsung Store profile image");
+    const avatar = screen.getAllByAltText("Samsung Store profile image")[0];
     fireEvent.error(avatar);
 
     await waitFor(() => {

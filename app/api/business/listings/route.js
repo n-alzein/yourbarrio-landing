@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
 import { getOwnedListingEditorData } from "@/lib/business/getOwnedListingEditorData";
+import { isSellerVisibleListing } from "@/lib/business/sellerVisibleListings";
 
 export async function GET(request) {
   const access = await getBusinessDataClientForRequest();
@@ -38,6 +39,7 @@ export async function GET(request) {
     .select("*")
     .eq("business_id", effectiveUserId)
     .eq("admin_hidden", false)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -47,7 +49,10 @@ export async function GET(request) {
     );
   }
 
-  const response = NextResponse.json({ listings: data || [] }, { status: 200 });
+  const response = NextResponse.json(
+    { listings: (data || []).filter(isSellerVisibleListing) },
+    { status: 200 }
+  );
   response.headers.set("Cache-Control", "no-store");
   return response;
 }

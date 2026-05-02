@@ -92,6 +92,7 @@ export type DashboardData = {
   recentOrders: RecentOrder[];
   categories: string[];
   listingCount: number;
+  totalLiveProductsCount: number;
   orderCount: number;
   viewCount: number;
   businessName?: string;

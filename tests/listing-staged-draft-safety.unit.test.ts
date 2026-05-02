@@ -46,6 +46,10 @@ const ownerBusinessListingsRouteSource = readFileSync(
   path.join(process.cwd(), "app/api/business/listings/route.js"),
   "utf8"
 );
+const ownedListingEditorDataSource = readFileSync(
+  path.join(process.cwd(), "lib/business/getOwnedListingEditorData.js"),
+  "utf8"
+);
 
 describe("staged listing draft safety", () => {
   it("keeps public and customer listing surfaces on public_listings_v without draft overlays", () => {
@@ -74,8 +78,9 @@ describe("staged listing draft safety", () => {
   });
 
   it("limits staged draft overlay application to the owner business listings API", () => {
-    expect(ownerBusinessListingsRouteSource).toContain("applyListingDraftDataToListing");
-    expect(ownerBusinessListingsRouteSource).toContain("data.has_unpublished_changes === true");
+    expect(ownerBusinessListingsRouteSource).toContain("getOwnedListingEditorData");
+    expect(ownedListingEditorDataSource).toContain("applyListingDraftDataToListing");
+    expect(ownedListingEditorDataSource).toContain("data.has_unpublished_changes === true");
   });
 
   it("keeps cart and order previews on explicit operational listing fields only", () => {

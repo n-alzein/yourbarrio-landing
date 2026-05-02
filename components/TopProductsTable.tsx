@@ -16,6 +16,7 @@ import type { TopProduct } from "@/lib/dashboardTypes";
 
 type TopProductsTableProps = {
   products: TopProduct[];
+  totalLiveProductsCount: number;
 };
 
 const formatCurrency = (value: number) =>
@@ -25,7 +26,7 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
-const TopProductsTable = ({ products }: TopProductsTableProps) => {
+const TopProductsTable = ({ products, totalLiveProductsCount }: TopProductsTableProps) => {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([
     { id: "revenue", desc: true },
@@ -80,6 +81,21 @@ const TopProductsTable = ({ products }: TopProductsTableProps) => {
   });
 
   const rows = table.getRowModel().rows;
+  const hasLiveProducts = totalLiveProductsCount > 0;
+  const emptyState = hasLiveProducts
+    ? {
+        title: "No sales yet",
+        description:
+          "Your products are live — once customers place orders, your top products will appear here.",
+        primaryAction: { href: "/business/listings", label: "View listings" },
+        className: "min-h-[168px] bg-slate-50/80",
+      }
+    : {
+        title: "No products yet",
+        description: "Add your first product to start selling.",
+        primaryAction: { href: "/business/listings/new", label: "Add product" },
+        className: "min-h-[168px] border-dashed bg-white",
+      };
 
   return (
     <div className="dashboard-panel p-5 transition duration-200 hover:border-slate-300 sm:p-6">
@@ -104,10 +120,10 @@ const TopProductsTable = ({ products }: TopProductsTableProps) => {
           <div className="min-h-[200px] p-4">
             <DashboardEmptyState
               compact
-              title="No products live yet"
-              description="Add your first product to start showing inventory, revenue, and performance here."
-              primaryAction={{ href: "/business/listings/new", label: "Add product" }}
-              className="min-h-[168px] border-dashed bg-white"
+              title={emptyState.title}
+              description={emptyState.description}
+              primaryAction={emptyState.primaryAction}
+              className={emptyState.className}
             />
           </div>
         ) : (

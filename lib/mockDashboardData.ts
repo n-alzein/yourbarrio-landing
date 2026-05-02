@@ -137,6 +137,7 @@ export const mockDashboardData: DashboardData = {
   recentOrders,
   categories: ["Home Fragrance", "Home Textiles", "Pantry", "Accessories", "Kitchen"],
   listingCount: topProducts.length,
+  totalLiveProductsCount: topProducts.length,
   orderCount: recentOrders.length,
   viewCount: profileViewsTimeSeries.reduce((total, point) => total + point.value, 0),
 };

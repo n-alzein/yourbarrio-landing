@@ -22,15 +22,23 @@ function createListingsClient(listings: Record<string, unknown>[]) {
         throw new Error(`Unexpected table: ${table}`);
       }
 
+      let rows = [...listings];
       const query = {
         select: vi.fn(() => query),
-        eq: vi.fn(() => query),
+        eq: vi.fn((field: string, value: unknown) => {
+          rows = rows.filter((row) => row[field] === value);
+          return query;
+        }),
+        is: vi.fn((field: string, value: unknown) => {
+          rows = rows.filter((row) => row[field] === value);
+          return query;
+        }),
         order: vi.fn(async () => ({
-          data: listings,
+          data: rows,
           error: null,
         })),
         maybeSingle: vi.fn(async () => ({
-          data: listings[0] || null,
+          data: rows[0] || null,
           error: null,
         })),
       };
@@ -55,6 +63,8 @@ describe("business listing drafts", () => {
           title: "Draft listing",
           status: "draft",
           is_published: false,
+          admin_hidden: false,
+          deleted_at: null,
         },
       ]),
       effectiveUserId: "business-1",
@@ -74,12 +84,80 @@ describe("business listing drafts", () => {
     });
   });
 
+  it("excludes archived, deleted, and admin-hidden listings from seller list reads", async () => {
+    getBusinessDataClientForRequestMock.mockResolvedValue({
+      ok: true,
+      client: createListingsClient([
+        {
+          id: "published-visible",
+          business_id: "business-1",
+          title: "Published visible",
+          status: "published",
+          admin_hidden: false,
+          deleted_at: null,
+        },
+        {
+          id: "draft-visible",
+          business_id: "business-1",
+          title: "Draft visible",
+          status: "draft",
+          admin_hidden: false,
+          deleted_at: null,
+        },
+        {
+          id: "admin-hidden",
+          business_id: "business-1",
+          title: "Admin hidden",
+          status: "published",
+          admin_hidden: true,
+          deleted_at: null,
+        },
+        {
+          id: "seller-deleted",
+          business_id: "business-1",
+          title: "Seller deleted",
+          status: "published",
+          admin_hidden: false,
+          seller_deleted: true,
+          deleted_at: null,
+        },
+        {
+          id: "soft-deleted",
+          business_id: "business-1",
+          title: "Soft deleted",
+          status: "published",
+          admin_hidden: false,
+          deleted_at: "2026-05-01T12:00:00.000Z",
+        },
+        {
+          id: "archived",
+          business_id: "business-1",
+          title: "Archived",
+          status: "archived",
+          admin_hidden: false,
+          deleted_at: null,
+        },
+      ]),
+      effectiveUserId: "business-1",
+    });
+
+    const response = await GET(new Request("http://localhost:3000/api/business/listings"));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.listings.map((listing: { id: string }) => listing.id)).toEqual([
+      "published-visible",
+      "draft-visible",
+    ]);
+  });
+
   it("overlays saved unpublished changes for published listings in edit reads", async () => {
     getBusinessDataClientForRequestMock.mockResolvedValue({
       ok: true,
       client: createListingsClient([
         {
           id: "listing-2",
+          public_id: "listing-2",
           business_id: "business-1",
           title: "Live listing",
           status: "published",

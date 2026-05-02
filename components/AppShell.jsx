@@ -15,6 +15,10 @@ import ThemeDiagnostics from "@/components/debug/ThemeDiagnostics";
 import SafariNavGuardClient from "@/components/nav/SafariNavGuardClient";
 import SafariDesktopClassClient from "@/components/SafariDesktopClassClient";
 import CrashLoggerClient from "@/components/CrashLoggerClient";
+import {
+  ChunkErrorBoundary,
+  ChunkErrorRecoveryListener,
+} from "@/components/ChunkErrorRecovery";
 import WebVitalsReporter from "@/components/WebVitalsReporter";
 import { AuthProvider } from "@/components/AuthProvider";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -77,6 +81,7 @@ export default function AppShell({
       data-theme="light"
       data-shell-kind={shellKind}
     >
+      <ChunkErrorRecoveryListener />
       <CrashLoggerClient />
       <RscLoopDiagClient />
       <WebVitalsReporter />
@@ -101,48 +106,50 @@ export default function AppShell({
         </div>
 
         {/* Single provider tree; LocationProvider is the source of truth for city/ZIP. */}
-        <Suspense fallback={null}>
-          <LocationProvider initialLocation={initialLocation}>
-            <UrlLocationMigratorClient />
-            <AuthProvider
-              initialUser={initialAuth?.user ?? null}
-              initialProfile={initialAuth?.profile ?? null}
-              initialRole={initialAuth?.role ?? null}
-              initialAuthResolved={initialAuthResolved}
-            >
-              <AutoRefreshGuardBanner />
-              <RealtimeProvider>
-                <CartProvider>
-                  <ModalMount>
-                    <main
-                      className="flex-1 w-full min-h-screen"
-                      style={{ paddingTop: "0px" }}
-                      data-app-shell-main="1"
-                      data-shell-kind={shellKind}
-                    >
-                      {children}
-                    </main>
-                    {!isAdminRoute ? (
-                      <Footer
-                        className={
-                          flushFooterOnHome
-                            ? "mt-0 border-t-0"
-                            : flushFooterOnPublicListings
-                              ? "mt-0"
-                              : flushFooterOnPublicBusinessProfile
+        <ChunkErrorBoundary>
+          <Suspense fallback={null}>
+            <LocationProvider initialLocation={initialLocation}>
+              <UrlLocationMigratorClient />
+              <AuthProvider
+                initialUser={initialAuth?.user ?? null}
+                initialProfile={initialAuth?.profile ?? null}
+                initialRole={initialAuth?.role ?? null}
+                initialAuthResolved={initialAuthResolved}
+              >
+                <AutoRefreshGuardBanner />
+                <RealtimeProvider>
+                  <CartProvider>
+                    <ModalMount>
+                      <main
+                        className="flex-1 w-full min-h-screen"
+                        style={{ paddingTop: "0px" }}
+                        data-app-shell-main="1"
+                        data-shell-kind={shellKind}
+                      >
+                        {children}
+                      </main>
+                      {!isAdminRoute ? (
+                        <Footer
+                          className={
+                            flushFooterOnHome
+                              ? "mt-0 border-t-0"
+                              : flushFooterOnPublicListings
                                 ? "mt-0"
-                            : flushFooterOnBusiness
-                              ? "mt-0"
-                              : undefined
-                        }
-                      />
-                    ) : null}
-                  </ModalMount>
-                </CartProvider>
-              </RealtimeProvider>
-            </AuthProvider>
-          </LocationProvider>
-        </Suspense>
+                                : flushFooterOnPublicBusinessProfile
+                                  ? "mt-0"
+                              : flushFooterOnBusiness
+                                ? "mt-0"
+                                : undefined
+                          }
+                        />
+                      ) : null}
+                    </ModalMount>
+                  </CartProvider>
+                </RealtimeProvider>
+              </AuthProvider>
+            </LocationProvider>
+          </Suspense>
+        </ChunkErrorBoundary>
       </ThemeProvider>
       <DebugToolsClient />
       <ThemeDiagnostics />

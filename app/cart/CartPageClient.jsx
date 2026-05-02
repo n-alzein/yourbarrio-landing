@@ -219,7 +219,7 @@ export default function CartPageClient() {
                 ? `/checkout?business_id=${encodeURIComponent(group.business_id)}`
                 : "/checkout";
 
-              const checkoutButtonClassName = `inline-flex h-[37px] items-center justify-center rounded-[6px] px-2.5 text-sm font-semibold transition duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-200/30 ${
+              const checkoutButtonClassName = `inline-flex min-h-[37px] min-w-0 items-center justify-center rounded-[6px] px-2.5 py-2 text-center text-sm font-semibold leading-tight whitespace-normal transition duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-200/30 ${
                 hasStockIssues
                   ? "cursor-not-allowed opacity-50"
                   : "hover:-translate-y-0.5"
@@ -228,7 +228,7 @@ export default function CartPageClient() {
               return (
                 <section
                   key={groupKey}
-                  className="space-y-1.5 rounded-[20px] px-4 py-3 md:px-4 md:py-3.5"
+                  className="min-w-0 space-y-1.5 rounded-[20px] px-4 py-3 md:px-4 md:py-3.5"
                   style={{
                     background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(252,249,255,0.98))",
                     border: "1px solid rgba(15,23,42,0.05)",
@@ -237,7 +237,7 @@ export default function CartPageClient() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 space-y-0">
-                      <p className="text-base font-semibold">{businessName}</p>
+                      <p className="min-w-0 break-words text-base font-semibold">{businessName}</p>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className="opacity-75">
                           {group.item_count} {group.item_count === 1 ? "item" : "items"}
@@ -400,12 +400,16 @@ export default function CartPageClient() {
                   </div>
 
                   <div
-                    className="flex items-center justify-between gap-3 border-t pt-2.5"
+                    data-testid={`cart-vendor-checkout-area-${groupKey}`}
+                    className="flex min-w-0 flex-col items-stretch justify-between border-t pt-2.5 md:flex-row md:items-center md:gap-3"
                     style={{ borderColor: "rgba(15,23,42,0.045)" }}
                   >
-                    <div className="flex items-baseline gap-2 text-sm min-w-0">
-                      <span className="font-medium text-[rgba(15,23,42,0.6)]">Vendor subtotal</span>
-                      <span className="font-semibold">${formatMoney(group.subtotal)}</span>
+                    <div
+                      data-testid={`cart-vendor-subtotal-row-${groupKey}`}
+                      className="flex w-full min-w-0 items-baseline justify-between gap-3 text-sm md:w-auto md:justify-start"
+                    >
+                      <span className="min-w-0 font-medium text-[rgba(15,23,42,0.6)]">Vendor subtotal</span>
+                      <span className="shrink-0 font-semibold">${formatMoney(group.subtotal)}</span>
                     </div>
                     {user?.id ? (
                       <Link
@@ -414,7 +418,8 @@ export default function CartPageClient() {
                         onClick={(event) => {
                           if (hasStockIssues) event.preventDefault();
                         }}
-                        className={`${checkoutButtonClassName} shrink-0`}
+                        data-testid={`cart-vendor-checkout-button-${groupKey}`}
+                        className={`${checkoutButtonClassName} mt-3 w-full md:mt-0 md:w-auto md:shrink-0`}
                         style={{
                           background: "#8C81AD",
                           border: "1px solid rgba(109,96,145,0.18)",
@@ -428,7 +433,8 @@ export default function CartPageClient() {
                       <button
                         type="button"
                         onClick={() => handleGuestCheckout(checkoutHref)}
-                        className={`${checkoutButtonClassName} shrink-0`}
+                        data-testid={`cart-vendor-checkout-button-${groupKey}`}
+                        className={`${checkoutButtonClassName} mt-3 w-full md:mt-0 md:w-auto md:shrink-0`}
                         style={{
                           background: "#8C81AD",
                           border: "1px solid rgba(109,96,145,0.18)",

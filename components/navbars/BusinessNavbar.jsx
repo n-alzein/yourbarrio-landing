@@ -815,7 +815,10 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
                 </button>
 
                 {notificationsOpen ? (
-                  <div className="absolute right-0 mt-4 w-80 rounded-3xl px-1.5 pb-3 pt-1.5 yb-dropdown-surface">
+                  <div
+                    data-testid="business-notifications-dropdown"
+                    className="absolute right-0 z-[60] mt-4 w-80 rounded-3xl px-1.5 pb-3 pt-1.5 yb-dropdown-surface"
+                  >
                     <div className="rounded-[26px]">
                       <div className="px-4 py-4 flex items-center justify-between">
                         <div>
