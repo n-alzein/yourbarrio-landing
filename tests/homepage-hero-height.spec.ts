@@ -17,6 +17,11 @@ async function readHeroMetrics(page: import("@playwright/test").Page) {
     }
 
     const navbarBox = navbarEl.getBoundingClientRect();
+    const navbarAfter = window.getComputedStyle(navbarEl, "::after");
+    const navbarDividerBottom =
+      navbarAfter.content !== "none" && navbarAfter.display !== "none"
+        ? navbarBox.bottom - (Number.parseFloat(navbarAfter.bottom || "0") || 0)
+        : navbarBox.bottom;
     const heroBox = heroEl.getBoundingClientRect();
     const contentBox = contentEl.getBoundingClientRect();
     const ctaBox = ctaEl.getBoundingClientRect();
@@ -26,6 +31,7 @@ async function readHeroMetrics(page: import("@playwright/test").Page) {
       viewportHeight: window.innerHeight,
       navbarHeight: navbarBox.height,
       navbarBottom: navbarBox.bottom,
+      navbarDividerBottom,
       heroHeight: heroBox.height,
       heroTop: heroBox.top,
       heroBottom: heroBox.bottom,
@@ -79,7 +85,7 @@ test.describe("homepage hero rendered height", () => {
     expect(metrics).toBeTruthy();
     console.log("homepage-hero-metrics-mobile", JSON.stringify(metrics));
 
-    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
+    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarDividerBottom ?? 0))).toBeLessThanOrEqual(0.5);
     expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(280);
     expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(320);
     expect(metrics?.featuredTop ?? 999).toBeLessThanOrEqual(450);
@@ -100,7 +106,7 @@ test.describe("homepage hero rendered height", () => {
 
     const metrics = await readHeroMetrics(page);
     expect(metrics).toBeTruthy();
-    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
+    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarDividerBottom ?? 0))).toBeLessThanOrEqual(0.5);
 
     const gapProbe = await page.evaluate(() => {
       const navbarEl = document.querySelector("nav.yb-navbar");
@@ -108,13 +114,18 @@ test.describe("homepage hero rendered height", () => {
       const publicShell = document.querySelector('[data-testid="public-shell-content"]');
       if (!navbarEl || !heroEl) return null;
       const navbarBox = navbarEl.getBoundingClientRect();
+      const navbarAfter = window.getComputedStyle(navbarEl, "::after");
+      const navbarDividerBottom =
+        navbarAfter.content !== "none" && navbarAfter.display !== "none"
+          ? navbarBox.bottom - (Number.parseFloat(navbarAfter.bottom || "0") || 0)
+          : navbarBox.bottom;
       const heroBox = heroEl.getBoundingClientRect();
       const heroStyle = window.getComputedStyle(heroEl);
       const midpointX = Math.floor(window.innerWidth / 2);
-      const midpointY = Math.floor((navbarBox.bottom + heroBox.top) / 2);
+      const midpointY = Math.floor((navbarDividerBottom + heroBox.top) / 2);
       const element = document.elementFromPoint(midpointX, midpointY);
       return {
-        gap: heroBox.top - navbarBox.bottom,
+        gap: heroBox.top - navbarDividerBottom,
         publicShellPaddingTop: publicShell ? window.getComputedStyle(publicShell).paddingTop : null,
         heroMarginTop: heroStyle.marginTop,
         heroPaddingTop: heroStyle.paddingTop,
@@ -125,11 +136,52 @@ test.describe("homepage hero rendered height", () => {
     });
 
     expect(gapProbe).toBeTruthy();
-    expect(Math.abs(gapProbe?.gap ?? 999)).toBeLessThanOrEqual(2);
-    expect(gapProbe?.publicShellPaddingTop).toMatch(/^(80|81)px$/);
+    expect(Math.abs(gapProbe?.gap ?? 999)).toBeLessThanOrEqual(0.5);
+    expect(gapProbe?.publicShellPaddingTop).toMatch(/^(81|82)px$/);
     expect(gapProbe?.heroMarginTop).toBe("0px");
     expect(gapProbe?.heroPaddingTop).toBe("0px");
     expect(gapProbe?.elementTestId).not.toBe("public-shell-content");
+  });
+
+  test("mobile hero remains flush on the first frame when returning from cart by logo", async ({ page }) => {
+    await page.setViewportSize({ width: 430, height: 932 });
+    await page.goto("/cart");
+    await expect(page.locator("nav.yb-navbar").first()).toBeVisible();
+
+    await page.locator('a[aria-label="Go to home"]').first().click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId("home-hero")).toBeVisible();
+
+    const gapProbe = await page.evaluate(() => {
+      const navbarEl = document.querySelector("nav.yb-navbar");
+      const heroEl = document.querySelector('[data-testid="home-hero"]');
+      const publicShell = document.querySelector('[data-testid="public-shell-content"]');
+      if (!navbarEl || !heroEl || !publicShell) return null;
+
+      const navbarBox = navbarEl.getBoundingClientRect();
+      const navbarAfter = window.getComputedStyle(navbarEl, "::after");
+      const navbarDividerBottom =
+        navbarAfter.content !== "none" && navbarAfter.display !== "none"
+          ? navbarBox.bottom - (Number.parseFloat(navbarAfter.bottom || "0") || 0)
+          : navbarBox.bottom;
+      const heroBox = heroEl.getBoundingClientRect();
+      const shellStyle = window.getComputedStyle(publicShell);
+      const midpointY = Math.floor((navbarDividerBottom + heroBox.top) / 2);
+      const element = document.elementFromPoint(Math.floor(window.innerWidth / 2), midpointY);
+
+      return {
+        gap: heroBox.top - navbarDividerBottom,
+        shellGap: publicShell.getAttribute("data-shell-gap"),
+        shellPaddingTop: shellStyle.paddingTop,
+        publicShellGapVar: shellStyle.getPropertyValue("--public-shell-gap").trim(),
+        elementTestId: element?.getAttribute?.("data-testid") || null,
+      };
+    });
+
+    expect(gapProbe).toBeTruthy();
+    expect(Math.abs(gapProbe?.gap ?? 999)).toBeLessThanOrEqual(0.5);
+    expect(gapProbe?.elementTestId).not.toBe("public-shell-content");
+    expect(gapProbe?.publicShellGapVar).toBe("0px");
   });
 
   test("mobile homepage uses one shell offset and no hero offset", async ({ page }) => {
@@ -143,11 +195,17 @@ test.describe("homepage hero rendered height", () => {
       const heroEl = document.querySelector('[data-testid="home-hero"]');
       if (!navbarEl || !shellEl || !heroEl) return null;
       const navbarBox = navbarEl.getBoundingClientRect();
+      const navbarAfter = window.getComputedStyle(navbarEl, "::after");
+      const navbarDividerBottom =
+        navbarAfter.content !== "none" && navbarAfter.display !== "none"
+          ? navbarBox.bottom - (Number.parseFloat(navbarAfter.bottom || "0") || 0)
+          : navbarBox.bottom;
       const heroBox = heroEl.getBoundingClientRect();
       const shellStyle = window.getComputedStyle(shellEl);
       const heroStyle = window.getComputedStyle(heroEl);
       return {
         navbarBottom: navbarBox.bottom,
+        navbarDividerBottom,
         heroTop: heroBox.top,
         shellPaddingTop: shellStyle.paddingTop,
         heroMarginTop: heroStyle.marginTop,
@@ -156,9 +214,50 @@ test.describe("homepage hero rendered height", () => {
     });
 
     expect(invariant).toBeTruthy();
-    expect(Math.abs((invariant?.heroTop ?? 999) - (invariant?.navbarBottom ?? 0))).toBeLessThanOrEqual(2);
-    expect(invariant?.shellPaddingTop).toMatch(/^(80|81)px$/);
+    expect(Math.abs((invariant?.heroTop ?? 999) - (invariant?.navbarDividerBottom ?? 0))).toBeLessThanOrEqual(0.5);
+    expect(invariant?.shellPaddingTop).toMatch(/^(81|82)px$/);
     expect(invariant?.heroMarginTop).toBe("0px");
     expect(invariant?.heroPaddingTop).toBe("0px");
   });
+
+  for (const width of [390, 430]) {
+    test(`mobile homepage hero starts at navbar divider bottom at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 932 });
+      await page.goto("/");
+      await expect(page.getByTestId("home-hero")).toBeVisible();
+
+      const invariant = await page.evaluate(() => {
+        const navbarEl = document.querySelector("nav.yb-navbar");
+        const heroEl = document.querySelector('[data-testid="home-hero"]');
+        if (!navbarEl || !heroEl) return null;
+        const navbarBox = navbarEl.getBoundingClientRect();
+        const navbarAfter = window.getComputedStyle(navbarEl, "::after");
+        const navbarDividerBottom =
+          navbarAfter.content !== "none" && navbarAfter.display !== "none"
+            ? navbarBox.bottom - (Number.parseFloat(navbarAfter.bottom || "0") || 0)
+            : navbarBox.bottom;
+        const heroBox = heroEl.getBoundingClientRect();
+        const elementAtBoundary = document.elementFromPoint(
+          Math.floor(window.innerWidth / 2),
+          Math.floor(navbarDividerBottom)
+        );
+
+        return {
+          navbarBottom: navbarBox.bottom,
+          navbarDividerBottom,
+          heroTop: heroBox.top,
+          delta: heroBox.top - navbarDividerBottom,
+          elementTestId: elementAtBoundary?.getAttribute?.("data-testid") || null,
+          elementClassName:
+            typeof elementAtBoundary?.className === "string"
+              ? elementAtBoundary.className
+              : null,
+        };
+      });
+
+      expect(invariant).toBeTruthy();
+      expect(Math.abs(invariant?.delta ?? 999)).toBeLessThanOrEqual(0.5);
+      expect(invariant?.elementTestId).not.toBe("public-shell-content");
+    });
+  }
 });

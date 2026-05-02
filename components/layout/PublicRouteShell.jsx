@@ -3,10 +3,37 @@
 import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 
+const PATHNAME_CHANGE_EVENT = "yb:pathnamechange";
+let historyPatchInstalled = false;
+
+function emitPathnameChange() {
+  window.dispatchEvent(new Event(PATHNAME_CHANGE_EVENT));
+}
+
+function installHistoryPatch() {
+  if (historyPatchInstalled || typeof window === "undefined") return;
+  historyPatchInstalled = true;
+
+  for (const method of ["pushState", "replaceState"]) {
+    const original = window.history[method];
+    if (typeof original !== "function" || original.__ybPathnamePatched) continue;
+    const patched = function patchedHistoryState(...args) {
+      const result = original.apply(this, args);
+      queueMicrotask(emitPathnameChange);
+      return result;
+    };
+    patched.__ybPathnamePatched = true;
+    window.history[method] = patched;
+  }
+}
+
 function subscribeToPathname(callback) {
+  installHistoryPatch();
+  window.addEventListener(PATHNAME_CHANGE_EVENT, callback);
   window.addEventListener("pageshow", callback);
   window.addEventListener("popstate", callback);
   return () => {
+    window.removeEventListener(PATHNAME_CHANGE_EVENT, callback);
     window.removeEventListener("pageshow", callback);
     window.removeEventListener("popstate", callback);
   };
@@ -59,7 +86,8 @@ export default function PublicRouteShell({
       data-shell-gap={resolvedGap}
       style={{
         ...lightThemeVars,
-        paddingTop: "calc(var(--public-nav-offset) + var(--public-shell-gap))",
+        paddingTop:
+          "calc(var(--public-nav-offset) + var(--public-shell-gap) + var(--public-nav-divider-overhang, 0px))",
       }}
     >
       {children}
