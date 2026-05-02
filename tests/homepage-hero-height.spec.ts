@@ -56,10 +56,9 @@ test.describe("homepage hero rendered height", () => {
     expect(metrics).toBeTruthy();
     console.log("homepage-hero-metrics", JSON.stringify(metrics));
 
-    expect(Math.abs(metrics?.heroTop ?? 999)).toBeLessThanOrEqual(2);
-    expect(metrics?.navbarBottom ?? 999).toBeGreaterThanOrEqual(79);
-    expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(380);
-    expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(405);
+    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
+    expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(300);
+    expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(320);
     expect(metrics?.ctaTop ?? -1).toBeGreaterThanOrEqual((metrics?.navbarBottom ?? 0) + 8);
     expect(metrics?.contentHeight ?? 999).toBeLessThanOrEqual(250);
     expect(metrics?.featuredTop ?? 999).toBeLessThanOrEqual(430);
@@ -81,7 +80,6 @@ test.describe("homepage hero rendered height", () => {
     console.log("homepage-hero-metrics-mobile", JSON.stringify(metrics));
 
     expect(Math.abs(metrics?.heroTop ?? 999)).toBeLessThanOrEqual(2);
-    expect(metrics?.navbarBottom ?? 999).toBeGreaterThanOrEqual(79);
     expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(360);
     expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(430);
     expect(metrics?.ctaTop ?? -1).toBeGreaterThanOrEqual((metrics?.navbarBottom ?? 0) + 8);

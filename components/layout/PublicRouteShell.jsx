@@ -31,9 +31,11 @@ export default function PublicRouteShell({
       data-home-flush={homeFlush ? "1" : undefined}
       style={{
         ...lightThemeVars,
-        paddingTop: homeFlush
-          ? "0px"
-          : "calc(var(--public-nav-offset) + var(--public-shell-gap))",
+        ...(homeFlush
+          ? {}
+          : {
+              paddingTop: "calc(var(--public-nav-offset) + var(--public-shell-gap))",
+            }),
       }}
     >
       {children}
