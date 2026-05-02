@@ -690,17 +690,17 @@ button {
   color: var(--yb-navbar-icon-muted);
 }
 
-.yb-navbar.yb-navbar-bordered,
-.yb-navbar-accent-line {
-  position: relative;
-  border-bottom: 1px solid var(--yb-navbar-border);
-}
-
-.yb-navbar.yb-navbar-bordered[data-nav-sticky="1"] {
+.yb-navbar.yb-navbar-bordered {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
+  border-bottom: 1px solid var(--yb-navbar-border);
+}
+
+.yb-navbar-accent-line {
+  position: relative;
+  border-bottom: 1px solid var(--yb-navbar-border);
 }
 
 body:has(nav[data-nav-sticky="1"]),

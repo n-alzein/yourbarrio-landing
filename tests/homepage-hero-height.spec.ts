@@ -82,4 +82,22 @@ test.describe("homepage hero rendered height", () => {
     expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(320);
     expect(metrics?.featuredTop ?? 999).toBeLessThanOrEqual(450);
   });
+
+  test("mobile hero remains flush after returning from cart", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+
+    await expect(page.getByTestId("home-hero")).toBeVisible();
+    await page.locator('a[href="/cart"]').first().click();
+    await expect(page).toHaveURL(/\/cart$/);
+    await expect(page.locator("nav.yb-navbar").first()).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId("home-hero")).toBeVisible();
+
+    const metrics = await readHeroMetrics(page);
+    expect(metrics).toBeTruthy();
+    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
+  });
 });
