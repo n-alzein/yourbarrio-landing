@@ -1,5 +1,6 @@
 import HeroBanner from "@/components/home/HeroBanner";
 import CustomerHomeClient from "@/app/(customer)/customer/home/CustomerHomeClient";
+import HomeGapDebugOverlay from "@/components/debug/HomeGapDebugOverlay";
 import { homeHeroConfig } from "@/lib/home/homeHero";
 import type { BrowseMode, HomeBrowseData } from "@/lib/browse/getHomeBrowseData";
 
@@ -11,6 +12,7 @@ type HomeBrowseProps = {
 export default async function HomeBrowse({ mode, initialData }: HomeBrowseProps) {
   return (
       <>
+      <HomeGapDebugOverlay />
       <div className="relative z-10 mt-0" data-home-hero-wrapper="1">
         <HeroBanner
           hero={homeHeroConfig}
