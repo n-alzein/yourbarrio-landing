@@ -791,6 +791,7 @@ export function ProfileHero({
         )}
       >
         <div
+          data-testid="profile-hero-cover"
           className={cx(
             "relative overflow-hidden",
             isPublicFullBleed

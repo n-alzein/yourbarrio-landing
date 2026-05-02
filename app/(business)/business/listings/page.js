@@ -415,7 +415,7 @@ export default function BusinessListingsPage() {
   // RENDER
   // ------------------------------------------------------
   return (
-    <div className="max-w-6xl mx-auto px-6 py-4 md:py-8 text-slate-900 dark:text-slate-100">
+    <div className="max-w-6xl mx-auto px-6 pb-4 pt-0 md:pb-8 text-slate-900 dark:text-slate-100">
       {/* Snapshot banner */}
       <div
         className={`rounded-2xl border shadow-sm p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 ${

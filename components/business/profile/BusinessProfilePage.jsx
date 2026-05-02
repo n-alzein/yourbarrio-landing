@@ -315,7 +315,7 @@ export default function BusinessProfilePage({
   }
 
   return (
-    <ProfilePageShell className={tone.textBase}>
+    <ProfilePageShell className={`${tone.textBase} !pt-0`}>
       <BusinessProfileView
         mode="owner"
         profile={profile}

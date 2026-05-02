@@ -21,7 +21,9 @@ export const metadata = {
 function BusinessRouteShell({ children = null, offsetForNav = false }) {
   return (
     <div
-      className="min-h-screen flex-1 bg-[var(--yb-bg)] text-[var(--yb-text)]"
+      className={`min-h-screen flex-1 bg-[var(--yb-bg)] text-[var(--yb-text)]${
+        offsetForNav ? " [&>*:first-child]:pt-4" : ""
+      }`}
       data-theme="light"
       data-testid="business-route-shell"
       style={{
@@ -32,7 +34,7 @@ function BusinessRouteShell({ children = null, offsetForNav = false }) {
         "--glow-2": "rgba(14, 165, 233, 0.08)",
         ...(offsetForNav
           ? {
-              paddingTop: "calc(var(--yb-nav-content-offset, 80px) + 16px)",
+              paddingTop: "var(--yb-nav-content-offset, 80px)",
             }
           : {}),
       }}

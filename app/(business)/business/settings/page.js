@@ -610,7 +610,7 @@ export default function SettingsPage() {
   ----------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-0 sm:px-6 sm:pb-10 lg:px-8">
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600/80">
