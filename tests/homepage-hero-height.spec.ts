@@ -25,6 +25,7 @@ async function readHeroMetrics(page: import("@playwright/test").Page) {
     return {
       viewportHeight: window.innerHeight,
       navbarHeight: navbarBox.height,
+      navbarBottom: navbarBox.bottom,
       heroHeight: heroBox.height,
       heroTop: heroBox.top,
       heroBottom: heroBox.bottom,
@@ -55,9 +56,11 @@ test.describe("homepage hero rendered height", () => {
     expect(metrics).toBeTruthy();
     console.log("homepage-hero-metrics", JSON.stringify(metrics));
 
-    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
-    expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(300);
-    expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(320);
+    expect(Math.abs(metrics?.heroTop ?? 999)).toBeLessThanOrEqual(2);
+    expect(metrics?.navbarBottom ?? 999).toBeGreaterThanOrEqual(79);
+    expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(380);
+    expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(405);
+    expect(metrics?.ctaTop ?? -1).toBeGreaterThanOrEqual((metrics?.navbarBottom ?? 0) + 8);
     expect(metrics?.contentHeight ?? 999).toBeLessThanOrEqual(250);
     expect(metrics?.featuredTop ?? 999).toBeLessThanOrEqual(430);
   });
@@ -77,9 +80,11 @@ test.describe("homepage hero rendered height", () => {
     expect(metrics).toBeTruthy();
     console.log("homepage-hero-metrics-mobile", JSON.stringify(metrics));
 
-    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
-    expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(280);
-    expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(320);
+    expect(Math.abs(metrics?.heroTop ?? 999)).toBeLessThanOrEqual(2);
+    expect(metrics?.navbarBottom ?? 999).toBeGreaterThanOrEqual(79);
+    expect(metrics?.heroHeight ?? 0).toBeGreaterThanOrEqual(360);
+    expect(metrics?.heroHeight ?? 999).toBeLessThanOrEqual(430);
+    expect(metrics?.ctaTop ?? -1).toBeGreaterThanOrEqual((metrics?.navbarBottom ?? 0) + 8);
     expect(metrics?.featuredTop ?? 999).toBeLessThanOrEqual(450);
   });
 
@@ -98,19 +103,23 @@ test.describe("homepage hero rendered height", () => {
 
     const metrics = await readHeroMetrics(page);
     expect(metrics).toBeTruthy();
-    expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
+    expect(Math.abs(metrics?.heroTop ?? 999)).toBeLessThanOrEqual(2);
+    expect(metrics?.ctaTop ?? -1).toBeGreaterThanOrEqual((metrics?.navbarBottom ?? 0) + 8);
 
     const gapProbe = await page.evaluate(() => {
       const navbarEl = document.querySelector("nav.yb-navbar");
       const heroEl = document.querySelector('[data-testid="home-hero"]');
+      const publicShell = document.querySelector('[data-testid="public-shell-content"]');
       if (!navbarEl || !heroEl) return null;
       const navbarBox = navbarEl.getBoundingClientRect();
       const heroBox = heroEl.getBoundingClientRect();
       const midpointX = Math.floor(window.innerWidth / 2);
-      const midpointY = Math.floor((navbarBox.bottom + heroBox.top) / 2);
-      const element = document.elementFromPoint(midpointX, midpointY);
+      const element = document.elementFromPoint(midpointX, Math.floor(navbarBox.bottom + 4));
       return {
-        gap: heroBox.top - navbarBox.bottom,
+        heroTop: heroBox.top,
+        navbarBottom: navbarBox.bottom,
+        publicShellPaddingTop: publicShell ? window.getComputedStyle(publicShell).paddingTop : null,
+        navBottomIsInsideHero: heroBox.top <= navbarBox.bottom && navbarBox.bottom <= heroBox.bottom,
         elementTag: element?.tagName || null,
         elementTestId: element?.getAttribute?.("data-testid") || null,
         elementBackground: element ? window.getComputedStyle(element).backgroundColor : null,
@@ -118,7 +127,9 @@ test.describe("homepage hero rendered height", () => {
     });
 
     expect(gapProbe).toBeTruthy();
-    expect(Math.abs(gapProbe?.gap ?? 999)).toBeLessThanOrEqual(2);
+    expect(Math.abs(gapProbe?.heroTop ?? 999)).toBeLessThanOrEqual(2);
+    expect(gapProbe?.navBottomIsInsideHero).toBe(true);
+    expect(gapProbe?.publicShellPaddingTop).toBe("0px");
     expect(gapProbe?.elementTestId).not.toBe("public-shell-content");
   });
 
@@ -138,7 +149,7 @@ test.describe("homepage hero rendered height", () => {
           const navbarEl = document.querySelector("nav.yb-navbar");
           const heroEl = document.querySelector('[data-testid="home-hero"]');
           if (!navbarEl || !heroEl) return 999;
-          return heroEl.getBoundingClientRect().top - navbarEl.getBoundingClientRect().bottom;
+          return Math.abs(heroEl.getBoundingClientRect().top);
         });
       })
       .toBeLessThanOrEqual(2);
