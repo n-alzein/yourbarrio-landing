@@ -99,5 +99,48 @@ test.describe("homepage hero rendered height", () => {
     const metrics = await readHeroMetrics(page);
     expect(metrics).toBeTruthy();
     expect(Math.abs((metrics?.heroTop ?? 999) - (metrics?.navbarHeight ?? 0))).toBeLessThanOrEqual(2);
+
+    const gapProbe = await page.evaluate(() => {
+      const navbarEl = document.querySelector("nav.yb-navbar");
+      const heroEl = document.querySelector('[data-testid="home-hero"]');
+      if (!navbarEl || !heroEl) return null;
+      const navbarBox = navbarEl.getBoundingClientRect();
+      const heroBox = heroEl.getBoundingClientRect();
+      const midpointX = Math.floor(window.innerWidth / 2);
+      const midpointY = Math.floor((navbarBox.bottom + heroBox.top) / 2);
+      const element = document.elementFromPoint(midpointX, midpointY);
+      return {
+        gap: heroBox.top - navbarBox.bottom,
+        elementTag: element?.tagName || null,
+        elementTestId: element?.getAttribute?.("data-testid") || null,
+        elementBackground: element ? window.getComputedStyle(element).backgroundColor : null,
+      };
+    });
+
+    expect(gapProbe).toBeTruthy();
+    expect(Math.abs(gapProbe?.gap ?? 999)).toBeLessThanOrEqual(2);
+    expect(gapProbe?.elementTestId).not.toBe("public-shell-content");
+  });
+
+  test("mobile homepage ignores stale shared nav content offset", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("home-hero")).toBeVisible();
+
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("--yb-nav-content-offset", "140px");
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const navbarEl = document.querySelector("nav.yb-navbar");
+          const heroEl = document.querySelector('[data-testid="home-hero"]');
+          if (!navbarEl || !heroEl) return 999;
+          return heroEl.getBoundingClientRect().top - navbarEl.getBoundingClientRect().bottom;
+        });
+      })
+      .toBeLessThanOrEqual(2);
   });
 });
