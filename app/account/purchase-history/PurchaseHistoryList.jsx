@@ -25,7 +25,7 @@ function MultiItemThumbnailPreview({ order }) {
 
   return (
     <div
-      className="flex h-14 w-[7.5rem] shrink-0 items-center sm:h-16 sm:w-[6.75rem]"
+      className="flex min-w-[9.75rem] shrink-0 items-center gap-1.5 sm:min-w-[11.25rem]"
       aria-hidden="true"
     >
       {items.map((item, index) => {
@@ -34,8 +34,7 @@ function MultiItemThumbnailPreview({ order }) {
         return (
           <div
             key={item.key}
-            className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white sm:h-11 sm:w-11 ${index > 0 ? "-ml-3" : ""}`}
-            style={{ borderColor: "var(--border)" }}
+            className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[10px] border border-[rgba(15,23,42,0.06)] bg-white sm:h-14 sm:w-14"
           >
             {item.url ? (
               <img
@@ -105,7 +104,7 @@ export default function PurchaseHistoryList({ orders }) {
                   key={order.id}
                   href={`/orders/${order.order_number}`}
                   aria-label={`View receipt for order ${displayOrderId} from ${vendorName}`}
-                  className="group flex items-center justify-between gap-3 px-2 py-4 transition-colors hover:bg-[rgba(248,250,252,0.95)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] sm:px-3 sm:py-[1.1875rem]"
+                  className="group flex cursor-pointer items-center justify-between gap-3 rounded-2xl px-4 py-3.5 transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] sm:px-5 sm:py-4"
                   style={{
                     outlineColor: "rgb(var(--brand-rgb))",
                     borderBottom:
@@ -114,7 +113,7 @@ export default function PurchaseHistoryList({ orders }) {
                         : "1px solid rgba(15, 23, 42, 0.06)",
                   }}
                 >
-                  <div className="min-w-0 flex flex-1 items-center gap-3.5 sm:gap-4">
+                  <div className="min-w-0 flex flex-1 items-center gap-4 sm:gap-[1.125rem]">
                     {isMultiItemOrder ? (
                       <MultiItemThumbnailPreview order={order} />
                     ) : thumbnailUrl ? (
@@ -122,12 +121,12 @@ export default function PurchaseHistoryList({ orders }) {
                           src={thumbnailUrl}
                           alt=""
                           loading="lazy"
-                          className="h-14 w-14 shrink-0 rounded-xl object-cover sm:h-16 sm:w-16"
+                          className="h-12 w-12 shrink-0 rounded-[10px] object-cover sm:h-14 sm:w-14"
                         />
                     ) : (
                       <div
                         aria-hidden="true"
-                        className="h-14 w-14 shrink-0 rounded-xl sm:h-16 sm:w-16"
+                        className="h-12 w-12 shrink-0 rounded-[10px] sm:h-14 sm:w-14"
                         style={{
                           background:
                             "linear-gradient(135deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.02))",
@@ -137,15 +136,15 @@ export default function PurchaseHistoryList({ orders }) {
                     )}
 
                     <div className="min-w-0 flex-1 space-y-0.5 pr-1">
-                      <p className="truncate text-base font-semibold text-slate-950">{vendorName}</p>
-                      <p className="text-xs leading-4 text-slate-500">
-                        Order {displayOrderId} · {formatOrderPurchaseTime(order)}
+                      <p className="truncate text-base font-semibold text-slate-950 sm:text-[1.05rem]">{vendorName}</p>
+                      <p className="text-sm font-normal leading-5 text-slate-500">
+                        {displayOrderId} · {formatOrderPurchaseTime(order)}
                       </p>
                       <SubtleStatus status={order.status} />
                     </div>
                   </div>
 
-                  <div className="ml-2 flex shrink-0 items-center gap-2.5 self-center text-right">
+                  <div className="ml-2 flex min-w-[150px] shrink-0 items-center justify-end gap-2.5 self-center text-right">
                     <span className="text-base font-semibold text-slate-950">${formatMoney(order.total)}</span>
                     <span className="text-lg leading-none text-slate-500 transition-colors group-hover:text-[rgb(var(--brand-rgb))]" aria-hidden="true">
                       →

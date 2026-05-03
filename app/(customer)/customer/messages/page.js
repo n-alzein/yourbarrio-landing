@@ -6,6 +6,7 @@ import { retry } from "@/lib/retry";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
+import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
 import InboxList from "@/components/messages/InboxList";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 
@@ -156,9 +157,9 @@ export default function CustomerMessagesPage() {
   const conversationCount = conversations.length;
 
   return (
-    <section className="w-full min-h-screen px-4 pb-10 pt-6 text-slate-950 sm:px-5 md:px-6 md:pb-14 md:pt-8 lg:px-8">
-      <div className="w-full">
-        <div className="mx-auto max-w-7xl space-y-5">
+    <section className="w-full min-h-screen pb-10 pt-3 text-slate-950 md:pb-14">
+      <CustomerAccountShell className="!bg-transparent">
+        <div className="space-y-5">
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 pb-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -199,7 +200,7 @@ export default function CustomerMessagesPage() {
             />
           </div>
         </div>
-      </div>
+      </CustomerAccountShell>
     </section>
   );
 }

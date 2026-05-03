@@ -328,7 +328,7 @@ export default function BusinessProfilePage({
         reviews={reviews}
         announcements={announcements}
         gallery={gallery}
-        heroVariant="publicFullBleed"
+        heroVariant="default"
         navClassName="mb-6"
         heroProps={{
           ownerPrimaryAction: {

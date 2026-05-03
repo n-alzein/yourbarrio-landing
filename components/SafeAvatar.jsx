@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { getAvatarInitials } from "@/lib/avatarInitials";
 import { getValidAvatarUrls, resolveAvatarUrl } from "@/lib/avatarUrl";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 
 const EMPTY_AVATAR_CANDIDATES = [];
+
+const subscribeToHydration = () => () => {};
+const getHydratedSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
 
 const authAvatarDiagEnabled =
   process.env.NEXT_PUBLIC_AUTH_DIAG === "1" ||
@@ -64,6 +68,11 @@ export default function SafeAvatar({
   );
   const [failedAvatarSources, setFailedAvatarSources] = useState(() => new Set());
   const [lastValidAvatarUrl, setLastValidAvatarUrl] = useState(() => realAvatarUrl);
+  const isHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getHydratedSnapshot,
+    getServerHydrationSnapshot
+  );
   const availableAvatarUrls = useMemo(
     () =>
       realAvatarUrls.filter((candidate) => {
@@ -91,8 +100,9 @@ export default function SafeAvatar({
     [resolvedFallback, stableAvatarUrl]
   );
   const initialFallback = !stableAvatarUrl || resolvedSrc === resolvedFallback;
+  const shouldShowInitialFallback = !isHydrated || initialFallback;
   const label = fullName || displayName || name || businessName || email || "";
-  const key = `${resolvedSrc}:${label}:${initialFallback ? "fallback" : "image"}`;
+  const key = `${resolvedSrc}:${label}:${shouldShowInitialFallback ? "fallback" : "image"}`;
 
   useEffect(() => {
     if (!authAvatarDiagEnabled) return;
@@ -129,7 +139,7 @@ export default function SafeAvatar({
       shape={shape}
       identityType={identityType}
       style={style}
-      showFallbackInitially={initialFallback}
+      showFallbackInitially={shouldShowInitialFallback}
       onResolvedLoad={(loadedSrc) => {
         if (loadedSrc && loadedSrc !== resolvedFallback) {
           setLastValidAvatarUrl(loadedSrc);

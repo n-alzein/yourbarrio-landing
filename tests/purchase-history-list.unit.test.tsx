@@ -45,14 +45,14 @@ describe("PurchaseHistoryList", () => {
 
     expect(link).toHaveAttribute("href", "/orders/YB-123456");
     expect(within(link).getByText("Barrio Bakery")).toHaveClass("text-base", "font-semibold");
-    expect(within(link).getByText(/Order YB-ORD-123456 · 10:09 AM/)).toHaveClass("text-xs");
+    expect(within(link).getByText(/YB-ORD-123456 · 10:09 AM/)).toHaveClass("text-sm");
     expect(within(link).getByText("$42.50")).toHaveClass("text-base", "font-semibold");
     expect(within(link).queryByText("Fulfilled")).not.toBeInTheDocument();
 
     const image = container.querySelector("img");
     expect(image).toHaveAttribute("src", "https://example.com/main-listing.jpg");
     expect(image).toHaveAttribute("loading", "lazy");
-    expect(image).toHaveClass("h-14", "w-14", "rounded-xl", "object-cover");
+    expect(image).toHaveClass("h-12", "w-12", "rounded-[10px]", "object-cover");
   });
 
   it("keeps attention statuses visible without a large fulfilled badge", () => {
@@ -102,7 +102,7 @@ describe("PurchaseHistoryList", () => {
     );
 
     expect(container.querySelector("img")).not.toBeInTheDocument();
-    expect(container.querySelector(".h-14.w-14.rounded-xl")).toBeInTheDocument();
+    expect(container.querySelector(".h-12.w-12.rounded-\\[10px\\]")).toBeInTheDocument();
   });
 
   it("shows a compact multi-image preview with overflow count for multi-item orders", () => {

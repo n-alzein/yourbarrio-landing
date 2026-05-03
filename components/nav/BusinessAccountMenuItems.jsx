@@ -93,7 +93,7 @@ export default function BusinessAccountMenuItems({
       <div className="border-t border-gray-100 pt-7">
         <div className="space-y-0.5">
           <BusinessSidebarItem
-            href="/go/account"
+            href="/business/settings"
             title="Account settings"
             description="Manage billing and preferences"
             icon={Settings}

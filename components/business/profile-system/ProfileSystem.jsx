@@ -158,11 +158,10 @@ export function ProfilePageShell({ children, className = "" }) {
   return (
     <div
       className={cx(
-        "min-h-screen bg-[#f8fafc] text-slate-950 business-theme",
+        "min-h-screen bg-[#f6f7fb] text-slate-950 business-theme",
         className
       )}
     >
-      <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[24rem] bg-[radial-gradient(circle_at_top_left,rgba(111,76,255,0.08),transparent_36%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.05),transparent_30%),linear-gradient(180deg,#fbfdff_0%,#f8fafc_46%,#f3f7fb_100%)]" />
       <div className="mx-auto max-w-[1180px] px-4 pb-12 pt-0 sm:px-6 lg:px-8">
         {children}
       </div>

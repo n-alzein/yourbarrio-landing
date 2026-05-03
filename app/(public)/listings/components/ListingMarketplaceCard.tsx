@@ -218,7 +218,7 @@ export default function ListingMarketplaceCard({
     <div
       className={
         isSavedVariant
-          ? "group relative flex h-full min-w-0 flex-col rounded-xl border border-slate-100 bg-white transition duration-200 ease-out hover:shadow-sm"
+          ? "group relative flex h-full min-w-0 flex-col rounded-xl border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition duration-200 ease-out hover:shadow-[0_8px_20px_rgba(15,23,42,0.055)]"
           : LISTING_MARKETPLACE_CARD_CLASS
       }
     >
@@ -310,7 +310,11 @@ export default function ListingMarketplaceCard({
           type="button"
           onClick={handleAddToCart}
           disabled={seeded || isOutOfStock || adding}
-          className="inline-flex h-9 w-fit items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+          className={
+            isSavedVariant
+              ? "inline-flex h-9 w-fit items-center justify-center gap-2 rounded-lg border border-slate-100 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-violet-100 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-400"
+              : "inline-flex h-9 w-fit items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+          }
         >
           <ShoppingCart className="h-4 w-4 text-current" />
           {addToCartLabel}

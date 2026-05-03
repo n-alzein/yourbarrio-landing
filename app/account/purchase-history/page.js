@@ -1,5 +1,6 @@
-import Link from "next/link";
 import AccountNavTabs from "@/components/account/AccountNavTabs";
+import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
+import OrderEmptyState from "@/app/account/OrderEmptyState";
 import { requireRole } from "@/lib/auth/server";
 import {
   DEFAULT_PURCHASE_HISTORY_LIMIT,
@@ -47,8 +48,8 @@ export default async function PurchaseHistoryPage({ searchParams }) {
   const error = result.error;
 
   return (
-    <div className="min-h-screen px-4 pb-12 md:px-8 lg:px-12" style={{ background: "var(--background)", color: "var(--text)" }}>
-      <div className="mx-auto max-w-5xl space-y-7">
+    <div className="min-h-screen pb-12" style={{ background: "var(--background)", color: "var(--text)" }}>
+      <CustomerAccountShell className="space-y-7">
         <div className="space-y-2.5">
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Orders</p>
           <h1 className="text-3xl font-semibold">Purchase History</h1>
@@ -59,7 +60,7 @@ export default async function PurchaseHistoryPage({ searchParams }) {
 
         <AccountNavTabs active="history" variant="history" />
 
-        <div id="purchase-history-list" className="scroll-mt-6">
+        <div id="purchase-history-list" className="scroll-mt-6 pt-4">
           {error ? (
             <div className="rounded-2xl p-4 text-sm text-rose-200" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               {error.message || "Failed to load orders."}
@@ -67,17 +68,12 @@ export default async function PurchaseHistoryPage({ searchParams }) {
           ) : null}
 
           {!error && visibleRows.length === 0 ? (
-            <div className="rounded-3xl p-8 text-center" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-              <h2 className="text-xl font-semibold">No order history yet.</h2>
-              <p className="mt-2 text-sm opacity-80">Completed and closed paid orders will appear here.</p>
-              <Link
-                href="/customer/home"
-                className="mt-5 inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold"
-                style={{ background: "var(--text)", color: "var(--background)" }}
-              >
-                Browse marketplace
-              </Link>
-            </div>
+            <OrderEmptyState
+              icon="history"
+              title="No order history yet."
+              description="Completed and closed paid orders will appear here."
+              ctaLabel="Browse marketplace"
+            />
           ) : null}
 
           {!error && visibleRows.length > 0 ? (
@@ -91,7 +87,7 @@ export default async function PurchaseHistoryPage({ searchParams }) {
             totalPages={result.total_pages}
           />
         ) : null}
-      </div>
+      </CustomerAccountShell>
     </div>
   );
 }

@@ -11,7 +11,7 @@ describe("settings phone separation", () => {
     const source = read("app/(business)/business/settings/page.js");
 
     expect(source).toContain('label="Your phone number"');
-    expect(source).toContain(
+    expect(source).not.toContain(
       "Private account contact number. This is not shown on your business profile."
     );
     expect(source).toContain('fetch("/api/account/profile"');
@@ -23,9 +23,10 @@ describe("settings phone separation", () => {
     const source = read("app/(customer)/customer/settings/page.js");
 
     expect(source).toContain('label="Your phone number"');
-    expect(source).toContain(
+    expect(source).not.toContain(
       "Private account contact number. This is not shown on your business profile."
     );
+    expect(source).not.toContain("auth provider");
     expect(source).toContain('fetch("/api/account/profile"');
     expect(source).not.toContain('.from("users")\n      .update');
   });

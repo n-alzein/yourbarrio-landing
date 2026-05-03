@@ -1,5 +1,7 @@
-import Link from "next/link";
 import AccountNavTabs from "@/components/account/AccountNavTabs";
+import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
+import OrderEmptyState from "@/app/account/OrderEmptyState";
+import Link from "next/link";
 import OrderItemThumbnails from "./OrderItemThumbnails";
 import {
   formatMoney,
@@ -7,17 +9,47 @@ import {
   getOrderStatusDescription,
   getOrderStatusLabel,
 } from "@/lib/orders";
+import { formatLocalDateLabel } from "@/lib/utils/datetime";
 import { formatEntityId } from "@/lib/entityIds";
 import { requireRole } from "@/lib/auth/server";
 import { getSupportAwareClient } from "@/lib/support/supportAwareData";
 import { CUSTOMER_ACTIVE_ORDER_STATUSES } from "@/lib/orders/customerVisibility";
 
 const STATUS_DOT_STYLES = {
-  requested: { background: "#d97706" },
-  confirmed: { background: "#2563eb" },
-  ready: { background: "#0f766e" },
-  out_for_delivery: { background: "#0f766e" },
+  requested: { background: "#f59e0b" },
+  confirmed: { background: "#3b82f6" },
+  ready: { background: "#22c55e" },
+  out_for_delivery: { background: "#22c55e" },
+  fulfilled: { background: "#22c55e" },
+  completed: { background: "#22c55e" },
+  cancelled: { background: "#ef4444" },
 };
+
+const COMPACT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+
+const COMPACT_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatCompactOrderDate(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return formatLocalDateLabel(value);
+
+  return COMPACT_DATE_FORMATTER.format(parsed);
+}
+
+function formatCompactOrderDateTime(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return formatOrderDateTime(value);
+
+  return COMPACT_DATE_TIME_FORMATTER.format(parsed);
+}
 
 function isMeaningfullyDifferentTimestamp(base, compare) {
   if (!base || !compare) return false;
@@ -63,10 +95,10 @@ export default async function AccountOrdersPage({ searchParams }) {
 
   return (
     <div
-      className="min-h-screen px-4 pb-12 md:px-8 lg:px-12"
+      className="min-h-screen pb-12"
       style={{ background: "var(--background)", color: "var(--text)" }}
     >
-      <div className="mx-auto max-w-5xl space-y-7">
+      <CustomerAccountShell className="space-y-7">
         <div className="space-y-2.5">
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">
             Orders
@@ -79,35 +111,26 @@ export default async function AccountOrdersPage({ searchParams }) {
 
         <AccountNavTabs active="orders" variant="orders" />
 
-        {error ? (
-          <div
-            className="rounded-2xl p-4 text-sm text-rose-600"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            {error.message || "Failed to load orders."}
-          </div>
-        ) : null}
-
-        {visibleRows.length === 0 ? (
-          <div
-            className="rounded-3xl p-8 text-center"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            <h2 className="text-xl font-semibold">No active orders yet.</h2>
-            <p className="mt-2 text-sm opacity-80">
-              Orders you place will appear here after payment is confirmed.
-            </p>
-            <Link
-              href="/customer/home"
-              className="mt-5 inline-flex items-center justify-center rounded-full px-5 h-11 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-2"
-              style={{ background: "var(--text)", color: "var(--background)" }}
+        <div className="pt-4">
+          {error ? (
+            <div
+              className="rounded-2xl p-4 text-sm text-rose-600"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
             >
-              Back to marketplace
-            </Link>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {visibleRows.map((order) => {
+              {error.message || "Failed to load orders."}
+            </div>
+          ) : null}
+
+          {visibleRows.length === 0 ? (
+            <OrderEmptyState
+              icon="active"
+              title="No active orders yet."
+              description="Orders you place will appear here after payment is confirmed."
+              ctaLabel="Back to marketplace"
+            />
+          ) : (
+            <div className="flex flex-col gap-4">
+              {visibleRows.map((order) => {
               const vendorName =
                 order?.vendor?.business_name ||
                 order?.vendor?.full_name ||
@@ -131,16 +154,17 @@ export default async function AccountOrdersPage({ searchParams }) {
                 lastUpdate
               );
               const statusTimestamp = hasMeaningfulUpdate
-                ? formatOrderDateTime(lastUpdate)
-                : formatOrderDateTime(order.created_at);
+                ? formatCompactOrderDateTime(lastUpdate)
+                : formatCompactOrderDateTime(order.created_at);
+              const placedDateLabel = formatCompactOrderDate(order.created_at);
               return (
                 <Link
                   key={order.id}
                   href={`/orders/${order.order_number}`}
                   aria-label={`View details for order ${displayOrderId} from ${vendorName}`}
-                  className="group cursor-pointer rounded-[28px] border bg-white/95 px-4 py-3.5 shadow-[0_10px_24px_-28px_rgba(15,23,42,0.18)] transition-[background-color,border-color,box-shadow,transform] hover:bg-[rgba(248,250,252,0.95)] hover:border-[rgba(15,23,42,0.09)] active:bg-[rgba(241,245,249,0.95)] active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/30 focus-visible:ring-offset-2 sm:px-5 sm:py-4"
+                  className="group cursor-pointer rounded-3xl border bg-white/95 px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-[background-color,border-color,box-shadow,transform] hover:bg-[rgba(248,250,252,0.95)] hover:border-[rgba(15,23,42,0.07)] active:bg-[rgba(241,245,249,0.95)] active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/30 focus-visible:ring-offset-2 sm:px-5 sm:py-4"
                   style={{
-                    borderColor: "rgba(15, 23, 42, 0.06)",
+                    borderColor: "rgba(15, 23, 42, 0.05)",
                   }}
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -151,17 +175,14 @@ export default async function AccountOrdersPage({ searchParams }) {
                           <p className="truncate text-base font-semibold text-slate-950 sm:text-[1.05rem]">
                             {vendorName}
                           </p>
-                          <p className="text-xs text-slate-500">
-                            Order {displayOrderId}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Placed {formatOrderDateTime(order.created_at)}
+                          <p className="text-sm font-normal text-slate-500">
+                            {displayOrderId} · {placedDateLabel}
                           </p>
                         </div>
                       </div>
 
                       <div className="space-y-1.5">
-                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium leading-5 text-slate-600">
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold leading-5 text-slate-700">
                           <span className="inline-flex items-center gap-2">
                             <span
                               aria-hidden="true"
@@ -172,16 +193,16 @@ export default async function AccountOrdersPage({ searchParams }) {
                                 }
                               }
                             />
-                            <span className="text-slate-900">{statusLabel}</span>
+                            <span className="text-slate-950">{statusLabel}</span>
                           </span>
                           <span className="text-slate-400" aria-hidden="true">
                             ·
                           </span>
-                          <span className="text-slate-500">
+                          <span className="text-slate-700">
                             {statusTimestamp}
                           </span>
                         </p>
-                        <p className="text-sm leading-5 text-slate-600">
+                        <p className="text-sm leading-5 text-slate-500">
                           {fulfillmentLabel} · {scheduleLabel}
                         </p>
                         {hasMeaningfulUpdate ? (
@@ -196,7 +217,7 @@ export default async function AccountOrdersPage({ searchParams }) {
                       <span className="text-base font-semibold text-slate-950">
                         ${formatMoney(order.total)}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-sm font-medium text-[rgba(var(--brand-rgb),0.9)] transition-colors group-hover:text-[rgb(var(--brand-rgb))]">
+                      <span className="inline-flex items-center gap-1 text-sm font-normal text-slate-600 transition-colors group-hover:text-[rgba(var(--brand-rgb),0.9)]">
                         View details
                         <span aria-hidden="true">→</span>
                       </span>
@@ -204,9 +225,10 @@ export default async function AccountOrdersPage({ searchParams }) {
                   </div>
                 </Link>
               );
-            })}
-          </div>
-        )}
+              })}
+            </div>
+          )}
+        </div>
 
         {hasMore ? (
           <div className="flex justify-center">
@@ -219,7 +241,7 @@ export default async function AccountOrdersPage({ searchParams }) {
             </Link>
           </div>
         ) : null}
-      </div>
+      </CustomerAccountShell>
     </div>
   );
 }

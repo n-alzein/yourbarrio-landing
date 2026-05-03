@@ -415,7 +415,7 @@ export default function BusinessListingsPage() {
   // RENDER
   // ------------------------------------------------------
   return (
-    <div className="max-w-6xl mx-auto px-6 pb-4 pt-0 md:pb-8 text-slate-900 dark:text-slate-100">
+    <div className="max-w-6xl mx-auto bg-[#f6f7fb] px-6 pb-4 pt-0 md:pb-8 text-slate-900 dark:text-slate-100">
       {/* Snapshot banner */}
       <div
         className={`rounded-2xl border shadow-sm p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 ${
@@ -518,7 +518,7 @@ export default function BusinessListingsPage() {
           </div>
 
           <div
-            className={`mt-6 rounded-2xl border p-4 shadow-sm ${
+            className={`mb-4 mt-6 rounded-2xl border p-4 shadow-sm md:mb-6 ${
               isLight ? "border-slate-200 bg-white" : "border-slate-700 bg-slate-900"
             }`}
           >

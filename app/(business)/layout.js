@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
+import BusinessAccountShell from "@/components/business/BusinessAccountShell";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
@@ -21,17 +22,17 @@ export const metadata = {
 function BusinessRouteShell({ children = null, offsetForNav = false }) {
   return (
     <div
-      className={`min-h-screen flex-1 bg-[var(--yb-bg)] text-[var(--yb-text)]${
+      className={`min-h-screen flex-1 bg-[#f6f7fb] text-[var(--yb-text)]${
         offsetForNav ? " [&>*:first-child]:pt-4" : ""
       }`}
       data-theme="light"
       data-testid="business-route-shell"
       style={{
-        "--bg-solid": "#ffffff",
-        "--bg-gradient-start": "#f7f7f8",
-        "--bg-gradient-end": "#eef2ff",
-        "--glow-1": "rgba(79, 70, 229, 0.1)",
-        "--glow-2": "rgba(14, 165, 233, 0.08)",
+        "--bg-solid": "#f6f7fb",
+        "--bg-gradient-start": "#f6f7fb",
+        "--bg-gradient-end": "#f6f7fb",
+        "--glow-1": "transparent",
+        "--glow-2": "transparent",
         ...(offsetForNav
           ? {
               paddingTop: "var(--yb-nav-content-offset, 80px)",
@@ -86,7 +87,7 @@ export default async function BusinessLayout({ children }) {
   }
 
   const content = (
-    <div className="min-h-screen flex flex-col bg-[var(--yb-bg)] text-[var(--yb-text)]" data-theme="light">
+    <div className="min-h-screen flex flex-col bg-[#f6f7fb] text-[var(--yb-text)]" data-theme="light">
       <BusinessNavbar
         requireAuth
         forcedAuth={{
@@ -104,7 +105,7 @@ export default async function BusinessLayout({ children }) {
           <Suspense
             fallback={null}
         >
-          {children}
+          <BusinessAccountShell>{children}</BusinessAccountShell>
         </Suspense>
       </BusinessRouteShell>
     </div>

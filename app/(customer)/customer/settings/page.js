@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
 import SafeAvatar from "@/components/SafeAvatar";
 import { useRouter } from "next/navigation";
 import {
@@ -24,10 +25,12 @@ import {
 
 const editableSections = new Set(["profile", "address"]);
 
-const sectionCardClassName =
-  "rounded-[28px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_12px_36px_rgba(15,23,42,0.06)] sm:px-7 sm:py-6";
+const settingsPanelClassName =
+  "divide-y divide-slate-100 overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)]";
+const sectionRowClassName =
+  "!rounded-none !border-0 !bg-transparent !p-6 !shadow-none sm:!p-8";
 const sectionHeaderClassName =
-  "mb-5 gap-3 border-b border-slate-100 pb-4";
+  "mb-5 gap-4 pb-0";
 const sectionTitleClassName = "text-[1.05rem] font-semibold text-slate-950";
 const sectionDescriptionClassName =
   "mt-1 max-w-2xl text-sm leading-6 text-slate-500";
@@ -35,16 +38,16 @@ const sectionBodyClassName = "space-y-5";
 const sectionFooterClassName =
   "mt-6 border-t border-slate-100 pt-4 sm:justify-end";
 const customerInputClassName =
-  "h-11 w-full rounded-2xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-violet-500 focus-visible:ring-4 focus-visible:ring-violet-500/15";
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-violet-500 focus-visible:ring-4 focus-visible:ring-violet-500/15";
 const readOnlyFieldClassName =
-  "flex min-h-11 items-center rounded-2xl border border-slate-200 bg-slate-50/70 px-3.5 text-sm text-slate-700";
+  "flex min-h-11 items-center rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 text-sm text-slate-700";
 const fieldLabelClassName = "font-medium text-slate-800";
 const fieldHelperClassName = "text-slate-500";
 const fieldErrorClassName = "text-rose-600";
 const secondaryButtonClassName =
-  "inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center rounded-lg border border-slate-100 bg-white/70 px-3.5 text-sm font-medium text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50";
 const primaryButtonClassName =
-  "inline-flex h-10 items-center justify-center rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed disabled:bg-violet-300";
+  "inline-flex h-9 items-center justify-center rounded-lg bg-violet-600 px-3.5 text-sm font-medium text-white transition hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed disabled:bg-violet-300";
 
 function SectionActionButton({ children, ...props }) {
   return (
@@ -68,6 +71,143 @@ function SectionSaveButton({ children, className = "", ...props }) {
 
 function ReadOnlyField({ value }) {
   return <div className={readOnlyFieldClassName}>{value || "—"}</div>;
+}
+
+function StatePicker({ id, value, onChange, invalid = false }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selectedState = US_STATES.find((state) => state.code === value);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const handleButtonKeyDown = (event) => {
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setOpen(true);
+      requestAnimationFrame(() => {
+        const activeOption =
+          rootRef.current?.querySelector("[aria-selected='true']") ||
+          rootRef.current?.querySelector("[role='option']");
+        activeOption?.focus();
+      });
+    }
+  };
+
+  const handleOptionKeyDown = (event, stateCode) => {
+    const options = Array.from(
+      rootRef.current?.querySelectorAll("[role='option']") || []
+    );
+    const index = options.indexOf(event.currentTarget);
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      options[Math.min(index + 1, options.length - 1)]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      options[Math.max(index - 1, 0)]?.focus();
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onChange(stateCode);
+      setOpen(false);
+      rootRef.current?.querySelector("button[aria-haspopup='listbox']")?.focus();
+    } else if (event.key === "Escape") {
+      setOpen(false);
+      rootRef.current?.querySelector("button[aria-haspopup='listbox']")?.focus();
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        id={id}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-invalid={invalid ? "true" : undefined}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={handleButtonKeyDown}
+        className={`${customerInputClassName} flex items-center justify-between text-left ${
+          value ? "text-slate-900" : "text-slate-400"
+        } ${
+          invalid
+            ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
+            : ""
+        }`}
+      >
+        <span>{selectedState ? selectedState.name : "State"}</span>
+        <span aria-hidden="true" className="text-xs text-slate-400">
+          v
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          aria-labelledby={id}
+          className="absolute z-30 mt-2 max-h-64 w-full min-w-56 overflow-auto rounded-xl border border-slate-100 bg-white p-1 shadow-[0_14px_34px_rgba(15,23,42,0.12)]"
+        >
+          <button
+            type="button"
+            role="option"
+            aria-selected={!value}
+            tabIndex={0}
+            onClick={() => {
+              onChange("");
+              setOpen(false);
+            }}
+            onKeyDown={(event) => handleOptionKeyDown(event, "")}
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25 ${
+              !value
+                ? "bg-violet-50 text-violet-700"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+          >
+            State
+          </button>
+          {US_STATES.map((stateOption) => (
+            <button
+              key={stateOption.code}
+              type="button"
+              role="option"
+              aria-selected={value === stateOption.code}
+              tabIndex={-1}
+              onClick={() => {
+                onChange(stateOption.code);
+                setOpen(false);
+              }}
+              onKeyDown={(event) => handleOptionKeyDown(event, stateOption.code)}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25 ${
+                value === stateOption.code
+                  ? "bg-violet-50 text-violet-700"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+            >
+              <span>{stateOption.name}</span>
+              <span className="text-xs text-slate-400">{stateOption.code}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function SettingsPage() {
@@ -384,7 +524,7 @@ export default function SettingsPage() {
       }
     })();
 
-    console.debug("[Settings:customer] auth provider debug", {
+    console.debug("[Settings:customer] login debug", {
       resolvedProvider: primaryProvider,
       providerLabel,
       sessionUserId: user?.id,
@@ -416,13 +556,13 @@ export default function SettingsPage() {
      UI START
   ----------------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600/80">
-              Customer account
-            </p>
+    <div
+      data-account-utility-bg="soft"
+      className="min-h-screen bg-[#fafafc] text-slate-900"
+    >
+      <div className="pb-12 pt-3 sm:pb-16">
+        <CustomerAccountShell className="!bg-transparent">
+          <div className="mb-7">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
                 Settings
@@ -432,23 +572,8 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            {isEditingAnySection ? (
-              <span>
-                Editing{" "}
-                <span className="font-semibold text-slate-900">
-                  {activeSection
-                    ? activeSection.charAt(0).toUpperCase() + activeSection.slice(1)
-                    : ""}
-                </span>
-              </span>
-            ) : (
-              <span>Choose a section to update.</span>
-            )}
-          </div>
-        </div>
 
-        <div className="space-y-10">
+          <div className={settingsPanelClassName}>
           <SettingsSection
             title="Profile"
             description="Keep your personal details current for orders, receipts, and support."
@@ -479,16 +604,15 @@ export default function SettingsPage() {
                 </>
               ) : null
             }
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             footerClassName={sectionFooterClassName}
             titleClassName={sectionTitleClassName}
             descriptionClassName={sectionDescriptionClassName}
           >
-            <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-              <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
-                <div className="flex flex-col items-start gap-4">
+            <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-start">
+              <div className="flex items-start gap-4 lg:flex-col">
                   <SafeAvatar
                     src={
                       form?.profile_photo_url ||
@@ -502,10 +626,10 @@ export default function SettingsPage() {
                     alt="Profile photo"
                     width={144}
                     height={144}
-                    className="h-28 w-28 border border-slate-200 object-cover shadow-sm sm:h-36 sm:w-36"
-                    initialsClassName="text-3xl sm:text-4xl"
+                    className="h-20 w-20 border border-slate-100 object-cover shadow-sm sm:h-24 sm:w-24"
+                    initialsClassName="text-2xl sm:text-3xl"
                   />
-                  <div className="space-y-1.5">
+                  <div className="min-w-0 space-y-1.5">
                     <p className="text-sm font-semibold text-slate-900">
                       Profile photo
                     </p>
@@ -524,7 +648,6 @@ export default function SettingsPage() {
                       />
                     </label>
                   ) : null}
-                </div>
               </div>
 
               <div className="space-y-5">
@@ -554,7 +677,6 @@ export default function SettingsPage() {
                   <Field
                     label="Your phone number"
                     id="phone"
-                    helper="Private account contact number. This is not shown on your business profile."
                     error={fieldErrors.phone}
                     labelClassName={fieldLabelClassName}
                     helperClassName={fieldHelperClassName}
@@ -579,7 +701,6 @@ export default function SettingsPage() {
                 <Field
                   label="Email"
                   id="email"
-                  helper="Your login email is managed through your auth provider."
                   labelClassName={fieldLabelClassName}
                   helperClassName={fieldHelperClassName}
                   errorClassName={fieldErrorClassName}
@@ -620,22 +741,22 @@ export default function SettingsPage() {
                 </>
               ) : null
             }
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             footerClassName={sectionFooterClassName}
             titleClassName={sectionTitleClassName}
             descriptionClassName={sectionDescriptionClassName}
           >
-            <FieldGrid className="gap-5 sm:grid-cols-2">
+            <FieldGrid className="gap-4 sm:grid-cols-2">
               <Field
                 label="Street address"
                 id="address"
-                helper="Required if city, state, or ZIP is set."
                 error={fieldErrors.address}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -645,7 +766,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("address", e.target.value)
                     }
-                    placeholder="123 Pine St"
+                    placeholder="Street address"
                     className={`${customerInputClassName} ${
                       fieldErrors.address
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
@@ -661,10 +782,10 @@ export default function SettingsPage() {
               <Field
                 label="Apt / Suite / Unit"
                 id="address_2"
-                helper="Optional."
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -674,7 +795,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("address_2", e.target.value)
                     }
-                    placeholder="Apt 4B"
+                    placeholder="Apt, suite, unit"
                     className={customerInputClassName}
                   />
                 ) : (
@@ -683,15 +804,15 @@ export default function SettingsPage() {
               </Field>
             </FieldGrid>
 
-            <FieldGrid className="gap-5 sm:grid-cols-3">
+            <FieldGrid className="mt-6 gap-4 sm:grid-cols-3">
               <Field
                 label="City"
                 id="city"
-                helper="Required if state or ZIP is set."
                 error={fieldErrors.city}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -699,7 +820,7 @@ export default function SettingsPage() {
                     type="text"
                     value={form.city}
                     onChange={(e) => handleFieldChange("city", e.target.value)}
-                    placeholder="Long Beach"
+                    placeholder="City"
                     className={`${customerInputClassName} ${
                       fieldErrors.city
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
@@ -715,31 +836,19 @@ export default function SettingsPage() {
               <Field
                 label="State"
                 id="state"
-                helper="Select your state."
                 error={fieldErrors.state}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
-                  <select
+                  <StatePicker
                     id="state"
                     value={form.state}
-                    onChange={(e) => handleFieldChange("state", e.target.value)}
-                    className={`${customerInputClassName} ${
-                      fieldErrors.state
-                        ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
-                        : ""
-                    }`}
-                    aria-invalid={Boolean(fieldErrors.state)}
-                  >
-                    <option value="">Select state</option>
-                    {US_STATES.map((stateOption) => (
-                      <option key={stateOption.code} value={stateOption.code}>
-                        {stateOption.code} - {stateOption.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(nextValue) => handleFieldChange("state", nextValue)}
+                    invalid={Boolean(fieldErrors.state)}
+                  />
                 ) : (
                   <ReadOnlyField value={form.state} />
                 )}
@@ -748,11 +857,11 @@ export default function SettingsPage() {
               <Field
                 label="Postal code"
                 id="postal_code"
-                helper="ZIP or ZIP+4 format."
                 error={fieldErrors.postal_code}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -762,7 +871,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("postal_code", e.target.value)
                     }
-                    placeholder="90802"
+                    placeholder="Postal code"
                     className={`${customerInputClassName} ${
                       fieldErrors.postal_code
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
@@ -780,13 +889,13 @@ export default function SettingsPage() {
           <SettingsSection
             title="Security"
             description="Manage how you access your account."
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             titleClassName={sectionTitleClassName}
             descriptionClassName={sectionDescriptionClassName}
           >
-            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 rounded-xl bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-900">
                   Password & login
@@ -809,26 +918,27 @@ export default function SettingsPage() {
           <SettingsSection
             title="Delete account"
             description="This permanently removes your access to YourBarrio and starts account deletion."
-            className="rounded-[28px] border border-rose-200 bg-white px-5 py-5 shadow-[0_12px_36px_rgba(15,23,42,0.04)] sm:px-7 sm:py-6"
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             titleClassName="text-[1.05rem] font-semibold text-rose-700"
             descriptionClassName="mt-1 max-w-2xl text-sm leading-6 text-slate-500"
           >
-            <div className="flex flex-col gap-4 rounded-2xl border border-rose-100 bg-rose-50/60 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 rounded-xl border border-rose-100/80 bg-rose-50/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-2xl text-sm leading-6 text-slate-600">
                 This action cannot be undone. Use it only if you want to permanently delete this account.
               </p>
               <button
                 type="button"
                 onClick={handleDeleteAccount}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/15"
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-rose-200 bg-white px-3.5 text-sm font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/15"
               >
                 Delete account
               </button>
             </div>
           </SettingsSection>
-        </div>
+          </div>
+        </CustomerAccountShell>
       </div>
 
       {toast ? (

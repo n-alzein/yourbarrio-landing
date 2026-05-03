@@ -1422,6 +1422,12 @@ body {
   background-color: var(--yb-bg);
 }
 
+body:has([data-account-utility-bg="soft"]) .app-shell-root,
+body:has([data-account-utility-bg="soft"]) .app-shell-root main,
+body:has([data-account-utility-bg="soft"]) [data-testid="customer-shell-content"] {
+  background-color: #fafafc;
+}
+
 html[data-nav-menu-open="1"] .app-shell-bg-gradient,
 html[data-nav-menu-open="1"] .app-shell-glow,
 html[data-nav-menu-open="1"] .animated-bg {

@@ -19,7 +19,7 @@ const {
 
 vi.mock("next/link", () => ({
   __esModule: true,
-  default: ({ href, children, ...rest }: any) => (
+  default: ({ href, children, prefetch: _prefetch, ...rest }: any) => (
     <a href={href} {...rest}>
       {children}
     </a>
@@ -28,6 +28,10 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
+  usePathname: () => "/account/orders",
+  useRouter: () => ({
+    prefetch: vi.fn(),
+  }),
 }));
 
 vi.mock("@/lib/auth/server", () => ({
@@ -224,7 +228,7 @@ describe("customer order visibility", () => {
     render(await AccountOrdersPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText("Paid Active Vendor")).toBeInTheDocument();
-    expect(screen.getByText(/Order YB-ORD-PAID-ACTIVE/)).toBeInTheDocument();
+    expect(screen.getByText(/YB-ORD-PAID-ACTIVE · May 1/)).toBeInTheDocument();
     expect(screen.queryByText("Pending Vendor")).not.toBeInTheDocument();
     expect(screen.queryByText("Failed Vendor")).not.toBeInTheDocument();
     expect(screen.queryByText("Unpaid Requested Vendor")).not.toBeInTheDocument();

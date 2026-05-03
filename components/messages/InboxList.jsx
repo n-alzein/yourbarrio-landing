@@ -239,13 +239,13 @@ function InboxSection({
           {title}
         </h2>
       ) : null}
-      <div className="divide-y divide-slate-200/80 border-y border-slate-200/80">
-        {isEmpty ? (
-          emptyState
-        ) : (
-          items
-        )}
-      </div>
+      {isEmpty ? (
+        emptyState
+      ) : (
+        <div className="divide-y divide-slate-200/80 border-y border-slate-200/80">
+          {items}
+        </div>
+      )}
     </section>
   );
 }
@@ -261,29 +261,29 @@ function EmptyInboxState({ role = "customer", showOrdersCTA = false }) {
     : "";
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col items-center px-4 py-8 text-center sm:py-10">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-50 text-purple-600 ring-1 ring-purple-100">
-        <MessageCircle className="h-5 w-5" aria-hidden="true" />
+    <div className="rounded-3xl border border-slate-100 bg-white px-6 py-14 text-center shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
+      <div className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+        <MessageCircle className="h-7 w-7" aria-hidden="true" />
       </div>
-      <h3 className="mt-4 text-base font-semibold text-slate-950">{title}</h3>
-      <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+      <h3 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h3>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-slate-500">
         {description}
       </p>
       {hint ? (
-        <p className="mt-1 text-sm leading-6 text-slate-400">{hint}</p>
+        <p className="mx-auto mt-1 max-w-xl text-sm text-slate-400">{hint}</p>
       ) : null}
       {!isBusiness ? (
-        <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
           <Link
             href="/listings"
-            className="inline-flex items-center justify-center rounded-full bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+            className="yb-primary-button inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-medium !text-white focus:outline-none focus:ring-2 focus:ring-[rgba(var(--brand-rgb),0.35)] focus:ring-offset-2"
           >
             Browse listings
           </Link>
           {showOrdersCTA ? (
             <Link
               href="/account/purchase-history"
-              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-100 bg-white px-5 text-sm font-medium text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
             >
               View your orders
             </Link>

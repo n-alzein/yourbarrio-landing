@@ -49,7 +49,7 @@ export default async function BusinessMessagesPage() {
   }
 
   return (
-    <section className="w-full min-h-screen px-4 pb-10 pt-0 text-slate-950 sm:px-5 md:px-6 md:pb-14 lg:px-8">
+    <section className="w-full min-h-screen bg-[#f6f7fb] px-4 pb-10 pt-0 text-slate-950 sm:px-5 md:px-6 md:pb-14 lg:px-8">
       <div className="w-full">
         <div className="mx-auto max-w-7xl">
           <BusinessMessagesInboxClient

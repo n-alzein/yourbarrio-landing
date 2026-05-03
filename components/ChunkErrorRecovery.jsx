@@ -66,19 +66,23 @@ export function ChunkRecoveryFallback({
         <div
           style={{
             alignItems: "center",
-            background: "#6f34ff",
-            borderRadius: "16px",
-            color: "#ffffff",
             display: "flex",
-            fontSize: "18px",
-            fontWeight: 700,
-            height: "48px",
+            height: "56px",
             justifyContent: "center",
             margin: "0 auto 20px",
-            width: "48px",
+            width: "56px",
           }}
         >
-          YB
+          <img
+            src="/YBpin.png"
+            alt="YourBarrio"
+            style={{
+              display: "block",
+              height: "56px",
+              objectFit: "contain",
+              width: "56px",
+            }}
+          />
         </div>
         <h1
           style={{

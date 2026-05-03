@@ -248,7 +248,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
 
   const quickActions = [
     {
-      href: "/go/dashboard",
+      href: "/business/dashboard",
       title: "Dashboard",
       description: "Monitor performance & leads",
       icon: LayoutDashboard,
@@ -918,6 +918,7 @@ function BusinessNavbarInner({ pathname, forcedAuth = null }) {
               <div className="relative">
                 <button
                   ref={accountTriggerRef}
+                  type="button"
                   onClick={() => setAccountSidebarOpen(true)}
                   className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-1.5 border border-white/10 hover:border-white/30 transition"
                   aria-haspopup="dialog"

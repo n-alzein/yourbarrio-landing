@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Landmark, Loader2, PackagePlus, ShoppingBag } from "lucide-react";
+import { BadgeCheck, Landmark, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import DateRangeControls from "@/components/DateRangeControls";
 import TopProductsTable from "@/components/TopProductsTable";
@@ -97,11 +97,11 @@ const hasMeaningfulSeries = (series: TimeSeriesPoint[]) => {
   return nonZeroPoints >= 3 || (nonZeroPoints >= 2 && total >= 10);
 };
 
-const rangeCopy: Record<DateRangeKey, string> = {
-  today: "today",
-  "7d": "last 7 days",
-  "30d": "last 30 days",
-  custom: "selected range",
+const rangeLabel: Record<DateRangeKey, string> = {
+  today: "Today",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  custom: "Selected range",
 };
 
 const DashboardErrorState = ({ onRetry }: { onRetry: () => void }) => (
@@ -222,69 +222,132 @@ function ContentFade({
   );
 }
 
-function QuickActionCard({
-  href,
-  title,
-  detail,
-  icon,
+function PerformanceSnapshot({
+  totalSales,
+  totalViews,
+  totalOrders,
+  dateRange,
 }: {
-  href: string;
-  title: string;
-  detail: string;
-  icon: ReactNode;
+  totalSales: number;
+  totalViews: number;
+  totalOrders: number;
+  dateRange: DateRangeKey;
 }) {
+  const showStarterGuidance = totalSales === 0 && totalViews === 0 && totalOrders === 0;
+  const showConversionGuidance = totalViews > 0 && totalOrders === 0;
+  const kpis = [
+    {
+      label: "Sales",
+      value: formatCurrency(totalSales),
+      helper: "Revenue",
+    },
+    {
+      label: "Views",
+      value: formatNumber(totalViews),
+      helper: "Storefront visits",
+    },
+    {
+      label: "Orders",
+      value: formatNumber(totalOrders),
+      helper: "New purchases",
+    },
+  ];
+
   return (
-    <Link
-      href={href}
-      className="dashboard-panel group flex items-center justify-between gap-4 bg-white px-5 py-4 transition duration-200 hover:border-slate-300/90 hover:bg-slate-50/[0.35] sm:px-6 sm:py-5"
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-slate-200/70 bg-slate-50 text-slate-700">
-          {icon}
+    <section className="dashboard-panel overflow-hidden">
+      <div className="flex flex-col gap-1 border-b border-slate-100/70 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div>
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-slate-400/80">
+            Performance snapshot
+          </p>
         </div>
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-slate-900">{title}</p>
-          <p className="mt-2 truncate text-sm text-slate-400/90">{detail}</p>
-        </div>
+        <p className="text-[0.72rem] font-medium text-slate-400/80">{rangeLabel[dateRange]}</p>
       </div>
-      <span className="text-[0.64rem] font-medium uppercase tracking-[0.1em] text-slate-300 transition duration-200 group-hover:text-slate-400">
-        Open
-      </span>
-    </Link>
+      <div className="grid grid-cols-1 sm:grid-cols-3">
+        {kpis.map((kpi, index) => (
+          <div
+            key={kpi.label}
+            className={`px-5 py-3.5 sm:px-6 sm:py-4 ${
+              index > 0 ? "border-t border-slate-100/65 sm:border-l sm:border-t-0" : ""
+            }`}
+          >
+            <p className="text-[0.62rem] font-medium uppercase tracking-[0.16em] text-slate-400/75">
+              {kpi.label}
+            </p>
+            <p className="mt-1.5 text-[1.45rem] font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-[1.65rem]">
+              {kpi.value}
+            </p>
+            <p className="mt-0.5 text-[0.8rem] text-slate-500/90">{kpi.helper}</p>
+          </div>
+        ))}
+      </div>
+      {showStarterGuidance || showConversionGuidance ? (
+        <div className="flex flex-col gap-3 border-t border-slate-100/70 bg-slate-50/35 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="max-w-2xl text-sm leading-6 text-slate-500">
+            {showStarterGuidance
+              ? "Start by publishing products and sharing your profile."
+              : "People are finding your shop. Add more products or improve photos to convert visits."}
+          </p>
+          {showStarterGuidance ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/business/listings/new"
+                className="yb-primary-button inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold !text-white hover:!text-white focus-visible:!text-white"
+              >
+                Add product
+              </Link>
+              <Link
+                href="/business/profile"
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--brand-rgb),0.35)] focus-visible:ring-offset-2"
+              >
+                View profile
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
-function InsightCard({
-  label,
-  value,
-  helper,
-  action,
+function DashboardSection({
+  title,
+  children,
 }: {
-  label: string;
-  value: string;
-  helper: string;
-  action?: { href: string; label: string };
+  title: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="dashboard-panel flex h-full flex-col justify-between p-5 transition duration-200 hover:-translate-y-[1px] hover:border-slate-300 sm:p-6">
+    <section className="space-y-3">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-400/85">
+        {title}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+function ChartEmptyState({
+  eyebrow,
+  title,
+}: {
+  eyebrow: string;
+  title: string;
+}) {
+  return (
+    <div className="dashboard-panel relative h-full p-5 transition duration-200 hover:-translate-y-[1px] hover:border-slate-300 sm:p-6">
       <div>
-        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-400/85">
-          {label}
+        <p className="text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-slate-400/85">
+          {eyebrow}
         </p>
-        <p className="mt-5 text-[2.5rem] font-semibold tracking-[-0.055em] text-slate-950">
-          {value}
-        </p>
-        <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-400/90">{helper}</p>
+        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
       </div>
-      {action ? (
-        <Link
-          href={action.href}
-          className="mt-8 inline-flex w-fit items-center gap-2 text-sm font-extrabold text-[#4c1d95] transition duration-200 hover:text-[#3b0764]"
-        >
-          {action.label}
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      ) : null}
+      <div className="dashboard-panel-inner mt-6 flex h-[240px] flex-col items-center justify-center p-6 text-center sm:h-[260px]">
+        <p className="text-base font-semibold text-slate-900">Not enough activity yet</p>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+          Your charts will appear once customers start viewing and ordering from your shop.
+        </p>
+      </div>
     </div>
   );
 }
@@ -569,67 +632,15 @@ const DashboardPage = () => {
       { id: "profile_visibility", label: "Profile ready", complete: Boolean(source?.businessName) },
     ];
 
-    const quickActions = [
-      {
-        href: listingCount > 0 ? "/business/listings" : "/business/listings/new",
-        title: listingCount > 0 ? "Manage products" : "Add first product",
-        detail:
-          listingCount > 0
-            ? `${formatNumber(listingCount)} ${listingCount === 1 ? "product" : "products"} ready`
-            : "Start with one clear offer",
-        icon: <PackagePlus className="h-4 w-4" />,
-      },
-      {
-        href: "/business/orders",
-        title: "Orders",
-        detail:
-          totalOrders > 0
-            ? `${formatNumber(totalOrders)} ${totalOrders === 1 ? "order" : "orders"} in ${rangeCopy[dateRange]}`
-            : "Stay ready for first purchase",
-        icon: <ShoppingBag className="h-4 w-4" />,
-      },
-    ];
-
-    const kpiCards = [
-      {
-        label: "Sales",
-        value: formatCurrency(totalSales),
-        helper:
-          totalSales > 0
-            ? `Revenue across ${rangeCopy[dateRange]}`
-            : "Add a product to start selling",
-        action: { href: "/business/listings/new", label: "Add product" },
-      },
-      {
-        label: "Views",
-        value: formatNumber(totalViews),
-        helper:
-          totalViews > 0
-            ? `Storefront visits in ${rangeCopy[dateRange]}`
-            : "Share your profile",
-        action: { href: "/business/profile", label: "View profile" },
-      },
-      {
-        label: "Orders",
-        value: formatNumber(totalOrders),
-        helper:
-          totalOrders > 0
-            ? `New purchases in ${rangeCopy[dateRange]}`
-            : "Orders will appear here once customers purchase",
-        action: { href: "/business/orders", label: "View orders" },
-      },
-    ];
-
     return {
       setupItems,
-      quickActions,
-      kpiCards,
       salesHasChart,
       viewsHasChart,
       totalSales,
       totalViews,
+      totalOrders,
     };
-  }, [data, dateRange]);
+  }, [data]);
 
   const categories = data?.categories ?? [];
   const hasDashboardData = Boolean(data && dashboardState);
@@ -642,10 +653,7 @@ const DashboardPage = () => {
   return (
     <main
       className="business-theme min-h-screen px-4 pb-20 sm:px-6"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 10% 10%, var(--glow-1), transparent 55%), radial-gradient(circle at 80% 0%, var(--glow-2), transparent 50%)",
-      }}
+      style={{ backgroundColor: "#f6f7fb" }}
     >
       <div className="mx-auto flex max-w-7xl flex-col gap-6 sm:gap-[1.625rem]">
         {showFatalError ? (
@@ -683,101 +691,69 @@ const DashboardPage = () => {
 
             {hasDashboardData && dashboardState ? (
               <ContentFade ready>
-                <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  {dashboardState.quickActions.map((action) => (
-                    <QuickActionCard
-                      key={action.title}
-                      href={action.href}
-                      title={action.title}
-                      detail={action.detail}
-                      icon={action.icon}
-                    />
-                  ))}
-                </section>
+                <PerformanceSnapshot
+                  totalSales={dashboardState.totalSales}
+                  totalViews={dashboardState.totalViews}
+                  totalOrders={dashboardState.totalOrders}
+                  dateRange={dateRange}
+                />
               </ContentFade>
             ) : (
-              <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <SectionShell className="h-[92px]" showSkeleton={showSectionSkeletons} lines={1} />
-                <SectionShell className="h-[92px]" showSkeleton={showSectionSkeletons} lines={1} />
-              </section>
+              <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
             )}
 
-            {hasDashboardData && dashboardState ? (
-              <ContentFade ready>
-                <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                  {dashboardState.kpiCards.map((card) => (
-                    <InsightCard
-                      key={card.label}
-                      label={card.label}
-                      value={card.value}
-                      helper={card.helper}
-                      action={card.action}
-                    />
-                  ))}
-                </section>
-              </ContentFade>
-            ) : (
-              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
-                <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
-                <SectionShell className="h-[174px]" showSkeleton={showSectionSkeletons} lines={2} />
-              </section>
-            )}
-
-            {hasDashboardData && dashboardState && data && (dashboardState.salesHasChart || dashboardState.viewsHasChart) ? (
-              <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <div className="min-w-0">
-                  {dashboardState.salesHasChart ? (
-                    <SalesOverTimeChart data={data.salesTimeSeries} />
-                  ) : (
-                    <InsightCard
-                      label="Sales pulse"
-                      value={formatCurrency(dashboardState.totalSales)}
-                      helper="More sales activity will unlock the trend view."
-                      action={{ href: "/business/listings/new", label: "Add product" }}
-                    />
-                  )}
+            {hasDashboardData && dashboardState && data ? (
+              <DashboardSection title="Performance">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div className="min-w-0">
+                    {dashboardState.salesHasChart ? (
+                      <SalesOverTimeChart data={data.salesTimeSeries} />
+                    ) : (
+                      <ChartEmptyState eyebrow="Sales" title="Sales over time" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    {dashboardState.viewsHasChart ? (
+                      <ProfileViewsChart data={data.profileViewsTimeSeries} />
+                    ) : (
+                      <ChartEmptyState eyebrow="Traffic" title="Profile views" />
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  {dashboardState.viewsHasChart ? (
-                    <ProfileViewsChart data={data.profileViewsTimeSeries} />
-                  ) : (
-                    <InsightCard
-                      label="Traffic pulse"
-                      value={formatNumber(dashboardState.totalViews)}
-                      helper="Once views pick up, the chart will show the pattern."
-                      action={{ href: "/business/profile", label: "View profile" }}
-                    />
-                  )}
-                </div>
-              </section>
+              </DashboardSection>
             ) : !hasDashboardData ? (
-              <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <SectionShell className="h-[320px]" showSkeleton={showSectionSkeletons} lines={3} />
-                <SectionShell className="h-[320px]" showSkeleton={showSectionSkeletons} lines={3} />
-              </section>
+              <DashboardSection title="Performance">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <SectionShell className="h-[320px]" showSkeleton={showSectionSkeletons} lines={3} />
+                  <SectionShell className="h-[320px]" showSkeleton={showSectionSkeletons} lines={3} />
+                </div>
+              </DashboardSection>
             ) : null}
 
             {hasDashboardData && data ? (
               <ContentFade ready>
-                <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                  <div className="min-w-0">
-                    <TopProductsTable
-                      products={data.topProducts}
-                      totalLiveProductsCount={data.totalLiveProductsCount ?? data.listingCount ?? 0}
-                    />
+                <DashboardSection title="Operations">
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <div className="min-w-0">
+                      <TopProductsTable
+                        products={data.topProducts}
+                        totalLiveProductsCount={data.totalLiveProductsCount ?? data.listingCount ?? 0}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <RecentOrders orders={data.recentOrders} />
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <RecentOrders orders={data.recentOrders} />
-                  </div>
-                </section>
+                </DashboardSection>
               </ContentFade>
             ) : null}
             {!hasDashboardData ? (
-              <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <SectionShell className="h-[360px]" showSkeleton={showSectionSkeletons} lines={4} />
-                <SectionShell className="h-[360px]" showSkeleton={showSectionSkeletons} lines={4} />
-              </section>
+              <DashboardSection title="Operations">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <SectionShell className="h-[360px]" showSkeleton={showSectionSkeletons} lines={4} />
+                  <SectionShell className="h-[360px]" showSkeleton={showSectionSkeletons} lines={4} />
+                </div>
+              </DashboardSection>
             ) : null}
           </>
         )}

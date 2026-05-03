@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import Link from "next/link";
 import { Heart } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
 import SafeImage from "@/components/SafeImage";
 import { useLocation } from "@/components/location/LocationProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -672,10 +673,11 @@ export default function CustomerSavedClient({
 
   return (
     <section
-      className="min-h-screen bg-[#fafafc] pb-12 text-slate-950 md:pb-16"
+      data-account-utility-bg="soft"
+      className="min-h-screen bg-[#fafafc] pt-3 pb-12 text-slate-950 md:pb-16"
     >
-      <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
-        <div className="space-y-8">
+      <CustomerAccountShell className="!bg-transparent">
+        <div>
           <header className="space-y-1">
             <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
               Saved
@@ -711,14 +713,15 @@ export default function CustomerSavedClient({
             )}
           </header>
 
-          {error ? (
-            <div className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-600">
-              We could not load your saved items. Please refresh and try again.
-            </div>
-          ) : null}
+          <div className="mt-5 space-y-8">
+            {error ? (
+              <div className="rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm text-rose-600">
+                We could not load your saved items. Please refresh and try again.
+              </div>
+            ) : null}
 
           {!isAuthed && !loadingUser ? (
-            <div className="rounded-3xl border border-slate-200 bg-white px-6 py-10 text-center shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+            <div className="rounded-3xl border border-slate-100 bg-white px-6 py-10 text-center shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
               <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-700">
                 <Heart className="h-6 w-6" />
               </div>
@@ -738,7 +741,7 @@ export default function CustomerSavedClient({
           ) : null}
 
           {isAuthed && totalSavedAll === 0 ? (
-            <div className="rounded-3xl border border-slate-200 bg-white px-6 py-14 text-center shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+            <div className="rounded-3xl border border-slate-100 bg-white px-6 py-14 text-center shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
               <div className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-700">
                 <Heart className="h-7 w-7" />
               </div>
@@ -750,7 +753,7 @@ export default function CustomerSavedClient({
               </p>
               <Link
                 href="/customer/home"
-                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-600 px-5 text-sm font-semibold text-white transition hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+                className="yb-primary-button mt-5 inline-flex min-h-11 items-center justify-center rounded-xl px-5 text-sm font-medium !text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--brand-rgb),0.35)]"
               >
                 Browse listings
               </Link>
@@ -758,13 +761,13 @@ export default function CustomerSavedClient({
           ) : null}
 
           {isAuthed && totalSavedAll > 0 && activeTab === "listings" && saved.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500">
+            <div className="rounded-2xl border border-slate-100 bg-white px-6 py-10 text-center text-sm text-slate-500">
               No saved listings yet.
             </div>
           ) : null}
 
           {isAuthed && totalSavedAll > 0 && activeTab === "shops" && savedShops.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500">
+            <div className="rounded-2xl border border-slate-100 bg-white px-6 py-10 text-center text-sm text-slate-500">
               No saved shops yet.
             </div>
           ) : null}
@@ -798,94 +801,95 @@ export default function CustomerSavedClient({
             </section>
           ) : null}
 
-          {isAuthed && activeTab === "shops" && savedShops.length > 0 ? (
-            <section className="mt-8 space-y-4 md:mt-10">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">
-                    Saved shops
-                  </h2>
+            {isAuthed && activeTab === "shops" && savedShops.length > 0 ? (
+              <section className="mt-8 space-y-4 md:mt-10">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                      Saved shops
+                    </h2>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {savedShops.map((shop) => {
-                  const businessId = getShopId(shop);
-                  const imageSrc = resolveBusinessImageSrc({
-                    imageUrl: shop.cover_photo_url || shop.profile_photo_url || null,
-                    businessType: shop.business_type,
-                    legacyCategory: shop.category,
-                  });
-                  const normalizedShop = {
-                    ...shop,
-                    id: businessId,
-                    public_id: shop.public_id || null,
-                  };
-                  const href = getCustomerBusinessUrl(normalizedShop);
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {savedShops.map((shop) => {
+                    const businessId = getShopId(shop);
+                    const imageSrc = resolveBusinessImageSrc({
+                      imageUrl: shop.cover_photo_url || shop.profile_photo_url || null,
+                      businessType: shop.business_type,
+                      legacyCategory: shop.category,
+                    });
+                    const normalizedShop = {
+                      ...shop,
+                      id: businessId,
+                      public_id: shop.public_id || null,
+                    };
+                    const href = getCustomerBusinessUrl(normalizedShop);
 
-                  return (
-                    <article
-                      key={businessId || shop.public_id || shop.business_name}
-                      className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-                    >
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => handleUnsaveShop(shop)}
-                          disabled={savingShopIds.has(businessId)}
-                          className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-600 shadow-sm backdrop-blur-sm transition hover:border-rose-200 hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-wait disabled:opacity-70"
-                          aria-label="Remove saved shop"
-                          aria-pressed="true"
-                          title="Remove saved shop"
-                        >
-                          <Heart className="h-5 w-5 text-rose-500" fill="currentColor" />
-                        </button>
+                    return (
+                      <article
+                        key={businessId || shop.public_id || shop.business_name}
+                        className="group overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)]"
+                      >
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => handleUnsaveShop(shop)}
+                            disabled={savingShopIds.has(businessId)}
+                            className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-600 shadow-sm backdrop-blur-sm transition hover:border-rose-200 hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-wait disabled:opacity-70"
+                            aria-label="Remove saved shop"
+                            aria-pressed="true"
+                            title="Remove saved shop"
+                          >
+                            <Heart className="h-5 w-5 text-rose-500" fill="currentColor" />
+                          </button>
 
-                        <Link
-                          href={href}
-                          className="relative block aspect-[16/10] overflow-hidden bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
-                        >
-                          <SafeImage
-                            src={imageSrc}
-                            alt={shop.business_name || "Saved shop"}
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                            fallbackSrc={imageSrc}
-                          />
-                        </Link>
-                      </div>
-
-                      <div className="space-y-4 p-4">
-                        <div className="min-w-0 space-y-1">
                           <Link
                             href={href}
-                            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+                            className="relative block aspect-[16/10] overflow-hidden bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
                           >
-                            <h3 className="line-clamp-2 text-lg font-semibold tracking-[-0.02em] text-slate-950">
-                              {shop.business_name || "Local business"}
-                            </h3>
+                            <SafeImage
+                              src={imageSrc}
+                              alt={shop.business_name || "Saved shop"}
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                              fallbackSrc={imageSrc}
+                            />
                           </Link>
-                          <p className="line-clamp-1 text-sm text-slate-500">
-                            {getShopMetaLine(shop)}
-                          </p>
                         </div>
 
-                        <div className="flex items-center justify-end pt-1">
-                          <Link
-                            href={href}
-                            className="inline-flex items-center justify-center rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-sm font-medium text-violet-600 transition hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
-                          >
-                            View shop
-                          </Link>
+                        <div className="space-y-4 p-4">
+                          <div className="min-w-0 space-y-1">
+                            <Link
+                              href={href}
+                              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+                            >
+                              <h3 className="line-clamp-2 text-lg font-semibold tracking-[-0.02em] text-slate-950">
+                                {shop.business_name || "Local business"}
+                              </h3>
+                            </Link>
+                            <p className="line-clamp-1 text-sm text-slate-500">
+                              {getShopMetaLine(shop)}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-end pt-1">
+                            <Link
+                              href={href}
+                              className="inline-flex items-center justify-center rounded-lg border border-violet-100 bg-white px-3 py-1.5 text-sm font-medium text-violet-600 transition hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
+                            >
+                              View shop
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </CustomerAccountShell>
     </section>
   );
 }

@@ -1,8 +1,12 @@
 "use client";
 
+import { useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { markAccountNavHandlerStart } from "@/lib/accountNavPerf";
 import { markNavInProgress } from "@/lib/nav/safariNavGuard";
+
+const ORDER_TAB_HREFS = ["/account/orders", "/account/purchase-history"];
 
 const variants = {
   orders: {
@@ -42,7 +46,18 @@ const variants = {
 };
 
 export default function AccountNavTabs({ active = "orders", variant = "orders" }) {
+  const router = useRouter();
   const config = variants[variant] || variants.orders;
+
+  const prefetchOrderTabs = useCallback(() => {
+    ORDER_TAB_HREFS.forEach((href) => {
+      router.prefetch(href);
+    });
+  }, [router]);
+
+  useEffect(() => {
+    prefetchOrderTabs();
+  }, [prefetchOrderTabs]);
 
   const handleClick = (id) => (event) => {
     markAccountNavHandlerStart(id, {
@@ -60,6 +75,7 @@ export default function AccountNavTabs({ active = "orders", variant = "orders" }
     <div className={config.container}>
       <Link
         href="/account/orders"
+        prefetch
         aria-current={isOrders ? "page" : undefined}
         className={isOrders ? config.active.className : config.inactive.className}
         style={isOrders ? config.active.style : config.inactive.style}
@@ -67,11 +83,14 @@ export default function AccountNavTabs({ active = "orders", variant = "orders" }
         data-perf-id="orders"
         onClick={handleClick("orders")}
         onPointerDownCapture={handlePointerDown("/account/orders")}
+        onFocus={prefetchOrderTabs}
+        onMouseEnter={prefetchOrderTabs}
       >
         Active
       </Link>
       <Link
         href="/account/purchase-history"
+        prefetch
         aria-current={!isOrders ? "page" : undefined}
         className={!isOrders ? config.active.className : config.inactive.className}
         style={!isOrders ? config.active.style : config.inactive.style}
@@ -79,6 +98,8 @@ export default function AccountNavTabs({ active = "orders", variant = "orders" }
         data-perf-id="history"
         onClick={handleClick("history")}
         onPointerDownCapture={handlePointerDown("/account/purchase-history")}
+        onFocus={prefetchOrderTabs}
+        onMouseEnter={prefetchOrderTabs}
       >
         History
       </Link>

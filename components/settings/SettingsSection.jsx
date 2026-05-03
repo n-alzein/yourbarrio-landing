@@ -55,7 +55,10 @@ export function Field({
   labelClassName = "",
   helperClassName = "",
   errorClassName = "",
+  hideEmptyHelper = false,
 }) {
+  const shouldShowHelper = Boolean(error || helper || !hideEmptyHelper);
+
   return (
     <div className={className}>
       <label
@@ -65,15 +68,17 @@ export function Field({
         {label}
       </label>
       {children}
-      <p
-        className={`mt-1.5 min-h-[1.25rem] text-xs ${
-          error
-            ? `text-rose-300 ${errorClassName}`
-            : `text-white/45 ${helperClassName}`
-        }`}
-      >
-        {error || helper || ""}
-      </p>
+      {shouldShowHelper ? (
+        <p
+          className={`mt-1.5 min-h-[1.25rem] text-xs ${
+            error
+              ? `text-rose-300 ${errorClassName}`
+              : `text-white/45 ${helperClassName}`
+          }`}
+        >
+          {error || helper || ""}
+        </p>
+      ) : null}
     </div>
   );
 }

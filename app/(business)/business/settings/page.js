@@ -38,25 +38,27 @@ function parseOptionalNonNegativeNumber(value) {
 
 const editableSections = new Set(["profile", "address", "fulfillment"]);
 
-const sectionCardClassName =
-  "rounded-[28px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_12px_36px_rgba(15,23,42,0.06)] sm:px-7 sm:py-6";
+const settingsPanelClassName =
+  "overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)]";
+const sectionRowClassName =
+  "rounded-none border-0 border-transparent bg-transparent p-5 shadow-none sm:p-7";
 const sectionHeaderClassName =
-  "mb-5 gap-3 border-b border-slate-100 pb-4";
+  "mb-5 gap-3 border-0 pb-0";
 const sectionTitleClassName = "text-[1.05rem] font-semibold text-slate-950";
 const sectionDescriptionClassName = "mt-1 max-w-2xl text-sm leading-6 text-slate-500";
 const sectionBodyClassName = "space-y-5";
 const sectionFooterClassName =
   "mt-6 border-t border-slate-100 pt-4 sm:justify-end";
 const businessInputClassName =
-  "h-11 w-full rounded-2xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-violet-500 focus-visible:ring-4 focus-visible:ring-violet-500/15";
+  "h-11 w-full rounded-2xl border border-slate-100 bg-white px-3.5 text-sm text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-violet-500 focus-visible:ring-4 focus-visible:ring-violet-500/15";
 const businessTextareaClassName = `${businessInputClassName} h-auto min-h-[110px] py-3`;
 const readOnlyFieldClassName =
-  "flex min-h-11 items-center rounded-2xl border border-slate-200 bg-slate-50/70 px-3.5 text-sm text-slate-700";
+  "flex min-h-11 items-center rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 text-sm text-slate-700";
 const fieldLabelClassName = "font-medium text-slate-800";
 const fieldHelperClassName = "text-slate-500";
 const fieldErrorClassName = "text-rose-600";
 const secondaryButtonClassName =
-  "inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-10 items-center justify-center rounded-xl border border-slate-100 bg-white/70 px-4 text-sm font-medium text-slate-600 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50";
 const primaryButtonClassName =
   "inline-flex h-10 items-center justify-center rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed disabled:bg-violet-300";
 
@@ -86,8 +88,8 @@ function ToggleField({ id, checked, onChange, label, helper, disabled }) {
       htmlFor={id}
       className={`flex min-h-[76px] items-start gap-3 rounded-2xl border px-4 py-4 transition ${
         disabled
-          ? "cursor-default border-slate-200 bg-slate-50/80"
-          : "cursor-pointer border-slate-200 bg-white hover:border-slate-300"
+          ? "cursor-default border-slate-100 bg-slate-50/80"
+          : "cursor-pointer border-slate-100 bg-white hover:border-slate-200"
       }`}
     >
       <span className="relative mt-0.5 inline-flex shrink-0">
@@ -117,13 +119,36 @@ function ToggleField({ id, checked, onChange, label, helper, disabled }) {
 function ReadOnlyField({ value, multiline = false }) {
   if (multiline) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3.5 py-3 text-sm leading-6 text-slate-700">
+      <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-sm leading-6 text-slate-700">
         {value || "—"}
       </div>
     );
   }
 
   return <div className={readOnlyFieldClassName}>{value || "—"}</div>;
+}
+
+function StateSelect({ id, value, onChange, className = "", error = false }) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={onChange}
+      className={`${businessInputClassName} appearance-none bg-[linear-gradient(45deg,transparent_50%,#64748b_50%),linear-gradient(135deg,#64748b_50%,transparent_50%)] bg-[length:5px_5px,5px_5px] bg-[position:calc(100%-18px)_19px,calc(100%-13px)_19px] bg-no-repeat pr-10 ${
+        error
+          ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
+          : ""
+      } ${className}`}
+      aria-invalid={error}
+    >
+      <option value="">State</option>
+      {US_STATES.map((stateOption) => (
+        <option key={stateOption.code} value={stateOption.code}>
+          {stateOption.code} - {stateOption.name}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 export default function SettingsPage() {
@@ -610,38 +635,18 @@ export default function SettingsPage() {
   ----------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
-      <div className="mx-auto max-w-5xl px-4 pb-8 pt-0 sm:px-6 sm:pb-10 lg:px-8">
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-violet-600/80">
-              Business account
-            </p>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                Settings
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Manage your business profile, fulfillment defaults, and account access.
-              </p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            {isEditingAnySection ? (
-              <span>
-                Editing{" "}
-                <span className="font-semibold text-slate-900">
-                  {activeSection
-                    ? activeSection.charAt(0).toUpperCase() + activeSection.slice(1)
-                    : ""}
-                </span>
-              </span>
-            ) : (
-              <span>Choose a section to update.</span>
-            )}
-          </div>
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-0 sm:px-6 sm:pb-10 lg:px-0">
+        <div className="mb-7 space-y-2.5">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+            Settings
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-slate-600">
+            Manage your business profile, fulfillment defaults, and account access.
+          </p>
         </div>
 
-        <div className="space-y-10">
+        <div className={settingsPanelClassName}>
+          <div className="divide-y divide-slate-100">
           <SettingsSection
             title="Profile"
             description="Update the business details customers see across YourBarrio."
@@ -672,7 +677,7 @@ export default function SettingsPage() {
                 </>
               ) : null
             }
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             footerClassName={sectionFooterClassName}
@@ -680,7 +685,7 @@ export default function SettingsPage() {
             descriptionClassName={sectionDescriptionClassName}
           >
             <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-              <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+              <div className="rounded-3xl border border-slate-100 bg-slate-50/70 p-5">
                 <div className="flex flex-col items-start gap-4">
                   <SafeAvatar
                     src={
@@ -698,7 +703,7 @@ export default function SettingsPage() {
                     height={144}
                     shape="rounded-square"
                     identityType="business"
-                    className="h-28 w-28 overflow-hidden rounded-2xl border border-slate-200 bg-gray-100 object-cover shadow-sm ring-1 ring-black/5 sm:h-36 sm:w-36"
+                    className="h-28 w-28 overflow-hidden rounded-2xl border border-slate-100 bg-gray-100 object-cover shadow-sm ring-1 ring-black/5 sm:h-36 sm:w-36"
                     initialsClassName="text-3xl sm:text-4xl"
                   />
                   <div className="space-y-1.5">
@@ -750,11 +755,11 @@ export default function SettingsPage() {
                   <Field
                     label="Your phone number"
                     id="phone"
-                    helper="Private account contact number. This is not shown on your business profile."
                     error={fieldErrors.phone}
                     labelClassName={fieldLabelClassName}
                     helperClassName={fieldHelperClassName}
                     errorClassName={fieldErrorClassName}
+                    hideEmptyHelper
                   >
                     {isEditingProfile ? (
                       <input
@@ -775,10 +780,10 @@ export default function SettingsPage() {
                 <Field
                   label="Website"
                   id="website"
-                  helper="Optional, for your external site or ordering page."
                   labelClassName={fieldLabelClassName}
                   helperClassName={fieldHelperClassName}
                   errorClassName={fieldErrorClassName}
+                  hideEmptyHelper
                 >
                   {isEditingProfile ? (
                     <input
@@ -828,7 +833,7 @@ export default function SettingsPage() {
                 </>
               ) : null
             }
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             footerClassName={sectionFooterClassName}
@@ -839,11 +844,11 @@ export default function SettingsPage() {
               <Field
                 label="Street address"
                 id="address"
-                helper="Required if city, state, or ZIP is set."
                 error={fieldErrors.address}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -853,7 +858,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("address", e.target.value)
                     }
-                    placeholder="123 Pine St"
+                    placeholder="Street address"
                     className={`${businessInputClassName} ${
                       fieldErrors.address
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
@@ -869,10 +874,10 @@ export default function SettingsPage() {
               <Field
                 label="Apt / Suite / Unit"
                 id="address_2"
-                helper="Optional, for multi-tenant buildings or suites."
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -882,7 +887,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("address_2", e.target.value)
                     }
-                    placeholder="Suite 210"
+                    placeholder="Apt, suite, unit"
                     className={businessInputClassName}
                   />
                 ) : (
@@ -895,11 +900,11 @@ export default function SettingsPage() {
               <Field
                 label="City"
                 id="city"
-                helper="Required if state or ZIP is set."
                 error={fieldErrors.city}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -907,7 +912,7 @@ export default function SettingsPage() {
                     type="text"
                     value={form.city}
                     onChange={(e) => handleFieldChange("city", e.target.value)}
-                    placeholder="Long Beach"
+                    placeholder="City"
                     className={`${businessInputClassName} ${
                       fieldErrors.city
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
@@ -923,31 +928,19 @@ export default function SettingsPage() {
               <Field
                 label="State"
                 id="state"
-                helper="Select your state."
                 error={fieldErrors.state}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
-                  <select
+                  <StateSelect
                     id="state"
                     value={form.state}
                     onChange={(e) => handleFieldChange("state", e.target.value)}
-                    className={`${businessInputClassName} ${
-                      fieldErrors.state
-                        ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
-                        : ""
-                    }`}
-                    aria-invalid={Boolean(fieldErrors.state)}
-                  >
-                    <option value="">Select state</option>
-                    {US_STATES.map((stateOption) => (
-                      <option key={stateOption.code} value={stateOption.code}>
-                        {stateOption.code} - {stateOption.name}
-                      </option>
-                    ))}
-                  </select>
+                    error={Boolean(fieldErrors.state)}
+                  />
                 ) : (
                   <ReadOnlyField value={form.state} />
                 )}
@@ -956,11 +949,11 @@ export default function SettingsPage() {
               <Field
                 label="Postal code"
                 id="postal_code"
-                helper="ZIP or ZIP+4 format."
                 error={fieldErrors.postal_code}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
+                hideEmptyHelper
               >
                 {isEditingAddress ? (
                   <input
@@ -970,7 +963,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("postal_code", e.target.value)
                     }
-                    placeholder="90802"
+                    placeholder="Postal code"
                     className={`${businessInputClassName} ${
                       fieldErrors.postal_code
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
@@ -1015,7 +1008,7 @@ export default function SettingsPage() {
                 </>
               ) : null
             }
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             footerClassName={sectionFooterClassName}
@@ -1049,7 +1042,7 @@ export default function SettingsPage() {
                 </>
               ) : (
                 <>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4">
                     <p className="text-sm font-semibold text-slate-900">
                       Pickup enabled by default
                     </p>
@@ -1057,7 +1050,7 @@ export default function SettingsPage() {
                       {form.pickup_enabled_default ? "Enabled" : "Disabled"}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4">
                     <p className="text-sm font-semibold text-slate-900">
                       Local delivery enabled
                     </p>
@@ -1069,7 +1062,7 @@ export default function SettingsPage() {
               )}
             </FieldGrid>
 
-            <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+            <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-4 sm:p-5">
               <div className="mb-4">
                 <h3 className="text-sm font-semibold text-slate-900">
                   Delivery defaults
@@ -1215,13 +1208,13 @@ export default function SettingsPage() {
           <SettingsSection
             title="Security"
             description="Manage how you access your account."
-            className={sectionCardClassName}
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             titleClassName={sectionTitleClassName}
             descriptionClassName={sectionDescriptionClassName}
           >
-            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-900">
                   Password & login
@@ -1244,7 +1237,7 @@ export default function SettingsPage() {
           <SettingsSection
             title="Delete account"
             description="This permanently removes your access to YourBarrio and starts account deletion."
-            className="rounded-[28px] border border-rose-200 bg-white px-5 py-5 shadow-[0_12px_36px_rgba(15,23,42,0.04)] sm:px-7 sm:py-6"
+            className={sectionRowClassName}
             headerClassName={sectionHeaderClassName}
             bodyClassName={sectionBodyClassName}
             titleClassName="text-[1.05rem] font-semibold text-rose-700"
@@ -1264,6 +1257,7 @@ export default function SettingsPage() {
             </div>
           </SettingsSection>
         </div>
+      </div>
       </div>
 
       {toast ? (

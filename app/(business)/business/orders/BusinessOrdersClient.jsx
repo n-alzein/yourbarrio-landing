@@ -519,9 +519,8 @@ export default function BusinessOrdersClient() {
 
   return (
     <div
-      className="min-h-screen px-4 pb-12 md:px-8 lg:px-12"
+      className="min-h-screen bg-[#f6f7fb] px-4 pb-12 md:px-8 lg:px-12"
       style={{
-        background: "var(--background)",
         color: "var(--text)",
       }}
     >
