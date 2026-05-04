@@ -157,7 +157,7 @@ export default async function AccountOrdersPage({ searchParams }) {
               return (
                 <Link
                   key={order.id}
-                  href={`/orders/${order.order_number}`}
+                  href={`/orders/${order.order_number}?from=active`}
                   aria-label={`View details for order ${displayOrderId} from ${vendorName}`}
                   className="group cursor-pointer rounded-3xl border bg-white/95 px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-[background-color,border-color,box-shadow,transform] hover:bg-[rgba(248,250,252,0.95)] hover:border-[rgba(15,23,42,0.07)] active:bg-[rgba(241,245,249,0.95)] active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/30 focus-visible:ring-offset-2 sm:px-5 sm:py-4"
                   style={{

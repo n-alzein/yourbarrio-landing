@@ -24,6 +24,19 @@ function isTruthyParam(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
+function getBackHref(searchParams) {
+  const source =
+    typeof searchParams?.from === "string"
+      ? searchParams.from.trim().toLowerCase()
+      : "";
+
+  if (source === "history" || source === "purchase-history") {
+    return "/account/purchase-history";
+  }
+
+  return "/account/orders";
+}
+
 export default async function OrderPage({ params, searchParams }) {
   const resolvedParams =
     params && typeof params.then === "function"
@@ -45,6 +58,7 @@ export default async function OrderPage({ params, searchParams }) {
     checkoutSessionId.length > 0 ||
     resolvedSearchParams?.from === "checkout" ||
     isTruthyParam(resolvedSearchParams?.success);
+  const backHref = getBackHref(resolvedSearchParams);
   const { supabase, user } = await requireRole("customer");
   const userId = user?.id || "";
 
@@ -129,6 +143,7 @@ export default async function OrderPage({ params, searchParams }) {
       purchasedAtLabel={formatOrderPurchaseDateTime(order)}
       statusTimestampLabel={formatOrderDateTime(order.updated_at || order.created_at)}
       mode={arrivedFromCheckout ? "checkout" : "details"}
+      backHref={backHref}
     />
   );
 }

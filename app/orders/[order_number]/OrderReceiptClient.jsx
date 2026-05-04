@@ -95,65 +95,63 @@ function StatusHeader({
   mode,
   displayOrderId,
   statusTimestampLabel,
+  backHref,
 }) {
   const statusLabel = getOrderStatusLabel(order?.status);
-  const statusDescription = getOrderStatusDescription(order?.status);
   const isCheckoutMode = mode === "checkout";
 
   return (
-    <section className="space-y-7">
-      <div className="space-y-2.5">
+    <section className="mb-8">
+      <Link
+        href={backHref || "/account/orders"}
+        className="mb-4 inline-flex w-fit items-center text-sm font-medium text-slate-500 transition hover:text-[rgb(var(--brand-rgb))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2"
+      >
+        <span aria-hidden="true">←</span>
+        <span className="ml-1">Back to orders</span>
+      </Link>
+
+      <div>
         {!isCheckoutMode ? (
-          <p className="text-[11px] tracking-[0.16em] text-slate-400">Order details</p>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Order details
+          </p>
         ) : null}
-        <h1 className="text-3xl font-semibold text-slate-950">
+        <h1 className="mb-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
           {isCheckoutMode ? "Order confirmed" : `Order ${displayOrderId}`}
         </h1>
-        <p className="text-sm text-slate-500">Order {displayOrderId}</p>
-        <p className="text-sm text-slate-600">
-          {isCheckoutMode
-            ? "We received your order and payment."
-            : statusDescription}
-        </p>
       </div>
 
-      <div className="space-y-2.5">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-slate-600">
-          <span className="inline-flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 rounded-full"
-              style={
-                STATUS_DOT_STYLES[order?.status] || {
-                  background: "rgba(15, 23, 42, 0.45)",
-                }
+      <p className="mb-3 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-slate-600">
+        <span className="inline-flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 rounded-full"
+            style={
+              STATUS_DOT_STYLES[order?.status] || {
+                background: "rgba(15, 23, 42, 0.45)",
               }
-            />
-            <span className="font-medium text-slate-900">{statusLabel}</span>
-          </span>
-          <span className="text-slate-400" aria-hidden="true">
-            ·
-          </span>
-          <span className="text-slate-500">{statusTimestampLabel}</span>
-        </p>
-      </div>
+            }
+          />
+          <span className="font-medium text-slate-950">{statusLabel}</span>
+        </span>
+        <span className="text-slate-400" aria-hidden="true">
+          ·
+        </span>
+        <span className="text-slate-500">{statusTimestampLabel}</span>
+      </p>
 
-      <div className="space-y-1.5">
-        <p className="text-sm leading-6 text-slate-600">
-          {NEXT_STEPS_COPY[order?.status] || "We'll keep you posted on the next update."}
-        </p>
-      </div>
     </section>
   );
 }
 
-/** @param {{ order: Order, vendor: VendorSummary, purchasedAtLabel: string, statusTimestampLabel: string, mode: "checkout" | "details" }} props */
+/** @param {{ order: Order, vendor: VendorSummary, purchasedAtLabel: string, statusTimestampLabel: string, mode: "checkout" | "details", backHref?: string }} props */
 export default function OrderReceiptClient({
   order,
   vendor,
   purchasedAtLabel,
   statusTimestampLabel,
   mode = "details",
+  backHref = "/account/orders",
 }) {
   const items = order?.order_items || [];
   const displayOrderId =
@@ -163,152 +161,183 @@ export default function OrderReceiptClient({
   const isCheckoutMode = mode === "checkout";
 
   return (
-    <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
-      <div className="max-w-4xl mx-auto space-y-10">
+    <div className="min-h-screen bg-[#f6f7fb] px-4 pb-14 pt-4 text-slate-950 sm:px-6 md:pb-16 lg:px-8">
+      <div className="mx-auto max-w-5xl">
         <StatusHeader
           order={order}
           mode={mode}
           displayOrderId={displayOrderId}
           statusTimestampLabel={statusTimestampLabel}
+          backHref={backHref}
         />
 
-        <div
-          className="rounded-3xl p-6 space-y-4"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid rgba(15, 23, 42, 0.06)",
-          }}
-        >
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="space-y-6 rounded-[24px] border border-slate-100 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.035)] sm:p-6 lg:p-7">
+          <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-semibold">
+              <p className="text-base font-semibold text-slate-950">
                 {isCheckoutMode ? "Receipt" : "Receipt and payment"}
               </p>
-              <p className="text-xs opacity-70 mb-6">
+              <p className="mt-1 text-sm text-slate-500">
                 {paymentSummary}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Purchased {purchasedAtLabel}
               </p>
             </div>
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[11px] font-medium text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/30 focus-visible:ring-offset-2"
-              style={{ borderColor: "rgba(15, 23, 42, 0.08)" }}
+              className="inline-flex h-9 w-fit items-center justify-center rounded-lg border border-slate-100 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-violet-100 hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2"
             >
               Print receipt
             </button>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 text-sm mt-4 md:mt-0">
-            <div className="space-y-1">
-              <p className="text-[11px] font-medium text-slate-500">Vendor</p>
-              <p className="font-semibold">{vendor?.business_name || vendor?.full_name || "Local vendor"}</p>
-              {vendor?.city ? <p className="text-xs opacity-70">{vendor.city}</p> : null}
+          <div className="grid gap-5 text-sm md:grid-cols-2">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Vendor
+              </p>
+              <p className="font-semibold text-slate-950">
+                {vendor?.business_name || vendor?.full_name || "Local vendor"}
+              </p>
+              {vendor?.city ? (
+                <p className="text-sm text-slate-500">{vendor.city}</p>
+              ) : null}
             </div>
-            <div className="space-y-0">
-              <p className="mb-1 text-[11px] font-medium text-slate-500">Fulfillment</p>
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Fulfillment
+              </p>
               {order?.fulfillment_type === "delivery" ? (
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold leading-tight">Delivery</p>
-                    <p className="text-xs opacity-70 leading-tight">
+                <div className="space-y-2">
+                  <div>
+                    <p className="font-semibold leading-5 text-slate-950">Delivery</p>
+                    <p className="mt-1 text-sm leading-5 text-slate-500">
                       {order.delivery_address1}
                       {order.delivery_address2 ? `, ${order.delivery_address2}` : ""}
                     </p>
                   </div>
                   {order?.delivery_instructions ? (
-                    <div className="text-right">
-                      <p className="text-[0.65rem] font-medium text-slate-500">Delivery instructions</p>
-                      <p className="mt-2 text-xs opacity-70">{order.delivery_instructions}</p>
+                    <div>
+                      <p className="text-xs font-medium text-slate-500">Delivery instructions</p>
+                      <p className="mt-1 text-sm leading-5 text-slate-500">
+                        {order.delivery_instructions}
+                      </p>
                     </div>
                   ) : null}
                   {order?.delivery_notes_snapshot ? (
-                    <div className="text-right">
-                      <p className="text-[0.65rem] font-medium text-slate-500">Delivery notes</p>
-                      <p className="mt-2 text-xs opacity-70">{order.delivery_notes_snapshot}</p>
+                    <div>
+                      <p className="text-xs font-medium text-slate-500">Delivery notes</p>
+                      <p className="mt-1 text-sm leading-5 text-slate-500">
+                        {order.delivery_notes_snapshot}
+                      </p>
                     </div>
                   ) : null}
+                  <p className="text-sm text-slate-500">{fulfillmentSummary}</p>
                 </div>
               ) : (
-                <p className="text-xs opacity-70 mb-3">
-                  Pickup time: {order.pickup_time || "ASAP"}
-                </p>
+                <div>
+                  <p className="font-semibold leading-5 text-slate-950">Pickup</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Pickup time: {order.pickup_time || "ASAP"}
+                  </p>
+                </div>
               )}
-              {order?.fulfillment_type === "delivery" ? (
-                <p className="text-xs text-slate-500">{fulfillmentSummary}</p>
-              ) : null}
             </div>
           </div>
 
-          <div className="border-t pt-4" style={{ borderColor: "var(--border)" }}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm table-fixed">
-                <colgroup>
-                  <col />
-                  <col style={{ width: "3.5rem" }} />
-                  <col style={{ width: "5.5rem" }} />
-                  <col style={{ width: "5.5rem" }} />
-                </colgroup>
-                <thead className="text-[11px] font-medium text-slate-500 leading-none">
-                  <tr>
-                    <th className="text-left font-medium pb-2">Item</th>
-                    <th className="text-right font-medium pb-2">Qty</th>
-                    <th className="text-right font-medium pb-2">Unit</th>
-                    <th className="text-right font-medium pb-2">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="align-top">
-                      <td className="opacity-80 pr-2 py-1 break-words">
-                        <div className="flex items-start gap-3">
-                          {item.image_url ? (
-                            <img
-                              src={item.image_url}
-                              alt=""
-                              className="h-11 w-11 shrink-0 rounded-lg object-cover"
-                            />
-                          ) : null}
+          <div className="border-t border-slate-100 pt-5">
+            <div className="hidden grid-cols-[minmax(0,1fr)_4rem_6rem_6rem] gap-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:grid">
+              <div>Item</div>
+              <div className="text-right">Qty</div>
+              <div className="text-right">Unit</div>
+              <div className="text-right">Total</div>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {items.map((item) => {
+                const lineTotal =
+                  Number(item.unit_price || 0) * Number(item.quantity || 0);
+
+                return (
+                  <div
+                    key={item.id}
+                    className="grid gap-3 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_4rem_6rem_6rem] sm:items-center sm:gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt=""
+                            className="h-14 w-14 shrink-0 rounded-xl border border-slate-100 object-cover"
+                          />
+                        ) : (
+                          <div className="h-14 w-14 shrink-0 rounded-xl border border-slate-100 bg-slate-50" />
+                        )}
+                        <div className="min-w-0 pt-0.5 font-medium leading-5 text-slate-800">
                           <ReceiptItemName item={item} />
                         </div>
-                      </td>
-                      <td className="text-right py-1">{item.quantity}</td>
-                      <td className="text-right py-1">
-                        ${formatMoney(item.unit_price)}
-                      </td>
-                      <td className="text-right py-1">
-                        ${formatMoney(Number(item.unit_price || 0) * Number(item.quantity || 0))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
+                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 sm:hidden">
+                        Qty
+                      </span>
+                      <span className="text-slate-700">{item.quantity}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
+                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 sm:hidden">
+                        Unit
+                      </span>
+                      <span className="text-slate-700">${formatMoney(item.unit_price)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
+                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 sm:hidden">
+                        Total
+                      </span>
+                      <span className="font-medium text-slate-950">
+                        ${formatMoney(lineTotal)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="border-t mt-4 pt-4 space-y-2 text-sm" style={{ borderColor: "var(--border)" }}>
-            <div className="flex items-center justify-between">
-              <span className="opacity-80">Subtotal</span>
-              <span>${formatMoney(order?.subtotal)}</span>
-            </div>
-            {Number(order?.delivery_fee_cents_snapshot || 0) > 0 ? (
-              <div className="flex items-center justify-between">
-                <span className="opacity-80">Delivery fee</span>
-                <span>${formatMoney(Number(order?.delivery_fee_cents_snapshot || 0) / 100)}</span>
+          <div className="border-t border-slate-100 pt-5">
+            <div className="ml-auto max-w-sm space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-slate-500">Subtotal</span>
+                <span>${formatMoney(order?.subtotal)}</span>
               </div>
-            ) : null}
-            <div className="flex items-center justify-between">
-              <span className="opacity-80">Service fee</span>
-              <span>${formatMoney(order?.fees)}</span>
+              {Number(order?.delivery_fee_cents_snapshot || 0) > 0 ? (
+                <div className="flex items-center justify-between gap-6">
+                  <span className="text-slate-500">Delivery fee</span>
+                  <span>
+                    ${formatMoney(Number(order?.delivery_fee_cents_snapshot || 0) / 100)}
+                  </span>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between gap-6">
+                <span className="text-slate-500">Service fee</span>
+                <span>${formatMoney(order?.fees)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-6 border-t border-slate-100 pt-2">
+                <span className="font-semibold text-slate-950">Total</span>
+                <span className="font-semibold text-slate-950">
+                  ${formatMoney(order?.total)}
+                </span>
+              </div>
+              {order?.status === "pending_payment" ? (
+                <p className="text-xs text-slate-500">
+                  Your order will move forward after Stripe confirms payment.
+                </p>
+              ) : null}
             </div>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">Total</span>
-              <span className="font-semibold">${formatMoney(order?.total)}</span>
-            </div>
-            {order?.status === "pending_payment" ? (
-              <p className="text-xs opacity-70">
-                Your order will move forward after Stripe confirms payment.
-              </p>
-            ) : null}
           </div>
         </div>
       </div>

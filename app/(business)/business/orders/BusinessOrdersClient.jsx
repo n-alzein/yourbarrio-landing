@@ -18,6 +18,7 @@ import {
   isBackward,
 } from "@/lib/orders/statusTransitions";
 import { getOrderItemThumbnailUrl } from "@/lib/orders/itemThumbnails";
+import { formatUSPhone, getUSPhoneDigits } from "@/lib/utils/formatUSPhone";
 
 const TABS = [
   { id: "new", label: "New" },
@@ -51,6 +52,44 @@ const businessStatusBadgeClass =
   "business-order-status !px-1.5 !py-0.5 !text-[11px] !font-medium tracking-[0.01em]";
 
 const businessOrdersTabCache = {};
+
+const TABLE_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+
+const TABLE_DATE_WITH_YEAR_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const TABLE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const formatOrderTableDateTime = (value) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return formatOrderDateTime(value);
+
+  const now = new Date();
+  const date =
+    parsed.getFullYear() === now.getFullYear()
+      ? TABLE_DATE_FORMATTER.format(parsed)
+      : TABLE_DATE_WITH_YEAR_FORMATTER.format(parsed);
+
+  return `${date} · ${TABLE_TIME_FORMATTER.format(parsed)}`;
+};
+
+const formatCustomerContact = (order) => {
+  if (order?.contact_phone) {
+    const digits = getUSPhoneDigits(order.contact_phone);
+    return digits.length === 10 ? formatUSPhone(digits) : order.contact_phone;
+  }
+
+  return order?.contact_email || "—";
+};
 
 const getLocalRangeStart = (days) => {
   const start = new Date();
@@ -743,6 +782,15 @@ export default function BusinessOrdersClient() {
             >
               <div className="max-h-[520px] overflow-auto">
                 <table className="min-w-full border-collapse text-sm">
+                  <colgroup>
+                    <col className="w-[19%]" />
+                    <col className="w-[17%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[17%]" />
+                  </colgroup>
                   <thead
                     className="sticky top-0 z-10 border-b border-slate-200/80 bg-white text-[10px] uppercase tracking-[0.18em] text-slate-600"
                   >
@@ -835,11 +883,11 @@ export default function BusinessOrdersClient() {
                             <div className="flex items-center gap-3">
                               <OrderThumbnail order={order} />
                               <div className="min-w-0">
-                                <p className="font-semibold text-slate-950">
-                                  Order {getOrderDisplayId(order.order_number)}
+                                <p className="whitespace-nowrap font-semibold text-slate-950">
+                                  {getOrderDisplayId(order.order_number)}
                                 </p>
-                                <p className="mt-px text-xs text-slate-400/90">
-                                  {formatOrderDateTime(order.created_at)}
+                                <p className="mt-px whitespace-nowrap text-xs text-slate-500">
+                                  {formatOrderTableDateTime(order.created_at)}
                                 </p>
                               </div>
                             </div>
@@ -849,8 +897,8 @@ export default function BusinessOrdersClient() {
                               <p className="font-medium text-slate-900">
                                 {order.contact_name || "Customer"}
                               </p>
-                              <p className="text-xs text-slate-400">
-                                {order.contact_phone || order.contact_email || "—"}
+                              <p className="whitespace-nowrap text-xs text-slate-500">
+                                {formatCustomerContact(order)}
                               </p>
                             </div>
                           </td>
@@ -947,11 +995,11 @@ export default function BusinessOrdersClient() {
                       <div className="flex min-w-0 items-start gap-3">
                         <OrderThumbnail order={order} />
                         <div className="min-w-0 space-y-1">
-                          <p className="text-sm font-semibold">
-                            Order {getOrderDisplayId(order.order_number)}
+                          <p className="whitespace-nowrap text-[13px] font-semibold text-slate-950 sm:text-sm">
+                            {getOrderDisplayId(order.order_number)}
                           </p>
-                          <p className="text-xs opacity-70">
-                            {formatOrderDateTime(order.created_at)}
+                          <p className="whitespace-nowrap text-xs text-slate-500">
+                            {formatOrderTableDateTime(order.created_at)}
                           </p>
                         </div>
                       </div>
@@ -969,8 +1017,8 @@ export default function BusinessOrdersClient() {
                         <p className="text-sm font-semibold">
                           {order.contact_name || "Customer"}
                         </p>
-                        <p className="opacity-70">
-                          {order.contact_phone || order.contact_email || "—"}
+                        <p className="whitespace-nowrap text-slate-500">
+                          {formatCustomerContact(order)}
                         </p>
                       </div>
                       <div className="space-y-1">
@@ -1055,11 +1103,14 @@ export default function BusinessOrdersClient() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2 w-full max-w-[35%] flex-none">
+              <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs uppercase tracking-[0.2em] opacity-70">
                   Order details
                 </p>
-                <h2 id="order-detail-title" className="text-2xl font-semibold">
+                <h2
+                  id="order-detail-title"
+                  className="whitespace-nowrap text-xl font-semibold sm:text-2xl"
+                >
                   Order {getOrderDisplayId(selectedOrder.order_number)}
                 </h2>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1227,15 +1278,6 @@ export default function BusinessOrdersClient() {
                 <span>Total</span>
                 <span className="text-right">${formatMoney(totalAmount)}</span>
               </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <OrderStatusBadge
-                status={selectedOrder.status}
-                label={getOrderStatusLabel(selectedOrder.status)}
-                className={businessStatusBadgeClass}
-                radiusClass="rounded-lg"
-              />
             </div>
 
             {orderActions.primaryAction || orderActions.hasMenu ? (

@@ -43,7 +43,7 @@ describe("PurchaseHistoryList", () => {
       name: /View receipt for order YB-ORD-123456 from Barrio Bakery/i,
     });
 
-    expect(link).toHaveAttribute("href", "/orders/YB-123456");
+    expect(link).toHaveAttribute("href", "/orders/YB-123456?from=history");
     expect(within(link).getByText("Barrio Bakery")).toHaveClass("text-base", "font-semibold");
     expect(within(link).getByText(/YB-ORD-123456 · 10:09 AM/)).toHaveClass("text-sm");
     expect(within(link).getByText("$42.50")).toHaveClass("text-base", "font-semibold");

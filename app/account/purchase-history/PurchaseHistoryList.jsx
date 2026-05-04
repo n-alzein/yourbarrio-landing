@@ -102,7 +102,7 @@ export default function PurchaseHistoryList({ orders }) {
               return (
                 <Link
                   key={order.id}
-                  href={`/orders/${order.order_number}`}
+                  href={`/orders/${order.order_number}?from=history`}
                   aria-label={`View receipt for order ${displayOrderId} from ${vendorName}`}
                   className="group flex cursor-pointer items-center justify-between gap-3 rounded-2xl px-4 py-3.5 transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] sm:px-5 sm:py-4"
                   style={{
