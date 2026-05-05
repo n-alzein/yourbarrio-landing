@@ -377,18 +377,33 @@ function getPayoutViewModel(
   ) {
     return {
       state: "needs_action",
-      title: "Finish setup to get paid",
-      body: "Complete your payout setup to start receiving money from customers.",
-      actionLabel: "Complete payout setup",
+      title: "Complete payouts to start getting paid",
+      body: "Finish your Stripe setup so payouts can be sent to your bank account.",
+      actionLabel: "Finish setup",
     };
   }
 
   return {
     state: "issue",
-    title: "Payout setup incomplete",
-    body: "There's an issue with your payment setup.",
+    title: "Complete payouts to start getting paid",
+    body: "Finish your Stripe setup so payouts can be sent to your bank account.",
     actionLabel: "Fix setup",
   };
+}
+
+function getPayoutReadinessViewModel(
+  stripeStatus: StripeConnectStatus | null,
+  loading: boolean
+) {
+  if (loading) return null;
+  const payoutViewModel = getPayoutViewModel(stripeStatus);
+  if (payoutViewModel.state === "ready") return null;
+
+  return {
+    state: payoutViewModel.state,
+    label: "Payments not ready",
+    description: "Finish Stripe setup before payouts can be sent.",
+  } as const;
 }
 
 function StripeStatusCard({
@@ -409,11 +424,8 @@ function StripeStatusCard({
   const viewModel = getPayoutViewModel(status);
   const showAction = !loading;
   const isReady = viewModel.state === "ready";
-  const statusLabel = loading
-    ? "Checking setup"
-    : isReady
-      ? "Ready to get paid"
-      : "Action needed";
+  const statusLabel = loading ? "Checking setup" : "Ready to get paid";
+  const showStatusBadge = loading || isReady;
 
   return (
     <section className="dashboard-panel p-5 sm:p-6">
@@ -425,7 +437,7 @@ function StripeStatusCard({
             ) : isReady ? (
               <BadgeCheck className="h-5 w-5 text-emerald-600" />
             ) : (
-              <Landmark className="h-5 w-5" />
+              <Landmark className="h-5 w-5 text-amber-600" />
             )}
           </div>
           <div>
@@ -436,15 +448,17 @@ function StripeStatusCard({
               <h2 className="text-xl font-semibold text-slate-950">
                 {loading ? "Checking payout setup" : viewModel.title}
               </h2>
-              <span
-                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] ${
-                  isReady
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-violet-100 bg-violet-50 text-[#5b21b6]"
-                }`}
-              >
-                {statusLabel}
-              </span>
+              {showStatusBadge ? (
+                <span
+                  className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] ${
+                    isReady
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                  }`}
+                >
+                  {statusLabel}
+                </span>
+              ) : null}
             </div>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
               {loading
@@ -649,6 +663,7 @@ const DashboardPage = () => {
   const dashboardName = data?.businessName;
   const dashboardAvatarUrl = data?.businessAvatarUrl ?? null;
   const setupItems = dashboardState?.setupItems ?? DEFAULT_SETUP_ITEMS;
+  const payoutReadiness = getPayoutReadinessViewModel(stripeStatus, stripeLoading);
 
   return (
     <main
@@ -668,6 +683,7 @@ const DashboardPage = () => {
               businessAvatarUrl={dashboardAvatarUrl}
               lastUpdated={dashboardLastUpdated}
               setupItems={setupItems}
+              payoutReadiness={payoutReadiness}
               onDateRangeChange={setDateRange}
               onFiltersChange={setFilters}
             />

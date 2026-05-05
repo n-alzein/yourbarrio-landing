@@ -155,4 +155,45 @@ describe("DateRangeControls", () => {
       expect(screen.getByText("SS")).toBeInTheDocument();
     });
   });
+
+  it("shows payout readiness as a blocker without adding a fourth setup step", () => {
+    render(
+      <DateRangeControls
+        {...baseProps}
+        setupItems={[
+          { id: "profile", label: "Profile complete", complete: true },
+          { id: "product", label: "First product", complete: true },
+          { id: "profile_visibility", label: "Profile ready", complete: false },
+        ]}
+        payoutReadiness={{
+          state: "needs_action",
+          label: "Payments not ready",
+          description: "Finish Stripe setup before payouts can be sent.",
+        }}
+      />
+    );
+
+    expect(screen.getByText("Setup in progress")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 steps finished")).toBeInTheDocument();
+    expect(screen.getByText("Payments not ready")).toBeInTheDocument();
+    expect(screen.getByText("Finish Stripe setup before payouts can be sent.")).toBeInTheDocument();
+    expect(screen.queryByText("Action required")).not.toBeInTheDocument();
+    expect(screen.queryByText(/4 steps/i)).not.toBeInTheDocument();
+  });
+
+  it("does not show payout blocker when payout readiness is ready", () => {
+    render(
+      <DateRangeControls
+        {...baseProps}
+        setupItems={[
+          { id: "profile", label: "Profile complete", complete: true },
+          { id: "product", label: "First product", complete: true },
+          { id: "profile_visibility", label: "Profile ready", complete: true },
+        ]}
+      />
+    );
+
+    expect(screen.queryByText("Payments not ready")).not.toBeInTheDocument();
+    expect(screen.getAllByText("All setup steps completed")[0]).toBeInTheDocument();
+  });
 });

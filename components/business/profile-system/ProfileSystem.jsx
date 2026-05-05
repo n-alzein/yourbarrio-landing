@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import FastImage from "@/components/FastImage";
 import { useAuth } from "@/components/AuthProvider";
+import SaveBusinessButton from "@/components/business/SaveBusinessButton";
 import { useModal } from "@/components/modals/ModalProvider";
 import { setAuthIntent } from "@/lib/auth/authIntent";
+import { useSavedBusinesses } from "@/lib/hooks/useSavedBusinesses";
 import { cx } from "@/lib/utils/cx";
 import { getOrCreateConversation } from "@/lib/messages";
 import {
@@ -424,12 +426,22 @@ function HeroPreviewActions({
   const [messageLoading, setMessageLoading] = useState(false);
   const { user, role, supabase } = useAuth();
   const { openModal } = useModal();
+  const {
+    savedBusinessIds,
+    savingBusinessIds,
+    showSaveControls,
+    toggleSavedBusiness,
+  } = useSavedBusinesses();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const website = profile?.website ? normalizeUrl(profile.website) : "";
   const directions = buildDirectionsUrl(profile);
   const businessId = String(profile?.id || profile?.owner_user_id || "").trim();
+  const saveBusinessId = String(profile?.business_row_id || profile?.business_id || "").trim();
+  const showSaveBusinessButton =
+    viewerMode !== "owner" && showSaveControls && Boolean(saveBusinessId);
+  const isBusinessSaved = saveBusinessId ? savedBusinessIds.has(saveBusinessId) : false;
   const currentQuery = searchParams?.toString() || "";
   const loginTarget = buildAuthReturnPath(
     pathname || publicPath || (businessId ? `/b/${encodeURIComponent(businessId)}` : "/"),
@@ -599,6 +611,19 @@ function HeroPreviewActions({
               icon={Phone}
               label="Call"
               variant={variant}
+            />
+          ) : null}
+          {showSaveBusinessButton ? (
+            <SaveBusinessButton
+              business={{
+                id: saveBusinessId,
+                public_id: profile?.public_id || null,
+              }}
+              isSaved={isBusinessSaved}
+              loading={savingBusinessIds.has(saveBusinessId)}
+              onToggle={toggleSavedBusiness}
+              variant={variant === "elevated" ? "hero" : "default"}
+              className="justify-self-end"
             />
           ) : null}
         </div>

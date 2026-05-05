@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CheckCircle2, Eye, PackagePlus, SlidersHorizontal } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  PackagePlus,
+  SlidersHorizontal,
+} from "lucide-react";
 import SafeAvatar from "@/components/SafeAvatar";
 import type { DashboardFilters, DateRangeKey } from "@/lib/dashboardTypes";
 
@@ -17,6 +23,12 @@ type SetupItem = {
   complete: boolean;
 };
 
+type PayoutReadinessStatus = {
+  state: "needs_action" | "issue";
+  label: string;
+  description: string;
+};
+
 type DateRangeControlsProps = {
   dateRange: DateRangeKey;
   filters: DashboardFilters;
@@ -25,6 +37,7 @@ type DateRangeControlsProps = {
   businessAvatarUrl?: string | null;
   lastUpdated: string;
   setupItems: SetupItem[];
+  payoutReadiness?: PayoutReadinessStatus | null;
   onDateRangeChange: (value: DateRangeKey) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
 };
@@ -40,6 +53,7 @@ const DateRangeControls = ({
   businessAvatarUrl,
   lastUpdated,
   setupItems,
+  payoutReadiness = null,
   onDateRangeChange,
   onFiltersChange,
 }: DateRangeControlsProps) => {
@@ -136,41 +150,72 @@ const DateRangeControls = ({
               </div>
             </div>
 
-            {!setupComplete ? (
+            {!setupComplete || payoutReadiness ? (
               <div className="mt-7 max-w-2xl transition-all duration-200 ease-out">
                 <div className="border-l border-slate-200/70 pl-4 sm:pl-5">
-                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">Setup in progress</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {completedCount} of {setupItems.length} steps finished
-                      </p>
-                    </div>
-                    <p className="text-[0.64rem] font-medium uppercase tracking-[0.12em] text-slate-400/85">
-                      Next: {nextStepLabel}
-                    </p>
-                  </div>
-                  <div className="mt-3.5 h-[5px] overflow-hidden rounded-full bg-slate-200/60">
+                  {!setupComplete ? (
+                    <>
+                      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-slate-900">
+                              Setup in progress
+                            </p>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {completedCount} of {setupItems.length} steps finished
+                          </p>
+                        </div>
+                        <p className="text-[0.64rem] font-medium uppercase tracking-[0.12em] text-slate-400/85">
+                          Next: {nextStepLabel}
+                        </p>
+                      </div>
+                      <div className="mt-3.5 h-[5px] overflow-hidden rounded-full bg-slate-200/60">
+                        <div
+                          className="h-full rounded-full bg-[#6a48c7] transition-all duration-300"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2.5 text-[0.69rem] text-slate-500">
+                        {setupItems.map((item) => (
+                          <span key={item.id} className="inline-flex items-center gap-2">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                item.complete ? "bg-emerald-300" : "bg-slate-300"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className={item.complete ? "text-slate-600" : "text-slate-400"}>
+                              {item.label}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {payoutReadiness ? (
                     <div
-                      className="h-full rounded-full bg-[#6a48c7] transition-all duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2.5 text-[0.69rem] text-slate-500">
-                    {setupItems.map((item) => (
-                      <span key={item.id} className="inline-flex items-center gap-2">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            item.complete ? "bg-emerald-300" : "bg-slate-300"
-                          }`}
+                      className={`rounded-2xl border border-amber-100 bg-amber-50/70 px-3.5 py-3 ${
+                        setupComplete ? "" : "mt-4"
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <AlertTriangle
+                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-500"
                           aria-hidden="true"
                         />
-                        <span className={item.complete ? "text-slate-600" : "text-slate-400"}>
-                          {item.label}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-amber-950">
+                            {payoutReadiness.label}
+                          </p>
+                          <p className="mt-0.5 text-sm leading-5 text-amber-800/85">
+                            {payoutReadiness.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}

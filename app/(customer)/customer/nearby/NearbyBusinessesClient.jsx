@@ -5,12 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
 import { useLocation } from "@/components/location/LocationProvider";
-import { useModal } from "@/components/modals/ModalProvider";
 import CustomerMap from "@/components/customer/CustomerMap";
 import { getCustomerBusinessUrl } from "@/lib/ids/publicRefs";
-import { setAuthIntent } from "@/lib/auth/authIntent";
-import { getAuthedContext } from "@/lib/auth/getAuthedContext";
-import { useCurrentAccountContext } from "@/lib/auth/useCurrentAccountContext";
+import { useSavedBusinesses } from "@/lib/hooks/useSavedBusinesses";
 import { getLocationCacheKey } from "@/lib/location";
 import { hasCoordinates } from "@/lib/location/filter";
 import NearbySplitViewShell from "./_components/NearbySplitViewShell";
@@ -41,7 +38,6 @@ const normalizeCategoryToken = (value) =>
     .replace(/^-+|-+$/g, "");
 
 const NEW_BUSINESS_DAYS = 45;
-const SAVED_BUSINESSES_EVENT = "yb:saved-businesses-changed";
 const INITIAL_VISIBLE_BUSINESSES = 6;
 
 const VERIFIED_STATUSES = new Set(["auto_verified", "manually_verified"]);
@@ -118,8 +114,6 @@ const getBusinessSelection = (business) => {
 export default function NearbyBusinessesClient() {
   const router = useRouter();
   const { user, loadingUser } = useAuth();
-  const accountContext = useCurrentAccountContext();
-  const { openModal } = useModal();
   const gateBusinessProfileAccess = useBusinessProfileAccessGate();
   const searchParams = useSearchParams();
   const { location, hydrated: locationHydrated, requestGpsLocation } = useLocation();
@@ -149,15 +143,16 @@ export default function NearbyBusinessesClient() {
   const [selectedBusinessId, setSelectedBusinessId] = useState(null);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [mapControls, setMapControls] = useState(null);
-  const [savedBusinessIds, setSavedBusinessIds] = useState(() => new Set());
-  const [savingBusinessIds, setSavingBusinessIds] = useState(() => new Set());
+  const {
+    savedBusinessIds,
+    savingBusinessIds,
+    showSaveControls,
+    toggleSavedBusiness,
+  } = useSavedBusinesses();
 
   const cardRefs = useRef(new Map());
   const hasLoadedYbRef = useRef(false);
   const ybRequestIdRef = useRef(0);
-
-  const savedBusinessesCacheKey = user?.id ? `yb_saved_businesses_${user.id}` : null;
-  const showSaveControls = !accountContext.isBusiness && !accountContext.rolePending;
 
   useEffect(() => {
     const initial = (() => {
@@ -180,82 +175,6 @@ export default function NearbyBusinessesClient() {
   useEffect(() => {
     hasLoadedYbRef.current = hasLoadedYb;
   }, [hasLoadedYb]);
-
-  useEffect(() => {
-    if (!savedBusinessesCacheKey || !showSaveControls) {
-      setSavedBusinessIds(new Set());
-      return;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(savedBusinessesCacheKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(parsed)) {
-        setSavedBusinessIds(new Set(parsed.filter(Boolean)));
-      }
-    } catch {
-      /* ignore cache errors */
-    }
-  }, [savedBusinessesCacheKey, showSaveControls]);
-
-  useEffect(() => {
-    let active = true;
-    const loadSavedBusinesses = async () => {
-      if (!user?.id || !showSaveControls) return;
-      try {
-        const { client, userId } = await getAuthedContext("loadSavedBusinesses");
-        const { data, error } = await client
-          .from("saved_businesses")
-          .select("business_id")
-          .eq("user_id", userId);
-        if (error) throw error;
-        if (!active) return;
-        const ids = (data || []).map((row) => row.business_id).filter(Boolean);
-        setSavedBusinessIds(new Set(ids));
-        if (typeof window !== "undefined" && savedBusinessesCacheKey) {
-          try {
-            window.localStorage.setItem(savedBusinessesCacheKey, JSON.stringify(ids));
-          } catch {
-            /* ignore */
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to load saved businesses", err);
-      }
-    };
-
-    loadSavedBusinesses();
-    return () => {
-      active = false;
-    };
-  }, [savedBusinessesCacheKey, showSaveControls, user?.id]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const syncSavedBusinesses = (ids) => {
-      if (Array.isArray(ids)) {
-        setSavedBusinessIds(new Set(ids.filter(Boolean)));
-      }
-    };
-    const onSavedBusinessesChanged = (event) => {
-      syncSavedBusinesses(event?.detail?.ids);
-    };
-    const onStorage = (event) => {
-      if (!savedBusinessesCacheKey || event.key !== savedBusinessesCacheKey) return;
-      try {
-        const parsed = event.newValue ? JSON.parse(event.newValue) : [];
-        syncSavedBusinesses(parsed);
-      } catch {
-        syncSavedBusinesses([]);
-      }
-    };
-    window.addEventListener(SAVED_BUSINESSES_EVENT, onSavedBusinessesChanged);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(SAVED_BUSINESSES_EVENT, onSavedBusinessesChanged);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, [savedBusinessesCacheKey]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -562,77 +481,9 @@ export default function NearbyBusinessesClient() {
     [gateBusinessProfileAccess, router]
   );
 
-  const persistSavedBusinessIds = useCallback(
-    (ids) => {
-      if (typeof window === "undefined") return;
-      const values = Array.from(ids).filter(Boolean);
-      if (savedBusinessesCacheKey) {
-        try {
-          window.localStorage.setItem(savedBusinessesCacheKey, JSON.stringify(values));
-        } catch {
-          /* ignore */
-        }
-      }
-      window.dispatchEvent(
-        new CustomEvent(SAVED_BUSINESSES_EVENT, {
-          detail: { ids: values },
-        })
-      );
-    },
-    [savedBusinessesCacheKey]
-  );
-
   const onToggleSaveShop = useCallback(
-    async (business) => {
-      const businessId = business?.id;
-      if (!businessId) return;
-      if (!showSaveControls) return;
-
-      if (!user?.id) {
-        const currentPath =
-          typeof window !== "undefined"
-            ? `${window.location.pathname}${window.location.search}`
-            : "/customer/nearby";
-        setAuthIntent({ redirectTo: currentPath, role: "customer" });
-        openModal("customer-login", { next: currentPath });
-        return;
-      }
-
-      const wasSaved = savedBusinessIds.has(businessId);
-      const optimistic = new Set(savedBusinessIds);
-      if (wasSaved) {
-        optimistic.delete(businessId);
-      } else {
-        optimistic.add(businessId);
-      }
-      setSavedBusinessIds(optimistic);
-      persistSavedBusinessIds(optimistic);
-      setSavingBusinessIds((prev) => new Set(prev).add(businessId));
-
-      try {
-        const response = await fetch("/api/customer/saved-businesses", {
-          method: wasSaved ? "DELETE" : "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ businessId }),
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.error || "Save shop update failed");
-        }
-      } catch (err) {
-        console.error("Save shop toggle failed", err);
-        setSavedBusinessIds(savedBusinessIds);
-        persistSavedBusinessIds(savedBusinessIds);
-      } finally {
-        setSavingBusinessIds((prev) => {
-          const next = new Set(prev);
-          next.delete(businessId);
-          return next;
-        });
-      }
-    },
-    [openModal, persistSavedBusinessIds, savedBusinessIds, showSaveControls, user?.id]
+    (business) => toggleSavedBusiness(business, { fallbackPath: "/customer/nearby" }),
+    [toggleSavedBusiness]
   );
 
   const onMarkerClick = useCallback((businessId) => {
