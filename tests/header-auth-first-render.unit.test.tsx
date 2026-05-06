@@ -139,6 +139,93 @@ describe("HeaderAccountWidget first render auth boundary", () => {
     );
   });
 
+  it("prefers the live context profile over a stale forced profile for the same account", () => {
+    mockAuthState.current = {
+      ...mockAuthState.current,
+      user: {
+        id: "user-live",
+        email: "customer@example.com",
+        user_metadata: {},
+      },
+      profile: {
+        id: "user-live",
+        email: "customer@example.com",
+        full_name: "Saved Customer",
+        updated_at: "2026-05-06T20:00:00.000Z",
+      },
+      role: "customer",
+      authStatus: "authenticated",
+    };
+
+    render(
+      <HeaderAccountWidget
+        surface="customer"
+        variant="desktop"
+        forcedAuth={{
+          role: "customer",
+          user: {
+            id: "user-live",
+            email: "customer@example.com",
+            user_metadata: {},
+          },
+          profile: {
+            id: "user-live",
+            email: "customer@example.com",
+            full_name: "",
+            updated_at: "2026-05-06T19:00:00.000Z",
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByText("Saved Customer")).toBeInTheDocument();
+    expect(screen.queryByText("customer@example.com")).not.toBeInTheDocument();
+  });
+
+  it("keeps forced auth profile when it belongs to a different support-mode account", () => {
+    mockAuthState.current = {
+      ...mockAuthState.current,
+      user: {
+        id: "staff-user",
+        email: "staff@example.com",
+        user_metadata: {},
+      },
+      profile: {
+        id: "staff-user",
+        email: "staff@example.com",
+        full_name: "Staff User",
+        updated_at: "2026-05-06T20:00:00.000Z",
+      },
+      role: "customer",
+      authStatus: "authenticated",
+    };
+
+    render(
+      <HeaderAccountWidget
+        surface="customer"
+        variant="desktop"
+        forcedAuth={{
+          supportMode: true,
+          role: "customer",
+          user: {
+            id: "customer-user",
+            email: "customer@example.com",
+            user_metadata: {},
+          },
+          profile: {
+            id: "customer-user",
+            email: "customer@example.com",
+            full_name: "Customer User",
+            updated_at: "2026-05-06T19:00:00.000Z",
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByText("Customer User")).toBeInTheDocument();
+    expect(screen.queryByText("Staff User")).not.toBeInTheDocument();
+  });
+
   it("keeps account UI when the avatar image fails", () => {
     render(
       <HeaderAccountWidget

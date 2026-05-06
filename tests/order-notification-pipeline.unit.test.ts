@@ -276,6 +276,39 @@ describe("order notification pipeline", () => {
     );
   });
 
+  it("uses the private user phone before the public business phone for order SMS", async () => {
+    const client = buildClient();
+    client.getTable("businesses")[0].order_alert_phone = null;
+    client.getTable("businesses")[0].phone = "+14155550199";
+    client.getTable("users")[0].phone = "+14155550123";
+
+    const smsSender = vi.fn().mockResolvedValue({
+      provider: "twilio",
+      providerMessageId: "SMPRIVATE",
+      status: "pending",
+      rawStatus: "queued",
+    });
+
+    await sendNewOrderNotifications("order-1", {
+      client,
+      now: new Date("2026-04-13T12:00:00.000Z"),
+      smsSender,
+      emailSender: vi.fn(),
+    });
+
+    expect(smsSender).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "+14155550123" })
+    );
+    expect(client.getTable("order_notifications")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: "sms",
+          destination: "+14155550123",
+        }),
+      ])
+    );
+  });
+
   it("classifies transient and permanent Twilio failures", () => {
     expect(classifyTwilioError({ status: 503, message: "upstream timeout" }).kind).toBe(
       "transient"

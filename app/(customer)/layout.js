@@ -9,6 +9,7 @@ import ProtectedRouteLoginPrompt from "@/components/auth/ProtectedRouteLoginProm
 import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
 import { PATHS } from "@/lib/auth/paths";
 import CustomerRealtimeProvider from "@/app/(customer)/customer/CustomerRealtimeProvider";
+import CustomerPostSignupProfilePrompt from "@/components/customer/CustomerPostSignupProfilePrompt";
 import { getAdminDataClient } from "@/lib/supabase/admin";
 import { isRscPrefetchRequest } from "@/lib/next/isRscPrefetchRequest";
 import { getRequestPath } from "@/lib/url/getRequestPath";
@@ -217,6 +218,7 @@ export default async function CustomerLayout({ children }) {
             }
           >
             <CustomerRealtimeProvider>{children}</CustomerRealtimeProvider>
+            <CustomerPostSignupProfilePrompt />
           </Suspense>
         </CustomerRouteShell>
       </AuthRedirectGuard>

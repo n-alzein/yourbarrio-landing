@@ -21,6 +21,10 @@ describe("checkout page UX polish", () => {
     expect(checkoutPageSource).toContain("formatUSPhone(value)");
     expect(checkoutPageSource).toContain("normalizeUSPhoneForStorage(nextContact.contact_phone)");
     expect(checkoutPageSource).toContain("isIncompleteUSPhone(nextContact.contact_phone)");
+    expect(checkoutPageSource).toContain("getCustomerProfileCompletion(profile)");
+    expect(checkoutPageSource).toContain(
+      "Add your phone number so the shop can coordinate pickup if needed."
+    );
     expect(checkoutPageSource).toContain("Edit contact info");
     expect(checkoutPageSource).toContain("Cancel");
     expect(checkoutPageSource).toContain("Save");

@@ -408,8 +408,8 @@ async function updateOrderNotificationState(
 function getNotificationDestinations(context: OrderContext) {
   const primaryPhone =
     normalizePhoneNumber(context.business?.order_alert_phone) ||
-    normalizePhoneNumber(context.business?.phone) ||
-    normalizePhoneNumber(context.user?.phone);
+    normalizePhoneNumber(context.user?.phone) ||
+    normalizePhoneNumber(context.business?.phone);
   const backupPhone = normalizePhoneNumber(context.business?.order_alert_phone_backup);
   const email =
     normalizeEmail(context.business?.order_alert_email) ||

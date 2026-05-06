@@ -26,6 +26,7 @@ import {
   isIncompleteUSPhone,
   normalizeUSPhoneForStorage,
 } from "@/lib/utils/formatUSPhone";
+import { getCustomerProfileCompletion } from "@/lib/customer/profile-completion";
 
 const formatMoney = (value) => {
   const amount = Number(value || 0);
@@ -299,6 +300,11 @@ export default function CheckoutPage() {
     [form.contact_email, form.contact_name, form.contact_phone]
   );
   const hasRequiredSavedContactInfo = Boolean(savedContactInfo.name && savedContactInfo.phone);
+  const profileCompletion = useMemo(
+    () => getCustomerProfileCompletion(profile),
+    [profile]
+  );
+  const shouldPromptForContactProfile = !profileCompletion.hasFullName || !profileCompletion.hasPhone;
   const showContactInputs = contactEditing || !hasRequiredSavedContactInfo;
   const savedContactParts = useMemo(
     () =>
@@ -428,6 +434,20 @@ export default function CheckoutPage() {
     }
     if (stockIssues.length > 0) {
       setError("Adjust unavailable cart quantities before checkout.");
+      return;
+    }
+    if (!hasRequiredSavedContactInfo) {
+      setContactEditing(true);
+      setContactError(
+        !savedContactInfo.phone
+          ? "Add your phone number so the shop can coordinate pickup if needed."
+          : "Add your name before continuing."
+      );
+      return;
+    }
+    if (isIncompleteUSPhone(savedContactInfo.phone)) {
+      setContactEditing(true);
+      setContactError("Enter a complete phone number.");
       return;
     }
 
@@ -649,6 +669,20 @@ export default function CheckoutPage() {
               {showContactInputs ? (
                 <div className="space-y-4">
                   <p className="text-xs font-semibold opacity-70">Edit contact info</p>
+                  {shouldPromptForContactProfile ? (
+                    <div
+                      className="rounded-xl px-3 py-2.5 text-xs leading-5"
+                      style={{
+                        background: "rgba(124,58,237,0.08)",
+                        border: "1px solid rgba(124,58,237,0.18)",
+                        color: "var(--text)",
+                      }}
+                    >
+                      {!profileCompletion.hasPhone
+                        ? "Add your phone number so the shop can coordinate pickup if needed."
+                        : "Add your name so the shop knows who they’re helping."}
+                    </div>
+                  ) : null}
                   <div className="grid min-w-0 gap-5 md:grid-cols-2">
                     <input
                       name="contact_name"

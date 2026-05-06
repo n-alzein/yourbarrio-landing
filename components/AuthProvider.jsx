@@ -72,6 +72,7 @@ const AuthContext = createContext({
   providerInstanceId: null,
   refreshProfile: async () => {},
   refreshBusinessProfile: async () => {},
+  updateProfile: () => {},
   logout: async (_options = {}) => {},
   beginAuthAttempt: () => 0,
   endAuthAttempt: () => false,
@@ -218,6 +219,58 @@ function mergeProfileAvatar(prevProfile, nextProfile, user) {
     ...nextProfile,
     profile_photo_url: priorAvatar,
   };
+}
+
+function parseProfileUpdatedAt(profile) {
+  const timestamp = Date.parse(profile?.updated_at || "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function hasProfileText(value) {
+  return String(value || "").trim().length > 0;
+}
+
+function mergeFreshProfile(prevProfile, nextProfile, user) {
+  if (!nextProfile) return prevProfile ?? null;
+  if (!prevProfile?.id || prevProfile.id !== nextProfile.id) {
+    return mergeProfileAvatar(prevProfile, nextProfile, user);
+  }
+
+  const prevUpdatedAt = parseProfileUpdatedAt(prevProfile);
+  const nextUpdatedAt = parseProfileUpdatedAt(nextProfile);
+  if (prevUpdatedAt !== null && nextUpdatedAt !== null && nextUpdatedAt < prevUpdatedAt) {
+    return prevProfile;
+  }
+
+  const resolvedNext = mergeProfileAvatar(prevProfile, nextProfile, user);
+  const mergedProfile = {
+    ...prevProfile,
+    ...resolvedNext,
+  };
+
+  if (prevUpdatedAt !== null && nextUpdatedAt === null) {
+    for (const key of [
+      "full_name",
+      "phone",
+      "address",
+      "address_2",
+      "city",
+      "state",
+      "postal_code",
+      "email",
+      "role",
+    ]) {
+      if (!hasProfileText(resolvedNext?.[key]) && hasProfileText(prevProfile?.[key])) {
+        mergedProfile[key] = prevProfile[key];
+      }
+    }
+  }
+
+  return mergedProfile;
+}
+
+function areProfilesEqual(leftProfile, rightProfile) {
+  return JSON.stringify(leftProfile || null) === JSON.stringify(rightProfile || null);
 }
 
 const withGuardState = (base) => ({
@@ -790,7 +843,7 @@ function primeAuthStateForInitialRender({
   }
   const nextUser = mergeAuthUser(authStore.state.user, initialUser);
   const nextProfile = initialProfile
-    ? mergeProfileAvatar(keepProfileForUser(authStore.state.profile, nextUser), initialProfile, nextUser)
+    ? mergeFreshProfile(keepProfileForUser(authStore.state.profile, nextUser), initialProfile, nextUser)
     : keepProfileForUser(authStore.state.profile, nextUser);
   const nextBusiness =
     initialBusiness ||
@@ -922,15 +975,15 @@ function seedAuthState({
   }
 
   if (!supportModeActive && initialProfile && !nextState.profile) {
-    nextState.profile = mergeProfileAvatar(nextState.profile, initialProfile, nextState.user);
+    nextState.profile = mergeFreshProfile(nextState.profile, initialProfile, nextState.user);
     changed = true;
   } else if (
     !supportModeActive &&
     initialProfile &&
     nextState.profile?.id === initialProfile.id
   ) {
-    const mergedProfile = mergeProfileAvatar(nextState.profile, initialProfile, nextState.user);
-    if (mergedProfile?.profile_photo_url !== nextState.profile?.profile_photo_url) {
+    const mergedProfile = mergeFreshProfile(nextState.profile, initialProfile, nextState.user);
+    if (!areProfilesEqual(mergedProfile, nextState.profile)) {
       nextState.profile = mergedProfile;
       changed = true;
     }
@@ -1327,7 +1380,7 @@ async function applyUserUpdate(user) {
   const previousProfile = keepProfileForUser(authStore.state.profile, user);
   const fetchedProfile = keepProfileForUser(profile, user);
   const nextProfile = fetchedProfile
-    ? mergeProfileAvatar(previousProfile, fetchedProfile, authStore.state.user || user)
+    ? mergeFreshProfile(previousProfile, fetchedProfile, authStore.state.user || user)
     : previousProfile;
   const nextUser = mergeAuthUser(authStore.state.user, user);
   const nextRole = resolveRole(nextProfile, nextUser, authStore.state.role);
@@ -1418,7 +1471,7 @@ async function handleMissingUserAuthEvent(event) {
     if (serverSnapshot.user?.id) {
       const nextUser = mergeAuthUser(authStore.state.user, serverSnapshot.user);
       const nextProfile = serverSnapshot.profile
-        ? mergeProfileAvatar(
+        ? mergeFreshProfile(
             keepProfileForUser(authStore.state.profile, nextUser),
             serverSnapshot.profile,
             nextUser
@@ -1518,7 +1571,7 @@ async function bootstrapAuth() {
         if (serverSnapshot.user?.id) {
           const nextUser = mergeAuthUser(authStore.state.user, serverSnapshot.user);
           const nextProfile = serverSnapshot.profile
-            ? mergeProfileAvatar(
+            ? mergeFreshProfile(
                 keepProfileForUser(authStore.state.profile, nextUser),
                 serverSnapshot.profile,
                 nextUser
@@ -2205,14 +2258,18 @@ export function AuthProvider({
     }
     const { profile, error } = await fetchProfile(authState.user);
     if (error || !mountedRef.current) return;
-    const nextProfile = mergeProfileAvatar(authState.profile, profile, authState.user);
-    const nextRole = resolveRole(nextProfile, authState.user, authState.role);
+    const currentState = authStore.state;
+    if (!currentState.user?.id || currentState.user.id !== authState.user.id) {
+      return;
+    }
+    const nextProfile = mergeFreshProfile(currentState.profile, profile, currentState.user);
+    const nextRole = resolveRole(nextProfile, currentState.user, currentState.role);
     let business = null;
     if (nextRole === "business") {
-      const { business: businessRow } = await fetchBusiness(authState.user);
+      const { business: businessRow } = await fetchBusiness(currentState.user);
       if (!mountedRef.current) return;
       business = businessRow ?? null;
-      authStore.businessUserId = authState.user.id;
+      authStore.businessUserId = currentState.user.id;
       authStore.businessPromise = null;
     } else {
       authStore.businessPromise = null;
@@ -2223,7 +2280,24 @@ export function AuthProvider({
       business,
       role: nextRole,
     });
-  }, [authState.profile, authState.role, authState.user]);
+  }, [authState.user]);
+
+  const updateProfile = useCallback((nextProfile) => {
+    const currentState = authStore.state;
+    if (!nextProfile?.id || nextProfile.id !== currentState.user?.id) {
+      return;
+    }
+    const mergedProfile = mergeFreshProfile(
+      currentState.profile,
+      nextProfile,
+      currentState.user
+    );
+    const nextRole = resolveRole(mergedProfile, currentState.user, currentState.role);
+    updateAuthState({
+      profile: mergedProfile,
+      role: nextRole,
+    });
+  }, []);
 
   const resetAuthUiStateCb = useCallback((reason) => {
     resetAuthUiState(reason);
@@ -2318,6 +2392,7 @@ export function AuthProvider({
       providerInstanceId,
       refreshProfile,
       refreshBusinessProfile: refreshProfile,
+      updateProfile,
       logout,
       beginAuthAttempt,
       endAuthAttempt,
@@ -2348,6 +2423,7 @@ export function AuthProvider({
       supabase,
       logout,
       refreshProfile,
+      updateProfile,
       resetAuthUiStateCb,
       seedAuthStateCb,
       providerInstanceId,

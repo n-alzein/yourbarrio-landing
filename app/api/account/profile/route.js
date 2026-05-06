@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
 import {
   isIncompleteUSPhone,
@@ -65,19 +66,46 @@ export async function POST(req) {
     updates.postal_code = trimString(body.postal_code) || null;
   }
 
-  const { data: profile, error } = await supabase
+  const writeClient = getSupabaseServerClient() || supabase;
+  const { data: profile, error } = await writeClient
     .from("users")
-    .update(updates)
+    .select("id")
     .eq("id", user.id)
-    .select("*")
     .maybeSingle();
 
-  if (error || !profile) {
+  if (error || !profile?.id) {
     return NextResponse.json(
-      { error: error?.message || "Failed to update account profile" },
+      { error: error?.message || "Account profile was not found." },
+      { status: 404 }
+    );
+  }
+
+  const { error: updateError, count: updatedCount } = await writeClient
+    .from("users")
+    .update(updates, { count: "exact" })
+    .eq("id", user.id);
+
+  if (updateError || updatedCount === 0) {
+    return NextResponse.json(
+      { error: updateError?.message || "Failed to update account profile" },
       { status: 400 }
     );
   }
 
-  return NextResponse.json({ profile });
+  const { data: updatedProfile, error: selectUpdatedError } = await writeClient
+    .from("users")
+    .select(
+      "id,email,role,full_name,profile_photo_url,phone,city,address,address_2,state,postal_code,updated_at"
+    )
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (selectUpdatedError || !updatedProfile) {
+    return NextResponse.json(
+      { error: selectUpdatedError?.message || "Failed to load updated account profile" },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json({ profile: updatedProfile });
 }

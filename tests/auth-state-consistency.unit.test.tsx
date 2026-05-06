@@ -96,15 +96,36 @@ function AuthProbe() {
     auth.user?.user_metadata?.avatar_url ||
     auth.user?.user_metadata?.picture ||
     "";
+  const displayName =
+    auth.profile?.full_name ||
+    auth.user?.user_metadata?.full_name ||
+    auth.user?.user_metadata?.name ||
+    auth.user?.email ||
+    "";
   return (
     <div>
       <div data-testid="status">{auth.authStatus}</div>
       <div data-testid="initialized">{String(auth.authInitialized)}</div>
       <div data-testid="user-id">{auth.user?.id || ""}</div>
       <div data-testid="profile-id">{auth.profile?.id || ""}</div>
+      <div data-testid="display-name">{displayName}</div>
       <div data-testid="avatar">{avatar}</div>
       <button type="button" onClick={() => void auth.refreshProfile()}>
         refresh profile
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          auth.updateProfile?.({
+            id: "user-1",
+            role: "customer",
+            full_name: "Saved Customer",
+            email: "user-1@example.com",
+            updated_at: "2026-05-06T12:00:00.000Z",
+          })
+        }
+      >
+        update profile
       </button>
     </div>
   );
@@ -427,5 +448,115 @@ describe("auth state consistency", () => {
       expect(screen.getByTestId("profile-id")).toHaveTextContent("user-1");
     });
     expect(screen.queryByText("unauthenticated")).not.toBeInTheDocument();
+  });
+
+  it("updates account display data immediately when profile is merged into auth context", async () => {
+    render(
+      <AuthProvider initialUser={googleUser()} initialRole="customer">
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Google User");
+
+    fireEvent.click(screen.getByRole("button", { name: "update profile" }));
+
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Saved Customer");
+  });
+
+  it("does not let an older profile refresh overwrite a freshly saved profile", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        profile: {
+          id: "user-1",
+          role: "customer",
+          full_name: "Stale Customer",
+          email: "user-1@example.com",
+          updated_at: "2026-05-05T12:00:00.000Z",
+        },
+      }),
+    } as Response);
+
+    render(
+      <AuthProvider initialUser={googleUser()} initialRole="customer">
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "update profile" }));
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Saved Customer");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "refresh profile" }));
+    });
+
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Saved Customer");
+  });
+
+  it("merges server-seeded profile fields beyond avatar on navigation", () => {
+    const first = render(
+      <AuthProvider
+        initialUser={googleUser()}
+        initialProfile={{
+          id: "user-1",
+          role: "customer",
+          full_name: "Original Name",
+        }}
+        initialRole="customer"
+      >
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Original Name");
+    first.unmount();
+
+    render(
+      <AuthProvider
+        initialUser={googleUser()}
+        initialProfile={{
+          id: "user-1",
+          role: "customer",
+          full_name: "Saved Customer",
+        }}
+        initialRole="customer"
+      >
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Saved Customer");
+  });
+
+  it("does not let an older server-seeded profile overwrite a newer client profile on navigation", () => {
+    const first = render(
+      <AuthProvider initialUser={googleUser()} initialRole="customer">
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "update profile" }));
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Saved Customer");
+    first.unmount();
+
+    render(
+      <AuthProvider
+        initialUser={googleUser()}
+        initialProfile={{
+          id: "user-1",
+          role: "customer",
+          full_name: "Stale Customer",
+          email: "user-1@example.com",
+          updated_at: "2026-05-05T12:00:00.000Z",
+        }}
+        initialRole="customer"
+      >
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId("display-name")).toHaveTextContent("Saved Customer");
   });
 });

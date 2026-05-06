@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
 import SafeAvatar from "@/components/SafeAvatar";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   getAuthProviderLabel,
   getPrimaryAuthProvider,
@@ -22,8 +22,22 @@ import {
   isIncompleteUSPhone,
   normalizeUSPhoneForStorage,
 } from "@/lib/utils/formatUSPhone";
+import {
+  getCustomerProfileActionLabel,
+  getCustomerProfileCompletion,
+} from "@/lib/customer/profile-completion";
+import {
+  getVisibleCustomerSettingsAddressErrors,
+  normalizeCustomerSettingsAddressPayload,
+  validateCustomerSettingsAddress,
+} from "@/lib/customer/settings-address-validation";
 
 const editableSections = new Set(["profile", "address"]);
+const focusFieldToSection = {
+  fullName: "profile",
+  phone: "profile",
+  streetAddress: "address",
+};
 
 const settingsPanelClassName =
   "divide-y divide-slate-100 overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)]";
@@ -47,7 +61,7 @@ const fieldErrorClassName = "text-rose-600";
 const secondaryButtonClassName =
   "inline-flex h-9 items-center justify-center rounded-lg border border-slate-100 bg-white/70 px-3.5 text-sm font-medium text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50";
 const primaryButtonClassName =
-  "inline-flex h-9 items-center justify-center rounded-lg bg-violet-600 px-3.5 text-sm font-medium text-white transition hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed disabled:bg-violet-300";
+  "yb-primary-button inline-flex h-9 items-center justify-center rounded-lg px-3.5 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed";
 
 function SectionActionButton({ children, ...props }) {
   return (
@@ -69,8 +83,92 @@ function SectionSaveButton({ children, className = "", ...props }) {
   );
 }
 
-function ReadOnlyField({ value }) {
-  return <div className={readOnlyFieldClassName}>{value || "—"}</div>;
+function ReadOnlyField({
+  value,
+  emptyLabel = "Not added yet",
+  actionLabel = "",
+  onAction = null,
+}) {
+  const hasValue = Boolean(String(value || "").trim());
+  return (
+    <div
+      className={`${readOnlyFieldClassName} ${
+        hasValue ? "" : "justify-between gap-3 text-slate-500"
+      }`}
+    >
+      <span className="min-w-0 break-words">{hasValue ? value : emptyLabel}</span>
+      {!hasValue && actionLabel && onAction ? (
+        <button
+          type="button"
+          onClick={onAction}
+          className="shrink-0 text-sm font-semibold text-violet-700 transition hover:text-violet-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ProfileCompletionCard({ completion, onPrimaryAction }) {
+  if (!completion || completion.missingFields.length === 0) return null;
+  const actionLabel = getCustomerProfileActionLabel(completion.nextRecommendedAction);
+
+  return (
+    <div className="mb-5 rounded-[24px] border border-slate-100 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.035)] sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+            Complete your profile
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+            Add a few details for faster checkout, order updates, and pickup coordination.
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-2 w-40 max-w-[45vw] overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-violet-600 transition-all"
+                style={{ width: `${completion.completionPercent}%` }}
+              />
+            </div>
+            <span className="text-sm font-medium text-slate-600">
+              {completion.completedCount} of {completion.totalCount} complete
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onPrimaryAction}
+          className="yb-primary-button inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20"
+        >
+          {actionLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function mergeProfile(baseProfile, nextProfile) {
+  return {
+    ...(baseProfile || {}),
+    ...(nextProfile || {}),
+  };
+}
+
+function getProfileSyncSignature(profile) {
+  if (!profile?.id) return "";
+  return JSON.stringify({
+    id: profile.id,
+    updated_at: profile.updated_at || "",
+    full_name: profile.full_name || "",
+    phone: profile.phone || "",
+    city: profile.city || "",
+    address: profile.address || "",
+    address_2: profile.address_2 || "",
+    state: profile.state || "",
+    postal_code: profile.postal_code || "",
+    profile_photo_url: profile.profile_photo_url || "",
+  });
 }
 
 function StatePicker({ id, value, onChange, invalid = false }) {
@@ -211,9 +309,10 @@ function StatePicker({ id, value, onChange, invalid = false }) {
 }
 
 export default function SettingsPage() {
-  const { user, profile, supabase, loadingUser, logout, refreshProfile } =
+  const { user, profile, supabase, loadingUser, logout, refreshProfile, updateProfile } =
     useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const effectiveProfile = useMemo(
     () =>
       profile ||
@@ -246,7 +345,14 @@ export default function SettingsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletePending, setDeletePending] = useState(false);
+  const [pendingFocusField, setPendingFocusField] = useState(null);
+  const [addressTouchedFields, setAddressTouchedFields] = useState({});
+  const [addressSaveAttempted, setAddressSaveAttempted] = useState(false);
   const toastTimerRef = useRef(null);
+  const handledCompleteProfileParamRef = useRef(false);
+  const fullNameInputRef = useRef(null);
+  const phoneInputRef = useRef(null);
+  const streetAddressInputRef = useRef(null);
 
   const buildInitialForm = (userValue) => ({
     full_name: userValue?.full_name || "",
@@ -259,8 +365,10 @@ export default function SettingsPage() {
     profile_photo_url: userValue?.profile_photo_url || "",
   });
 
-  const [form, setForm] = useState(() => buildInitialForm(effectiveProfile));
-  const lastUserIdRef = useRef(null);
+  const [liveProfile, setLiveProfile] = useState(() => effectiveProfile);
+  const currentProfile = liveProfile || effectiveProfile;
+  const [form, setForm] = useState(() => buildInitialForm(currentProfile));
+  const lastFormProfileSignatureRef = useRef("");
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -276,20 +384,55 @@ export default function SettingsPage() {
     if (!editableSections.has(sectionKey) || saving) return;
     setActiveSection(sectionKey);
     setFieldErrors({});
+    if (sectionKey === "address") {
+      setAddressTouchedFields({});
+      setAddressSaveAttempted(false);
+    }
   };
+
+  const beginSectionEditWithFocus = useCallback((sectionKey, focusField) => {
+    if (!editableSections.has(sectionKey) || saving) return;
+    setActiveSection(sectionKey);
+    setPendingFocusField(focusField);
+    setFieldErrors({});
+    if (sectionKey === "address") {
+      setAddressTouchedFields({});
+      setAddressSaveAttempted(false);
+    }
+  }, [saving]);
 
   const cancelSectionEdit = () => {
     setActiveSection(null);
-    setForm(buildInitialForm(effectiveProfile));
+    setPendingFocusField(null);
+    setForm(buildInitialForm(currentProfile));
     setFieldErrors({});
+    setAddressTouchedFields({});
+    setAddressSaveAttempted(false);
   };
 
   const handleFieldChange = (key, value) => {
+    const nextValue = key === "phone" ? formatUSPhone(value) : value;
     setForm((prev) => ({
       ...prev,
-      [key]: key === "phone" ? formatUSPhone(value) : value,
+      [key]: nextValue,
     }));
     setFieldErrors((prev) => {
+      const nextForm = {
+        ...form,
+        [key]: nextValue,
+      };
+      if (
+        ["address", "address_2", "city", "state", "postal_code"].includes(key) &&
+        Object.keys(validateCustomerSettingsAddress(nextForm)).length === 0
+      ) {
+        const next = { ...prev };
+        delete next.address;
+        delete next.city;
+        delete next.state;
+        delete next.postal_code;
+        return next;
+      }
+
       if (!prev[key]) return prev;
       const next = { ...prev };
       delete next[key];
@@ -297,47 +440,24 @@ export default function SettingsPage() {
     });
   };
 
-  const normalizeAddressPayload = (values) => {
-    const trimValue = (value) => (value ?? "").trim();
-    const stateValue = normalizeStateCode(trimValue(values.state)) || "";
-    const postalValue = trimValue(values.postal_code);
-    return {
-      address: trimValue(values.address),
-      address_2: trimValue(values.address_2),
-      city: trimValue(values.city),
-      state: stateValue,
-      postal_code: postalValue,
-    };
+  const handleAddressFieldBlur = (key) => {
+    setAddressTouchedFields((prev) => ({
+      ...prev,
+      [key]: true,
+    }));
+    setFieldErrors((prev) => ({
+      ...prev,
+      ...validateCustomerSettingsAddress(form),
+    }));
   };
 
-  const validateAddressFields = (values) => {
-    const errors = {};
-    const hasStreet = Boolean(values.address);
-    const hasCity = Boolean(values.city);
-    const hasState = Boolean(values.state);
-    const hasPostal = Boolean(values.postal_code);
-
-    if ((hasCity || hasState || hasPostal) && !hasStreet) {
-      errors.address =
-        "Street address is required when city, state, or postal code is filled.";
-    }
-
-    if ((hasState || hasPostal) && !hasCity) {
-      errors.city = "City is required when state or postal code is filled.";
-    }
-
-    if (hasState && !/^[A-Z]{2}$/.test(values.state)) {
-      errors.state = "Use a 2-letter state code (e.g., CA).";
-    }
-
-    if (
-      hasPostal &&
-      !/^[0-9]{5}(-[0-9]{4})?$/.test(values.postal_code)
-    ) {
-      errors.postal_code = "Use ZIP or ZIP+4 (e.g., 94107 or 94107-1234).";
-    }
-
-    return errors;
+  const visibleAddressErrors = getVisibleCustomerSettingsAddressErrors(
+    fieldErrors,
+    addressTouchedFields,
+    addressSaveAttempted
+  );
+  const getAddressFieldError = (key) => {
+    return visibleAddressErrors[key];
   };
 
   useEffect(() => {
@@ -351,12 +471,73 @@ export default function SettingsPage() {
   ----------------------------------------------------------- */
   useEffect(() => {
     if (!effectiveProfile?.id) return;
-    if (lastUserIdRef.current === effectiveProfile.id) return;
-    lastUserIdRef.current = effectiveProfile.id;
-    queueMicrotask(() => {
-      setForm(buildInitialForm(effectiveProfile));
+    setLiveProfile((prev) => {
+      if (!prev?.id || prev.id !== effectiveProfile.id) {
+        return effectiveProfile;
+      }
+
+      const previousUpdatedAt = Date.parse(prev.updated_at || "");
+      const nextUpdatedAt = Date.parse(effectiveProfile.updated_at || "");
+      if (
+        Number.isFinite(previousUpdatedAt) &&
+        Number.isFinite(nextUpdatedAt) &&
+        previousUpdatedAt > nextUpdatedAt
+      ) {
+        return prev;
+      }
+
+      return mergeProfile(prev, effectiveProfile);
     });
   }, [effectiveProfile]);
+
+  useEffect(() => {
+    if (!currentProfile?.id) return;
+    if (activeSection) return;
+    const nextSignature = getProfileSyncSignature(currentProfile);
+    if (lastFormProfileSignatureRef.current === nextSignature) return;
+    lastFormProfileSignatureRef.current = nextSignature;
+    queueMicrotask(() => {
+      setForm(buildInitialForm(currentProfile));
+    });
+  }, [activeSection, currentProfile]);
+
+  useEffect(() => {
+    if (!pendingFocusField) return undefined;
+    const expectedSection = focusFieldToSection[pendingFocusField];
+    if (expectedSection && activeSection !== expectedSection) return undefined;
+
+    const inputByField = {
+      fullName: fullNameInputRef,
+      phone: phoneInputRef,
+      streetAddress: streetAddressInputRef,
+    };
+    const targetRef = inputByField[pendingFocusField];
+    let timeoutId = null;
+    const frameId = requestAnimationFrame(() => {
+      timeoutId = window.setTimeout(() => {
+        const target = targetRef?.current;
+        if (!target) return;
+        const shouldScrollTargetIntoView = pendingFocusField === "streetAddress";
+        if (shouldScrollTargetIntoView) {
+          const navOffset = 112;
+          const top = target.getBoundingClientRect().top + window.scrollY - navOffset;
+          window.scrollTo({
+            top: Math.max(0, top),
+            behavior: "smooth",
+          });
+        }
+        target.focus({ preventScroll: true });
+        setPendingFocusField(null);
+      }, 0);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [activeSection, pendingFocusField]);
 
   useEffect(() => {
     if (loadingUser) return;
@@ -370,47 +551,70 @@ export default function SettingsPage() {
   ----------------------------------------------------------- */
   async function handleSave() {
     if (!user) return;
-    const normalizedAddress = normalizeAddressPayload(form);
-    const validationErrors = validateAddressFields(normalizedAddress);
+    const normalizedAddress = normalizeCustomerSettingsAddressPayload(form);
+    const validationErrors = validateCustomerSettingsAddress(normalizedAddress);
+    if (activeSection === "address") {
+      setAddressSaveAttempted(true);
+    }
     if (isIncompleteUSPhone(form.phone)) {
       validationErrors.phone = "Enter a complete 10-digit US phone number.";
     }
 
     if (Object.keys(validationErrors).length > 0) {
       setFieldErrors(validationErrors);
-      showToast("error", "Fix the highlighted fields.");
+      if (activeSection !== "address" || Object.keys(validationErrors).some((key) => key === "phone")) {
+        showToast("error", "Fix the highlighted fields.");
+      }
       return;
     }
 
     setSaving(true);
     setFieldErrors({});
 
-    const response = await fetch("/api/account/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        full_name: form.full_name,
-        phone: normalizeUSPhoneForStorage(form.phone),
-        city: normalizedAddress.city || null,
-        address: normalizedAddress.address || null,
-        address_2: normalizedAddress.address_2 || null,
-        state: normalizedAddress.state || null,
-        postal_code: normalizedAddress.postal_code || null,
-        profile_photo_url: form.profile_photo_url,
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
+    const profilePayload =
+      activeSection === "address"
+        ? {
+            city: normalizedAddress.city || null,
+            address: normalizedAddress.address || null,
+            address_2: normalizedAddress.address_2 || null,
+            state: normalizedAddress.state || null,
+            postal_code: normalizedAddress.postal_code || null,
+          }
+        : {
+            full_name: form.full_name,
+            phone: normalizeUSPhoneForStorage(form.phone),
+            profile_photo_url: form.profile_photo_url,
+          };
 
-    setSaving(false);
-    setActiveSection(null);
+    try {
+      const response = await fetch("/api/account/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profilePayload),
+      });
+      const payload = await response.json().catch(() => ({}));
 
-    if (response.ok) {
-      refreshProfile();
-      showToast("success", "Settings updated.");
-      return;
+      if (response.ok) {
+        const updatedProfile = mergeProfile(currentProfile, payload?.profile);
+        setLiveProfile(updatedProfile);
+        setForm(buildInitialForm(updatedProfile));
+        lastFormProfileSignatureRef.current = getProfileSyncSignature(updatedProfile);
+        setAddressTouchedFields({});
+        setAddressSaveAttempted(false);
+        setActiveSection(null);
+        setSaving(false);
+        updateProfile?.(updatedProfile);
+        refreshProfile?.();
+        showToast("success", "Settings updated.");
+        return;
+      }
+
+      setSaving(false);
+      showToast("error", payload?.error || "Failed to save settings.");
+    } catch {
+      setSaving(false);
+      showToast("error", "Failed to save settings.");
     }
-
-    showToast("error", payload?.error || "Failed to save settings.");
   }
 
   /* -----------------------------------------------------------
@@ -486,9 +690,9 @@ export default function SettingsPage() {
      CHANGE DETECTION
   ----------------------------------------------------------- */
   const hasChanges =
-    effectiveProfile &&
+    currentProfile &&
     JSON.stringify(form) !==
-      JSON.stringify(buildInitialForm(effectiveProfile));
+      JSON.stringify(buildInitialForm(currentProfile));
 
   const primaryProvider = getPrimaryAuthProvider(user);
   const providerLabel = getAuthProviderLabel(user);
@@ -501,6 +705,43 @@ export default function SettingsPage() {
   const isEditingProfile = activeSection === "profile";
   const isEditingAddress = activeSection === "address";
   const isEditingAnySection = activeSection !== null;
+  const profileCompletion = useMemo(
+    () => getCustomerProfileCompletion(currentProfile),
+    [currentProfile]
+  );
+  const displayForm = useMemo(() => buildInitialForm(currentProfile), [currentProfile]);
+  const beginProfileCompletionAction = useCallback(() => {
+    const nextAction = profileCompletion.nextRecommendedAction;
+    if (!nextAction) return;
+    if (nextAction === "address") {
+      beginSectionEditWithFocus("address", "streetAddress");
+      return;
+    }
+    if (nextAction === "phone") {
+      beginSectionEditWithFocus("profile", "phone");
+      return;
+    }
+    beginSectionEditWithFocus("profile", "fullName");
+  }, [beginSectionEditWithFocus, profileCompletion.nextRecommendedAction]);
+
+  useEffect(() => {
+    if (loadingUser || !user?.id) return;
+    if (handledCompleteProfileParamRef.current) return;
+    if (searchParams?.get("complete") !== "profile") return;
+
+    handledCompleteProfileParamRef.current = true;
+    beginProfileCompletionAction();
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("complete");
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${url.pathname}${url.search}${url.hash}`
+      );
+    }
+  }, [beginProfileCompletionAction, loadingUser, searchParams, user?.id]);
 
   /* -----------------------------------------------------------
      DEBUG (dev only) — trace provider sources
@@ -573,6 +814,11 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <ProfileCompletionCard
+            completion={profileCompletion}
+            onPrimaryAction={beginProfileCompletionAction}
+          />
+
           <div className={settingsPanelClassName}>
           <SettingsSection
             title="Profile"
@@ -615,13 +861,13 @@ export default function SettingsPage() {
               <div className="flex items-start gap-4 lg:flex-col">
                   <SafeAvatar
                     src={
-                      form?.profile_photo_url ||
-                      effectiveProfile?.profile_photo_url ||
-                      ""
+                      isEditingProfile
+                        ? form?.profile_photo_url || currentProfile?.profile_photo_url || ""
+                        : displayForm.profile_photo_url
                     }
                     userMetadata={user?.user_metadata}
-                    fullName={form?.full_name || effectiveProfile?.full_name}
-                    displayName={form?.full_name || effectiveProfile?.full_name}
+                    fullName={isEditingProfile ? form?.full_name || currentProfile?.full_name : displayForm.full_name}
+                    displayName={isEditingProfile ? form?.full_name || currentProfile?.full_name : displayForm.full_name}
                     email={userEmail}
                     alt="Profile photo"
                     width={144}
@@ -662,6 +908,7 @@ export default function SettingsPage() {
                     {isEditingProfile ? (
                       <input
                         id="full_name"
+                        ref={fullNameInputRef}
                         type="text"
                         value={form.full_name}
                         onChange={(e) =>
@@ -670,7 +917,11 @@ export default function SettingsPage() {
                         className={customerInputClassName}
                       />
                     ) : (
-                      <ReadOnlyField value={form.full_name} />
+                      <ReadOnlyField
+                        value={displayForm.full_name}
+                        actionLabel="Add name"
+                        onAction={() => beginSectionEditWithFocus("profile", "fullName")}
+                      />
                     )}
                   </Field>
 
@@ -685,6 +936,7 @@ export default function SettingsPage() {
                     {isEditingProfile ? (
                       <input
                         id="phone"
+                        ref={phoneInputRef}
                         type="tel"
                         value={form.phone}
                         onChange={(e) =>
@@ -693,7 +945,11 @@ export default function SettingsPage() {
                         className={customerInputClassName}
                       />
                     ) : (
-                      <ReadOnlyField value={form.phone} />
+                      <ReadOnlyField
+                        value={displayForm.phone}
+                        actionLabel="Add phone"
+                        onAction={() => beginSectionEditWithFocus("profile", "phone")}
+                      />
                     )}
                   </Field>
                 </FieldGrid>
@@ -705,7 +961,7 @@ export default function SettingsPage() {
                   helperClassName={fieldHelperClassName}
                   errorClassName={fieldErrorClassName}
                 >
-                  <ReadOnlyField value={userEmail} />
+                  <ReadOnlyField value={userEmail} emptyLabel="Not available" />
                 </Field>
               </div>
             </div>
@@ -752,7 +1008,7 @@ export default function SettingsPage() {
               <Field
                 label="Street address"
                 id="address"
-                error={fieldErrors.address}
+                error={getAddressFieldError("address")}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
@@ -761,21 +1017,27 @@ export default function SettingsPage() {
                 {isEditingAddress ? (
                   <input
                     id="address"
+                    ref={streetAddressInputRef}
                     type="text"
                     value={form.address}
                     onChange={(e) =>
                       handleFieldChange("address", e.target.value)
                     }
+                    onBlur={() => handleAddressFieldBlur("address")}
                     placeholder="Street address"
                     className={`${customerInputClassName} ${
-                      fieldErrors.address
+                      getAddressFieldError("address")
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
                         : ""
                     }`}
-                    aria-invalid={Boolean(fieldErrors.address)}
+                    aria-invalid={Boolean(getAddressFieldError("address"))}
                   />
                 ) : (
-                  <ReadOnlyField value={form.address} />
+                  <ReadOnlyField
+                    value={displayForm.address}
+                    actionLabel="Add address"
+                    onAction={() => beginSectionEditWithFocus("address", "streetAddress")}
+                  />
                 )}
               </Field>
 
@@ -791,15 +1053,16 @@ export default function SettingsPage() {
                   <input
                     id="address_2"
                     type="text"
-                    value={form.address_2}
-                    onChange={(e) =>
-                      handleFieldChange("address_2", e.target.value)
-                    }
-                    placeholder="Apt, suite, unit"
+                      value={form.address_2}
+                      onChange={(e) =>
+                        handleFieldChange("address_2", e.target.value)
+                      }
+                      onBlur={() => handleAddressFieldBlur("address_2")}
+                      placeholder="Apt, suite, unit"
                     className={customerInputClassName}
                   />
                 ) : (
-                  <ReadOnlyField value={form.address_2} />
+                  <ReadOnlyField value={displayForm.address_2} emptyLabel="Optional" />
                 )}
               </Field>
             </FieldGrid>
@@ -808,7 +1071,7 @@ export default function SettingsPage() {
               <Field
                 label="City"
                 id="city"
-                error={fieldErrors.city}
+                error={getAddressFieldError("city")}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
@@ -820,23 +1083,24 @@ export default function SettingsPage() {
                     type="text"
                     value={form.city}
                     onChange={(e) => handleFieldChange("city", e.target.value)}
+                    onBlur={() => handleAddressFieldBlur("city")}
                     placeholder="City"
                     className={`${customerInputClassName} ${
-                      fieldErrors.city
+                      getAddressFieldError("city")
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
                         : ""
                     }`}
-                    aria-invalid={Boolean(fieldErrors.city)}
+                    aria-invalid={Boolean(getAddressFieldError("city"))}
                   />
                 ) : (
-                  <ReadOnlyField value={form.city} />
+                  <ReadOnlyField value={displayForm.city} />
                 )}
               </Field>
 
               <Field
                 label="State"
                 id="state"
-                error={fieldErrors.state}
+                error={getAddressFieldError("state")}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
@@ -846,18 +1110,21 @@ export default function SettingsPage() {
                   <StatePicker
                     id="state"
                     value={form.state}
-                    onChange={(nextValue) => handleFieldChange("state", nextValue)}
-                    invalid={Boolean(fieldErrors.state)}
+                    onChange={(nextValue) => {
+                      handleFieldChange("state", nextValue);
+                      handleAddressFieldBlur("state");
+                    }}
+                    invalid={Boolean(getAddressFieldError("state"))}
                   />
                 ) : (
-                  <ReadOnlyField value={form.state} />
+                  <ReadOnlyField value={displayForm.state} />
                 )}
               </Field>
 
               <Field
                 label="Postal code"
                 id="postal_code"
-                error={fieldErrors.postal_code}
+                error={getAddressFieldError("postal_code")}
                 labelClassName={fieldLabelClassName}
                 helperClassName={fieldHelperClassName}
                 errorClassName={fieldErrorClassName}
@@ -871,16 +1138,17 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleFieldChange("postal_code", e.target.value)
                     }
+                    onBlur={() => handleAddressFieldBlur("postal_code")}
                     placeholder="Postal code"
                     className={`${customerInputClassName} ${
-                      fieldErrors.postal_code
+                      getAddressFieldError("postal_code")
                         ? "border-rose-400 focus-visible:border-rose-500 focus-visible:ring-rose-500/15"
                         : ""
                     }`}
-                    aria-invalid={Boolean(fieldErrors.postal_code)}
+                    aria-invalid={Boolean(getAddressFieldError("postal_code"))}
                   />
                 ) : (
-                  <ReadOnlyField value={form.postal_code} />
+                  <ReadOnlyField value={displayForm.postal_code} />
                 )}
               </Field>
             </FieldGrid>

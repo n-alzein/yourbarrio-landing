@@ -40,7 +40,9 @@ export default function CustomerLoginModal({
           }
           await onSuccess?.(destination, meta);
         }}
-        onSwitchToSignup={() => openModal("customer-signup")}
+        onSwitchToSignup={() =>
+          openModal("customer-signup", nextFromModalProps ? { next: nextFromModalProps } : {})
+        }
       />
     </BaseModal>
   );

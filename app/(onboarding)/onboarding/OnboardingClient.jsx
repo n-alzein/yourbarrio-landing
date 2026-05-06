@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import { getBusinessTypeOptions } from "@/lib/taxonomy/businessTypes";
@@ -16,6 +17,8 @@ import {
 } from "@/lib/utils/formatUSPhone";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+const PHONE_VERIFICATION_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_PHONE_VERIFICATION === "true";
 const PLACES_DISABLED =
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "true" ||
   process.env.NEXT_PUBLIC_DISABLE_PLACES === "1" ||
@@ -36,6 +39,7 @@ const initialForm = {
   city: "",
   state: "",
   postal_code: "",
+  notificationsPhone: "",
   phone: "",
   website: "",
 };
@@ -122,6 +126,17 @@ function resolveStateCode(region) {
 }
 
 const BUSINESS_TYPE_OPTIONS = getBusinessTypeOptions();
+const DEFAULT_BUSINESS_PREVIEW_IMAGE = "/placeholders/business/types/boutique.png";
+const BUSINESS_TYPE_PREVIEW_IMAGES = new Map(
+  BUSINESS_TYPE_OPTIONS.map((type) => [
+    type.slug,
+    `/placeholders/business/types/${type.slug}.png`,
+  ])
+);
+
+function getBusinessTypePreviewImage(slug) {
+  return BUSINESS_TYPE_PREVIEW_IMAGES.get(slug) || DEFAULT_BUSINESS_PREVIEW_IMAGE;
+}
 
 // ------------------------------
 // MAIN COMPONENT (only ONE export default)
@@ -135,20 +150,31 @@ export default function BusinessOnboardingPage() {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [basicInteracted, setBasicInteracted] = useState(false);
-  const [contactOpen, setContactOpen] = useState(false);
+  const [step, setStep] = useState(1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPulse, setPreviewPulse] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [phoneVerification, setPhoneVerification] = useState({
+    status: "default",
+    code: "",
+    error: "",
+  });
   const pickedLocationRef = useRef(null); // stores { lat, lng } from address lookup
+  const toastTimerRef = useRef(null);
 
   const selectedBusinessType =
     BUSINESS_TYPE_OPTIONS.find((type) => type.slug === form.business_type) || null;
-  const hasBasicProgress = basicInteracted || Boolean(form.businessName || form.business_type);
+  const isStepOneValid = Boolean(
+    form.businessName.trim() &&
+      form.business_type.trim() &&
+      form.description.trim()
+  );
   const previewName = form.businessName.trim() || "Your shop";
   const previewType = selectedBusinessType?.label || "Local business";
   const previewDescription =
     form.description.trim() ||
     "A quick, welcoming description will appear here as you shape your shop.";
+  const previewImageSrc = getBusinessTypePreviewImage(selectedBusinessType?.slug);
   const previewState =
     US_STATES.find((stateOption) => stateOption.code === form.state)?.name || form.state;
   const previewLocation = [form.city, previewState].filter(Boolean).join(", ") || "Nearby";
@@ -161,11 +187,27 @@ export default function BusinessOnboardingPage() {
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  function showToast(message) {
+    setToast(message);
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3000);
+  }
+
   function updateField(field, value, options = {}) {
     dispatch({ field, value });
-    if (field === "businessName" || field === "business_type") {
-      setBasicInteracted(true);
-    }
     if (ADDRESS_FIELDS.has(field) && !options.keepLocation) {
       pickedLocationRef.current = null;
     }
@@ -285,12 +327,130 @@ export default function BusinessOnboardingPage() {
     form.description,
     form.city,
     form.state,
-    form.phone,
+    form.notificationsPhone,
     form.website,
   ]);
 
+  function handleNotificationsPhoneChange(value) {
+    updateField("notificationsPhone", formatUSPhone(value));
+    setPhoneVerification({ status: "default", code: "", error: "" });
+  }
+
+  function handleVerificationCodeChange(value) {
+    const code = value.replace(/\D/g, "").slice(0, 6);
+    setPhoneVerification((prev) => ({ ...prev, code, error: "" }));
+  }
+
+  async function handleSendVerificationCode() {
+    const normalizedPhone = normalizeUSPhoneForStorage(form.notificationsPhone);
+    if (!normalizedPhone) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        notificationsPhone: "Enter a complete 10-digit US phone number.",
+      }));
+      return;
+    }
+
+    if (!PHONE_VERIFICATION_ENABLED) {
+      setPhoneVerification((prev) => ({
+        ...prev,
+        status: "default",
+        error: "",
+      }));
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.notificationsPhone;
+        return next;
+      });
+      showToast("Phone verification will be available soon");
+      return;
+    }
+
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.notificationsPhone;
+      return next;
+    });
+    setPhoneVerification({ status: "sending", code: "", error: "" });
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    setPhoneVerification({ status: "enter_code", code: "", error: "" });
+  }
+
+  function handleConfirmVerificationCode() {
+    if (phoneVerification.code.length !== 6) {
+      setPhoneVerification((prev) => ({
+        ...prev,
+        status: "error",
+        error: "Enter the 6-digit code.",
+      }));
+      return;
+    }
+
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.notificationsPhone;
+      return next;
+    });
+    setPhoneVerification({ status: "verified", code: "", error: "" });
+  }
+
+  function validateStepOne() {
+    const errors = {};
+    if (!form.businessName.trim()) {
+      errors.businessName = "Business name is required.";
+    }
+    if (!form.business_type.trim()) {
+      errors.business_type = "Choose a shop category.";
+    }
+    if (!form.description.trim()) {
+      errors.description = "Description is required.";
+    }
+    return errors;
+  }
+
+  function validateStepTwo() {
+    const normalizedAddress = normalizeAddressPayload(form);
+    const errors = validateAddressFields(normalizedAddress);
+    const normalizedNotificationsPhone = normalizeUSPhoneForStorage(
+      form.notificationsPhone
+    );
+
+    if (!String(form.notificationsPhone || "").trim()) {
+      errors.notificationsPhone = "Notifications phone is required.";
+    } else if (isIncompleteUSPhone(form.notificationsPhone)) {
+      errors.notificationsPhone = "Enter a complete 10-digit US phone number.";
+    } else if (!normalizedNotificationsPhone) {
+      errors.notificationsPhone = "Enter a complete 10-digit US phone number.";
+    }
+    if (isIncompleteUSPhone(form.phone)) {
+      errors.phone = "Enter a complete 10-digit US phone number.";
+    }
+
+    return { errors, normalizedAddress, normalizedNotificationsPhone };
+  }
+
+  function handleContinue() {
+    const validationErrors = validateStepOne();
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...validationErrors }));
+      setMessage("Fix the highlighted fields.");
+      return;
+    }
+    setMessage("");
+    setStep(2);
+  }
+
+  function handleBack() {
+    setMessage("");
+    setStep(1);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+    if (step === 1) {
+      handleContinue();
+      return;
+    }
     setLoading(true);
     setMessage("");
 
@@ -308,17 +468,19 @@ export default function BusinessOnboardingPage() {
         return;
       }
 
-      const normalizedAddress = normalizeAddressPayload(form);
-      const validationErrors = validateAddressFields(normalizedAddress);
-      if (!String(form.business_type || "").trim()) {
-        validationErrors.business_type = "Choose a shop category.";
-      }
-      if (isIncompleteUSPhone(form.phone)) {
-        validationErrors.phone = "Enter a complete 10-digit US phone number.";
-      }
+      const stepOneErrors = validateStepOne();
+      const {
+        errors: stepTwoErrors,
+        normalizedAddress,
+        normalizedNotificationsPhone,
+      } = validateStepTwo();
+      const validationErrors = { ...stepOneErrors, ...stepTwoErrors };
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
         setMessage("Fix the highlighted fields.");
+        if (Object.keys(stepOneErrors).length > 0) {
+          setStep(1);
+        }
         setLoading(false);
         return;
       }
@@ -338,6 +500,8 @@ export default function BusinessOnboardingPage() {
           city: normalizedAddress.city,
           state: normalizedAddress.state,
           postal_code: normalizedAddress.postal_code,
+          notifications_phone: normalizedNotificationsPhone,
+          notifications_phone_verified: phoneVerification.status === "verified",
           phone: normalizeUSPhoneForStorage(form.phone),
           website: normalizedWebsite,
           latitude: pickedLocationRef.current?.lat ?? null,
@@ -392,23 +556,23 @@ export default function BusinessOnboardingPage() {
             type={previewType}
             description={previewDescription}
             location={previewLocation}
+            imageSrc={previewImageSrc}
             pulse={previewPulse}
           />
         </aside>
 
         <main className="mx-auto w-full max-w-[680px] lg:max-w-none">
           <form id="business-onboarding-form" onSubmit={handleSubmit} className="w-full">
-            <div className="mb-8 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-[32px] font-semibold leading-tight tracking-normal text-slate-950">
-                  Launch your shop
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">Takes less than 2 minutes</p>
+            <div className="rounded-[24px] border border-white/80 bg-white p-5 shadow-[0_24px_70px_-54px_rgba(15,23,42,0.65)] sm:p-7">
+              <div className="mb-7 flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-[32px] font-semibold leading-tight tracking-normal text-slate-950">
+                    {step === 1 ? "Tell us about your shop" : "Set up your shop details"}
+                  </h1>
+                  <p className="mt-2 text-sm text-slate-500">Takes less than 2 minutes</p>
+                </div>
+                <StepDots step={step} />
               </div>
-              <span className="mt-2 whitespace-nowrap text-xs font-medium text-slate-500">
-                Step 1 of 2
-              </span>
-            </div>
 
             {message ? (
               <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -416,183 +580,196 @@ export default function BusinessOnboardingPage() {
               </div>
             ) : null}
 
-            <div>
-              <FormField
-                label="Business name"
-                value={form.businessName}
-                placeholder="Your shop name"
-                onChange={(v) => updateField("businessName", v)}
-                onFocus={() => setBasicInteracted(true)}
-                required
-                large
-              />
-
-              <div className="mt-5">
-                <FormField
-                  label="Business type"
-                  value={form.business_type}
-                  placeholder="Choose your shop category"
-                  onChange={(v) => updateField("business_type", v)}
-                  onFocus={() => setBasicInteracted(true)}
-                  required
-                  options={BUSINESS_TYPE_OPTIONS.map((type) => ({
-                    value: type.slug,
-                    label: type.label,
-                  }))}
-                  error={fieldErrors.business_type}
-                />
+            {toast ? (
+              <div className="mb-6 rounded-xl border border-[#d9ccff] bg-[#f4f0ff] px-4 py-3 text-sm font-medium text-[#5d2bd6] shadow-[0_16px_30px_-24px_rgba(110,52,255,0.55)]">
+                {toast}
               </div>
+            ) : null}
 
-              {hasBasicProgress ? (
-                <div className="mt-[18px] overflow-visible [animation:onboardingFadeSlide_150ms_ease-out]">
-                  <FormTextArea
-                    label="Description"
-                    value={form.description}
-                    placeholder="Describe your shop"
-                    rows={4}
-                    onChange={(v) => updateField("description", v)}
-                    required
-                    action={
-                      <AIDescriptionAssistant
-                        type="business"
-                        name={form.businessName}
-                        category={form.business_type}
-                        value={form.description}
-                        onApply={(description) => updateField("description", description)}
-                        context="onboarding"
-                        compact
-                        label="Generate with AI"
-                      />
-                    }
-                  />
-
-                <div className="mt-7 border-t border-slate-200/60 pt-7">
-                  <FormField
-                    label="Street address"
-                    value={form.address}
-                    placeholder="Street address"
-                    listId="address-suggestions"
-                    onChange={(v) => {
-                      updateField("address", v);
-                      const match = addressSuggestions.find((item) => item.label === v);
-                      if (match) {
-                        applySuggestion(match);
-                      }
-                    }}
-                    required
-                    error={fieldErrors.address}
-                  />
-
-                  {addressSuggestions.length ? (
-                    <datalist id="address-suggestions">
-                      {addressSuggestions.map((item) => (
-                        <option key={item.label} value={item.label} />
-                      ))}
-                    </datalist>
-                  ) : null}
-
-                  <div className="mt-[18px] grid items-start gap-[18px] sm:grid-cols-[1fr_0.62fr_0.84fr]">
+              <div key={step} className="overflow-visible [animation:onboardingStepSlide_180ms_ease-out]">
+                {step === 1 ? (
+                  <div>
                     <FormField
-                      label="City"
-                      value={form.city}
-                      placeholder=""
-                      onChange={(v) => updateField("city", v)}
+                      label="Business name"
+                      value={form.businessName}
+                      placeholder="Your shop name"
+                      onChange={(v) => updateField("businessName", v)}
                       required
-                      error={fieldErrors.city}
+                      error={fieldErrors.businessName}
                     />
 
-                    <FormField
-                      label="State"
-                      value={form.state}
-                      placeholder=""
-                      onChange={(v) => updateField("state", v)}
-                      required
-                      error={fieldErrors.state}
-                      options={US_STATES.map((stateOption) => ({
-                        value: stateOption.code,
-                        label: stateOption.code,
-                      }))}
-                    />
-
-                    <FormField
-                      label="ZIP"
-                      value={form.postal_code}
-                      placeholder=""
-                      onChange={(v) => updateField("postal_code", v)}
-                      required
-                      error={fieldErrors.postal_code}
-                    />
-                  </div>
-
-                  <div className="mt-[18px]">
-                    <FormField
-                      label="Apt / Suite"
-                      value={form.address_2}
-                      placeholder=""
-                      onChange={(v) => updateField("address_2", v)}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-7">
-                  <button
-                    type="button"
-                    onClick={() => setContactOpen((open) => !open)}
-                    className="inline-flex items-center gap-2 text-left text-xs font-medium text-slate-400 transition hover:text-[#6e34ff]"
-                  >
-                    Add contact details (optional)
-                    <span
-                      className={[
-                        "text-sm text-slate-400 transition-transform duration-150",
-                        contactOpen ? "rotate-180" : "",
-                      ].join(" ")}
-                    >
-                      ↓
-                    </span>
-                  </button>
-
-                  <div
-                    className={[
-                      "grid transition-all duration-150 ease-out",
-                      contactOpen
-                        ? "mt-[18px] max-h-64 translate-y-0 overflow-visible opacity-100"
-                        : "max-h-0 -translate-y-1 overflow-hidden opacity-0",
-                    ].join(" ")}
-                  >
-                    <div className="grid gap-[18px] sm:grid-cols-2">
+                    <div className="mt-[22px]">
                       <FormField
-                        label="Business phone"
-                        value={form.phone}
-                        placeholder=""
-                        onChange={(v) => updateField("phone", formatUSPhone(v))}
-                        helper="Visible to customers on your shop page"
-                        error={fieldErrors.phone}
-                      />
-
-                      <FormField
-                        label="Website"
-                        value={form.website}
-                        placeholder="yourdomain.com"
-                        onChange={(v) => updateField("website", v)}
+                        label="Business type"
+                        value={form.business_type}
+                        placeholder="Choose your shop category"
+                        onChange={(v) => updateField("business_type", v)}
+                        required
+                        options={BUSINESS_TYPE_OPTIONS.map((type) => ({
+                          value: type.slug,
+                          label: type.label,
+                        }))}
+                        error={fieldErrors.business_type}
                       />
                     </div>
-                  </div>
-                </div>
 
-                <div className="hidden pt-7 sm:block">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex h-[52px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6e34ff] to-[#7b3ff2] px-5 text-[15px] font-semibold text-[#FFFFFF] shadow-[0_14px_28px_-22px_rgba(110,52,255,0.72)] transition duration-[120ms] ease-out hover:brightness-105 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/45 disabled:cursor-not-allowed disabled:from-[#ebe7f4] disabled:to-[#ebe7f4] disabled:text-[#9f96ad] disabled:shadow-none disabled:hover:brightness-100 disabled:active:scale-100"
-                  >
-                    {loading ? "Launching..." : "Launch my shop"}
-                  </button>
-                  <p className="mt-2 text-center text-xs font-medium text-slate-500">
-                    Free to start • No setup fees • Edit anytime
-                  </p>
-                </div>
-                </div>
-              ) : null}
+                    <div className="mt-[22px]">
+                      <FormTextArea
+                        label="Description"
+                        value={form.description}
+                        placeholder="Describe your shop"
+                        rows={4}
+                        onChange={(v) => updateField("description", v)}
+                        required
+                        error={fieldErrors.description}
+                        action={
+                          <AIDescriptionAssistant
+                            type="business"
+                            name={form.businessName}
+                            category={form.business_type}
+                            value={form.description}
+                            onApply={(description) => updateField("description", description)}
+                            context="onboarding"
+                            compact
+                            label="Generate with AI"
+                          />
+                        }
+                      />
+                    </div>
+
+                    <div className="hidden pt-5 sm:block">
+                      <PrimaryButton
+                        type="button"
+                        disabled={!isStepOneValid}
+                        onClick={handleContinue}
+                      >
+                        Continue
+                      </PrimaryButton>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <FormField
+                      label="Street address"
+                      value={form.address}
+                      placeholder="Street address"
+                      listId="address-suggestions"
+                      onChange={(v) => {
+                        updateField("address", v);
+                        const match = addressSuggestions.find((item) => item.label === v);
+                        if (match) {
+                          applySuggestion(match);
+                        }
+                      }}
+                      required
+                      error={fieldErrors.address}
+                    />
+
+                    {addressSuggestions.length ? (
+                      <datalist id="address-suggestions">
+                        {addressSuggestions.map((item) => (
+                          <option key={item.label} value={item.label} />
+                        ))}
+                      </datalist>
+                    ) : null}
+
+                    <div className="mt-[18px] grid items-start gap-[18px] sm:grid-cols-[1fr_0.62fr_0.84fr]">
+                      <FormField
+                        label="City"
+                        value={form.city}
+                        placeholder=""
+                        onChange={(v) => updateField("city", v)}
+                        required
+                        error={fieldErrors.city}
+                      />
+
+                      <FormField
+                        label="State"
+                        value={form.state}
+                        placeholder=""
+                        onChange={(v) => updateField("state", v)}
+                        required
+                        error={fieldErrors.state}
+                        options={US_STATES.map((stateOption) => ({
+                          value: stateOption.code,
+                          label: stateOption.code,
+                        }))}
+                      />
+
+                      <FormField
+                        label="ZIP"
+                        value={form.postal_code}
+                        placeholder=""
+                        onChange={(v) => updateField("postal_code", v)}
+                        required
+                        error={fieldErrors.postal_code}
+                      />
+                    </div>
+
+                    <div className="mt-[18px]">
+                      <FormField
+                        label="Apt / Suite"
+                        value={form.address_2}
+                        placeholder=""
+                        onChange={(v) => updateField("address_2", v)}
+                      />
+                    </div>
+
+                    <div className="mt-7 border-t border-slate-200/60 pt-7">
+                      <SectionHeading title="Public contact details (optional)" />
+                      <div className="mt-[18px] grid gap-[18px] sm:grid-cols-2">
+                        <FormField
+                          label="Public phone"
+                          value={form.phone}
+                          placeholder=""
+                          onChange={(v) => updateField("phone", formatUSPhone(v))}
+                          helper="Shown on your shop page for customers to contact you"
+                          error={fieldErrors.phone}
+                        />
+
+                        <FormField
+                          label="Website"
+                          value={form.website}
+                          placeholder="yourdomain.com"
+                          onChange={(v) => updateField("website", v)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-7 border-t border-slate-200/60 pt-7">
+                      <SectionHeading title="Order notifications" />
+                      <div className="mt-[18px]">
+                        <NotificationsPhoneField
+                          value={form.notificationsPhone}
+                          code={phoneVerification.code}
+                          status={phoneVerification.status}
+                          verificationError={phoneVerification.error}
+                          error={fieldErrors.notificationsPhone}
+                          onChange={handleNotificationsPhoneChange}
+                          onSendCode={handleSendVerificationCode}
+                          onCodeChange={handleVerificationCodeChange}
+                          onConfirmCode={handleConfirmVerificationCode}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-auto hidden pt-5 sm:flex sm:items-center sm:gap-3">
+                      <button
+                        type="button"
+                        onClick={handleBack}
+                        className="flex h-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/45"
+                      >
+                        ← Back
+                      </button>
+                      <div className="flex-1">
+                        <PrimaryButton type="submit" disabled={loading}>
+                          {loading ? "Launching..." : "Launch my shop"}
+                        </PrimaryButton>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </form>
         </main>
@@ -612,14 +789,34 @@ export default function BusinessOnboardingPage() {
               Free to start • No setup fees
             </p>
           </div>
-          <button
-            type="submit"
-            form="business-onboarding-form"
-            disabled={loading}
-            className="flex h-[52px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6e34ff] to-[#7b3ff2] px-5 text-[15px] font-semibold text-[#FFFFFF] shadow-[0_14px_28px_-22px_rgba(110,52,255,0.72)] transition duration-[120ms] ease-out hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:from-[#ebe7f4] disabled:to-[#ebe7f4] disabled:text-[#9f96ad] disabled:shadow-none disabled:hover:brightness-100 disabled:active:scale-100"
-          >
-            {loading ? "Launching..." : "Launch my shop"}
-          </button>
+          {step === 1 ? (
+            <PrimaryButton
+              type="button"
+              disabled={!isStepOneValid}
+              onClick={handleContinue}
+            >
+              Continue
+            </PrimaryButton>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex h-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition active:scale-[0.98]"
+              >
+                ← Back
+              </button>
+              <div className="flex-1">
+                <PrimaryButton
+                  type="submit"
+                  form="business-onboarding-form"
+                  disabled={loading}
+                >
+                  {loading ? "Launching..." : "Launch my shop"}
+                </PrimaryButton>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -638,6 +835,7 @@ export default function BusinessOnboardingPage() {
               type={previewType}
               description={previewDescription}
               location={previewLocation}
+              imageSrc={previewImageSrc}
               pulse={previewPulse}
               compact
             />
@@ -646,10 +844,10 @@ export default function BusinessOnboardingPage() {
       ) : null}
 
       <style jsx global>{`
-        @keyframes onboardingFadeSlide {
+        @keyframes onboardingStepSlide {
           from {
             opacity: 0;
-            transform: translateY(-4px);
+            transform: translateY(6px);
           }
           to {
             opacity: 1;
@@ -673,7 +871,15 @@ export default function BusinessOnboardingPage() {
   );
 }
 
-function ShopPreview({ name, type, description, location, pulse, compact = false }) {
+function ShopPreview({
+  name,
+  type,
+  description,
+  location,
+  imageSrc = DEFAULT_BUSINESS_PREVIEW_IMAGE,
+  pulse,
+  compact = false,
+}) {
   return (
     <div
       className={[
@@ -691,13 +897,13 @@ function ShopPreview({ name, type, description, location, pulse, compact = false
 
       <div className="relative mt-5 overflow-hidden rounded-2xl bg-slate-100">
         <Image
-          src="/placeholders/business/types/boutique.png"
+          src={imageSrc}
           alt=""
           width={720}
           height={420}
           className={[
             compact ? "h-28" : "h-44",
-            "w-full object-cover brightness-[0.92] contrast-[0.96] saturate-[0.94]",
+            "w-full object-cover brightness-[0.92] contrast-[0.96] saturate-[0.94] transition-opacity duration-150",
           ].join(" ")}
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/14 via-transparent to-white/10" />
@@ -733,6 +939,137 @@ function ShopPreview({ name, type, description, location, pulse, compact = false
 // Reusable inputs
 // ------------------------------
 
+function StepDots({ step }) {
+  return (
+    <div className="mt-3 flex h-6 items-center gap-2" aria-hidden="true">
+      {[1, 2].map((item) => (
+        <span
+          key={item}
+          className={[
+            "h-2.5 w-2.5 rounded-full transition-colors duration-150",
+            item <= step ? "bg-[#6e34ff]" : "bg-slate-200",
+          ].join(" ")}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PrimaryButton({ children, type = "button", disabled, onClick, form }) {
+  return (
+    <button
+      type={type}
+      form={form}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-[52px] w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#6e34ff] to-[#7b3ff2] px-5 text-[15px] font-semibold text-[#FFFFFF] shadow-[0_14px_28px_-22px_rgba(110,52,255,0.72)] transition duration-[120ms] ease-out hover:brightness-105 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/45 disabled:cursor-not-allowed disabled:from-[#ebe7f4] disabled:to-[#ebe7f4] disabled:text-[#9f96ad] disabled:shadow-none disabled:hover:brightness-100 disabled:active:scale-100"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionHeading({ title }) {
+  return (
+    <h2 className="text-sm font-semibold leading-5 text-slate-900">
+      {title}
+    </h2>
+  );
+}
+
+function NotificationsPhoneField({
+  value,
+  code,
+  status,
+  verificationError,
+  error,
+  onChange,
+  onSendCode,
+  onCodeChange,
+  onConfirmCode,
+}) {
+  const isVerified = status === "verified";
+  const isSending = status === "sending";
+  const isEnteringCode = status === "enter_code" || status === "error";
+  const hasError = Boolean(error || verificationError);
+  const inputClassName = [
+    "h-11 w-full rounded-xl border bg-white px-4 text-base text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.035)]",
+    "placeholder:text-slate-400 outline-none transition focus:outline-none focus:ring-0 focus:shadow-[0_0_0_2px_rgba(110,52,255,0.15)]",
+    hasError
+      ? "border-rose-300 focus:border-rose-400 focus:shadow-[0_0_0_2px_rgba(244,63,94,0.14)]"
+      : "border-slate-200/80 focus:border-[#6e34ff]",
+  ].join(" ");
+  const buttonClassName =
+    "inline-flex h-11 shrink-0 items-center justify-center rounded-xl px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300/45 disabled:cursor-not-allowed";
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-semibold text-slate-800">
+        Notifications phone <span className="ml-0.5 text-rose-500">*</span>
+      </label>
+
+      <div className="flex items-center gap-1.5">
+        <input
+          type="tel"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder=""
+          className={inputClassName}
+          aria-invalid={hasError}
+        />
+
+        {isVerified ? (
+          <span className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            Verified
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onSendCode}
+            disabled={isSending}
+            className={`${buttonClassName} bg-[#7b3ff2] text-[#FFFFFF] shadow-[0_8px_18px_-16px_rgba(110,52,255,0.72)] hover:bg-[#6e34ff] disabled:bg-[#ebe7f4] disabled:text-[#9f96ad] disabled:shadow-none disabled:hover:bg-[#ebe7f4]`}
+          >
+            {isSending ? "Sending..." : "Verify"}
+          </button>
+        )}
+      </div>
+
+      <p className="mt-2 text-xs leading-5 text-slate-400">
+        Verify your phone to receive SMS order notifications. Not shown to customers.
+      </p>
+
+      {isEnteringCode ? (
+        <div className="mt-1 flex items-center gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(event) => onCodeChange(event.target.value)}
+            placeholder="123456"
+            className={`${inputClassName} flex-1 tracking-[0.18em]`}
+            aria-label="Verification code"
+          />
+          <button
+            type="button"
+            onClick={onConfirmCode}
+            className={`${buttonClassName} w-auto border border-slate-200 bg-white text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.035)] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950`}
+          >
+            Confirm
+          </button>
+        </div>
+      ) : null}
+
+      {hasError ? (
+        <p className="mt-2.5 text-xs font-medium leading-5 text-rose-600">
+          {error || verificationError}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function FormField({
   label,
   value,
@@ -751,7 +1088,7 @@ function FormField({
   const hasError = Boolean(error);
   const inputClassName = [
     "w-full rounded-xl border bg-white px-4 text-base text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.035)]",
-    large ? "h-[52px]" : "h-12",
+    large ? "h-[52px]" : "h-11",
     "placeholder:text-slate-400 outline-none transition focus:outline-none focus:ring-0 focus:shadow-[0_0_0_2px_rgba(110,52,255,0.15)]",
     hasError
       ? "border-rose-300 focus:border-rose-400 focus:shadow-[0_0_0_2px_rgba(244,63,94,0.14)]"
@@ -984,10 +1321,15 @@ function FormTextArea({
   rows = 3,
   required = false,
   action,
+  error,
 }) {
+  const hasError = Boolean(error);
   const textareaClassName = [
-    "h-24 w-full resize-none rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-base text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.035)]",
-    "placeholder:text-slate-400 outline-none transition focus:border-[#6e34ff] focus:outline-none focus:ring-0 focus:shadow-[0_0_0_2px_rgba(110,52,255,0.15)]",
+    "h-24 w-full resize-none rounded-xl border bg-white px-4 py-3 text-base text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.035)]",
+    "placeholder:text-slate-400 outline-none transition focus:outline-none focus:ring-0 focus:shadow-[0_0_0_2px_rgba(110,52,255,0.15)]",
+    hasError
+      ? "border-rose-300 focus:border-rose-400 focus:shadow-[0_0_0_2px_rgba(244,63,94,0.14)]"
+      : "border-slate-200/80 focus:border-[#6e34ff]",
   ].join(" ");
   return (
     <div>
@@ -1006,6 +1348,9 @@ function FormTextArea({
         required={required}
         className={textareaClassName}
       />
+      {hasError ? (
+        <p className="mt-2.5 text-xs font-medium leading-5 text-rose-600">{error}</p>
+      ) : null}
     </div>
   );
 }

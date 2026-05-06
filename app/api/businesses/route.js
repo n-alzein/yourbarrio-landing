@@ -62,6 +62,7 @@ export async function POST(req) {
       city,
       state,
       postal_code,
+      notifications_phone,
       phone,
       website,
     } = body || {};
@@ -80,6 +81,26 @@ export async function POST(req) {
 
     const normalizedWebsite = normalizeWebsite(website);
     const normalizedState = normalizeStateCode(state) || "";
+    if (!String(notifications_phone || "").trim()) {
+      return NextResponse.json(
+        { error: "Notifications phone is required." },
+        { status: 400 }
+      );
+    }
+    if (isIncompleteUSPhone(notifications_phone)) {
+      return NextResponse.json(
+        { error: "Enter a complete 10-digit US phone number." },
+        { status: 400 }
+      );
+    }
+    const normalizedNotificationsPhone =
+      normalizeUSPhoneForStorage(notifications_phone);
+    if (!normalizedNotificationsPhone) {
+      return NextResponse.json(
+        { error: "Enter a complete 10-digit US phone number." },
+        { status: 400 }
+      );
+    }
     if (isIncompleteUSPhone(phone)) {
       return NextResponse.json(
         { error: "Enter a complete 10-digit US phone number." },
@@ -122,6 +143,7 @@ export async function POST(req) {
       role: "business",
       public_id: existingUser?.public_id || null,
       full_name: trimmedName,
+      phone: normalizedNotificationsPhone,
       business_name: trimmedName,
       business_type: businessType?.slug || trimmedBusinessType,
       category: businessType?.name || trimmedCategory,
@@ -172,6 +194,7 @@ export async function POST(req) {
       latitude: geo?.lat ?? null,
       longitude: geo?.lng ?? null,
       is_internal: existingBusiness?.is_internal === true,
+      phone_verified_at: null,
       verification_status: "pending",
       updated_at: new Date().toISOString(),
     };

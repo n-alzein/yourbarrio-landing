@@ -1,5 +1,7 @@
 "use client";
 
+import NoticeBannerHost from "@/components/common/NoticeBannerHost";
+
 export default function PublicRouteShell({
   children = null,
   className = "",
@@ -31,10 +33,11 @@ export default function PublicRouteShell({
       data-shell-gap={gap}
       style={{
         ...lightThemeVars,
-        paddingTop: "calc(var(--public-nav-offset) + var(--public-shell-gap))",
+        paddingTop: "var(--public-nav-offset)",
       }}
     >
-      {children}
+      <NoticeBannerHost audience="all" />
+      <div style={{ paddingTop: "var(--public-shell-gap)" }}>{children}</div>
     </div>
   );
 }

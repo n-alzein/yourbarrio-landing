@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { useModal } from "./ModalProvider";
 import { buildOAuthCallbackUrl, logOAuthStart } from "@/lib/auth/oauthRedirect";
+import { markCustomerProfilePromptPending } from "@/components/customer/CustomerPostSignupProfilePrompt";
 
-export default function CustomerSignupModal({ onClose }) {
+function resolveSignupDestination(next) {
+  if (typeof next !== "string") return "/customer/home";
+  const trimmed = next.trim();
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return "/customer/home";
+  }
+  if (trimmed.startsWith("/api/") || trimmed.startsWith("/_next/")) {
+    return "/customer/home";
+  }
+  return trimmed;
+}
+
+export default function CustomerSignupModal({ onClose, next = null }) {
   const { supabase } = useAuth();
   const { openModal } = useModal();
 
@@ -14,90 +27,153 @@ export default function CustomerSignupModal({ onClose }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const submitLockRef = useRef(false);
+
+  const friendlyExistingAccountMessage =
+    "An account with this email already exists. Log in instead.";
+  const destination = resolveSignupDestination(next);
+
+  function isAlreadyRegisteredError(authError) {
+    const message = String(authError?.message || "").toLowerCase();
+    const code = String(authError?.code || authError?.name || "").toLowerCase();
+    return (
+      message.includes("user already registered") ||
+      message.includes("already registered") ||
+      code.includes("user_already_exists") ||
+      code.includes("email_exists")
+    );
+  }
+
+  async function persistSession(session) {
+    const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
+
+    if (!session?.access_token || !session?.refresh_token) {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session;
+    }
+
+    if (!session?.access_token || !session?.refresh_token) {
+      throw new Error("missing_session");
+    }
+
+    if (debugAuth) {
+      console.log("[customer-signup] refreshing cookies with tokens");
+    }
+
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      }),
+    });
+
+    const refreshed = res.headers.get("x-auth-refresh-user") === "1";
+    if (debugAuth) {
+      console.log(
+        "[customer-signup] refresh user header",
+        res.headers.get("x-auth-refresh-user")
+      );
+    }
+
+    if (!refreshed) {
+      throw new Error("refresh_failed");
+    }
+
+    return session;
+  }
+
+  async function fetchFreshProfile() {
+    const res = await fetch("/api/me", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      headers: {
+        "x-yb-auth-bootstrap": "customer_signup",
+      },
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload?.user?.id || !payload?.profile?.id) {
+      throw new Error(payload?.error || "profile_missing");
+    }
+    return payload;
+  }
+
+  async function recoverExistingSessionForEmail() {
+    const { data } = await supabase.auth.getSession();
+    const session = data?.session;
+    const sessionEmail = String(session?.user?.email || "").trim().toLowerCase();
+    const requestedEmail = String(email || "").trim().toLowerCase();
+
+    if (!session?.user?.id || !requestedEmail || sessionEmail !== requestedEmail) {
+      return false;
+    }
+
+    await persistSession(session);
+    await fetchFreshProfile();
+    onClose?.();
+    window.location.replace(destination);
+    return true;
+  }
 
   async function handleSignup(event) {
     event.preventDefault();
+    if (submitLockRef.current) return;
+
+    submitLockRef.current = true;
     setError("");
     setLoading(true);
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
-
-    const authUser = signUpData?.user;
-    if (!authUser) {
-      setError("Signup succeeded but no user returned. Try logging in.");
-      setLoading(false);
-      return;
-    }
-
-    const { error: insertError } = await supabase.from("users").insert({
-      id: authUser.id,
-      email: authUser.email,
-      role: "customer",
-      full_name: "",
-    });
-
-    if (insertError) {
-      setError("Account created, but failed to finish profile. Try logging in.");
-      setLoading(false);
-      return;
-    }
-
-    onClose?.();
-
-    const debugAuth = process.env.NEXT_PUBLIC_DEBUG_AUTH === "1";
-
     try {
-      const session = signUpData?.session;
-
-      if (debugAuth) {
-        console.log("[customer-signup] refreshing cookies with tokens");
-      }
-
-      const res = await fetch("/api/auth/refresh", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          access_token: session?.access_token,
-          refresh_token: session?.refresh_token,
-        }),
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            role: "customer",
+          },
+        },
       });
 
-      const refreshed = res.headers.get("x-auth-refresh-user") === "1";
-      if (debugAuth) {
-        console.log(
-          "[customer-signup] refresh user header",
-          res.headers.get("x-auth-refresh-user")
-        );
+      if (signUpError) {
+        if (isAlreadyRegisteredError(signUpError)) {
+          const recovered = await recoverExistingSessionForEmail();
+          if (!recovered) {
+            setError(friendlyExistingAccountMessage);
+          }
+        } else {
+          setError(signUpError.message);
+        }
+        return;
       }
 
-      if (!refreshed) {
+      const authUser = signUpData?.user;
+      if (!authUser) {
+        setError("Signup succeeded but no user returned. Try logging in.");
+        return;
+      }
+
+      await persistSession(signUpData?.session);
+      await fetchFreshProfile();
+      markCustomerProfilePromptPending(authUser.id);
+
+      onClose?.();
+      window.location.replace(destination);
+    } catch (err) {
+      console.error("Customer signup completion failed", err);
+      if (err?.message === "missing_session" || err?.message === "refresh_failed") {
         setError(
           "Signup succeeded but session could not be persisted in Safari. Please try again."
         );
-        setLoading(false);
         return;
       }
-    } catch (err) {
-      console.error("Auth refresh call failed", err);
-      setError(
-        "Signup succeeded but session could not be persisted in Safari. Please try again."
-      );
+      setError("Account created, but failed to finish profile. Try logging in.");
+    } finally {
+      submitLockRef.current = false;
       setLoading(false);
-      return;
     }
-
-    window.location.replace("/customer/home");
-    setLoading(false);
   }
 
   async function handleGoogleSignup() {

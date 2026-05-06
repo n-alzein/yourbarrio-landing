@@ -21,6 +21,8 @@ function createRequest(body = {}) {
       city: "Long Beach",
       state: "CA",
       postal_code: "90802",
+      notifications_phone: "+1 562 555 0101",
+      notifications_phone_verified: false,
       ...body,
     }),
   });
@@ -172,7 +174,7 @@ describe("POST /api/businesses", () => {
     );
   });
 
-  it("saves submitted phone to business record and not user account record", async () => {
+  it("saves notifications phone to user account and public phone to business record", async () => {
     const supabase = createSupabaseMock({
       businessRowOverride: {
         phone: "(562) 123-4567",
@@ -184,14 +186,15 @@ describe("POST /api/businesses", () => {
     expect(response.status).toBe(200);
 
     expect(supabase.from("users").upsert).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        phone: expect.anything(),
+      expect.objectContaining({
+        phone: "(562) 555-0101",
       }),
       expect.any(Object)
     );
     expect(supabase.from("businesses").upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         business_type_id: "type-food",
+        phone_verified_at: null,
         phone: "(562) 123-4567",
       }),
       {
@@ -201,7 +204,38 @@ describe("POST /api/businesses", () => {
     );
   });
 
-  it("rejects incomplete non-empty onboarding phone numbers", async () => {
+  it("rejects missing notifications phone", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(
+      createRequest({ notifications_phone: "", notifications_phone_verified: true })
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Notifications phone is required.",
+    });
+  });
+
+  it("allows unverified notifications phone during pre-Twilio onboarding", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(
+      createRequest({ notifications_phone_verified: false })
+    );
+
+    expect(response.status).toBe(200);
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "(562) 555-0101",
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("rejects incomplete non-empty public phone numbers", async () => {
     const supabase = createSupabaseMock();
     createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
 

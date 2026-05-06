@@ -17,6 +17,8 @@ describe("settings phone separation", () => {
     expect(source).toContain('fetch("/api/account/profile"');
     expect(source).toContain('fetch("/api/business/profile"');
     expect(source).not.toContain("business_name: form.full_name,\n      phone: form.phone");
+    expect(source).not.toContain("Complete your profile");
+    expect(source).not.toContain("getCustomerProfileCompletion");
   });
 
   it("customer settings saves the private phone through the account profile API", () => {

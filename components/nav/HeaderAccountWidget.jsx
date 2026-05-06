@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, LogOut, MapPin } from "lucide-react";
 import SafeAvatar from "@/components/SafeAvatar";
 import { AUTH_UI_RESET_EVENT, useAuth } from "@/components/AuthProvider";
@@ -22,6 +22,70 @@ import { getLocationLabel, isZipLike, normalizeSelectedLocation } from "@/lib/lo
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
 // Keep resolved placeholder paths aligned so SafeAvatar can switch to initials.
 const CUSTOMER_AVATAR_FALLBACK = "/customer-placeholder.png";
+
+function parseProfileUpdatedAt(profile) {
+  const timestamp = Date.parse(profile?.updated_at || "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function hasProfileValue(value) {
+  return String(value || "").trim().length > 0;
+}
+
+function chooseLiveAccountProfile({
+  forcedProfile,
+  contextProfile,
+  forcedUser,
+  contextUser,
+}) {
+  if (!forcedProfile) return contextProfile ?? null;
+  if (!contextProfile) return forcedProfile;
+
+  const forcedUserId = forcedUser?.id || forcedProfile?.id || null;
+  const contextUserId = contextUser?.id || contextProfile?.id || null;
+  if (forcedUserId && contextUserId && forcedUserId !== contextUserId) {
+    return forcedProfile;
+  }
+
+  const forcedUpdatedAt = parseProfileUpdatedAt(forcedProfile);
+  const contextUpdatedAt = parseProfileUpdatedAt(contextProfile);
+  if (
+    contextUpdatedAt !== null &&
+    (forcedUpdatedAt === null || contextUpdatedAt >= forcedUpdatedAt)
+  ) {
+    return {
+      ...forcedProfile,
+      ...contextProfile,
+    };
+  }
+
+  if (forcedUpdatedAt !== null && contextUpdatedAt !== null && forcedUpdatedAt > contextUpdatedAt) {
+    return forcedProfile;
+  }
+
+  const mergedProfile = {
+    ...forcedProfile,
+    ...contextProfile,
+  };
+
+  for (const key of [
+    "full_name",
+    "phone",
+    "address",
+    "address_2",
+    "city",
+    "state",
+    "postal_code",
+    "email",
+    "role",
+  ]) {
+    if (!hasProfileValue(contextProfile?.[key]) && hasProfileValue(forcedProfile?.[key])) {
+      mergedProfile[key] = forcedProfile[key];
+    }
+  }
+
+  return mergedProfile;
+}
 
 export default function HeaderAccountWidget({
   surface = "public",
@@ -55,6 +119,7 @@ export default function HeaderAccountWidget({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [accountSidebarOpen, setAccountSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [mobileLocationOpen, setMobileLocationOpen] = useState(false);
   const [mobileLocationInput, setMobileLocationInput] = useState("");
   const [mobileLocationSuggestions, setMobileLocationSuggestions] = useState([]);
@@ -83,7 +148,16 @@ export default function HeaderAccountWidget({
   const contextAuthUser = user?.id ? user : null;
   const accountUser = forcedAuthUser || contextAuthUser;
   const chosenUserSource = forcedAuthUser ? "forced" : contextAuthUser ? "context" : "none";
-  const accountProfile = forcedAuth?.profile || profile;
+  const accountProfile = useMemo(
+    () =>
+      chooseLiveAccountProfile({
+        forcedProfile: forcedAuth?.profile,
+        contextProfile: profile,
+        forcedUser: forcedAuthUser,
+        contextUser: contextAuthUser,
+      }),
+    [contextAuthUser, forcedAuth?.profile, forcedAuthUser, profile]
+  );
   const accountBusiness = forcedAuth?.business || business;
   const effectiveRole = forcedAuth?.role || role;
   const isCustomer = effectiveRole === "customer";
@@ -156,6 +230,10 @@ export default function HeaderAccountWidget({
     surface,
     variant,
   ]);
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   const unreadUserId = accountUser?.id || accountProfile?.id;
   const canLoadUnread =
@@ -636,7 +714,7 @@ export default function HeaderAccountWidget({
     return (
       <>
         <div className="flex items-center gap-3">
-        {isBusiness ? (
+        {hasHydrated && isBusiness ? (
           <Link
             href="/go/dashboard"
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white/90 border border-white/20 hover:bg-white/10 transition"
