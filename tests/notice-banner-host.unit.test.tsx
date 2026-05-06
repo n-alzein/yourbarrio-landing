@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import NoticeBannerHost from "@/components/common/NoticeBannerHost";
 
@@ -80,7 +80,7 @@ describe("NoticeBannerHost", () => {
     );
   });
 
-  it("does not render a dismissed notice again in the same session", () => {
+  it("does not render a dismissed notice again in the same session", async () => {
     window.sessionStorage.setItem(
       "yb_notice_dismissed:customer-profile-completion:user-1",
       "1"
@@ -88,6 +88,8 @@ describe("NoticeBannerHost", () => {
 
     render(<NoticeBannerHost audience="customer" />);
 
-    expect(screen.queryByText("Finish setting up your account")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Finish setting up your account")).not.toBeInTheDocument();
+    });
   });
 });

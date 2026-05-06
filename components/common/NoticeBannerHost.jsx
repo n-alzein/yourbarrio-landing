@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import NoticeBanner from "@/components/common/NoticeBanner";
 import { useAuth } from "@/components/AuthProvider";
@@ -9,6 +9,22 @@ import {
   isNoticeDismissedForSession,
   resolveNotices,
 } from "@/lib/notices/resolve-notices";
+
+function subscribeSessionDismissal() {
+  return () => {};
+}
+
+function getServerDismissalSnapshot() {
+  return false;
+}
+
+function useSessionDismissedNotice(noticeId) {
+  return useSyncExternalStore(
+    subscribeSessionDismissal,
+    () => (noticeId ? isNoticeDismissedForSession(noticeId) : false),
+    getServerDismissalSnapshot
+  );
+}
 
 export default function NoticeBannerHost({ audience = "all" }) {
   const pathname = usePathname() || "/";
@@ -26,12 +42,14 @@ export default function NoticeBannerHost({ audience = "all" }) {
     [pathname, profile, role, user]
   );
 
+  const isDismissedForSession = useSessionDismissedNotice(notice?.id);
+
   const visible =
     authStatus === "authenticated" &&
     notice &&
     (notice.audience === "all" || notice.audience === audience || audience === "all") &&
     !dismissedNoticeIds.has(notice.id) &&
-    !isNoticeDismissedForSession(notice.id);
+    !isDismissedForSession;
 
   if (!visible) return null;
 
