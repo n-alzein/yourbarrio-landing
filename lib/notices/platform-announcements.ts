@@ -62,6 +62,14 @@ function isPlatformAnnouncementRow(row: any): row is PlatformAnnouncement {
   return Boolean(row?.id && row?.message && row?.audience && row?.variant && row?.status);
 }
 
+function logPlatformAnnouncementFailure(stage: string, error: any, meta: Record<string, unknown> = {}) {
+  console.warn("[platform-announcements] optional read failed", {
+    stage,
+    message: error?.message || String(error),
+    ...meta,
+  });
+}
+
 export function platformAnnouncementToNotice(row: PlatformAnnouncement): Notice {
   const version = row.updated_at || row.created_at || "";
   return {
@@ -79,20 +87,37 @@ export function platformAnnouncementToNotice(row: PlatformAnnouncement): Notice 
 }
 
 export async function resolveCurrentViewerAudience() {
-  const authedClient = await getSupabaseServerAuthedClient();
+  const authedClient = await getSupabaseServerAuthedClient().catch((error) => {
+    logPlatformAnnouncementFailure("server-client", error);
+    return null;
+  });
   if (!authedClient) return "guest" as const;
 
-  const {
-    data: { user },
-  } = await authedClient.auth.getUser();
+  let user = null;
+  try {
+    const result = await authedClient.auth.getUser();
+    user = result?.data?.user ?? null;
+  } catch (error) {
+    logPlatformAnnouncementFailure("auth.getUser", error);
+    return "guest" as const;
+  }
   if (!user?.id) return "guest" as const;
 
-  const serviceClient = getAdminServiceRoleClient();
-  const { data } = await serviceClient
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+  let data = null;
+  try {
+    const serviceClient = getAdminServiceRoleClient();
+    const result = await serviceClient
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (result.error) {
+      logPlatformAnnouncementFailure("viewer-role", result.error, { userId: user.id });
+    }
+    data = result.data ?? null;
+  } catch (error) {
+    logPlatformAnnouncementFailure("viewer-role", error, { userId: user.id });
+  }
 
   return normalizeViewerAudience(data?.role || user.app_metadata?.role || user.user_metadata?.role);
 }
@@ -100,23 +125,42 @@ export async function resolveCurrentViewerAudience() {
 export async function getActivePlatformAnnouncementForAudience(
   viewerAudience: "guest" | "customer" | "business"
 ): Promise<PlatformAnnouncement | null> {
-  const serviceClient = getAdminServiceRoleClient();
+  let serviceClient = null;
+  try {
+    serviceClient = getAdminServiceRoleClient();
+  } catch (error) {
+    logPlatformAnnouncementFailure("service-client", error, { viewerAudience });
+    return null;
+  }
   const now = new Date().toISOString();
   const audiences = eligibleAnnouncementAudiences(viewerAudience);
 
-  const { data, error } = await serviceClient
-    .from("platform_announcements")
-    .select(ACTIVE_SELECT)
-    .eq("status", "active")
-    .in("audience", audiences)
-    .or(`starts_at.is.null,starts_at.lte.${now}`)
-    .or(`ends_at.is.null,ends_at.gt.${now}`)
-    .order("priority", { ascending: false })
-    .order("updated_at", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
+  let data = null;
+  let error = null;
+  try {
+    const result = await serviceClient
+      .from("platform_announcements")
+      .select(ACTIVE_SELECT)
+      .eq("status", "active")
+      .in("audience", audiences)
+      .or(`starts_at.is.null,starts_at.lte.${now}`)
+      .or(`ends_at.is.null,ends_at.gt.${now}`)
+      .order("priority", { ascending: false })
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10);
+    data = result.data;
+    error = result.error;
+  } catch (err) {
+    error = err;
+  }
 
-  if (error || !Array.isArray(data)) return null;
+  if (error || !Array.isArray(data)) {
+    if (error) {
+      logPlatformAnnouncementFailure("active-announcement", error, { viewerAudience });
+    }
+    return null;
+  }
 
   const rows = data.filter(isPlatformAnnouncementRow);
   rows.sort((a, b) => {

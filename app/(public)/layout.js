@@ -18,6 +18,11 @@ export const revalidate = 0;
 export default async function PublicLayout({ children }) {
   const accountContext = await getCurrentAccountContext({
     source: "public-layout",
+  }).catch((error) => {
+    console.warn("[PUBLIC_LAYOUT] account context failed", {
+      message: error?.message || String(error),
+    });
+    return null;
   });
   const forcedAuth = accountContext?.isAuthenticated
     ? {

@@ -260,12 +260,6 @@ export async function middleware(request) {
     pathname !== "/favicon.ico";
   if (isRscQuery || shouldSetFlightHeaders) {
     requestHeaders.set("rsc", "1");
-    if (!requestHeaders.has("next-router-state-tree")) {
-      requestHeaders.set(
-        "next-router-state-tree",
-        '["",{"children":["__PAGE__",{}]},null,null,true]'
-      );
-    }
   }
   const response = NextResponse.next({
     request: {

@@ -24,6 +24,11 @@ export default async function RootLayout({ children, auth, businessAuth }) {
   const initialLocation = await getLocationFromCookies();
   const initialAccountContext = await getCurrentAccountContext({
     source: "root-layout",
+  }).catch((error) => {
+    console.warn("[ROOT_LAYOUT] account context failed", {
+      message: error?.message || String(error),
+    });
+    return null;
   });
   const initialAuth = initialAccountContext?.isAuthenticated
     ? {
