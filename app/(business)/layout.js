@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import BusinessNavbar from "@/components/navbars/BusinessNavbar";
 import BusinessAccountShell from "@/components/business/BusinessAccountShell";
+import NoticeBannerHost from "@/components/common/NoticeBannerHost";
 import InactivityLogout from "@/components/auth/InactivityLogout";
 import AuthSeed from "@/components/auth/AuthSeed";
 import AuthRedirectGuard from "@/components/auth/AuthRedirectGuard";
@@ -38,6 +39,7 @@ function BusinessRouteShell({ children = null, offsetForNav = false }) {
           : {}),
       }}
     >
+      {offsetForNav ? <NoticeBannerHost audience="business" /> : null}
       {children}
     </div>
   );

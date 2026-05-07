@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import NoticeBanner from "@/components/common/NoticeBanner";
 import { useAuth } from "@/components/AuthProvider";
@@ -30,6 +30,32 @@ export default function NoticeBannerHost({ audience = "all" }) {
   const pathname = usePathname() || "/";
   const { user, profile, role, authStatus } = useAuth();
   const [dismissedNoticeIds, setDismissedNoticeIds] = useState(() => new Set());
+  const [platformNotice, setPlatformNotice] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadPlatformNotice() {
+      try {
+        const response = await fetch("/api/platform-announcements/active", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Unable to load announcement");
+        const payload = await response.json();
+        if (!cancelled) setPlatformNotice(payload?.notice || null);
+      } catch {
+        if (!cancelled) setPlatformNotice(null);
+      }
+    }
+
+    loadPlatformNotice();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [authStatus, role, user?.id]);
 
   const notice = useMemo(
     () =>
@@ -38,14 +64,15 @@ export default function NoticeBannerHost({ audience = "all" }) {
         profile,
         role,
         pathname,
+        extraNotices: platformNotice ? [platformNotice] : [],
       }),
-    [pathname, profile, role, user]
+    [pathname, platformNotice, profile, role, user]
   );
 
   const isDismissedForSession = useSessionDismissedNotice(notice?.id);
 
   const visible =
-    authStatus === "authenticated" &&
+    authStatus !== "loading" &&
     notice &&
     (notice.audience === "all" || notice.audience === audience || audience === "all") &&
     !dismissedNoticeIds.has(notice.id) &&

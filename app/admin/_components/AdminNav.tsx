@@ -33,6 +33,7 @@ export default function AdminNav({
     { href: "/admin/customers", label: "Customers", icon: "customers" },
     { href: "/admin/businesses", label: "Businesses", icon: "businesses" },
     { href: "/admin/listings", label: "Listings", icon: "listings" },
+    { href: "/admin/announcements", label: "Announcements", icon: "announcements" },
     { href: "/admin/verification", label: "Verification", icon: "verification", badgeCount: pendingVerificationCount },
     { href: "/admin/admins", label: canManageAdmins ? "Admin Management" : "Admins", icon: "admins" },
     ...(canManageAdmins
@@ -113,6 +114,7 @@ type NavIconName =
   | "customers"
   | "businesses"
   | "listings"
+  | "announcements"
   | "verification"
   | "admins"
   | "settings"
@@ -161,6 +163,12 @@ function NavIcon({ name }: { name: NavIconName }) {
           <path d="M4 6.5 12 3l8 3.5v11L12 21l-8-3.5z" />
           <path d="M12 3v18" />
           <path d="m4 6.5 8 3.5 8-3.5" />
+        </svg>
+      );
+    case "announcements":
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M4 10v4a2 2 0 0 0 2 2h2l4 4v-4h2l6 2V6l-6 2H6a2 2 0 0 0-2 2z" />
         </svg>
       );
     case "verification":

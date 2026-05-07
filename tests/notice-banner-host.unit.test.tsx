@@ -33,6 +33,10 @@ function mockSessionStorage() {
 describe("NoticeBannerHost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise(() => {}))
+    );
     mockPathname = "/nearby";
     mockSessionStorage();
     mockAuth = {
@@ -91,5 +95,29 @@ describe("NoticeBannerHost", () => {
     await waitFor(() => {
       expect(screen.queryByText("Finish setting up your account")).not.toBeInTheDocument();
     });
+  });
+
+  it("renders an active platform announcement over profile completion", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        notice: {
+          id: "platform-announcement:ann-1:v1",
+          variant: "warning",
+          priority: 950,
+          audience: "all",
+          title: "Planned maintenance",
+          message: "YourBarrio may be briefly unavailable tonight.",
+          ctaLabel: "Status",
+          ctaHref: "/status",
+          dismissible: true,
+        },
+      }),
+    } as Response);
+
+    render(<NoticeBannerHost audience="customer" />);
+
+    expect((await screen.findAllByText("Planned maintenance")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Finish setting up your account")).not.toBeInTheDocument();
   });
 });
