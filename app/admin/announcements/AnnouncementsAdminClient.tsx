@@ -396,7 +396,9 @@ export default function AnnouncementsAdminClient({
                   message={previewMessage}
                   ctaLabel={previewCtaLabel}
                   ctaHref={previewCtaHref}
+                  onCtaClick={() => {}}
                   dismissible={form.dismissible}
+                  onDismiss={() => {}}
                 />
               </div>
             </section>
