@@ -4,9 +4,11 @@ import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import SafeAvatar from "@/components/SafeAvatar";
+import BusinessAvatar from "@/components/messages/BusinessAvatar";
 import { getAvatarUrl, getDisplayName, getUnreadCount } from "@/lib/messages";
 import {
   formatLegacyOrderUpdatePreview,
+  getConversationPreview,
   splitInboxConversations,
 } from "@/components/messages/inboxPresentation";
 
@@ -45,11 +47,15 @@ export default function InboxList({
       role === "business" ? conversation.customer : conversation.business;
     const payload = {
       name: getDisplayName(otherProfile),
-      avatarUrl: getAvatarUrl(otherProfile),
+      conversation,
     };
     window.sessionStorage.setItem(
       `yb-conversation-header:${conversation.id}`,
       JSON.stringify(payload)
+    );
+    window.sessionStorage.setItem(
+      `yb-conversation:${conversation.id}`,
+      JSON.stringify(conversation)
     );
   };
 
@@ -107,12 +113,15 @@ export default function InboxList({
   }
 
   if (isFlat) {
-    const { conversations: conversationRows, orderUpdates } =
-      splitInboxConversations(conversations);
+    const splitRows = isFlat
+      ? { conversations, orderUpdates: [] }
+      : splitInboxConversations(conversations);
+    const conversationRows = splitRows.conversations;
+    const orderUpdates = isCustomerFlat ? [] : splitRows.orderUpdates;
     const hasConversationRows = conversationRows.length > 0;
 
     return (
-      <div className={hasConversationRows ? "space-y-8" : "space-y-5"}>
+      <div className={hasConversationRows ? "space-y-2" : "space-y-5"}>
         <InboxSection
           title="Conversations"
           emptyState={
@@ -163,7 +172,7 @@ export default function InboxList({
             role === "business" ? conversation.customer : conversation.business;
           const displayName = getDisplayName(otherProfile);
           const unreadCount = getUnreadCount(conversation, role);
-          const preview = conversation.last_message_preview || "";
+          const preview = getConversationPreview(conversation);
           const previewTime = formatPreviewTime(conversation.last_message_at);
 
           return (
@@ -190,13 +199,24 @@ export default function InboxList({
               className="group block rounded-[24px] border border-transparent bg-white/0 px-4 py-3 transition hover:border-white/10 hover:bg-white/10 md:px-5 md:py-4"
             >
               <div className="flex items-center gap-4">
-                <SafeAvatar
-                  src={getAvatarUrl(otherProfile)}
-                  name={displayName}
-                  alt={displayName}
-                  className="h-12 w-12 rounded-2xl object-cover border border-white/10"
-                  initialsClassName="text-[13px]"
-                />
+                {role === "customer" ? (
+                  <BusinessAvatar
+                    profile={otherProfile}
+                    name={displayName}
+                    alt={displayName}
+                    className="h-12 w-12 rounded-2xl border border-white/10 object-cover"
+                  />
+                ) : (
+                  <SafeAvatar
+                    src={getAvatarUrl(otherProfile)}
+                    name={displayName}
+                    alt={displayName}
+                    shape="circle"
+                    identityType="person"
+                    className="h-12 w-12 rounded-full border border-white/10 object-cover"
+                    initialsClassName="text-[13px]"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-white/90 truncate">
@@ -242,7 +262,7 @@ function InboxSection({
       {isEmpty ? (
         emptyState
       ) : (
-        <div className="divide-y divide-slate-200/80 border-y border-slate-200/80">
+        <div className="space-y-2">
           {items}
         </div>
       )}
@@ -261,11 +281,11 @@ function EmptyInboxState({ role = "customer", showOrdersCTA = false }) {
     : "";
 
   return (
-    <div className="rounded-3xl border border-slate-100 bg-white px-6 py-14 text-center shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
-      <div className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+    <div className="rounded-3xl border border-slate-100 bg-white px-5 py-10 text-center shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
+      <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
         <MessageCircle className="h-7 w-7" aria-hidden="true" />
       </div>
-      <h3 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h3>
+      <h3 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h3>
       <p className="mx-auto mt-2 max-w-xl text-sm text-slate-500">
         {description}
       </p>
@@ -326,7 +346,7 @@ function ConversationRow({
     role === "business" ? conversation.customer : conversation.business;
   const displayName = getDisplayName(otherProfile);
   const unreadCount = getUnreadCount(conversation, role);
-  const preview = conversation.last_message_preview || "";
+  const preview = getConversationPreview(conversation);
   const previewTime = formatPreviewTime(conversation.last_message_at);
 
   return (
@@ -334,15 +354,26 @@ function ConversationRow({
       href={`${basePath}/${conversation.id}`}
       prefetch
       {...buildRowHandlers({ conversation, onPrepare, onPrefetch })}
-      className="group flex cursor-pointer items-center gap-4 px-1 py-4 transition hover:bg-slate-50 sm:px-2"
+      className="group flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition hover:border-violet-100 hover:bg-violet-50/40"
     >
-      <SafeAvatar
-        src={getAvatarUrl(otherProfile)}
-        name={displayName}
-        alt={displayName}
-        className="h-11 w-11 rounded-2xl border border-slate-200 object-cover shadow-sm"
-        initialsClassName="text-[13px]"
-      />
+      {role === "customer" ? (
+        <BusinessAvatar
+          profile={otherProfile}
+          name={displayName}
+          alt={displayName}
+          className="h-12 w-12 shrink-0 rounded-2xl border border-slate-100 object-cover shadow-sm"
+        />
+      ) : (
+        <SafeAvatar
+          src={getAvatarUrl(otherProfile)}
+          name={displayName}
+          alt={displayName}
+          shape="circle"
+          identityType="person"
+          className="h-12 w-12 shrink-0 rounded-full border border-slate-200 object-cover shadow-sm"
+          initialsClassName="text-[13px]"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-4">
           <p className="truncate text-sm font-semibold text-slate-950">
@@ -352,7 +383,9 @@ function ConversationRow({
             {previewTime}
           </span>
         </div>
-        <p className="mt-0.5 truncate text-sm text-slate-500">{preview}</p>
+        <p className="mt-1 truncate text-sm text-slate-500">
+          {preview}
+        </p>
       </div>
       {unreadCount > 0 ? (
         <span className="min-w-[24px] rounded-full bg-rose-500 px-2 py-0.5 text-center text-[10px] font-semibold text-white">

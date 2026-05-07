@@ -1,6 +1,7 @@
 "use client";
 
 import OrderCard from "@/components/messages/OrderCard";
+import { filterRealConversationMessages } from "@/lib/messages";
 
 function formatMessageTime(value) {
   if (!value) return "";
@@ -110,8 +111,12 @@ export default function MessageThread({
   messages = [],
   currentUserId,
   loading = false,
+  variant = "dark",
 }) {
-  if (loading && !messages.length) {
+  const isLight = variant === "light";
+  const visibleMessages = filterRealConversationMessages(messages);
+
+  if (loading && !visibleMessages.length) {
     return (
       <div className="space-y-5">
         {Array.from({ length: 5 }).map((_, index) => {
@@ -124,21 +129,37 @@ export default function MessageThread({
               <div className={`max-w-[80%] ${isSelf ? "items-end" : "items-start"}`}>
                 <div
                   className={`rounded-[24px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${
-                    isSelf
+                    isLight
+                      ? "border-slate-100 bg-white"
+                      : isSelf
                       ? "border-[#dccbff]/30 bg-[linear-gradient(135deg,rgba(220,203,255,0.28),rgba(220,203,255,0.14))]"
                       : "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.14),rgba(255,255,255,0.06))]"
                   }`}
                 >
                   <div className="animate-pulse">
-                    <div className="h-4 w-40 rounded-full bg-white/15" />
-                    <div className="mt-2 h-4 w-28 rounded-full bg-white/10" />
+                    <div
+                      className={`h-4 w-40 rounded-full ${
+                        isLight ? "bg-slate-100" : "bg-white/15"
+                      }`}
+                    />
+                    <div
+                      className={`mt-2 h-4 w-28 rounded-full ${
+                        isLight ? "bg-slate-100" : "bg-white/10"
+                      }`}
+                    />
                     {index === 2 ? (
-                      <div className="mt-2 h-4 w-36 rounded-full bg-white/10" />
+                      <div
+                        className={`mt-2 h-4 w-36 rounded-full ${
+                          isLight ? "bg-slate-100" : "bg-white/10"
+                        }`}
+                      />
                     ) : null}
                   </div>
                 </div>
                 <div
-                  className={`mt-2 h-3 rounded-full bg-white/10 animate-pulse ${
+                  className={`mt-2 h-3 rounded-full animate-pulse ${
+                    isLight ? "bg-slate-100" : "bg-white/10"
+                  } ${
                     isSelf ? "ml-auto w-14" : "w-16"
                   }`}
                 />
@@ -150,15 +171,21 @@ export default function MessageThread({
     );
   }
 
-  if (!messages.length) {
+  if (!visibleMessages.length) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/70">
+      <div
+        className={`rounded-3xl border p-6 ${
+          isLight
+            ? "border-slate-100 bg-slate-50 text-slate-500"
+            : "border-white/10 bg-white/5 text-white/70"
+        }`}
+      >
         No messages yet. Start the conversation below.
       </div>
     );
   }
 
-  const entries = buildThreadEntries(messages, currentUserId);
+  const entries = buildThreadEntries(visibleMessages, currentUserId);
 
   return (
     <div className="space-y-4">
@@ -194,7 +221,11 @@ export default function MessageThread({
                   </div>
                 ))}
               </div>
-              <span className="mt-1 text-[11px] text-white/50">
+              <span
+                className={`mt-1 text-[11px] ${
+                  isLight ? "text-slate-400" : "text-white/50"
+                }`}
+              >
                 {formatMessageTime(group.items[group.items.length - 1]?.created_at)}
               </span>
             </div>

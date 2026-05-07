@@ -119,7 +119,7 @@ describe("inbox presentation helpers", () => {
 });
 
 describe("InboxList customer flat variant", () => {
-  it("renders conversations and order updates separately", () => {
+  it("renders every eligible conversation and does not show an order updates section", () => {
     render(
       <InboxList
         conversations={[
@@ -148,17 +148,20 @@ describe("InboxList customer flat variant", () => {
     const activeSection = screen
       .getByRole("heading", { name: "Conversations" })
       .closest("section");
-    const updatesSection = screen
-      .getByRole("heading", { name: "Order updates" })
-      .closest("section");
 
     expect(within(activeSection).getByText("Barrio Bakery")).toBeInTheDocument();
     expect(within(activeSection).getByText("Can you confirm pickup?")).toBeInTheDocument();
-    expect(within(updatesSection).getByText("Test ABCD")).toBeInTheDocument();
+    expect(within(activeSection).getByText("Test ABCD")).toBeInTheDocument();
+    expect(within(activeSection).getByText("Order conversation")).toBeInTheDocument();
     expect(
-      within(updatesSection).getByText("Order YB-8XQZ4Y fulfilled")
-    ).toBeInTheDocument();
-    expect(within(updatesSection).queryByRole("img")).not.toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Order updates" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Order YB-8XQZ4Y update: Your order status is now Fulfilled."
+      )
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Order YB-8XQZ4Y fulfilled")).not.toBeInTheDocument();
   });
 
   it("keeps uncertain order-looking messages in active conversations", () => {
@@ -219,7 +222,7 @@ describe("InboxList customer flat variant", () => {
     );
   });
 
-  it("keeps order updates visible when there are no conversations", () => {
+  it("renders historical order-only conversations with a neutral preview", () => {
     render(
       <InboxList
         conversations={[
@@ -238,14 +241,21 @@ describe("InboxList customer flat variant", () => {
       />
     );
 
-    expect(screen.queryByRole("heading", { name: "Conversations" })).not.toBeInTheDocument();
+    const activeSection = screen
+      .getByRole("heading", { name: "Conversations" })
+      .closest("section");
+
+    expect(within(activeSection).getByText("Test ABCD")).toBeInTheDocument();
+    expect(within(activeSection).getByText("Order conversation")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Message a business" })
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Recent order updates" })
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Recent order updates" })
-    ).toBeInTheDocument();
-    expect(screen.getByText("Order YB-8XQZ4Y fulfilled")).toBeInTheDocument();
+      screen.queryByText(
+        "Order YB-8XQZ4Y update: Your order status is now Fulfilled."
+      )
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Order YB-8XQZ4Y fulfilled")).not.toBeInTheDocument();
   });
 
   it("shows a passive business empty state without customer CTAs", () => {
@@ -274,7 +284,7 @@ describe("InboxList customer flat variant", () => {
     expect(screen.queryByRole("link", { name: "View your orders" })).not.toBeInTheDocument();
   });
 
-  it("renders business conversations with compact order updates", () => {
+  it("renders business historical order-only threads as neutral conversations", () => {
     render(
       <InboxList
         conversations={[
@@ -303,16 +313,16 @@ describe("InboxList customer flat variant", () => {
     const conversationSection = screen
       .getByRole("heading", { name: "Conversations" })
       .closest("section");
-    const updatesSection = screen
-      .getByRole("heading", { name: "Order updates" })
-      .closest("section");
 
     expect(within(conversationSection).getByText("Nour Customer")).toBeInTheDocument();
     expect(within(conversationSection).getByText("Is this still available?")).toBeInTheDocument();
-    expect(within(updatesSection).getByText("Order Customer")).toBeInTheDocument();
+    expect(within(conversationSection).getByText("Order Customer")).toBeInTheDocument();
+    expect(within(conversationSection).getByText("Order conversation")).toBeInTheDocument();
     expect(
-      within(updatesSection).getByText("Order YB-8XQZ4Y fulfilled")
-    ).toBeInTheDocument();
-    expect(within(updatesSection).queryByRole("img")).not.toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Order updates" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Order YB-8XQZ4Y fulfilled")
+    ).not.toBeInTheDocument();
   });
 });

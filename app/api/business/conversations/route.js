@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
-import { fetchConversationById, fetchConversations } from "@/lib/messages";
+import {
+  fetchConversationById,
+  fetchConversationOrderContext,
+  fetchConversations,
+  fetchMessagePage,
+} from "@/lib/messages";
 
 export async function GET(request) {
   const access = await getBusinessDataClientForRequest();
@@ -12,6 +17,12 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const conversationId = searchParams.get("conversationId");
+  const includeInitialThread = searchParams.get("includeInitialThread") === "1";
+  const selectedConversationId = searchParams.get("selectedConversationId") || "";
+  const initialThreadLimitValue = searchParams.get("initialThreadLimit");
+  const initialThreadLimit = initialThreadLimitValue
+    ? Number(initialThreadLimitValue)
+    : undefined;
 
   try {
     if (conversationId) {
@@ -28,7 +39,15 @@ export async function GET(request) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 
-      const response = NextResponse.json({ conversation }, { status: 200 });
+      const orderContext = await fetchConversationOrderContext({
+        supabase,
+        conversationId,
+      });
+
+      const response = NextResponse.json(
+        { conversation, orderContext },
+        { status: 200 }
+      );
       response.headers.set("Cache-Control", "no-store");
       return response;
     }
@@ -38,7 +57,96 @@ export async function GET(request) {
       userId: effectiveUserId,
       role: "business",
     });
-    const response = NextResponse.json({ conversations }, { status: 200 });
+
+    let initialThread = null;
+    if (includeInitialThread && conversations.length) {
+      let selectedConversation =
+        (selectedConversationId
+          ? conversations.find(
+              (conversation) => conversation.id === selectedConversationId
+            )
+          : null) || conversations[0];
+
+      if (
+        selectedConversationId &&
+        selectedConversation?.id !== selectedConversationId
+      ) {
+        const selectedById = await fetchConversationById({
+          supabase,
+          conversationId: selectedConversationId,
+        });
+        if (selectedById?.business_id === effectiveUserId) {
+          selectedConversation = selectedById;
+        }
+      }
+
+      if (selectedConversation?.business_id === effectiveUserId) {
+        try {
+          const [messagePage, orderContext] = await Promise.all([
+            fetchMessagePage({
+              supabase,
+              conversationId: selectedConversation.id,
+              limit: initialThreadLimit,
+              includeSystemOrderUpdates: false,
+            }),
+            fetchConversationOrderContext({
+              supabase,
+              conversationId: selectedConversation.id,
+            }),
+          ]);
+
+          const latestMessage =
+            messagePage.messages[messagePage.messages.length - 1] || null;
+          if (latestMessage) {
+            selectedConversation = {
+              ...selectedConversation,
+              last_message_at:
+                latestMessage.created_at || selectedConversation.last_message_at,
+              last_message_preview:
+                latestMessage.body || selectedConversation.last_message_preview || "",
+            };
+          } else {
+            selectedConversation = {
+              ...selectedConversation,
+              last_message_preview: "Order conversation",
+            };
+          }
+
+          initialThread = {
+            conversationId: selectedConversation.id,
+            conversation: selectedConversation,
+            orderContext,
+            messages: messagePage.messages,
+            hasMore: messagePage.hasMore,
+          };
+
+          if (
+            selectedConversationId &&
+            selectedConversation.id === selectedConversationId &&
+            !conversations.some(
+              (conversation) => conversation.id === selectedConversation.id
+            )
+          ) {
+            conversations.unshift(selectedConversation);
+          }
+        } catch (threadError) {
+          initialThread = {
+            conversationId: selectedConversation.id,
+            conversation: selectedConversation,
+            orderContext: null,
+            messages: [],
+            hasMore: false,
+            error:
+              threadError?.message || "Failed to load the selected conversation",
+          };
+        }
+      }
+    }
+
+    const response = NextResponse.json(
+      { conversations, initialThread },
+      { status: 200 }
+    );
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (err) {

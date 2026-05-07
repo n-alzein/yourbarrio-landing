@@ -49,6 +49,18 @@ export function splitInboxConversations(conversations = []) {
   );
 }
 
+export function getConversationPreview(conversation = {}) {
+  const preview =
+    typeof conversation.last_message_preview === "string"
+      ? conversation.last_message_preview.trim()
+      : "";
+  if (!preview) return "Conversation started";
+  if (classifyInboxItem(conversation) === "order_update") {
+    return "Order conversation";
+  }
+  return preview;
+}
+
 function normalizeValue(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }

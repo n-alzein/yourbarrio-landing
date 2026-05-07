@@ -1,12 +1,22 @@
 import BusinessMessagesInboxClient from "@/components/messages/BusinessMessagesInboxClient";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
-import { fetchConversations } from "@/lib/messages";
+import {
+  fetchConversationOrderContext,
+  fetchConversations,
+  fetchMessagePage,
+} from "@/lib/messages";
 import { createServerTiming, logServerTiming, perfTimingEnabled } from "@/lib/serverTiming";
 
-export default async function BusinessMessagesPage() {
+export default async function BusinessMessagesPage({ searchParams }) {
   const timing = createServerTiming("biz_msg_page_");
   const totalStart = timing.start();
+  const resolvedSearchParams = await searchParams;
+  const requestedThreadId =
+    typeof resolvedSearchParams?.thread === "string"
+      ? resolvedSearchParams.thread
+      : "";
   let initialConversations = [];
+  let initialThread = null;
   let initialError = null;
   let initialUserId = null;
 
@@ -30,6 +40,32 @@ export default async function BusinessMessagesPage() {
           await logServerTiming("business-messages-inbox-data", payload);
         },
       });
+      const selectedConversation =
+        initialConversations.find(
+          (conversation) => conversation.id === requestedThreadId
+        ) ||
+        initialConversations[0] ||
+        null;
+      if (selectedConversation?.id) {
+        const [messagePage, orderContext] = await Promise.all([
+          fetchMessagePage({
+            supabase: access.client,
+            conversationId: selectedConversation.id,
+            includeSystemOrderUpdates: false,
+          }),
+          fetchConversationOrderContext({
+            supabase: access.client,
+            conversationId: selectedConversation.id,
+          }),
+        ]);
+        initialThread = {
+          conversationId: selectedConversation.id,
+          conversation: selectedConversation,
+          messages: messagePage.messages,
+          hasMore: Boolean(messagePage.hasMore),
+          orderContext,
+        };
+      }
     } catch (err) {
       console.error("Failed to load business conversations on the server", err);
       initialError = "We couldn't load your messages. Please try again.";
@@ -54,6 +90,7 @@ export default async function BusinessMessagesPage() {
         <div className="mx-auto max-w-7xl">
           <BusinessMessagesInboxClient
             initialConversations={initialConversations}
+            initialThread={initialThread}
             initialError={initialError}
             initialUserId={initialUserId}
             intro={intro}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
-import { fetchConversationById } from "@/lib/messages";
+import { fetchConversationById, fetchConversationOrderContext } from "@/lib/messages";
 
 export async function GET(request, { params }) {
   const access = await getBusinessDataClientForRequest();
@@ -29,7 +29,15 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const response = NextResponse.json({ conversation }, { status: 200 });
+    const orderContext = await fetchConversationOrderContext({
+      supabase,
+      conversationId,
+    });
+
+    const response = NextResponse.json(
+      { conversation, orderContext },
+      { status: 200 }
+    );
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (err) {

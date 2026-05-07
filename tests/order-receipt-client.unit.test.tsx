@@ -61,6 +61,9 @@ describe("OrderReceiptClient", () => {
     expect(screen.getByText("Confirmed")).toBeInTheDocument();
     expect(screen.getByText("Shoreline Market")).toBeInTheDocument();
     expect(screen.getByText("Pickup time: ASAP")).toBeInTheDocument();
+    expect(screen.getByText("Order activity")).toBeInTheDocument();
+    expect(screen.getByText("Order confirmed")).toBeInTheDocument();
+    expect(screen.getByText("Ready for pickup")).toBeInTheDocument();
     expect(screen.getByText("Long sleeve cotton shirt")).toBeInTheDocument();
     expect(screen.getByText("$24.00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /print receipt/i })).toBeInTheDocument();

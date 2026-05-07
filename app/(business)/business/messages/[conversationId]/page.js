@@ -1,6 +1,9 @@
 import BusinessConversationClient from "@/components/messages/BusinessConversationClient";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
-import { fetchConversationWithMessages } from "@/lib/messages";
+import {
+  fetchConversationOrderContext,
+  fetchConversationWithMessages,
+} from "@/lib/messages";
 import { createServerTiming, logServerTiming, perfTimingEnabled } from "@/lib/serverTiming";
 
 export default async function BusinessConversationPage({ params }) {
@@ -11,6 +14,8 @@ export default async function BusinessConversationPage({ params }) {
 
   let initialConversation = null;
   let initialMessages = [];
+  let initialHasMore = false;
+  let initialOrderContext = null;
   let initialError = null;
   let initialUserId = null;
 
@@ -41,6 +46,11 @@ export default async function BusinessConversationPage({ params }) {
       } else {
         initialConversation = thread.conversation;
         initialMessages = thread.messages;
+        initialHasMore = Boolean(thread.hasMore);
+        initialOrderContext = await fetchConversationOrderContext({
+          supabase: access.client,
+          conversationId,
+        });
       }
     } catch (err) {
       console.error("Failed to load business conversation on the server", err);
@@ -60,24 +70,14 @@ export default async function BusinessConversationPage({ params }) {
   }
 
   return (
-    <section className="relative w-full min-h-screen pt-6 md:pt-8 text-white overflow-hidden -mt-8 md:-mt-12 pb-20 md:pb-24">
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0b0720] via-[#0a0816] to-black" />
-        <div className="absolute -top-32 -left-20 h-[360px] w-[360px] rounded-full bg-purple-600/20 blur-[120px]" />
-        <div className="absolute top-10 right-10 h-[300px] w-[300px] rounded-full bg-pink-500/15 blur-[120px]" />
-      </div>
-
-      <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
-        <div className="max-w-5xl mx-auto">
-          <BusinessConversationClient
-            conversationId={conversationId}
-            initialConversation={initialConversation}
-            initialMessages={initialMessages}
-            initialError={initialError}
-            initialUserId={initialUserId}
-          />
-        </div>
-      </div>
-    </section>
+    <BusinessConversationClient
+      conversationId={conversationId}
+      initialConversation={initialConversation}
+      initialMessages={initialMessages}
+      initialHasMore={initialHasMore}
+      initialOrderContext={initialOrderContext}
+      initialError={initialError}
+      initialUserId={initialUserId}
+    />
   );
 }

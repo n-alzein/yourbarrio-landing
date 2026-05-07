@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchMessages } from "@/lib/messages";
+import { fetchMessagePage } from "@/lib/messages";
 import { getSupportAwareClient } from "@/lib/support/supportAwareData";
 
 export async function GET(request) {
@@ -17,6 +17,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const conversationId = searchParams.get("conversationId");
   const before = searchParams.get("before");
+  const beforeId = searchParams.get("beforeId");
   const limitValue = searchParams.get("limit");
   const limit = limitValue ? Number(limitValue) : undefined;
 
@@ -42,13 +43,15 @@ export async function GET(request) {
   }
 
   try {
-    const messages = await fetchMessages({
+    const page = await fetchMessagePage({
       supabase,
       conversationId,
       before: before || null,
+      beforeId: beforeId || null,
       limit,
+      includeSystemOrderUpdates: false,
     });
-    const response = NextResponse.json({ messages }, { status: 200 });
+    const response = NextResponse.json(page, { status: 200 });
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (err) {

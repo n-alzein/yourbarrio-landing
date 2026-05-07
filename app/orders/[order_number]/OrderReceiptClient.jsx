@@ -61,6 +61,89 @@ function getPaymentSummary(order) {
   return "Payment completed with Stripe.";
 }
 
+function formatActivityTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function buildOrderActivity(order) {
+  if (!order) return [];
+
+  const status = order.status;
+  const baseEvents = [
+    {
+      key: "confirmed",
+      label: "Order confirmed",
+      timestamp:
+        order.confirmed_at || (status === "confirmed" ? order.updated_at : null),
+      completed: [
+        "confirmed",
+        "ready",
+        "out_for_delivery",
+        "fulfilled",
+        "completed",
+      ].includes(status),
+    },
+  ];
+
+  if (order.fulfillment_type === "delivery") {
+    baseEvents.push({
+      key: "out_for_delivery",
+      label: "Out for delivery",
+      timestamp: status === "out_for_delivery" ? order.updated_at : null,
+      completed: ["out_for_delivery", "fulfilled", "completed"].includes(
+        status
+      ),
+    });
+  } else {
+    baseEvents.push({
+      key: "ready",
+      label: "Ready for pickup",
+      timestamp: status === "ready" ? order.updated_at : null,
+      completed: ["ready", "fulfilled", "completed"].includes(status),
+    });
+  }
+
+  baseEvents.push({
+    key: "fulfilled",
+    label: "Fulfilled",
+    timestamp:
+      order.fulfilled_at ||
+      (status === "fulfilled" || status === "completed"
+        ? order.updated_at
+        : null),
+    completed: status === "fulfilled" || status === "completed",
+  });
+
+  if (status === "cancelled" || status === "payment_failed") {
+    baseEvents.push({
+      key: "cancelled",
+      label:
+        status === "payment_failed" ? "Refunded or payment failed" : "Cancelled",
+      timestamp: order.cancelled_at || order.updated_at,
+      completed: true,
+      attention: true,
+    });
+  }
+
+  return [
+    {
+      key: "requested",
+      label: "Order received",
+      timestamp: order.paid_at || order.created_at,
+      completed: true,
+    },
+    ...baseEvents,
+  ];
+}
+
 function ReceiptItemName({ item }) {
   const title = item?.title || "Item";
   const listingExists = Boolean(item?.listing_id && item?.listing?.id);
@@ -159,6 +242,7 @@ export default function OrderReceiptClient({
   const fulfillmentSummary = getFulfillmentSummary(order);
   const paymentSummary = getPaymentSummary(order);
   const isCheckoutMode = mode === "checkout";
+  const orderActivity = buildOrderActivity(order);
 
   return (
     <div className="min-h-screen bg-[#f6f7fb] px-4 pb-14 pt-4 text-slate-950 sm:px-6 md:pb-16 lg:px-8">
@@ -246,6 +330,51 @@ export default function OrderReceiptClient({
               )}
             </div>
           </div>
+
+          <section className="border-t border-slate-100 pt-5">
+            <div className="mb-4">
+              <p className="text-base font-semibold text-slate-950">
+                Order activity
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Status updates for this order live here.
+              </p>
+            </div>
+            <ol className="space-y-3">
+              {orderActivity.map((event) => (
+                <li key={event.key} className="flex gap-3">
+                  <span
+                    aria-hidden="true"
+                    className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                      event.completed
+                        ? event.attention
+                          ? "bg-rose-500"
+                          : "bg-[rgb(var(--brand-rgb))]"
+                        : "bg-slate-200"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                      <p
+                        className={`text-sm font-medium ${
+                          event.completed ? "text-slate-950" : "text-slate-500"
+                        }`}
+                      >
+                        {event.label}
+                      </p>
+                      {event.timestamp ? (
+                        <time className="text-xs text-slate-400">
+                          {formatActivityTime(event.timestamp)}
+                        </time>
+                      ) : (
+                        <span className="text-xs text-slate-400">Pending</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
 
           <div className="border-t border-slate-100 pt-5">
             <div className="hidden grid-cols-[minmax(0,1fr)_4rem_6rem_6rem] gap-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:grid">

@@ -8,13 +8,16 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useRealtimeChannel } from "@/lib/realtime/useRealtimeChannel";
 import {
+  filterRealConversationMessages,
   getAvatarUrl,
   getDisplayName,
   getOtherConversationProfile,
+  isRealConversationMessage,
+  isSystemOrderMessage,
   markConversationRead,
   sendMessage,
-  MESSAGE_PAGE_SIZE,
 } from "@/lib/messages";
+import { getOrderStatusLabel } from "@/lib/orders";
 import { retry } from "@/lib/retry";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { memoizeRequest } from "@/lib/requestMemo";
@@ -22,14 +25,48 @@ import MessageThread from "@/components/messages/MessageThread";
 import MessageComposer from "@/components/messages/MessageComposer";
 import {
   appendMessageDedup,
-  getTrackedOrderIds,
   isNearScrollBottom,
-  patchOrderStatusMessage,
   prependMessagesDedup,
   scrollToBottom,
 } from "@/components/messages/realtimeThreadState";
 
 const UNREAD_REFRESH_EVENT = "yb-unread-refresh";
+const BUSINESS_THREAD_PAGE_SIZE = 40;
+
+async function fetchBusinessMessagePage({
+  conversationId,
+  before,
+  beforeId,
+  limit = BUSINESS_THREAD_PAGE_SIZE,
+}) {
+  const params = new URLSearchParams({
+    conversationId,
+    limit: String(limit),
+  });
+  if (before) params.set("before", before);
+  if (beforeId) params.set("beforeId", beforeId);
+
+  const response = await retry(
+    () =>
+      fetchWithTimeout(`/api/business/messages?${params.toString()}`, {
+        method: "GET",
+        credentials: "include",
+        timeoutMs: 12000,
+      }),
+    { retries: 1, delayMs: 600 }
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Failed to load messages");
+  }
+
+  const payload = await response.json();
+  return {
+    messages: filterRealConversationMessages(payload?.messages),
+    hasMore: Boolean(payload?.hasMore),
+  };
+}
 
 function useDelayedFlag(active, delayMs = 200) {
   const [visible, setVisible] = useState(false);
@@ -48,18 +85,23 @@ export default function BusinessConversationClient({
   conversationId,
   initialConversation = null,
   initialMessages = [],
+  initialHasMore = false,
+  initialOrderContext = null,
   initialError = null,
   initialUserId = null,
 }) {
   const { user, loadingUser, supabase, authStatus } = useAuth();
   const userId = user?.id || initialUserId || null;
   const [conversation, setConversation] = useState(initialConversation);
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState(() =>
+    filterRealConversationMessages(initialMessages)
+  );
+  const [orderContext, setOrderContext] = useState(() =>
+    normalizeBusinessOrderContext(initialOrderContext)
+  );
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(
-    initialMessages.length === MESSAGE_PAGE_SIZE
-  );
+  const [hasMore, setHasMore] = useState(Boolean(initialHasMore));
   const [error, setError] = useState(initialError);
   const [messagesError, setMessagesError] = useState(null);
   const [sendError, setSendError] = useState(null);
@@ -71,10 +113,9 @@ export default function BusinessConversationClient({
   const scrollRef = useRef(null);
   const isNearBottomRef = useRef(true);
   const shouldStickToBottomRef = useRef(true);
+  const restoreScrollAfterPrependRef = useRef(null);
   const hasThreadRef = useRef(Boolean(initialConversation));
-  const showThreadSkeleton = useDelayedFlag(loading && messages.length === 0);
-  const trackedOrderIds = useMemo(() => getTrackedOrderIds(messages), [messages]);
-  const trackedOrderKey = trackedOrderIds.join(",");
+  const showThreadLoader = useDelayedFlag(loading && messages.length === 0);
 
   const loadThread = useCallback(async () => {
     if (!conversationId || authStatus !== "authenticated") return;
@@ -87,7 +128,7 @@ export default function BusinessConversationClient({
       const result = await memoizeRequest(
         `business-thread:${conversationId}`,
         async () => {
-          const [convoResponse, messagesResponse] = await Promise.all([
+          const [convoResponse, messagePage] = await Promise.all([
             fetchWithTimeout(
               `/api/business/conversations?conversationId=${encodeURIComponent(
                 conversationId
@@ -98,41 +139,23 @@ export default function BusinessConversationClient({
                 timeoutMs: 12000,
               }
             ),
-            retry(
-              () =>
-                fetchWithTimeout(
-                  `/api/business/messages?conversationId=${encodeURIComponent(
-                    conversationId
-                  )}`,
-                  {
-                    method: "GET",
-                    credentials: "include",
-                    timeoutMs: 12000,
-                  }
-                ),
-              { retries: 1, delayMs: 600 }
-            ),
+            fetchBusinessMessagePage({ conversationId }),
           ]);
 
           if (!convoResponse.ok) {
             const message = await convoResponse.text();
             throw new Error(message || "Failed to load conversation");
           }
-          if (!messagesResponse.ok) {
-            const message = await messagesResponse.text();
-            throw new Error(message || "Failed to load messages");
-          }
 
-          const [convoPayload, messagesPayload] = await Promise.all([
-            convoResponse.json(),
-            messagesResponse.json(),
-          ]);
+          const convoPayload = await convoResponse.json();
 
           return {
             conversation: convoPayload?.conversation ?? null,
-            messages: Array.isArray(messagesPayload?.messages)
-              ? messagesPayload.messages
-              : [],
+            orderContext: normalizeBusinessOrderContext(
+              convoPayload?.orderContext ?? null
+            ),
+            messages: messagePage.messages,
+            hasMore: messagePage.hasMore,
           };
         }
       );
@@ -140,9 +163,10 @@ export default function BusinessConversationClient({
       if (requestId !== requestIdRef.current) return;
 
       setConversation(result.conversation);
+      setOrderContext(result.orderContext);
       shouldStickToBottomRef.current = true;
       setMessages(result.messages);
-      setHasMore(result.messages.length === MESSAGE_PAGE_SIZE);
+      setHasMore(result.hasMore);
       hasThreadRef.current = Boolean(result.conversation);
     } catch (err) {
       console.error("Failed to load conversation", err);
@@ -165,31 +189,10 @@ export default function BusinessConversationClient({
     setMessagesError(null);
 
     try {
-      const response = await retry(
-        () =>
-          fetchWithTimeout(
-            `/api/business/messages?conversationId=${encodeURIComponent(
-              conversationId
-            )}`,
-            {
-              method: "GET",
-              credentials: "include",
-              timeoutMs: 12000,
-            }
-          ),
-        { retries: 1, delayMs: 600 }
-      );
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to load messages");
-      }
-
-      const payload = await response.json();
-      const nextMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+      const page = await fetchBusinessMessagePage({ conversationId });
       shouldStickToBottomRef.current = true;
-      setMessages(nextMessages);
-      setHasMore(nextMessages.length === MESSAGE_PAGE_SIZE);
+      setMessages(page.messages);
+      setHasMore(page.hasMore);
     } catch (err) {
       console.error("Failed to reload messages", err);
       setMessagesError("We couldn't load messages yet. Try again.");
@@ -267,7 +270,15 @@ export default function BusinessConversationClient({
   }, []);
 
   useEffect(() => {
-    if (!scrollRef.current || loadingMore) return;
+    if (!scrollRef.current) return;
+    const restore = restoreScrollAfterPrependRef.current;
+    if (restore) {
+      scrollRef.current.scrollTop =
+        scrollRef.current.scrollHeight - restore.scrollHeight + restore.scrollTop;
+      restoreScrollAfterPrependRef.current = null;
+      return;
+    }
+    if (loadingMore) return;
     if (!shouldStickToBottomRef.current && !isNearBottomRef.current) return;
     const handle = requestAnimationFrame(() => {
       scrollToBottom(scrollRef.current);
@@ -291,9 +302,10 @@ export default function BusinessConversationClient({
           },
           (payload) => {
             const next = payload.new;
-            if (!next?.id) return;
-            shouldStickToBottomRef.current =
-              next.type === "order_status_update" ? false : isNearBottomRef.current;
+      if (!next?.id) return;
+            if (isSystemOrderMessage(next)) return;
+            if (!isRealConversationMessage(next)) return;
+            shouldStickToBottomRef.current = isNearBottomRef.current;
             setMessages((prev) => {
               return appendMessageDedup(prev, next);
             });
@@ -322,77 +334,36 @@ export default function BusinessConversationClient({
     diagLabel: "business-thread",
   });
 
-  const buildOrderChannel = useCallback(
-    (activeClient) => {
-      let channel = activeClient.channel(`orders-for-thread-${conversationId}`);
-      const orderIds = trackedOrderKey ? trackedOrderKey.split(",") : [];
-      orderIds.forEach((orderId) => {
-        channel = channel.on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "orders",
-            filter: `id=eq.${orderId}`,
-          },
-          (payload) => {
-            const nextOrder = payload.new;
-            if (!nextOrder?.id) return;
-            shouldStickToBottomRef.current = false;
-            setMessages((prev) => patchOrderStatusMessage(prev, nextOrder));
-          }
-        );
-      });
-      return channel;
-    },
-    [conversationId, trackedOrderKey]
-  );
-
-  useRealtimeChannel({
-    supabase,
-    enabled:
-      !loadingUser &&
-      authStatus === "authenticated" &&
-      Boolean(conversationId) &&
-      Boolean(trackedOrderKey),
-    buildChannel: buildOrderChannel,
-    diagLabel: `business-thread-orders-${trackedOrderKey}`,
-  });
-
   const loadOlder = useCallback(async () => {
     if (!conversationId || loadingMore || !hasMore) return;
     if (authStatus !== "authenticated") return;
-    const oldest = messages[0]?.created_at;
-    if (!oldest) return;
+    const oldestMessage = messages[0];
+    if (!oldestMessage?.created_at) return;
 
+    if (scrollRef.current) {
+      restoreScrollAfterPrependRef.current = {
+        scrollHeight: scrollRef.current.scrollHeight,
+        scrollTop: scrollRef.current.scrollTop,
+      };
+    }
     setLoadingMore(true);
     try {
-      const response = await fetchWithTimeout(
-        `/api/business/messages?conversationId=${encodeURIComponent(
-          conversationId
-        )}&before=${encodeURIComponent(oldest)}`,
-        {
-          method: "GET",
-          credentials: "include",
-          timeoutMs: 12000,
-        }
-      );
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to load older messages");
-      }
-
-      const payload = await response.json();
-      const older = Array.isArray(payload?.messages) ? payload.messages : [];
+      const page = await fetchBusinessMessagePage({
+        conversationId,
+        before: oldestMessage.created_at,
+        beforeId: oldestMessage.id || null,
+      });
+      const older = page.messages;
       if (older.length === 0) {
         setHasMore(false);
+        restoreScrollAfterPrependRef.current = null;
       } else {
         shouldStickToBottomRef.current = false;
         setMessages((prev) => prependMessagesDedup(prev, older));
-        if (older.length < MESSAGE_PAGE_SIZE) setHasMore(false);
+        setHasMore(page.hasMore);
       }
     } catch (err) {
+      restoreScrollAfterPrependRef.current = null;
       console.error("Failed to load older messages", err);
     } finally {
       setLoadingMore(false);
@@ -424,7 +395,7 @@ export default function BusinessConversationClient({
           body,
           session,
         });
-        if (sent?.id) {
+        if (sent?.id && isRealConversationMessage(sent)) {
           shouldStickToBottomRef.current = true;
           setMessages((prev) => {
             return appendMessageDedup(prev, sent);
@@ -456,108 +427,191 @@ export default function BusinessConversationClient({
     : seededHeader?.avatarUrl || "";
 
   return (
-    <>
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur">
-        <div className="space-y-4">
+    <section
+      className="relative w-full overflow-hidden bg-[#f6f7fb] text-slate-950"
+      style={{
+        boxSizing: "border-box",
+        height:
+          "calc(100dvh - var(--yb-nav-content-offset, 80px) - var(--business-beta-banner-height, 0px))",
+      }}
+    >
+      <div className="box-border flex h-full min-h-0 w-full px-2 pb-2 sm:px-5 sm:pb-4 md:px-8 md:pb-5 lg:px-12">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-[22px] border border-slate-100 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.045)] sm:rounded-[28px]">
+          <div className="shrink-0 border-b border-slate-100 bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="space-y-2">
           <Link
             href="/business/messages"
-            className="mb-3 inline-flex items-center text-xs uppercase tracking-[0.28em] text-white/60 hover:text-white"
+                className="inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 transition hover:text-slate-700"
           >
             Back to inbox
           </Link>
-          <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
             {otherProfile || seededHeader ? (
               <SafeAvatar
                 src={headerAvatarUrl}
                 name={headerName}
                 alt={headerName}
-                className="h-12 w-12 rounded-2xl object-cover border border-white/10"
+                    className="h-10 w-10 rounded-full border border-slate-100 object-cover sm:h-11 sm:w-11"
                 initialsClassName="text-[13px]"
                 iconClassName="h-5 w-5"
               />
             ) : (
-              <div className="h-12 w-12 rounded-2xl border border-white/10 bg-white/10 animate-pulse" />
+                  <div className="h-10 w-10 animate-pulse rounded-full border border-slate-100 bg-slate-100 sm:h-11 sm:w-11" />
             )}
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-white/50">
+                <div className="min-w-0">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                 Conversation
               </p>
               {otherProfile || seededHeader ? (
-                <h1 className="text-2xl font-semibold text-white">{headerName}</h1>
+                    <h1 className="truncate text-base font-semibold text-slate-950">
+                      {headerName}
+                    </h1>
               ) : (
-                <div className="mt-2 h-7 w-44 rounded-full bg-white/10 animate-pulse" />
+                    <div className="mt-2 h-5 w-36 animate-pulse rounded-full bg-slate-100" />
               )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
       {error ? (
-        <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="mx-4 mt-3 shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           <span>{error}</span>
           <button
             type="button"
             onClick={() => {
               void loadThread();
             }}
-            className="rounded-full border border-rose-200/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-rose-100 hover:text-white"
+                className="rounded-full border border-rose-200 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700 transition hover:bg-rose-100"
           >
             Try again
           </button>
         </div>
       ) : null}
 
-      <div className="mt-4 rounded-[28px] border border-white/10 bg-white/5 p-5 md:p-6 space-y-4">
+          <div className="flex min-h-0 flex-1 flex-col bg-white">
         {messagesError ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="mx-4 mt-3 shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             <span>{messagesError}</span>
             <button
               type="button"
               onClick={() => {
                 void reloadMessages();
               }}
-              className="rounded-full border border-rose-200/40 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-rose-100 hover:text-white"
+                  className="rounded-full border border-rose-200 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700 transition hover:bg-rose-100"
             >
               Retry
             </button>
           </div>
         ) : null}
 
-        <div className="flex h-[44vh] flex-col">
-          {hasMore ? (
-            <button
-              type="button"
-              onClick={() => {
-                void loadOlder();
-              }}
-              disabled={loadingMore}
-              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70 hover:text-white"
-            >
-              {loadingMore ? "Loading..." : "Load older messages"}
-            </button>
-          ) : null}
+            {orderContext ? <OrderContextCard order={orderContext} /> : null}
+
+            <div className="flex min-h-0 flex-1 flex-col">
           <div
-            className="mt-4 flex-1 overflow-y-auto pr-2"
+                className="min-h-0 flex-1 overflow-y-auto bg-slate-50/45 px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-6 sm:pt-4"
             ref={scrollRef}
             onScroll={handleThreadScroll}
           >
-            <MessageThread
-              messages={messages}
-              currentUserId={userId}
-              loading={showThreadSkeleton}
-            />
+            {hasMore ? (
+              <div className="mb-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void loadOlder();
+                  }}
+                  disabled={loadingMore}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-500 shadow-sm transition hover:border-violet-100 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-60"
+                >
+                  {loadingMore ? "Loading..." : "Load earlier messages"}
+                </button>
+              </div>
+            ) : null}
+                {showThreadLoader ? (
+                  <div className="py-8 text-center text-sm text-slate-500">
+                    Loading messages...
+                  </div>
+                ) : (
+                  <MessageThread
+                    messages={messages}
+                    currentUserId={userId}
+                    variant="light"
+                  />
+                )}
           </div>
         </div>
       </div>
 
-      <div className="sticky bottom-0 mt-4 w-full">
+          <div className="shrink-0 border-t border-slate-100 bg-white px-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2.5 sm:p-3">
         {sendError ? (
-          <div className="mb-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-100">
+              <div className="mb-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs text-rose-700">
             {sendError}
           </div>
         ) : null}
-        <MessageComposer onSend={handleSend} disabled={!conversation} />
+            <MessageComposer
+              onSend={handleSend}
+              disabled={loading || !conversation}
+              variant="light"
+            />
+          </div>
+        </div>
       </div>
-    </>
+    </section>
+  );
+}
+
+function normalizeBusinessOrderContext(order) {
+  if (!order) return null;
+  const orderNumber = order.orderNumber || order.orderId || "";
+  return {
+    ...order,
+    viewHref: orderNumber
+      ? `/business/orders?order=${encodeURIComponent(orderNumber)}`
+      : "/business/orders",
+  };
+}
+
+function formatContextTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function OrderContextCard({ order }) {
+  const orderNumber = order?.orderNumber || order?.orderId || "";
+  const statusLabel = getOrderStatusLabel(order?.status);
+  const updatedLabel = formatContextTime(order?.updatedAt);
+  const href = order?.viewHref || "/business/orders";
+
+  return (
+    <aside className="mx-3 mt-2 shrink-0 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-600 sm:mx-4 sm:mt-3 sm:px-4 sm:py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Order context
+          </p>
+          <p className="mt-1 truncate font-semibold text-slate-950">
+            Order {orderNumber}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {statusLabel}
+            {order?.fulfillmentLabel ? ` · ${order.fulfillmentLabel}` : ""}
+            {updatedLabel ? ` · ${updatedLabel}` : ""}
+          </p>
+        </div>
+        <Link
+          href={href}
+          className="yb-primary-button inline-flex h-8 shrink-0 items-center justify-center rounded-full px-3 text-xs font-semibold !text-white sm:h-9 sm:px-4"
+        >
+          View order
+        </Link>
+      </div>
+    </aside>
   );
 }

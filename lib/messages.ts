@@ -7,6 +7,17 @@ export const MESSAGE_PAGE_SIZE = 50;
 export const CONVERSATION_PAGE_SIZE = 40;
 const MESSAGE_SELECT_COLUMNS =
   "id, conversation_id, sender_id, recipient_id, body, created_at, read_at, type, order_id, order_number, status, timestamp, fulfillment_type, business_name, order_items";
+const REAL_MESSAGE_SELECT_COLUMNS =
+  "id, conversation_id, sender_id, recipient_id, body, created_at, read_at, type";
+const ORDER_CONTEXT_MESSAGE_SELECT_COLUMNS =
+  "id, conversation_id, sender_id, recipient_id, body, created_at, type, order_id, order_number, status, timestamp, fulfillment_type, business_name, order_items";
+const REAL_MESSAGE_TYPE_FILTER =
+  "type.is.null,and(type.neq.order_status_update,type.neq.system_order_update)";
+const SYSTEM_ORDER_MESSAGE_TYPES = new Set([
+  "order_status_update",
+  "system_order_update",
+]);
+const ORDER_CONVERSATION_PREVIEW = "Order conversation";
 
 export function getDisplayName(profile: {
   business_name?: string | null;
@@ -42,6 +53,22 @@ export function getUnreadCount(
   return role === "business"
     ? Number(conversation?.business_unread_count || 0)
     : Number(conversation?.customer_unread_count || 0);
+}
+
+function normalizeMessageType(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+export function isSystemOrderMessage(message: { type?: unknown } | null | undefined) {
+  return SYSTEM_ORDER_MESSAGE_TYPES.has(normalizeMessageType(message?.type));
+}
+
+export function isRealConversationMessage(message: { type?: unknown } | null | undefined) {
+  return !isSystemOrderMessage(message);
+}
+
+export function filterRealConversationMessages(messages: any[] = []) {
+  return (Array.isArray(messages) ? messages : []).filter(isRealConversationMessage);
 }
 
 export async function fetchConversations({
@@ -100,13 +127,29 @@ export async function fetchConversations({
     (typeof performance !== "undefined" ? performance.now() : Date.now()) -
     profileStart;
 
-  const conversations = rows.map((row) => ({
-    ...row,
-    customer:
-      role === "business" ? profiles[row.customer_id] ?? null : null,
-    business:
-      role === "customer" ? profiles[row.business_id] ?? null : null,
-  }));
+  const realMessageByConversation = await fetchLatestRealMessageByConversation({
+    supabase: client,
+    conversationIds: rows.map((row) => row.id),
+  });
+
+  const conversations = rows.map((row) => {
+    const latestRealMessage = realMessageByConversation[row.id] ?? null;
+    return {
+      ...row,
+      last_message_at:
+        latestRealMessage?.created_at
+          ? latestRealMessage.created_at
+          : row.last_message_at,
+      last_message_preview:
+        latestRealMessage
+          ? latestRealMessage.body || ""
+          : ORDER_CONVERSATION_PREVIEW,
+      customer:
+        role === "business" ? profiles[row.customer_id] ?? null : null,
+      business:
+        role === "customer" ? profiles[row.business_id] ?? null : null,
+    };
+  });
 
   if (diagEnabled && typeof window !== "undefined") {
     const durationMs = Date.now() - startTime;
@@ -189,16 +232,17 @@ export async function fetchConversationWithMessages({
 
   const hydrateStart = typeof performance !== "undefined" ? performance.now() : Date.now();
   const messageStart = typeof performance !== "undefined" ? performance.now() : Date.now();
-  const [hydratedConversation, messages] = await Promise.all([
+  const [hydratedConversation, messagePage] = await Promise.all([
     hydrateConversationProfiles({
       supabase: client,
       conversation,
       profileRole,
     }),
-    fetchMessages({
+    fetchMessagePage({
       supabase: client,
       conversationId,
       limit,
+      includeSystemOrderUpdates: false,
     }),
   ]);
   const profileHydrationMs =
@@ -214,7 +258,7 @@ export async function fetchConversationWithMessages({
       conversationLookupMs: Math.round(conversationLookupMs),
       profileHydrationMs: Math.round(profileHydrationMs),
       messagesQueryMs: Math.round(messagesQueryMs),
-      messageCount: messages.length,
+      messageCount: messagePage.messages.length,
       totalMs: Math.round(
         conversationLookupMs + Math.max(profileHydrationMs, messagesQueryMs)
       ),
@@ -223,7 +267,8 @@ export async function fetchConversationWithMessages({
 
   return {
     conversation: hydratedConversation,
-    messages,
+    messages: messagePage.messages,
+    hasMore: messagePage.hasMore,
   };
 }
 
@@ -311,30 +356,176 @@ export async function fetchMessages({
   conversationId,
   limit = MESSAGE_PAGE_SIZE,
   before,
+  beforeId,
+  includeSystemOrderUpdates = true,
 }: {
   supabase?: any;
   conversationId: string;
   limit?: number;
   before?: string | null;
+  beforeId?: string | null;
+  includeSystemOrderUpdates?: boolean;
+}) {
+  const page = await fetchMessagePage({
+    supabase,
+    conversationId,
+    limit,
+    before,
+    beforeId,
+    includeSystemOrderUpdates,
+  });
+  return page.messages;
+}
+
+export async function fetchMessagePage({
+  supabase,
+  conversationId,
+  limit = MESSAGE_PAGE_SIZE,
+  before,
+  beforeId,
+  includeSystemOrderUpdates = true,
+}: {
+  supabase?: any;
+  conversationId: string;
+  limit?: number;
+  before?: string | null;
+  beforeId?: string | null;
+  includeSystemOrderUpdates?: boolean;
 }) {
   const client = supabase ?? getSupabaseBrowserClient();
-  if (!client) return [];
+  if (!client) return { messages: [], hasMore: false };
+  const pageSize = Math.min(Math.max(Number(limit) || MESSAGE_PAGE_SIZE, 1), 100);
 
   let query = client
     .from("messages")
     .select(MESSAGE_SELECT_COLUMNS)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("id", { ascending: false })
+    .limit(pageSize + 1);
 
   if (before) {
-    query = query.lt("created_at", before);
+    query = beforeId
+      ? query.or(
+          `created_at.lt.${before},and(created_at.eq.${before},id.lt.${beforeId})`
+        )
+      : query.lt("created_at", before);
+  }
+  if (!includeSystemOrderUpdates) {
+    query = query.or(REAL_MESSAGE_TYPE_FILTER);
   }
 
   const { data, error } = await query;
   if (error) throw error;
   const rows = Array.isArray(data) ? data : [];
-  return rows.reverse();
+  const filteredRows = includeSystemOrderUpdates
+    ? rows
+    : filterRealConversationMessages(rows);
+  const visibleRows = filteredRows.slice(0, pageSize);
+  const messages = visibleRows.reverse();
+  return {
+    messages,
+    hasMore: filteredRows.length > pageSize,
+  };
+}
+
+async function fetchLatestRealMessageByConversation({
+  supabase,
+  conversationIds,
+}: {
+  supabase?: any;
+  conversationIds: string[];
+}) {
+  const client = supabase ?? getSupabaseBrowserClient();
+  const ids = Array.from(new Set((conversationIds || []).filter(Boolean)));
+  if (!client || ids.length === 0) return {};
+
+  const { data, error } = await client
+    .from("messages")
+    .select(REAL_MESSAGE_SELECT_COLUMNS)
+    .in("conversation_id", ids)
+    .or(REAL_MESSAGE_TYPE_FILTER)
+    .order("created_at", { ascending: false })
+    .limit(Math.max(ids.length * 25, 100));
+
+  if (error) throw error;
+
+  const latestByConversation: Record<string, any> = {};
+  (Array.isArray(data) ? data : []).forEach((message) => {
+    if (!message?.conversation_id) return;
+    if (!isRealConversationMessage(message)) return;
+    if (!latestByConversation[message.conversation_id]) {
+      latestByConversation[message.conversation_id] = message;
+    }
+  });
+  return latestByConversation;
+}
+
+export async function fetchConversationOrderContext({
+  supabase,
+  conversationId,
+}: {
+  supabase?: any;
+  conversationId: string;
+}) {
+  const client = supabase ?? getSupabaseBrowserClient();
+  if (!client || !conversationId) return null;
+
+  const { data: message, error: messageError } = await client
+    .from("messages")
+    .select(ORDER_CONTEXT_MESSAGE_SELECT_COLUMNS)
+    .eq("conversation_id", conversationId)
+    .eq("type", "order_status_update")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (messageError) throw messageError;
+  if (!message) return null;
+
+  let order = null;
+  if (message.order_id) {
+    const { data: orderRow, error: orderError } = await client
+      .from("orders")
+      .select(
+        "id,order_number,status,fulfillment_type,pickup_time,delivery_time,updated_at,created_at,confirmed_at,fulfilled_at,cancelled_at"
+      )
+      .eq("id", message.order_id)
+      .maybeSingle();
+    if (orderError) throw orderError;
+    order = orderRow ?? null;
+  }
+
+  const orderNumber = order?.order_number || message.order_number || "";
+  const fulfillmentType =
+    order?.fulfillment_type || message.fulfillment_type || null;
+  const schedule =
+    fulfillmentType === "delivery"
+      ? order?.delivery_time
+      : order?.pickup_time;
+  const fulfillmentLabel = fulfillmentType
+    ? `${fulfillmentType === "delivery" ? "Delivery" : "Pickup"}${
+        schedule ? ` · ${schedule}` : ""
+      }`
+    : "";
+
+  return {
+    orderId: order?.id || message.order_id || null,
+    orderNumber,
+    status: order?.status || message.status || "",
+    fulfillmentType,
+    fulfillmentLabel,
+    updatedAt:
+      order?.updated_at ||
+      message.timestamp ||
+      message.created_at ||
+      order?.created_at ||
+      null,
+    businessName: message.business_name || "",
+    viewHref: orderNumber
+      ? `/orders/${encodeURIComponent(orderNumber)}?from=messages`
+      : "/account/orders",
+  };
 }
 
 export async function sendMessage({
@@ -567,7 +758,9 @@ async function fetchProfilesByIds({
 
   const { data, error } = await client
     .from("users")
-    .select("id, full_name, business_name, profile_photo_url, account_status")
+    .select(
+      "id, public_id, full_name, business_name, business_type, category, profile_photo_url, account_status"
+    )
     .in("id", uniqueIds);
 
   if (error) throw error;
