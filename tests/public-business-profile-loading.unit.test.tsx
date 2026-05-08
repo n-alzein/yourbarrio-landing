@@ -112,9 +112,9 @@ describe("public business profile loading states", () => {
     render(<PublicBusinessProfileSkeleton />);
 
     expect(screen.getByTestId("public-business-profile-skeleton-cover")).toHaveClass(
-      "h-[205px]",
-      "sm:h-[245px]",
-      "lg:h-[270px]"
+      "h-[360px]",
+      "sm:h-[320px]",
+      "lg:h-[260px]"
     );
     expect(screen.getByTestId("public-business-profile-skeleton-avatar")).toHaveClass(
       "h-20",

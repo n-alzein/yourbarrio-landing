@@ -6,7 +6,6 @@ export default function PublicBusinessHero({
   profile,
   ratingSummary,
   publicPath,
-  shell = "public",
   mode = "public",
   ownerPrimaryAction,
   onAvatarUpload,
@@ -15,8 +14,10 @@ export default function PublicBusinessHero({
   editMode = false,
   variant = "default",
   ownerSecondaryActions,
+  navItems = null,
+  showBackLink = false,
 }) {
-  const backHref = shell === "public" ? "/business/profile" : null;
+  const backHref = showBackLink ? "/business/profile" : null;
 
   return (
     <ProfileHero
@@ -33,6 +34,7 @@ export default function PublicBusinessHero({
       uploading={uploading}
       editMode={editMode}
       variant={variant}
+      navItems={navItems}
     />
   );
 }

@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
+import {
+  getOnboardingDemoBusinessImage,
+  onboardingDemoCardImage,
+} from "@/lib/businessImages";
 import { getBusinessTypeOptions } from "@/lib/taxonomy/businessTypes";
 import { isBusinessOnboardingComplete } from "@/lib/business/onboardingCompletion";
 import { US_STATES } from "@/lib/constants/usStates";
@@ -126,16 +130,10 @@ function resolveStateCode(region) {
 }
 
 const BUSINESS_TYPE_OPTIONS = getBusinessTypeOptions();
-const DEFAULT_BUSINESS_PREVIEW_IMAGE = "/placeholders/business/types/boutique.png";
-const BUSINESS_TYPE_PREVIEW_IMAGES = new Map(
-  BUSINESS_TYPE_OPTIONS.map((type) => [
-    type.slug,
-    `/placeholders/business/types/${type.slug}.png`,
-  ])
-);
+const DEFAULT_BUSINESS_PREVIEW_IMAGE = onboardingDemoCardImage;
 
 function getBusinessTypePreviewImage(slug) {
-  return BUSINESS_TYPE_PREVIEW_IMAGES.get(slug) || DEFAULT_BUSINESS_PREVIEW_IMAGE;
+  return slug ? getOnboardingDemoBusinessImage(slug) : DEFAULT_BUSINESS_PREVIEW_IMAGE;
 }
 
 // ------------------------------

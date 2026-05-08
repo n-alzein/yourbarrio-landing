@@ -1,17 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import {
-  GENERIC_BUSINESS_PLACEHOLDER,
-  resolveBusinessImageSrc,
-} from "@/lib/placeholders/businessPlaceholders";
+import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
+import { getBusinessAvatarImage } from "@/lib/businessImages";
 
 export function getBusinessAvatarSrc(profile) {
-  return resolveBusinessImageSrc({
-    imageUrl: profile?.profile_photo_url || null,
-    businessType: profile?.business_type || null,
-    legacyCategory: profile?.category || null,
-  });
+  const avatar = getBusinessAvatarImage(profile || {});
+  return avatar.kind === "image" ? avatar.src : "";
 }
 
 export default function BusinessAvatar({
@@ -21,23 +15,18 @@ export default function BusinessAvatar({
   className = "",
   imgClassName = "",
 }) {
-  const businessKey = profile?.id || profile?.public_id || name || "business";
-  const resolvedSrc = getBusinessAvatarSrc(profile);
-  const [failedKey, setFailedKey] = useState(null);
-  const src =
-    failedKey === `${businessKey}:${resolvedSrc}`
-      ? GENERIC_BUSINESS_PLACEHOLDER
-      : resolvedSrc;
+  const avatar = getBusinessAvatarImage(profile || {});
 
   return (
-    <img
-      key={`${businessKey}:${src}`}
-      src={src}
-      alt={alt || name || "Business"}
-      className={`${className} ${imgClassName}`.trim()}
-      onError={() => {
-        setFailedKey(`${businessKey}:${resolvedSrc}`);
-      }}
-    />
+    <span className={`relative inline-block overflow-hidden ${className}`.trim()}>
+      <BusinessAvatarSurface
+        business={profile}
+        avatar={avatar}
+        alt={alt || name || "Business"}
+        className={imgClassName}
+        sizes="48px"
+        compact
+      />
+    </span>
   );
 }

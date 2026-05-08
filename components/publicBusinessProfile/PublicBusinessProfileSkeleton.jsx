@@ -46,34 +46,32 @@ export default function PublicBusinessProfileSkeleton({ withinProfileShell = fal
     <div className={outerClassName} data-testid="public-business-profile-skeleton">
       <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
         <div
-          className={`relative h-[205px] overflow-hidden sm:h-[245px] lg:h-[270px] ${softSkeletonBlockClass}`}
+          className={`relative h-[360px] overflow-hidden sm:h-[320px] md:h-[300px] lg:h-[260px] xl:h-[280px] ${softSkeletonBlockClass}`}
           data-testid="public-business-profile-skeleton-cover"
+          data-business-cover-source="defaultFallback"
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.55),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.16),rgba(15,23,42,0.12)_52%,rgba(15,23,42,0.22)_100%)]" />
-        </div>
-      </div>
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.06)_0%,rgba(15,23,42,0)_38%,rgba(248,250,252,0.08)_62%,rgba(248,250,252,0.46)_89%,rgba(248,250,252,0.68)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,250,252,0.18)_0%,rgba(248,250,252,0.1)_26%,rgba(248,250,252,0.02)_60%,rgba(248,250,252,0.08)_100%)]" />
+          <div className="absolute inset-x-0 bottom-0 h-[52%] bg-[radial-gradient(ellipse_at_28%_82%,rgba(248,250,252,0.54)_0%,rgba(248,250,252,0.28)_36%,rgba(248,250,252,0)_74%)]" />
+          <div className="absolute bottom-0 left-0 h-[62%] w-[68%] bg-[radial-gradient(ellipse_at_30%_78%,rgba(248,250,252,0.72)_0%,rgba(248,250,252,0.52)_32%,rgba(248,250,252,0.18)_58%,rgba(248,250,252,0)_82%)]" />
 
-      <div className={contentShellClassName}>
-        <div className="relative z-10 mx-auto -mt-14 max-w-[1180px] px-4 sm:-mt-16 sm:px-6 lg:-mt-[4.5rem] lg:px-8">
-          <div className="rounded-[24px] bg-white/96 p-4 shadow-[0_24px_70px_-42px_rgba(15,23,42,0.44)] ring-1 ring-slate-100/80 backdrop-blur sm:p-5 lg:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8">
+            <div className="mx-auto flex max-w-[1180px] flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:min-w-0 lg:flex-1">
                 <div
-                  className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-[22px] border border-white bg-slate-100 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.38)] sm:h-24 sm:w-24 ${softSkeletonBlockClass}`}
+                  className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-[20px] border border-white bg-slate-100 shadow-[0_18px_42px_-26px_rgba(15,23,42,0.55)] ring-1 ring-white/80 sm:h-24 sm:w-24 ${softSkeletonBlockClass}`}
                   data-testid="public-business-profile-skeleton-avatar"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="h-9 w-48 rounded-full bg-slate-200/90 sm:h-11 sm:w-64" />
+                  <div className="h-9 w-56 rounded-full bg-slate-200/90 sm:h-11 sm:w-72" />
                   <div className="mt-3 flex flex-wrap gap-2">
                     <div className="h-5 w-28 rounded-full bg-slate-100" />
                     <div className="h-5 w-24 rounded-full bg-slate-100" />
-                    <div className="h-5 w-20 rounded-full bg-slate-100" />
                   </div>
-                  <div className="mt-3 h-4 w-5/6 max-w-[28rem] rounded-full bg-slate-200/75" />
                 </div>
               </div>
 
-              <div className="flex w-full flex-wrap gap-2 lg:w-auto lg:max-w-[420px] lg:justify-end">
+              <div className="flex w-full flex-wrap gap-2 lg:w-fit lg:max-w-none lg:justify-end lg:self-end">
                 <div className="h-10 w-28 rounded-full bg-slate-100" data-testid="public-business-profile-skeleton-action" />
                 <div className="h-10 w-24 rounded-full bg-slate-100" />
                 <div className="h-10 w-10 rounded-full bg-slate-100" />
@@ -81,13 +79,24 @@ export default function PublicBusinessProfileSkeleton({ withinProfileShell = fal
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="mb-6 mt-6 flex flex-wrap gap-2 px-4 sm:px-6 lg:px-8" data-testid="public-business-profile-skeleton-nav">
-          <div className="h-9 w-20 rounded-full bg-white shadow-sm ring-1 ring-slate-100" />
-          <div className="h-9 w-24 rounded-full bg-white shadow-sm ring-1 ring-slate-100" />
-          <div className="h-9 w-24 rounded-full bg-white shadow-sm ring-1 ring-slate-100" />
-          <div className="h-9 w-20 rounded-full bg-white shadow-sm ring-1 ring-slate-100" />
-          <div className="h-9 w-20 rounded-full bg-white shadow-sm ring-1 ring-slate-100" />
+      <div className={contentShellClassName}>
+        <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
+
+          <div className="sticky top-16 z-20 mb-5" data-testid="public-business-profile-skeleton-nav">
+            <div className="border-y border-slate-200/85 bg-white/96 shadow-[0_14px_38px_-42px_rgba(15,23,42,0.35)] backdrop-blur">
+              <div className="mx-auto max-w-[1180px] overflow-x-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex min-w-max gap-8">
+                  <div className="h-12 w-12 border-b-2 border-[#6E34FF]" />
+                  <div className="h-12 w-16 border-b-2 border-transparent" />
+                  <div className="h-12 w-16 border-b-2 border-transparent" />
+                  <div className="h-12 w-14 border-b-2 border-transparent" />
+                  <div className="h-12 w-14 border-b-2 border-transparent" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-10 px-4 sm:px-6 md:space-y-12 lg:px-8">

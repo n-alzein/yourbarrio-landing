@@ -21,6 +21,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getAuthedContext } from "@/lib/auth/getAuthedContext";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import SafeImage from "@/components/SafeImage";
+import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
 import { getOrCreateConversation } from "@/lib/messages";
 import {
   getMaxPurchasableQuantity,
@@ -68,10 +69,8 @@ import {
   getBusinessTypeLabel,
   getListingCategoryLabel,
 } from "@/lib/taxonomy/compat";
-import {
-  getBusinessTypePlaceholder,
-  getListingCategoryPlaceholder,
-} from "@/lib/taxonomy/placeholders";
+import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
+import { getBusinessAvatarImage } from "@/lib/businessImages";
 import {
   getSeededListingBadgeLabel,
   isSeededListing,
@@ -1202,14 +1201,12 @@ export default function ListingDetailsClient({
                         className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[18px]"
                         style={{ background: "var(--surface)", border: "1px solid rgba(15,23,42,0.08)" }}
                       >
-                        <SafeImage
-                          src={business?.profile_photo_url || getBusinessTypePlaceholder(business)}
+                        <BusinessAvatarSurface
+                          business={business}
+                          avatar={getBusinessAvatarImage(business || {})}
                           alt={storeName}
-                          fill
-                          className="object-cover"
                           sizes="48px"
-                          useNextImage
-                          fallbackSrc={getBusinessTypePlaceholder(business)}
+                          compact
                         />
                       </div>
                       <div className="min-w-0">

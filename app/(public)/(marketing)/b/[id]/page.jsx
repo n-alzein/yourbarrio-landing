@@ -18,6 +18,7 @@ import {
 import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
 import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
+import { getBusinessAvatarImage, getBusinessCoverImage } from "@/lib/businessImages";
 
 const PUBLIC_CACHE_SECONDS = 300;
 const PERF_ENV_FLAG = "YB_PROFILE_PERF";
@@ -424,7 +425,8 @@ export async function generateMetadata({ params }) {
   const name =
     profile?.business_name || profile?.full_name || "Local business";
   const description = descriptionSnippet(profile?.description);
-  const image = profile?.cover_photo_url || profile?.profile_photo_url;
+  const avatar = getBusinessAvatarImage(profile || {});
+  const image = getBusinessCoverImage(profile || {}) || (avatar.kind === "image" ? avatar.src : null);
 
   return {
     title: `${name} on YourBarrio`,
@@ -570,7 +572,7 @@ export default async function PublicBusinessProfilePage({
           sectionClassName={sectionShellClassName}
           reviewsClassName={reviewsShellClassName}
           heroVariant="publicFullBleed"
-          navClassName="mb-6"
+          navClassName="mb-5"
         />
       </div>
     </div>

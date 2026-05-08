@@ -6,12 +6,13 @@ import { Heart } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import CustomerAccountShell from "@/components/customer/CustomerAccountShell";
 import SafeImage from "@/components/SafeImage";
+import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
 import { useLocation } from "@/components/location/LocationProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { createFetchSafe } from "@/lib/fetchSafe";
 import { memoizeRequest } from "@/lib/requestMemo";
 import { getCustomerBusinessUrl } from "@/lib/ids/publicRefs";
-import { resolveBusinessImageSrc } from "@/lib/placeholders/businessPlaceholders";
+import { getBusinessAvatarImage } from "@/lib/businessImages";
 import ListingMarketplaceCard from "@/app/(public)/listings/components/ListingMarketplaceCard";
 import { sortListingsByAvailability } from "@/lib/inventory";
 
@@ -814,11 +815,7 @@ export default function CustomerSavedClient({
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {savedShops.map((shop) => {
                     const businessId = getShopId(shop);
-                    const imageSrc = resolveBusinessImageSrc({
-                      imageUrl: shop.cover_photo_url || shop.profile_photo_url || null,
-                      businessType: shop.business_type,
-                      legacyCategory: shop.category,
-                    });
+                    const avatarImage = getBusinessAvatarImage(shop);
                     const normalizedShop = {
                       ...shop,
                       id: businessId,
@@ -848,11 +845,13 @@ export default function CustomerSavedClient({
                             href={href}
                             className="relative block aspect-[16/10] overflow-hidden bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
                           >
-                            <SafeImage
-                              src={imageSrc}
+                            <BusinessAvatarSurface
+                              business={shop}
+                              avatar={avatarImage}
                               alt={shop.business_name || "Saved shop"}
-                              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                              fallbackSrc={imageSrc}
+                              className="transition duration-300 group-hover:scale-[1.02]"
+                              sizes="(max-width: 767px) 100vw, 33vw"
+                              variant="cardHero"
                             />
                           </Link>
                         </div>

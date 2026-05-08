@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { resolveBusinessImageSrc } from "@/lib/placeholders/businessPlaceholders";
+import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
+import { getBusinessAvatarImage } from "@/lib/businessImages";
 import { getBusinessPublicUrl } from "@/lib/ids/publicRefs";
 
 type BusinessCardProps = {
@@ -13,6 +13,8 @@ type BusinessCardProps = {
     category?: string | null;
     city?: string | null;
     state?: string | null;
+    avatar_url?: string | null;
+    logo_url?: string | null;
     profile_photo_url?: string | null;
     cover_photo_url?: string | null;
     distanceMiles?: number | null;
@@ -35,11 +37,7 @@ function formatLocationLine(business: BusinessCardProps["business"]) {
 }
 
 export function getBusinessImage(business: BusinessCardProps["business"]) {
-  return resolveBusinessImageSrc({
-    imageUrl: business?.cover_photo_url || business?.profile_photo_url || null,
-    businessType: business?.business_type,
-    legacyCategory: business?.category,
-  });
+  return getBusinessAvatarImage(business || {});
 }
 
 export default function BusinessCard({
@@ -48,7 +46,7 @@ export default function BusinessCard({
   isVerified = false,
 }: BusinessCardProps) {
   const href = getBusinessPublicUrl(business || {});
-  const imageSrc = getBusinessImage(business);
+  const avatarImage = getBusinessImage(business);
   const businessName = String(business?.business_name || "Local business").trim();
   const locationLine = formatLocationLine(business);
   const visibleBadges = Array.isArray(badges) ? badges.filter(Boolean).slice(0, 1) : [];
@@ -60,13 +58,13 @@ export default function BusinessCard({
       className="group relative flex w-[280px] min-w-[280px] snap-start flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(124,58,237,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-200 focus-visible:ring-offset-2 sm:w-[320px] sm:min-w-[320px] lg:w-[340px] lg:min-w-[340px]"
     >
       <div className="relative h-[180px] w-full overflow-hidden rounded-t-2xl bg-stone-100">
-        <Image
-          src={imageSrc}
+        <BusinessAvatarSurface
+          business={business}
+          avatar={avatarImage}
           alt={businessName}
-          fill
           sizes="(max-width: 767px) 280px, (max-width: 1279px) 33vw, 280px"
-          className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-          loading="lazy"
+          className="transition-transform duration-500 ease-out group-hover:scale-105"
+          variant="cardHero"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/5 to-transparent" />
         {visibleBadges.length ? (

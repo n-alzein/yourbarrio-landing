@@ -5,6 +5,7 @@ import {
   buildLoginHrefForReturnPath,
   ProfileHero,
 } from "@/components/business/profile-system/ProfileSystem";
+import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
 
 let mockAuth = {
   user: null,
@@ -82,6 +83,10 @@ describe("ProfileHero preview actions", () => {
     getOrCreateConversationMock.mockReset();
     openModalMock.mockReset();
     setAuthIntentMock.mockReset();
+    Object.defineProperty(window, "scrollTo", {
+      value: vi.fn(),
+      writable: true,
+    });
     window.sessionStorage.clear();
     mockAuth = {
       user: null,
@@ -130,6 +135,61 @@ describe("ProfileHero preview actions", () => {
     expect(screen.queryByText("Local business")).not.toBeInTheDocument();
     expect(screen.getAllByText("Los Angeles, CA")).toHaveLength(1);
     expect(screen.getByLabelText("Share")).toBeInTheDocument();
+    expect(screen.getByTestId("profile-hero-cover")).toHaveAttribute(
+      "data-business-cover-source",
+      "defaultFallback"
+    );
+  });
+
+  it("does not leak the owner back link into public hero renders by default", () => {
+    render(
+      <PublicBusinessHero
+        mode="public"
+        profile={profile}
+        ratingSummary={{ count: 3, average: 4.7 }}
+        publicPath="/b/shop-111"
+      />
+    );
+
+    expect(screen.queryByRole("link", { name: "Back to business profile" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the owner preview back link behind an explicit preview flag", () => {
+    render(
+      <PublicBusinessHero
+        mode="public"
+        profile={profile}
+        ratingSummary={{ count: 3, average: 4.7 }}
+        publicPath="/b/shop-111"
+        showBackLink
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Back to business profile" })).toHaveAttribute(
+      "href",
+      "/business/profile"
+    );
+  });
+
+  it("scrolls to the reviews section from the header review summary", () => {
+    render(
+      <>
+        <ProfileHero
+          mode="preview"
+          profile={profile}
+          ratingSummary={{ count: 3, average: 4.7 }}
+          publicPath="/b/shop-111"
+        />
+        <section id="reviews">Reviews</section>
+      </>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Jump to reviews" }));
+
+    expect(window.scrollTo).toHaveBeenCalledWith({
+      top: -152,
+      behavior: "smooth",
+    });
   });
 
   it("keeps message subtle for logged-in customers and opens the conversation", async () => {

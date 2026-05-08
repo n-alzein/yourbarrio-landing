@@ -1,7 +1,7 @@
 "use client";
 
-import FastImage from "@/components/FastImage";
-import { resolveBusinessImageSrc } from "@/lib/placeholders/businessPlaceholders";
+import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
+import { getBusinessAvatarImage } from "@/lib/businessImages";
 import { Heart } from "lucide-react";
 
 const formatDistance = (distanceKm) => {
@@ -57,17 +57,9 @@ export default function NearbyBusinessCard({
   const hookLine = getHookLine(business, locationLine);
   const categoryLabel = business.categoryLabel || business.category || "Local spot";
   const metadataItems = [categoryLabel, locationLine, distanceLabel].filter(Boolean);
-  const photo = resolveBusinessImageSrc({
-    imageUrl:
-      business?.imageUrl ||
-      business?.profile_photo_url ||
-      business?.photo_url ||
-      business?.image_url ||
-      business?.avatar_url ||
-      business?.logo_url ||
-      null,
-    businessType: business?.business_type,
-    legacyCategory: business?.categoryLabel || business?.category,
+  const avatarImage = getBusinessAvatarImage({
+    ...business,
+    business_type: business?.business_type || business?.businessTypeSlug || business?.businessTypeName,
   });
   const businessName = business.name || "business";
   const handleCardActivate = () => onClick(business);
@@ -107,14 +99,12 @@ export default function NearbyBusinessCard({
           aria-label={`Open ${businessName} profile`}
         >
           <div className="relative aspect-[16/9] w-full overflow-hidden rounded-t-[1.45rem] bg-slate-100">
-            <FastImage
-              src={photo}
+            <BusinessAvatarSurface
+              business={business}
+              avatar={avatarImage}
               alt={business.name || "Business"}
-              fill
               sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1535px) 33vw, 420px"
-              className="object-cover"
-              fallbackSrc={photo}
-              decoding="async"
+              variant="cardHero"
             />
           </div>
 
@@ -173,8 +163,8 @@ export default function NearbyBusinessCard({
               onToggleSave?.(business);
             }}
             disabled={saveLoading}
-            className={`absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/92 text-slate-600 shadow-sm backdrop-blur transition hover:border-rose-200 hover:text-rose-500 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-wait disabled:opacity-70 ${
-              isSaved ? "opacity-95" : "opacity-80"
+            className={`absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/85 bg-white text-slate-700 shadow-[0_8px_22px_rgba(15,23,42,0.14)] ring-1 ring-white/75 backdrop-blur transition hover:border-rose-200 hover:text-rose-500 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-violet-400/70 disabled:cursor-wait disabled:opacity-70 ${
+              isSaved ? "opacity-100" : "opacity-90"
             }`}
             aria-pressed={isSaved}
             aria-label={isSaved ? "Remove saved shop" : "Save shop"}

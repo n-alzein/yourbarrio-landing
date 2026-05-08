@@ -61,7 +61,7 @@ const timeValue = (value) => {
 
 const getBusinessQualityScore = (business) => {
   let score = 0;
-  if (business?.imageUrl || business?.profile_photo_url || business?.cover_photo_url) score += 2;
+  if (business?.avatar_url || business?.logo_url || business?.profile_photo_url) score += 2;
   if (business?.description && String(business.description).trim().length >= 24) score += 2;
   if (business?.website) score += 1;
   if (business?.city && business?.state) score += 1;
@@ -330,7 +330,8 @@ export default function NearbyBusinessesClient() {
               zip_code: row.zip_code || row.zip || "",
               description: row.description || row.bio || "",
               website: row.website || "",
-              imageUrl: row.cover_photo_url || row.profile_photo_url || row.photo_url || "",
+              avatar_url: row.avatar_url || "",
+              logo_url: row.logo_url || "",
               cover_photo_url: row.cover_photo_url || "",
               profile_photo_url: row.profile_photo_url || "",
               verification_status: row.verification_status || "",

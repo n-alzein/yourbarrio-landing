@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import FastImage from "@/components/FastImage";
+import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
+import BusinessCoverSurface from "@/components/business/BusinessCoverSurface";
 import { useAuth } from "@/components/AuthProvider";
 import SaveBusinessButton from "@/components/business/SaveBusinessButton";
 import { useModal } from "@/components/modals/ModalProvider";
@@ -24,9 +25,9 @@ import {
 } from "lucide-react";
 import { getBusinessTypeLabel } from "@/lib/taxonomy/compat";
 import {
-  getBusinessTypePlaceholder,
-  resolveBusinessImageSrc,
-} from "@/lib/placeholders/businessPlaceholders";
+  getBusinessAvatarImage,
+  getBusinessCoverImage,
+} from "@/lib/businessImages";
 import {
   normalizeUrl,
   formatTime,
@@ -66,27 +67,15 @@ export function getProfileIdentity(profile) {
   const businessType = getBusinessTypeLabel(profile, "Local business");
   const city = profile?.city || "";
   const location = [city, profile?.state].filter(Boolean).join(", ");
-  const placeholderSrc = getBusinessTypePlaceholder(
-    profile?.business_type || profile?.category || null
-  );
-  const avatarSrc = resolveBusinessImageSrc({
-    imageUrl: profile?.profile_photo_url || null,
-    businessType: profile?.business_type,
-    legacyCategory: profile?.category,
-  });
-  const coverSrc = resolveBusinessImageSrc({
-    imageUrl: profile?.cover_photo_url || null,
-    businessType: profile?.business_type,
-    legacyCategory: profile?.category,
-  });
+  const avatarImage = getBusinessAvatarImage(profile || {});
+  const coverSrc = getBusinessCoverImage(profile || {});
 
   return {
     name,
     businessType,
     city,
     location,
-    placeholderSrc,
-    avatarSrc,
+    avatarImage,
     coverSrc,
   };
 }
@@ -231,7 +220,7 @@ export function ProfileEmptyState({
   );
 }
 
-export function ProfileSectionNav({ items, className = "" }) {
+export function ProfileSectionNav({ items, className = "", attached = false }) {
   const [activeId, setActiveId] = useState(items?.[0]?.id || "");
 
   useEffect(() => {
@@ -260,27 +249,61 @@ export function ProfileSectionNav({ items, className = "" }) {
   }, [items]);
 
   return (
-    <div className={cx("sticky top-16 z-20 mb-8 overflow-x-auto rounded-full border border-slate-100 bg-[rgba(255,255,255,0.92)] px-2 py-1.5 shadow-sm backdrop-blur", className)}>
-      <div className="flex min-w-max items-center gap-1">
-        {items.map((item) => {
-          const active = item.id === activeId;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => scrollToSection(item.id)}
-              className={cx(
-                "rounded-full px-3.5 py-2 text-sm font-medium transition",
-                active
-                  ? "bg-[#ede7ff] text-[#5b37d6]"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              )}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+    <div
+      className={cx(
+        attached
+          ? "sticky top-16 z-20 mb-5"
+          : "sticky top-16 z-20 mb-5 overflow-x-auto border-b border-slate-200/80 bg-white/95 backdrop-blur",
+        className
+      )}
+    >
+      {attached ? (
+        <div className="border-b border-slate-200/85 bg-white/96 shadow-[0_14px_38px_-42px_rgba(15,23,42,0.35)] backdrop-blur">
+          <div className="mx-auto max-w-[1180px] overflow-x-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-max items-center gap-8">
+              {items.map((item) => {
+                const active = item.id === activeId;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => scrollToSection(item.id)}
+                    className={cx(
+                      "relative min-h-12 px-0 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
+                      active
+                        ? "text-[#5b37d6] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#6E34FF]"
+                        : "text-slate-500 hover:text-slate-900"
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mx-auto flex min-w-max max-w-[1180px] items-center gap-6 px-4 sm:px-6 lg:px-8">
+          {items.map((item) => {
+            const active = item.id === activeId;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => scrollToSection(item.id)}
+                className={cx(
+                  "relative min-h-11 px-0 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
+                  active
+                    ? "text-[#5b37d6] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#6E34FF]"
+                    : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -310,6 +333,9 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
   const count = ratingSummary?.count || 0;
   const average = Number(ratingSummary?.average || 0);
   const hoursStatus = getHoursStatus(profile);
+  const reviewLabel = count
+    ? `${average.toFixed(1)} · ${count} review${count === 1 ? "" : "s"}`
+    : "No reviews yet";
 
   return (
     <>
@@ -320,10 +346,22 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
             {location}
           </span>
         ) : null}
-        <span className="inline-flex items-center gap-2">
-          <Star className="h-4 w-4 text-amber-500" fill="currentColor" />
-          {count ? `${average.toFixed(1)} · ${count} review${count === 1 ? "" : "s"}` : "No reviews yet"}
-        </span>
+        {count ? (
+          <button
+            type="button"
+            onClick={() => scrollToSection("reviews")}
+            className="inline-flex items-center gap-2 rounded-full text-left transition hover:text-[#5b37d6] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2"
+            aria-label="Jump to reviews"
+          >
+            <Star className="h-4 w-4 text-amber-500" fill="currentColor" />
+            {reviewLabel}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            <Star className="h-4 w-4 text-amber-500" fill="currentColor" />
+            {reviewLabel}
+          </span>
+        )}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {businessType ? (
@@ -342,7 +380,7 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
 function HeroActionIconButton({ href, icon: Icon, label, onClick, variant = "default" }) {
   const baseClassName = cx(
     "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-[#f3efff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
-    variant === "elevated" ? "bg-slate-50 shadow-sm ring-1 ring-slate-100" : ""
+    variant === "elevated" ? "border border-slate-200 bg-white shadow-sm" : ""
   );
 
   if (href) {
@@ -382,11 +420,11 @@ function HeroActionButton({
   variant = "default",
 }) {
   const className = cx(
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-[16px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
     tone === "primary"
-      ? "dashboard-primary-action bg-[#6E34FF] text-white shadow-[0_18px_38px_-24px_rgba(106,61,240,0.7)] hover:bg-[#5E2DE0]"
+      ? "dashboard-primary-action bg-[#6E34FF] text-white shadow-[0_16px_34px_-24px_rgba(106,61,240,0.75)] hover:bg-[#5E2DE0]"
       : variant === "elevated"
-        ? "border border-slate-200 bg-slate-50/80 text-slate-800 shadow-sm hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
+        ? "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
         : "border border-slate-300 bg-white text-slate-800 hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
   );
   const primaryStyle = tone === "primary" ? { color: "#ffffff" } : undefined;
@@ -584,6 +622,80 @@ function HeroPreviewActions({
     );
   }
 
+  if (variant === "elevated") {
+    return (
+      <div className="flex w-full flex-col gap-2 lg:items-end">
+        <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
+          {directions ? (
+            <HeroActionButton
+              href={directions}
+              icon={MapPin}
+              label="Directions"
+              tone="primary"
+              variant={variant}
+            />
+          ) : null}
+          {website ? (
+            <HeroActionButton
+              href={website}
+              icon={Globe}
+              label="Website"
+              variant={variant}
+            />
+          ) : null}
+          {profile?.phone ? (
+            <HeroActionButton
+              href={`tel:${profile.phone}`}
+              icon={Phone}
+              label="Call"
+              variant={variant}
+            />
+          ) : null}
+          {showSaveBusinessButton ? (
+            <SaveBusinessButton
+              business={{
+                id: saveBusinessId,
+                public_id: profile?.public_id || null,
+              }}
+              isSaved={isBusinessSaved}
+              loading={savingBusinessIds.has(saveBusinessId)}
+              onToggle={toggleSavedBusiness}
+              variant="hero"
+              className="border border-slate-200 bg-white shadow-sm ring-0"
+            />
+          ) : null}
+          <HeroActionIconButton
+            icon={Share2}
+            label={copied ? "Copied" : "Share"}
+            onClick={handleShare}
+            variant={variant}
+          />
+        </div>
+
+        {canMessageDirectly ? (
+          <button
+            type="button"
+            onClick={handleMessage}
+            disabled={messageLoading}
+            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-full px-2 text-sm font-medium text-slate-500/90 transition hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 disabled:opacity-70 lg:self-end"
+          >
+            <MessageCircle className="h-4 w-4 text-slate-500/80" />
+            {messageLoading ? "Opening..." : "Message"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleGuestMessageIntent}
+            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-full px-2 text-sm font-medium text-slate-500/90 transition hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 lg:self-end"
+          >
+            <MessageCircle className="h-4 w-4 text-slate-500/80" />
+            Sign in to message
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={cx("flex w-full flex-col sm:w-auto", variant === "elevated" ? "gap-2" : "gap-3")}>
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -689,8 +801,7 @@ function PreviewHeroCard({
   name,
   businessType,
   location,
-  placeholderSrc,
-  avatarSrc,
+  avatarImage,
   viewerMode = "public",
   ownerPrimaryAction = null,
   ownerSecondaryActions = [],
@@ -700,29 +811,52 @@ function PreviewHeroCard({
   variant = "default",
 }) {
   const isElevated = variant === "elevated";
+  const isCoverIntegrated = variant === "coverIntegrated";
+  const description = String(profile?.description || "").trim();
+  const headerDescription =
+    isElevated && description && description.length <= 150 ? description : "";
+  const actionsVariant = isCoverIntegrated ? "elevated" : variant;
 
   return (
-    <div className={cx("relative z-10 px-4 sm:px-6 lg:px-8", isElevated ? "mx-auto -mt-14 max-w-[1180px] sm:-mt-16 lg:-mt-[4.5rem]" : "-mt-10 sm:-mt-14")}>
+    <div
+      className={cx(
+        isCoverIntegrated
+          ? "absolute inset-x-0 bottom-0 z-10 px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8"
+          : "relative z-10 px-4 sm:px-6 lg:px-8",
+        isElevated ? "mx-auto -mt-12 max-w-[1180px] sm:-mt-14 lg:-mt-[4.25rem]" : "",
+        !isElevated && !isCoverIntegrated ? "-mt-10 sm:-mt-14" : ""
+      )}
+    >
       <div
         className={cx(
-          "bg-white/96 p-4 backdrop-blur sm:p-5 lg:p-6",
+          isCoverIntegrated ? "mx-auto max-w-[1180px]" : "bg-white/96 backdrop-blur",
           isElevated
-            ? "rounded-[24px] shadow-[0_24px_70px_-42px_rgba(15,23,42,0.44)] ring-1 ring-slate-100/80"
-            : "rounded-[28px] border border-slate-200/90 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.4)]"
+            ? "rounded-t-[20px] rounded-b-none border border-b-0 border-slate-200/85 p-4 shadow-[0_20px_50px_-46px_rgba(15,23,42,0.4)] sm:p-5 lg:p-6"
+            : isCoverIntegrated
+              ? "p-0"
+            : "rounded-[28px] border border-slate-200/90 p-4 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.4)] backdrop-blur sm:p-5 lg:p-6"
         )}
       >
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className={cx("flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between", isCoverIntegrated ? "lg:gap-8" : "")}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:min-w-0 lg:flex-1">
-            <div className={cx("relative h-20 w-20 shrink-0 overflow-hidden border border-white bg-slate-100 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.38)] sm:h-24 sm:w-24", isElevated ? "rounded-[22px]" : "rounded-[26px]")}>
-              <FastImage
-                src={avatarSrc}
+            <div
+              className={cx(
+                "relative shrink-0 overflow-hidden border border-white bg-slate-100 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.38)]",
+                isCoverIntegrated
+                  ? "h-20 w-20 rounded-[20px] shadow-[0_18px_42px_-26px_rgba(15,23,42,0.55)] ring-1 ring-white/80 sm:h-24 sm:w-24"
+                  : isElevated
+                    ? "h-[5.5rem] w-[5.5rem] rounded-[20px] shadow-[0_18px_38px_-30px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/80 sm:h-24 sm:w-24 lg:h-[6.5rem] lg:w-[6.5rem]"
+                    : "h-20 w-20 rounded-[26px] sm:h-24 sm:w-24"
+              )}
+            >
+              <BusinessAvatarSurface
+                business={profile}
+                avatar={avatarImage}
                 alt={`${name} logo`}
-                fallbackSrc={placeholderSrc}
-                className="object-cover"
-                fill
-                sizes="96px"
+                sizes={isCoverIntegrated ? "108px" : isElevated ? "104px" : "96px"}
                 priority
-                decoding="async"
+                compact={!isCoverIntegrated}
+                variant={isCoverIntegrated ? "wordmark" : "avatar"}
               />
               {viewerMode === "owner" && editMode && onAvatarUpload ? (
                 <label className="absolute bottom-2 right-2 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white bg-white text-slate-700 shadow">
@@ -745,27 +879,56 @@ function PreviewHeroCard({
                 </label>
               ) : null}
             </div>
-            <div className="min-w-0">
-              <h1 className={cx("font-semibold tracking-[-0.05em] text-slate-950", isElevated ? "text-[1.75rem] leading-tight sm:text-[2.3rem]" : "text-[1.9rem] sm:text-[2.35rem]")}>
+            <div className="min-w-0 flex-1">
+              {isElevated && businessType ? (
+                <p
+                  className={cx(
+                    "mb-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-medium leading-none text-[#5b37d6]",
+                    "border-[#e6ddff] bg-[#f7f3ff]"
+                  )}
+                >
+                  {businessType}
+                </p>
+              ) : null}
+              <h1
+                className={cx(
+                  "font-semibold tracking-[-0.035em] text-slate-950",
+                  isCoverIntegrated
+                    ? "max-w-[20ch] text-[1.9rem] leading-[1.02] drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] sm:text-[2.35rem] lg:text-[2.55rem]"
+                    : isElevated
+                      ? "max-w-[20ch] text-[1.75rem] leading-[1.05] sm:text-[2.15rem] lg:text-[2.35rem]"
+                      : "text-[1.9rem] sm:text-[2.35rem]"
+                )}
+              >
                 {name}
               </h1>
               <HeroMetadata
                 location={location}
                 ratingSummary={ratingSummary}
-                businessType={businessType}
+                businessType={isElevated || isCoverIntegrated ? null : businessType}
                 profile={profile}
               />
+              {headerDescription ? (
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-[15px]">
+                  {headerDescription}
+                </p>
+              ) : null}
             </div>
           </div>
 
-          <div className="w-full lg:w-auto lg:max-w-[420px]">
+          <div
+            className={cx(
+              "w-full lg:w-auto lg:max-w-[440px]",
+              isCoverIntegrated ? "lg:w-fit lg:max-w-none lg:self-end" : ""
+            )}
+          >
             <HeroPreviewActions
               profile={profile}
               publicPath={publicPath}
               viewerMode={viewerMode}
               ownerPrimaryAction={ownerPrimaryAction}
               ownerSecondaryActions={ownerSecondaryActions}
-              variant={variant}
+              variant={actionsVariant}
             />
           </div>
         </div>
@@ -789,14 +952,16 @@ export function ProfileHero({
   uploading,
   editMode = false,
   variant = "default",
+  navItems = null,
 }) {
-  const { name, businessType, location, placeholderSrc, avatarSrc, coverSrc } =
+  const { name, businessType, location, avatarImage, coverSrc } =
     useMemo(() => getProfileIdentity(profile), [profile]);
 
   const topActionClasses =
     "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition";
   const isPreview = mode === "preview";
   const isPublicFullBleed = variant === "publicFullBleed" && isPreview;
+  const coverSource = coverSrc ? "uploaded" : "defaultFallback";
 
   return (
     <section
@@ -816,10 +981,11 @@ export function ProfileHero({
       >
         <div
           data-testid="profile-hero-cover"
+          data-business-cover-source={coverSource}
           className={cx(
             "relative overflow-hidden",
             isPublicFullBleed
-              ? "h-[205px] sm:h-[245px] lg:h-[270px]"
+              ? "h-[360px] sm:h-[320px] md:h-[300px] lg:h-[260px] xl:h-[280px]"
               : isPreview
                 ? "h-[180px] sm:h-[220px] lg:h-[250px]"
                 : "h-[220px] sm:h-[260px] lg:h-[300px]"
@@ -835,18 +1001,29 @@ export function ProfileHero({
               )}
             />
           ) : null}
-          <FastImage
+          <BusinessCoverSurface
+            business={profile}
             src={coverSrc}
             alt={`${name} cover`}
-            fallbackSrc={placeholderSrc}
-            className="object-cover"
-            fill
             sizes="(max-width: 1280px) 100vw, 1200px"
             priority
-            decoding="async"
           />
           {isPublicFullBleed ? (
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.16),rgba(15,23,42,0.08)_40%,rgba(15,23,42,0.52)_100%),linear-gradient(120deg,rgba(106,61,240,0.18),rgba(15,23,42,0.04)_52%,rgba(15,23,42,0.18))]" />
+            coverSource === "defaultFallback" ? (
+              <>
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.06)_0%,rgba(15,23,42,0)_38%,rgba(248,250,252,0.08)_62%,rgba(248,250,252,0.46)_89%,rgba(248,250,252,0.68)_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,250,252,0.18)_0%,rgba(248,250,252,0.1)_26%,rgba(248,250,252,0.02)_60%,rgba(248,250,252,0.08)_100%)]" />
+                <div className="absolute inset-x-0 bottom-0 h-[52%] bg-[radial-gradient(ellipse_at_28%_82%,rgba(248,250,252,0.54)_0%,rgba(248,250,252,0.28)_36%,rgba(248,250,252,0)_74%)]" />
+                <div className="absolute bottom-0 left-0 h-[62%] w-[68%] bg-[radial-gradient(ellipse_at_30%_78%,rgba(248,250,252,0.72)_0%,rgba(248,250,252,0.52)_32%,rgba(248,250,252,0.18)_58%,rgba(248,250,252,0)_82%)]" />
+              </>
+            ) : (
+              <>
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.12)_0%,rgba(15,23,42,0.01)_34%,rgba(248,250,252,0.12)_58%,rgba(248,250,252,0.66)_86%,rgba(248,250,252,0.88)_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,250,252,0.44)_0%,rgba(248,250,252,0.25)_24%,rgba(248,250,252,0.04)_58%,rgba(248,250,252,0.16)_100%)]" />
+                <div className="absolute inset-x-0 bottom-0 h-[56%] bg-[radial-gradient(ellipse_at_28%_82%,rgba(248,250,252,0.7)_0%,rgba(248,250,252,0.38)_36%,rgba(248,250,252,0)_74%)]" />
+                <div className="absolute bottom-0 left-0 h-[62%] w-[68%] bg-[radial-gradient(ellipse_at_30%_78%,rgba(248,250,252,0.78)_0%,rgba(248,250,252,0.56)_32%,rgba(248,250,252,0.2)_58%,rgba(248,250,252,0)_82%)]" />
+              </>
+            )
           ) : null}
 
           <div className={cx("absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6", isPublicFullBleed ? "mx-auto max-w-[1180px] lg:px-8" : "")}>
@@ -883,40 +1060,63 @@ export function ProfileHero({
               </label>
             ) : null}
           </div>
+
+          {isPublicFullBleed && isPreview ? (
+            <PreviewHeroCard
+              profile={profile}
+              ratingSummary={ratingSummary}
+              publicPath={publicPath}
+              name={name}
+              businessType={businessType}
+              location={location}
+              avatarImage={avatarImage}
+              viewerMode={viewerMode}
+              ownerPrimaryAction={ownerPrimaryAction}
+              ownerSecondaryActions={ownerSecondaryActions}
+              editMode={editMode}
+              onAvatarUpload={onAvatarUpload}
+              uploading={uploading}
+              variant="coverIntegrated"
+            />
+          ) : null}
         </div>
 
         {isPreview ? (
-          <PreviewHeroCard
-            profile={profile}
-            ratingSummary={ratingSummary}
-            publicPath={publicPath}
-            name={name}
-            businessType={businessType}
-            location={location}
-            placeholderSrc={placeholderSrc}
-            avatarSrc={avatarSrc}
-            viewerMode={viewerMode}
-            ownerPrimaryAction={ownerPrimaryAction}
-            ownerSecondaryActions={ownerSecondaryActions}
-            editMode={editMode}
-            onAvatarUpload={onAvatarUpload}
-            uploading={uploading}
-            variant={isPublicFullBleed ? "elevated" : "default"}
-          />
+          <>
+            {!isPublicFullBleed ? (
+              <PreviewHeroCard
+                profile={profile}
+                ratingSummary={ratingSummary}
+                publicPath={publicPath}
+                name={name}
+                businessType={businessType}
+                location={location}
+                avatarImage={avatarImage}
+                viewerMode={viewerMode}
+                ownerPrimaryAction={ownerPrimaryAction}
+                ownerSecondaryActions={ownerSecondaryActions}
+                editMode={editMode}
+                onAvatarUpload={onAvatarUpload}
+                uploading={uploading}
+                variant="default"
+              />
+            ) : null}
+            {isPublicFullBleed && Array.isArray(navItems) && navItems.length ? (
+              <ProfileSectionNav items={navItems} attached />
+            ) : null}
+          </>
         ) : (
           <div className="relative bg-white px-5 pb-5 pt-0 sm:px-6 lg:px-8">
             <div className="-mt-8 flex flex-col gap-4 lg:-mt-10 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="relative h-24 w-24 overflow-hidden rounded-[28px] border border-white bg-slate-100 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.45)] sm:h-28 sm:w-28">
-                  <FastImage
-                    src={avatarSrc}
+                  <BusinessAvatarSurface
+                    business={profile}
+                    avatar={avatarImage}
                     alt={`${name} logo`}
-                    fallbackSrc={placeholderSrc}
-                    className="object-cover"
-                    fill
                     sizes="112px"
                     priority
-                    decoding="async"
+                    variant="wordmark"
                   />
                   {editMode && onAvatarUpload ? (
                     <label className="absolute bottom-2 right-2 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white bg-white text-slate-700 shadow">

@@ -4,13 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import useBusinessProfileAccessGate from "@/components/auth/useBusinessProfileAccessGate";
-import { markImageFailed } from "@/lib/safeImage";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import { getCustomerBusinessUrl } from "@/lib/ids/publicRefs";
-import {
-  getBusinessTypePlaceholder,
-  resolveBusinessImageSrc,
-} from "@/lib/placeholders/businessPlaceholders";
+import { getBusinessAvatarImage } from "@/lib/businessImages";
 
 // helper: compute distance in km
 function haversine(lat1, lon1, lat2, lon2) {
@@ -61,6 +57,30 @@ const formatCategory = (type) => {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 };
+
+function buildPopupAvatarPlaceholder(avatar) {
+  const accent = avatar?.accent || {
+    bg: "#f1f5f9",
+    bgSoft: "#ffffff",
+    fg: "#475569",
+  };
+  const tile = document.createElement("div");
+  tile.style.width = "100%";
+  tile.style.height = "120px";
+  tile.style.display = "flex";
+  tile.style.alignItems = "center";
+  tile.style.justifyContent = "center";
+  tile.style.borderRadius = "10px";
+  tile.style.border = "1px solid #e5e7eb";
+  tile.style.marginBottom = "8px";
+  tile.style.overflow = "hidden";
+  tile.style.color = accent.fg;
+  tile.style.fontWeight = "700";
+  tile.style.fontSize = "28px";
+  tile.style.background = `linear-gradient(135deg, ${accent.bgSoft} 0%, ${accent.bg} 64%, #ffffff 100%)`;
+  tile.textContent = avatar?.initials || "YB";
+  return tile;
+}
 
 // Default to Long Beach to avoid centering in the ocean if geolocation or data is missing
 const FALLBACK_CENTER = { lat: 33.7701, lng: -118.1937 };
@@ -457,7 +477,7 @@ export default function GoogleMapClient({
                   ? formatCategory(row.category.replace(/\s+/g, "_"))
                   : "Local Business",
                 source: "supabase_users",
-                imageUrl: row.profile_photo_url || null,
+                profile_photo_url: row.profile_photo_url || null,
                 description: row.description || "",
                 website: row.website || "",
               };
@@ -521,17 +541,10 @@ export default function GoogleMapClient({
       });
     }
     const imgContainer = document.createElement("div");
-    const placeholderSrc = getBusinessTypePlaceholder(
-      biz.business_type || biz.categoryLabel || biz.category || null
-    );
-    const resolvedSrc = resolveBusinessImageSrc({
-      imageUrl: biz.imageUrl || null,
-      businessType: biz.business_type,
-      legacyCategory: biz.categoryLabel || biz.category || null,
-    });
-    if (resolvedSrc) {
+    const avatar = getBusinessAvatarImage(biz || {});
+    if (avatar.kind === "image") {
       const img = document.createElement("img");
-      img.src = resolvedSrc;
+      img.src = avatar.src;
       img.alt = safeText(biz.name || "");
       img.style.width = "100%";
       img.style.maxHeight = "120px";
@@ -540,11 +553,13 @@ export default function GoogleMapClient({
       img.style.border = "1px solid #e5e7eb";
       img.style.marginBottom = "8px";
       img.onerror = () => {
-        if (img.src === placeholderSrc) return;
-        markImageFailed(img.src || biz.imageUrl);
-        img.src = placeholderSrc;
+        img.remove();
+        const placeholder = buildPopupAvatarPlaceholder(avatar);
+        imgContainer.appendChild(placeholder);
       };
       imgContainer.appendChild(img);
+    } else {
+      imgContainer.appendChild(buildPopupAvatarPlaceholder(avatar));
     }
 
     if (imgContainer.childElementCount) {

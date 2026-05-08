@@ -69,10 +69,13 @@ export default function BusinessProfileView({
         shell={shell}
         mode={mode}
         variant={heroVariant}
+        navItems={heroVariant === "publicFullBleed" ? DEFAULT_NAV_ITEMS : null}
         {...heroProps}
       />
 
-      <ProfileSectionNav items={DEFAULT_NAV_ITEMS} className={navClassName} />
+      {heroVariant === "publicFullBleed" ? null : (
+        <ProfileSectionNav items={DEFAULT_NAV_ITEMS} className={navClassName} />
+      )}
 
       <div className="space-y-10 md:space-y-12">
         <BusinessAbout

@@ -235,6 +235,7 @@ export default async function BusinessPreviewPage() {
         profile={profile}
         ratingSummary={ratingSummary}
         publicPath={getCustomerBusinessUrl(profile || { id: effectiveUserId })}
+        showBackLink
       />
       <ProfileSectionNav
         items={[

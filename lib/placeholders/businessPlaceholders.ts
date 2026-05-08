@@ -3,6 +3,8 @@ import { resolveImageSrc } from "@/lib/safeImage";
 export const BUSINESS_PLACEHOLDER_BASE = "/placeholders/business/types";
 export const GENERIC_BUSINESS_PLACEHOLDER = `${BUSINESS_PLACEHOLDER_BASE}/other.png`;
 
+// These are illustrative onboarding/demo storefront images. Live marketplace and
+// profile surfaces should use "@/lib/businessImages" instead.
 const BUSINESS_TYPE_TO_FILE: Record<string, string> = {
   boutique: `${BUSINESS_PLACEHOLDER_BASE}/boutique.png`,
   "beauty-wellness": `${BUSINESS_PLACEHOLDER_BASE}/beauty-wellness.png`,
