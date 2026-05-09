@@ -14,17 +14,22 @@ describe("chunk error recovery", () => {
     expect(isChunkLoadError(new Error("CSS chunk load failed"))).toBe(true);
     expect(
       isChunkLoadError(
-        new TypeError("Failed to fetch dynamically imported module")
+        new TypeError(
+          "Failed to fetch dynamically imported module: https://example.test/_next/static/chunks/app/layout.js"
+        )
       )
     ).toBe(true);
     expect(
       isChunkLoadError({
-        reason: new Error("Importing a module script failed."),
+        reason: new Error(
+          "Importing a module script failed. https://example.test/_next/static/chunks/app/page.js"
+        ),
       })
     ).toBe(true);
     expect(
       isChunkLoadError({
-        target: { href: "https://example.test/_next/static/css/app.css" },
+        message:
+          "Unable to preload CSS for https://example.test/_next/static/css/app.css",
       })
     ).toBe(true);
   });
@@ -32,6 +37,19 @@ describe("chunk error recovery", () => {
   it("does not classify unrelated runtime errors as chunk failures", () => {
     expect(isChunkLoadError(new Error("Cannot read properties of null"))).toBe(false);
     expect(isChunkLoadError({ message: "Unauthorized" })).toBe(false);
+    expect(isChunkLoadError(new Error("Load failed"))).toBe(false);
+    expect(isChunkLoadError(new Error("Failed to fetch"))).toBe(false);
+    expect(isChunkLoadError(new Error("AbortError: The operation was aborted"))).toBe(false);
+    expect(
+      isChunkLoadError(
+        new TypeError("Failed to fetch dynamically imported module")
+      )
+    ).toBe(false);
+    expect(
+      isChunkLoadError(
+        new Error("Hydration failed because the server rendered HTML didn't match the client.")
+      )
+    ).toBe(false);
     expect(isChunkLoadError(null)).toBe(false);
   });
 
@@ -73,11 +91,25 @@ describe("chunk error recovery", () => {
 
     expect(shouldAttemptChunkRecovery(error, window.sessionStorage)).toBe(true);
     markChunkRecoveryAttempted(window.sessionStorage);
-    expect(window.sessionStorage.getItem(CHUNK_RECOVERY_GUARD_KEY)).toBe("1");
+    expect(window.sessionStorage.getItem(CHUNK_RECOVERY_GUARD_KEY)).toContain('"at"');
     expect(hasChunkRecoveryGuard(window.sessionStorage)).toBe(true);
     expect(shouldAttemptChunkRecovery(error, window.sessionStorage)).toBe(false);
 
     clearChunkRecoveryGuard(window.sessionStorage);
     expect(hasChunkRecoveryGuard(window.sessionStorage)).toBe(false);
+  });
+
+  it("ignores legacy or expired recovery guards so stale state cannot render refresh UI", () => {
+    window.sessionStorage.clear();
+    window.sessionStorage.setItem(CHUNK_RECOVERY_GUARD_KEY, "1");
+    expect(hasChunkRecoveryGuard(window.sessionStorage)).toBe(false);
+    expect(window.sessionStorage.getItem(CHUNK_RECOVERY_GUARD_KEY)).toBe(null);
+
+    window.sessionStorage.setItem(
+      CHUNK_RECOVERY_GUARD_KEY,
+      JSON.stringify({ at: Date.now() - 60_000 })
+    );
+    expect(hasChunkRecoveryGuard(window.sessionStorage)).toBe(false);
+    expect(window.sessionStorage.getItem(CHUNK_RECOVERY_GUARD_KEY)).toBe(null);
   });
 });

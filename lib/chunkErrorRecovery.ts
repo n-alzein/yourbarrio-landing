@@ -1,18 +1,31 @@
 export const CHUNK_RECOVERY_GUARD_KEY = "yb_chunk_recovered";
 
-const CHUNK_ERROR_PATTERNS = [
+const NEXT_STATIC_ASSET_PATTERN = /\/_next\/static\/(?:chunks|css)\//i;
+const NEXT_STATIC_CHUNK_PATTERN = /\/_next\/static\/chunks\//i;
+const NEXT_STATIC_CSS_PATTERN = /\/_next\/static\/css\//i;
+const EXPLICIT_CHUNK_ERROR_PATTERNS = [
   /ChunkLoadError/i,
   /Loading chunk [\w-]+ failed/i,
   /Loading CSS chunk [\w-]+ failed/i,
   /CSS chunk load failed/i,
+];
+const NEXT_STATIC_MODULE_ERROR_PATTERNS = [
   /Failed to fetch dynamically imported module/i,
   /Error loading dynamically imported module/i,
   /Importing a module script failed/i,
-  /Unable to preload CSS/i,
-  /\/_next\/static\/(?:chunks|css)\//i,
+  /Expected a JavaScript module script/i,
+  /MIME type .*?text\/html/i,
 ];
-
-const NEXT_STATIC_ASSET_PATTERN = /\/_next\/static\/(?:chunks|css)\//i;
+const NEXT_STATIC_CSS_ERROR_PATTERNS = [/Unable to preload CSS/i];
+const GENERIC_NON_CHUNK_FAILURE_PATTERNS = [
+  /\bAbortError\b/i,
+  /\baborted\b/i,
+  /\bcancelled\b/i,
+  /\bcanceled\b/i,
+  /^Load failed$/i,
+  /^Failed to fetch$/i,
+  /\bHydration failed\b/i,
+];
 const NON_APP_ASSET_PATTERN =
   /\/(?:api|business-photos|business-gallery|listing-photos|profile-photos|avatars)\//i;
 const HTTP_API_ERROR_PATTERNS = [
@@ -80,6 +93,28 @@ function isHttpApiErrorText(text: string): boolean {
   return HTTP_API_ERROR_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function hasGenericNonChunkFailure(text: string): boolean {
+  return GENERIC_NON_CHUNK_FAILURE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function hasExplicitChunkSignature(text: string): boolean {
+  return EXPLICIT_CHUNK_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function hasNextStaticModuleSignature(text: string): boolean {
+  return (
+    NEXT_STATIC_CHUNK_PATTERN.test(text) &&
+    NEXT_STATIC_MODULE_ERROR_PATTERNS.some((pattern) => pattern.test(text))
+  );
+}
+
+function hasNextStaticCssSignature(text: string): boolean {
+  return (
+    NEXT_STATIC_CSS_PATTERN.test(text) &&
+    NEXT_STATIC_CSS_ERROR_PATTERNS.some((pattern) => pattern.test(text))
+  );
+}
+
 export function isChunkLoadError(error: unknown): boolean {
   const text = collectErrorText(error);
   if (!text) return false;
@@ -94,7 +129,16 @@ export function isChunkLoadError(error: unknown): boolean {
   if (!hasNextStaticAsset && isHttpApiErrorText(text)) {
     return false;
   }
-  return CHUNK_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+  if (!hasNextStaticAsset && hasGenericNonChunkFailure(text)) {
+    return false;
+  }
+  if (hasNextStaticAsset && status && status >= 400) {
+    return true;
+  }
+  if (hasExplicitChunkSignature(text)) {
+    return true;
+  }
+  return hasNextStaticModuleSignature(text) || hasNextStaticCssSignature(text);
 }
 
 export function getChunkErrorDiagnostics(
@@ -141,7 +185,24 @@ export function getChunkErrorDiagnostics(
 export function hasChunkRecoveryGuard(storage: Storage | undefined | null): boolean {
   if (!storage) return false;
   try {
-    return storage.getItem(CHUNK_RECOVERY_GUARD_KEY) === "1";
+    const rawValue = storage.getItem(CHUNK_RECOVERY_GUARD_KEY);
+    if (!rawValue) return false;
+    if (rawValue === "1") {
+      storage.removeItem(CHUNK_RECOVERY_GUARD_KEY);
+      return false;
+    }
+    const parsed = JSON.parse(rawValue) as { at?: unknown };
+    const attemptedAt = typeof parsed.at === "number" ? parsed.at : 0;
+    if (!attemptedAt) {
+      storage.removeItem(CHUNK_RECOVERY_GUARD_KEY);
+      return false;
+    }
+    const ageMs = Date.now() - attemptedAt;
+    if (ageMs < 0 || ageMs > 30_000) {
+      storage.removeItem(CHUNK_RECOVERY_GUARD_KEY);
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -150,7 +211,10 @@ export function hasChunkRecoveryGuard(storage: Storage | undefined | null): bool
 export function markChunkRecoveryAttempted(storage: Storage | undefined | null): void {
   if (!storage) return;
   try {
-    storage.setItem(CHUNK_RECOVERY_GUARD_KEY, "1");
+    storage.setItem(
+      CHUNK_RECOVERY_GUARD_KEY,
+      JSON.stringify({ at: Date.now() })
+    );
   } catch {}
 }
 

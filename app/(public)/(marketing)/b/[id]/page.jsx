@@ -26,6 +26,8 @@ const LOOKUP_DEBUG_ENV_FLAG = "YB_PROFILE_LOOKUP_DEBUG";
 const UUID_ANY_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export const dynamic = "force-dynamic";
+
 function buildRatingSummary(rows) {
   const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let sum = 0;
