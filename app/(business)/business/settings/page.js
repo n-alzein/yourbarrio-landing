@@ -27,6 +27,10 @@ import {
   isIncompleteUSPhone,
   normalizeUSPhoneForStorage,
 } from "@/lib/utils/formatUSPhone";
+import {
+  commitTemporaryImages,
+  uploadTemporaryImage,
+} from "@/lib/images/tempMediaClient";
 
 function parseOptionalNonNegativeNumber(value) {
   const trimmed = String(value ?? "").trim();
@@ -515,17 +519,18 @@ export default function SettingsPage() {
 
     setPhotoUploading(true);
 
-    const fileName = `${user.id}-${Date.now()}`;
-
-    const { error } = await supabase.storage
-      .from("business-photos")
-      .upload(fileName, file);
-
-    if (!error) {
-      const { data: publicUrlData } = supabase.storage
-        .from("business-photos")
-        .getPublicUrl(fileName);
-      const photoUrl = publicUrlData?.publicUrl || `business-photos/${fileName}`;
+    try {
+      const tempUpload = await uploadTemporaryImage({
+        file,
+        purpose: "business_avatar",
+      });
+      const committed = await commitTemporaryImages({
+        assetIds: [tempUpload.asset.id],
+        businessId: user.id,
+        purpose: "business_avatar",
+      });
+      const photoUrl = committed.profileUrl;
+      if (!photoUrl) throw new Error("Upload failed to return a URL.");
 
       const { error: userPhotoError } = await supabase
         .from("users")
@@ -557,7 +562,7 @@ export default function SettingsPage() {
       } else {
         showToast("success", "Photo uploaded.");
       }
-    } else {
+    } catch (error) {
       showToast("error", error.message || "Failed to upload photo.");
     }
 

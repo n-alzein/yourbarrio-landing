@@ -17,6 +17,12 @@ vi.mock("next/image", () => ({
   default: ({ alt, ...rest }: any) => <img alt={alt} {...rest} />,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    prefetch: vi.fn(),
+  }),
+}));
+
 vi.mock("@/lib/listingPhotos", () => ({
   resolveListingCoverImageUrl: () => null,
 }));
@@ -147,6 +153,11 @@ describe("homepage launch focus", () => {
   it("removes the category section from the homepage client", () => {
     expect(customerHomeSource).not.toContain("Browse by category");
     expect(customerHomeSource).not.toContain("CategoryTilesGrid");
+  });
+
+  it("keeps customer-home listing thumbnails product-safe", () => {
+    expect(customerHomeSource).toContain("bg-white object-contain object-center");
+    expect(customerHomeSource).not.toContain("h-20 w-20 object-cover");
   });
 
   it("keeps the business section copy aligned to the launch brief", async () => {

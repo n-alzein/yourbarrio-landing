@@ -140,6 +140,53 @@ describe("business user save controls", () => {
     expect(screen.getByRole("button", { name: /save shop/i })).toBeInTheDocument();
   });
 
+  it("uses avatar media for the nearby business identity image instead of cover media", () => {
+    render(
+      <NearbyBusinessCard
+        business={{
+          id: "shop-1",
+          name: "Shop One",
+          category: "Retail",
+          profile_photo_url: "https://cdn.example.com/avatar.jpg",
+          cover_photo_url: "https://cdn.example.com/cover.jpg",
+        }}
+        onHover={vi.fn()}
+        onLeave={vi.fn()}
+        onClick={vi.fn()}
+        registerCard={vi.fn()}
+        showSaveControl={false}
+      />
+    );
+
+    const media = screen.getByTestId("nearby-business-card-media");
+    const image = media.querySelector("img");
+    expect(image).toHaveAttribute("src", "https://cdn.example.com/avatar.jpg");
+    expect(image).not.toHaveAttribute("src", "https://cdn.example.com/cover.jpg");
+  });
+
+  it("renders a generated nearby avatar fallback when only a business cover exists", () => {
+    render(
+      <NearbyBusinessCard
+        business={{
+          id: "shop-1",
+          name: "Cover Only Shop",
+          category: "Retail",
+          cover_photo_url: "https://cdn.example.com/cover.jpg",
+        }}
+        onHover={vi.fn()}
+        onLeave={vi.fn()}
+        onClick={vi.fn()}
+        registerCard={vi.fn()}
+        showSaveControl={false}
+      />
+    );
+
+    const media = screen.getByTestId("nearby-business-card-media");
+    expect(media.querySelector("img")).toBeNull();
+    expect(media.querySelector("[data-business-avatar-placeholder='true']")).toBeInTheDocument();
+    expect(media.textContent).toContain("Cover Only Shop");
+  });
+
   it("does not render save controls on business profile pages", () => {
     render(<BusinessProfileView mode="public" {...profileProps} />);
 

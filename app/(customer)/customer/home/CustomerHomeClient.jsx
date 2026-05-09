@@ -642,7 +642,7 @@ function CustomerHomePageInner({
                           <FastImage
                             src={coverFor(item)}
                             alt={item.title || "Listing"}
-                            className="h-20 w-20 object-cover rounded-lg border border-white/10"
+                            className="h-20 w-20 rounded-lg border border-white/10 bg-white object-contain object-center"
                             fallbackSrc="/business-placeholder.png"
                             width={80}
                             height={80}

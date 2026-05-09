@@ -11,6 +11,12 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
+
 vi.mock("@/components/FastImage", () => ({
   __esModule: true,
   default: ({ alt, fill, priority, sizes, decoding, ...rest }) => <img alt={alt} {...rest} />,

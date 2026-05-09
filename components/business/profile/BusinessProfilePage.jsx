@@ -6,6 +6,10 @@ import { ImagePlus, ListChecks, Megaphone, Pencil, Plus, Settings } from "lucide
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getBusinessPublicUrl } from "@/lib/ids/publicRefs";
+import {
+  commitTemporaryImages,
+  uploadTemporaryImage,
+} from "@/lib/images/tempMediaClient";
 import { uploadPublicImage } from "@/lib/storageUpload";
 import { ProfilePageShell } from "@/components/business/profile-system/ProfileSystem";
 import BusinessProfileView from "@/components/publicBusinessProfile/BusinessProfileView";
@@ -170,17 +174,19 @@ export default function BusinessProfilePage({
       showToast("error", "Business profile not ready. Refresh and try again.");
       return;
     }
-    const bucket = "business-photos";
     setUploading((prev) => ({ ...prev, [type]: true }));
 
     try {
-      const { publicUrl } = await uploadPublicImage({
-        supabase: client,
-        bucket,
+      const tempUpload = await uploadTemporaryImage({
         file,
-        pathPrefix: `${businessId}/${type}`,
-        maxSizeMB: 8,
+        purpose: type === "avatar" ? "business_avatar" : "business_cover",
       });
+      const committed = await commitTemporaryImages({
+        assetIds: [tempUpload.asset.id],
+        businessId,
+        purpose: type === "avatar" ? "business_avatar" : "business_cover",
+      });
+      const publicUrl = committed.profileUrl;
 
       if (!publicUrl) throw new Error("Upload failed to return a URL.");
 

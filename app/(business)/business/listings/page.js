@@ -95,27 +95,16 @@ export default function BusinessListingsPage() {
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
   const [isHydrating, setIsHydrating] = useState(true);
-  const [viewMode, setViewMode] = useState(() => {
-    if (typeof window === "undefined") return BUSINESS_LISTINGS_VIEW_GRID;
-    try {
-      const storedView = window.localStorage.getItem(BUSINESS_LISTINGS_VIEW_STORAGE_KEY);
-      return storedView === BUSINESS_LISTINGS_VIEW_TABLE
-        ? BUSINESS_LISTINGS_VIEW_TABLE
-        : BUSINESS_LISTINGS_VIEW_GRID;
-    } catch {
-      return BUSINESS_LISTINGS_VIEW_GRID;
-    }
-  });
+  const [viewMode, setViewMode] = useState(BUSINESS_LISTINGS_VIEW_GRID);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortKey, setSortKey] = useState("updated");
   const [copiedRef, setCopiedRef] = useState("");
 
-  const initialListingsCache = useMemo(() => readBusinessListingsCache(), []);
-  const [listings, setListings] = useState(() => initialListingsCache.listings);
+  const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [hasLoaded, setHasLoaded] = useState(() => initialListingsCache.loaded);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [isVisible, setIsVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden
   );
@@ -159,6 +148,23 @@ export default function BusinessListingsPage() {
   }, []);
 
   useEffect(() => {
+    const cachedListings = readBusinessListingsCache();
+    if (cachedListings.loaded) {
+      setListings(cachedListings.listings);
+      setHasLoaded(true);
+    }
+
+    try {
+      const storedView = window.localStorage.getItem(BUSINESS_LISTINGS_VIEW_STORAGE_KEY);
+      setViewMode(
+        storedView === BUSINESS_LISTINGS_VIEW_TABLE
+          ? BUSINESS_LISTINGS_VIEW_TABLE
+          : BUSINESS_LISTINGS_VIEW_GRID
+      );
+    } catch {
+      setViewMode(BUSINESS_LISTINGS_VIEW_GRID);
+    }
+
     setIsHydrating(false);
   }, []);
 
@@ -413,7 +419,7 @@ export default function BusinessListingsPage() {
   // ------------------------------------------------------
   // LOADING STATES
   // ------------------------------------------------------
-  if (isHydrating && !hasLoaded) {
+  if (isHydrating) {
     return (
       <p className="text-slate-700 dark:text-slate-100 text-center py-20">
         Loading listings...
@@ -743,8 +749,7 @@ export default function BusinessListingsPage() {
                                   <SafeImage
                                     src={coverImageUrl}
                                     alt={listing.title}
-                                    className="h-full w-full"
-                                    style={{ objectFit: "cover", objectPosition: "center" }}
+                                    className="h-full w-full bg-white object-contain object-center"
                                     fallbackSrc={getListingCategoryPlaceholder(listing)}
                                   />
                                 ) : (

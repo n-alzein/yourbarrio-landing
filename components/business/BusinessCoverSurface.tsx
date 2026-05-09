@@ -15,6 +15,8 @@ type Props = {
   className?: string;
   sizes?: string;
   priority?: boolean;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
 };
 
 export default function BusinessCoverSurface({
@@ -24,12 +26,23 @@ export default function BusinessCoverSurface({
   className = "object-cover",
   sizes,
   priority = false,
+  loading = "lazy",
+  fetchPriority = "auto",
 }: Props) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showImage = Boolean(src && failedSrc !== src);
+  const effectiveLoading = priority ? "eager" : loading;
+  const effectiveFetchPriority = priority ? "high" : fetchPriority;
 
   if (!showImage) {
-    return <BusinessCoverFallback business={business} />;
+    return (
+      <BusinessCoverFallback
+        business={business}
+        loading={effectiveLoading}
+        fetchPriority={effectiveFetchPriority}
+        sizes={sizes}
+      />
+    );
   }
 
   return (
@@ -40,7 +53,8 @@ export default function BusinessCoverSurface({
       className={className}
       fill
       sizes={sizes}
-      priority={priority}
+      loading={effectiveLoading}
+      fetchPriority={effectiveFetchPriority}
       decoding="async"
       onError={() => setFailedSrc(src || null)}
       data-business-cover-source="uploaded"

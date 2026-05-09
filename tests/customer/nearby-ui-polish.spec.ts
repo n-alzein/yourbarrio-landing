@@ -30,6 +30,110 @@ const loginCustomer = async (page: import("@playwright/test").Page) => {
 };
 
 test.describe("Nearby UI polish", () => {
+  test("loads first-row business identity images immediately without using covers as avatars", async ({ page }) => {
+    const imageWarnings: string[] = [];
+    page.on("console", (message) => {
+      const text = message.text();
+      if (/image.*fill.*parent|parent.*height.*0/i.test(text)) {
+        imageWarnings.push(text);
+      }
+    });
+
+    await installStableLocation(page);
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.route("**/api/public-businesses**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          businessTypes: [{ id: "boutique", name: "Boutique", slug: "boutique" }],
+          businesses: [
+            {
+              id: "nearby-cover-1",
+              public_id: "nearby-cover-1",
+              business_name: "First Row Cover",
+              category: "Boutique",
+              business_type_slug: "boutique",
+              city: "Long Beach",
+              state: "CA",
+              profile_photo_url: "/images/fallback/categories/fashion.png",
+              cover_photo_url: "/images/fallback/business-profile-cover-neighborhood.png",
+              latitude: 33.7701,
+              longitude: -118.1937,
+            },
+            {
+              id: "nearby-cover-2",
+              public_id: "nearby-cover-2",
+              business_name: "First Row Fallback",
+              category: "Boutique",
+              business_type_slug: "boutique",
+              city: "Long Beach",
+              state: "CA",
+              profile_photo_url: "/images/fallback/categories/fashion.png",
+              latitude: 33.7702,
+              longitude: -118.1938,
+            },
+            {
+              id: "nearby-cover-3",
+              public_id: "nearby-cover-3",
+              business_name: "First Row Third",
+              category: "Boutique",
+              business_type_slug: "boutique",
+              city: "Long Beach",
+              state: "CA",
+              profile_photo_url: "/images/fallback/categories/fashion.png",
+              cover_photo_url: "/images/fallback/business-profile-cover-neighborhood.png",
+              latitude: 33.7703,
+              longitude: -118.1939,
+            },
+            {
+              id: "nearby-cover-4",
+              public_id: "nearby-cover-4",
+              business_name: "Lazy Row Cover",
+              category: "Boutique",
+              business_type_slug: "boutique",
+              city: "Long Beach",
+              state: "CA",
+              cover_photo_url: "/images/fallback/business-profile-cover-neighborhood.png",
+              latitude: 33.7704,
+              longitude: -118.194,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("/nearby", { waitUntil: "domcontentloaded" });
+
+    const cards = page.locator('[data-testid="nearby-results-list"] article');
+    await expect(cards.first()).toBeVisible();
+
+    const firstMedia = cards.first().getByTestId("nearby-business-card-media");
+    const firstBox = await firstMedia.boundingBox();
+    expect(firstBox?.height || 0).toBeGreaterThan(80);
+    expect(firstBox?.width || 0).toBeGreaterThan(200);
+
+    const firstImage = firstMedia.locator("img").first();
+    await expect(firstImage).toHaveAttribute("loading", "eager");
+    await expect(firstImage).toHaveAttribute("fetchpriority", "high");
+    await expect(firstImage).toHaveAttribute("src", /categories\/fashion/);
+    await expect(firstImage).not.toHaveAttribute("src", /business-profile-cover-neighborhood/);
+
+    await expect(cards.nth(1).getByTestId("nearby-business-card-media").locator("img").first()).toHaveAttribute(
+      "loading",
+      "eager"
+    );
+    await expect(cards.nth(2).getByTestId("nearby-business-card-media").locator("img").first()).toHaveAttribute(
+      "loading",
+      "eager"
+    );
+    await expect(cards.nth(3).getByTestId("nearby-business-card-media").locator("img").first()).toHaveCount(0);
+    await expect(
+      cards.nth(3).getByTestId("nearby-business-card-media").locator("[data-business-avatar-placeholder='true']")
+    ).toBeVisible();
+    expect(imageWarnings).toEqual([]);
+  });
+
   test("header spacing is tight and split view occupies viewport", async ({ page }) => {
     test.skip(!customerEmail || !customerPassword, "Set E2E_CUSTOMER_* env vars");
 

@@ -26,6 +26,11 @@ import {
 import { retry } from "@/lib/retry";
 import { validateImageFile } from "@/lib/storageUpload";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import {
+  commitTemporaryImages,
+  discardTemporaryImages,
+  uploadTemporaryImage,
+} from "@/lib/images/tempMediaClient";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 import {
   dollarsInputToCents,
@@ -322,16 +327,37 @@ export default function EditListingPage() {
         setPhotoError(validation.error);
         continue;
       }
-      accepted.push(
-        createLocalPhotoDraft(normalizedFile, {
+      const draft = createLocalPhotoDraft(normalizedFile, {
           source,
           normalization: {
             converted: normalizedFile !== file,
             raw: describeImageFile(file),
             normalized: describeImageFile(normalizedFile),
           },
-        })
-      );
+        });
+      try {
+        const uploaded = await uploadTemporaryImage({
+          file: normalizedFile,
+          purpose: "listing_image",
+        });
+        const objectPreviewUrl = draft.original.previewUrl;
+        if (objectPreviewUrl) URL.revokeObjectURL(objectPreviewUrl);
+        accepted.push({
+          ...draft,
+          original: {
+            ...draft.original,
+            previewUrl: uploaded.previewUrl,
+            path: uploaded.asset.source_path || null,
+          },
+          tempUpload: {
+            assetId: uploaded.asset.id,
+            uploadSessionId: uploaded.upload_session_id,
+          },
+        });
+      } catch (error) {
+        if (draft.original.previewUrl) URL.revokeObjectURL(draft.original.previewUrl);
+        setPhotoError(error?.message || "Image upload failed. Please try again.");
+      }
     }
 
     if (!accepted.length) return;
@@ -345,62 +371,44 @@ export default function EditListingPage() {
     setCoverImageId(photoId || null);
   };
 
-  async function uploadNewPhotos() {
-    if (!photos.length) return [];
-    const client = getSupabaseBrowserClient() ?? supabase;
-    if (!client || !accountId) throw new Error("Connection not ready. Try again.");
+  async function commitPendingPhotos(listingId, currentPhotos) {
+    const pending = currentPhotos.filter((photo) => photo?.tempUpload?.assetId);
+    if (!pending.length) return convertPhotoDraftsToSavedState(currentPhotos);
 
-    const uploaded = [];
+    const sortOrders = Object.fromEntries(
+      currentPhotos.map((photo, index) => [photo?.tempUpload?.assetId || photo?.id, index])
+    );
+    const payload = await commitTemporaryImages({
+      assetIds: pending.map((photo) => photo.tempUpload.assetId),
+      listingId,
+      businessId: accountId,
+      purpose: "listing_image",
+      sortOrders,
+    });
+    const variantsById = new Map(
+      (payload.listingPhotoVariants || []).map((variant) => [variant.id, variant])
+    );
 
-    for (const photo of photos) {
-      if (photo.status !== "new" || !photo.original.file) {
-        uploaded.push(photo);
-        continue;
-      }
-      const file = photo.original.file;
-      const fileName = `${accountId}-${Date.now()}-${crypto
-        .randomUUID?.()
-        ?.slice(0, 6) || Math.random().toString(36).slice(2, 8)}-${
-        file.name
-      }`;
-
-      const { error } = await retry(
-        async () => {
-          const result = await client.storage
-            .from("listing-photos")
-            .upload(fileName, file, {
-              contentType: file.type,
-              upsert: false,
-              cacheControl: "3600",
-            });
-          if (result.error) throw result.error;
-          return result;
-        },
-        { retries: 1, delayMs: 600 }
-      );
-
-      if (error) {
-        console.error("❌ Upload error:", error);
-        throw new Error("Failed to upload one of the photos.");
-      }
-
-      const { data: url } = client.storage
-        .from("listing-photos")
-        .getPublicUrl(fileName);
-
-      if (url?.publicUrl) {
-        uploaded.push({
+    return convertPhotoDraftsToSavedState(
+      currentPhotos.map((photo) => {
+        const committed = variantsById.get(photo?.tempUpload?.assetId);
+        if (!committed) return photo;
+        return {
           ...photo,
+          status: "existing",
+          mediaAssetId: committed.media_asset_id || committed.id,
+          tempUpload: null,
           original: {
             ...photo.original,
-            publicUrl: url.publicUrl,
-            path: `listing-photos/${fileName}`,
+            file: null,
+            previewUrl: committed.original?.url || photo.original?.previewUrl || null,
+            publicUrl: committed.original?.url || null,
+            path: committed.original?.path || null,
           },
-        });
-      }
-    }
-
-    return uploaded;
+          variants: committed.variants || null,
+        };
+      })
+    );
   }
 
   const handleRemovePhoto = (photoId) => {
@@ -409,6 +417,13 @@ export default function EditListingPage() {
       const target = prev.find((photo) => photo.id === photoId);
       if (target?.status === "new" && target?.original?.previewUrl) {
         URL.revokeObjectURL(target.original.previewUrl);
+      }
+      if (target?.tempUpload?.assetId) {
+        discardTemporaryImages({ assetIds: [target.tempUpload.assetId] }).catch((error) => {
+          console.warn("[listing.photo] discard_temp_failed", {
+            message: error?.message || String(error),
+          });
+        });
       }
       return prev.filter((photo) => photo.id !== photoId);
     });
@@ -635,8 +650,7 @@ export default function EditListingPage() {
     const resetTimer = setTimeout(() => setSaving(false), 20000);
 
     try {
-      const uploaded = await uploadNewPhotos();
-      const savedPhotos = convertPhotoDraftsToSavedState(uploaded);
+      const savedPhotos = await commitPendingPhotos(internalListingId, photos);
       const resolvedCoverImageId = resolveCoverImageId(savedPhotos, coverImageId);
       const orderedSavedPhotos = orderPhotoDraftsWithCoverFirst(savedPhotos, resolvedCoverImageId);
       const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(orderedSavedPhotos);

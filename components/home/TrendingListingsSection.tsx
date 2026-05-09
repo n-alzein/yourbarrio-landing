@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { BrowseMode, ListingSummary } from "@/lib/browse/getHomeBrowseData";
+import { isSavedMediaVariantUrl } from "@/lib/images/resolveMediaAssetUrl";
 import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
 import { getCustomerListingUrl, getListingUrl } from "@/lib/ids/publicRefs";
@@ -210,6 +211,7 @@ export default function TrendingListingsSection({
                     fill
                     sizes="(max-width: 767px) calc((100vw - 2rem - 0.75rem) / 2), (max-width: 1023px) calc((100vw - 4rem - 2rem) / 3), calc((100vw - 5rem - 3rem) / 4)"
                     className="object-contain object-center p-1.5 transition-transform duration-200 ease-out group-hover:scale-105 sm:p-2"
+                    unoptimized={isSavedMediaVariantUrl(imageSrc)}
                   />
                 </div>
 

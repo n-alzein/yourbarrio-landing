@@ -1,4 +1,5 @@
 import { normalizeBusinessTypeSlug } from "@/lib/placeholders/businessPlaceholders";
+import { resolveMediaAssetUrl } from "@/lib/images/resolveMediaAssetUrl";
 
 export type BusinessImageInput = {
   business_name?: string | null;
@@ -13,6 +14,15 @@ export type BusinessImageInput = {
   logo_url?: string | null;
   profile_photo_url?: string | null;
   cover_photo_url?: string | null;
+  bucket?: string | null;
+  purpose?: string | null;
+  avatar_128_path?: string | null;
+  avatar_256_path?: string | null;
+  cover_mobile_path?: string | null;
+  cover_desktop_path?: string | null;
+  business_avatar_media_asset?: Record<string, unknown> | null;
+  business_cover_media_asset?: Record<string, unknown> | null;
+  media_assets?: Array<Record<string, unknown>> | null;
 };
 
 export type BusinessCategoryAccent = {
@@ -214,6 +224,60 @@ function firstRealImageUrl(candidates: Array<string | null | undefined>): string
   return null;
 }
 
+function getMediaAssetPurpose(asset?: Record<string, unknown> | null): string {
+  return String(asset?.purpose || "").trim();
+}
+
+function findMediaAssetByPurpose(
+  business: BusinessImageInput,
+  purposes: Set<string>
+): Record<string, unknown> | null {
+  const candidates = [
+    business.business_avatar_media_asset,
+    business.business_cover_media_asset,
+    ...(Array.isArray(business.media_assets) ? business.media_assets : []),
+  ].filter(Boolean) as Array<Record<string, unknown>>;
+
+  return candidates.find((asset) => purposes.has(getMediaAssetPurpose(asset))) || null;
+}
+
+export function resolveBusinessAvatarUrl(business: BusinessImageInput = {}): string | null {
+  const avatarAsset =
+    findMediaAssetByPurpose(business, new Set(["business_avatar", "user_avatar"])) ||
+    (business.avatar_256_path || business.avatar_128_path
+      ? {
+          bucket: business.bucket || "business-photos",
+          avatar_256_path: business.avatar_256_path,
+          avatar_128_path: business.avatar_128_path,
+        }
+      : null);
+  const mediaAssetUrl = avatarAsset
+    ? resolveMediaAssetUrl(avatarAsset, "avatar_profile")
+    : null;
+  return firstRealImageUrl([
+    mediaAssetUrl,
+    business.avatar_url,
+    business.logo_url,
+    business.profile_photo_url,
+  ]);
+}
+
+export function resolveBusinessCoverUrl(business: BusinessImageInput = {}): string | null {
+  const coverAsset =
+    findMediaAssetByPurpose(business, new Set(["business_cover"])) ||
+    (business.cover_desktop_path || business.cover_mobile_path
+      ? {
+          bucket: business.bucket || "business-photos",
+          cover_desktop_path: business.cover_desktop_path,
+          cover_mobile_path: business.cover_mobile_path,
+        }
+      : null);
+  const mediaAssetUrl = coverAsset
+    ? resolveMediaAssetUrl(coverAsset, "business_cover_desktop")
+    : null;
+  return firstRealImageUrl([mediaAssetUrl, business.cover_photo_url]);
+}
+
 function getBusinessTypeValue(business: BusinessImageInput = {}) {
   return (
     business.business_type ||
@@ -260,11 +324,7 @@ export function getBusinessCategoryAccent(
 export function getBusinessAvatarImage(
   business: BusinessImageInput = {}
 ): BusinessAvatarImage {
-  const src = firstRealImageUrl([
-    business.avatar_url,
-    business.logo_url,
-    business.profile_photo_url,
-  ]);
+  const src = resolveBusinessAvatarUrl(business);
   if (src) return { kind: "image", src };
 
   return {
@@ -276,7 +336,7 @@ export function getBusinessAvatarImage(
 }
 
 export function getBusinessCoverImage(business: BusinessImageInput = {}): string | null {
-  return firstRealImageUrl([business.cover_photo_url]);
+  return resolveBusinessCoverUrl(business);
 }
 
 export function isRealBusinessCoverImage(business: BusinessImageInput = {}): boolean {

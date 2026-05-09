@@ -10,9 +10,17 @@ export const DEFAULT_BUSINESS_COVER_FALLBACK_SRC =
 type Props = {
   business?: BusinessImageInput;
   className?: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
+  sizes?: string;
 };
 
-export default function BusinessCoverFallback({ className = "" }: Props) {
+export default function BusinessCoverFallback({
+  className = "",
+  loading = "lazy",
+  fetchPriority = "auto",
+  sizes = "100vw",
+}: Props) {
   return (
     <div
       className={cx("relative h-full w-full overflow-hidden bg-[#f6efe8]", className)}
@@ -24,8 +32,9 @@ export default function BusinessCoverFallback({ className = "" }: Props) {
         alt=""
         aria-hidden="true"
         fill
-        sizes="100vw"
-        priority
+        sizes={sizes}
+        loading={loading}
+        fetchPriority={fetchPriority}
         className="object-cover object-[62%_center]"
         decoding="async"
       />

@@ -84,6 +84,8 @@ export default function NearbyResultsPane({
     );
   }
 
+  const eagerImageCount = isMobile ? 2 : 3;
+
   return (
     <div className="space-y-6">
       {refreshing ? (
@@ -95,7 +97,7 @@ export default function NearbyResultsPane({
         </div>
       ) : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="nearby-results-list">
-        {(visibleBusinesses || businesses).map((business) => (
+        {(visibleBusinesses || businesses).map((business, index) => (
           <NearbyBusinessCard
             key={business.id || business.name}
             business={business}
@@ -111,6 +113,8 @@ export default function NearbyResultsPane({
             showSaveControl={showSaveControls}
             isMobile={isMobile}
             registerCard={registerCard}
+            coverLoading={index < eagerImageCount ? "eager" : "lazy"}
+            coverFetchPriority={index === 0 ? "high" : "auto"}
           />
         ))}
       </div>

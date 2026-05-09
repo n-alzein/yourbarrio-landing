@@ -5,6 +5,8 @@ import {
   getBusinessInitials,
   getOnboardingDemoBusinessImage,
   isKnownBusinessPlaceholderImage,
+  resolveBusinessAvatarUrl,
+  resolveBusinessCoverUrl,
 } from "@/lib/businessImages";
 
 describe("business image resolvers", () => {
@@ -49,6 +51,45 @@ describe("business image resolvers", () => {
       kind: "image",
       src: "https://cdn.example.com/logo.png",
     });
+  });
+
+  it("keeps media asset avatar and cover resolution separate", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      const business = {
+        business_name: "Media Asset Shop",
+        bucket: "business-photos",
+        profile_photo_url: "https://cdn.example.com/legacy-avatar.jpg",
+        cover_photo_url: "https://cdn.example.com/legacy-cover.jpg",
+        media_assets: [
+          {
+            purpose: "business_cover",
+            bucket: "business-photos",
+            cover_desktop_path: "owner/cover/asset/cover_desktop_1600.webp",
+            public_url: "https://cdn.example.com/cover-public-url.webp",
+          },
+          {
+            purpose: "business_avatar",
+            bucket: "business-photos",
+            avatar_256_path: "owner/avatar/asset/avatar_256.webp",
+            avatar_128_path: "owner/avatar/asset/avatar_128.webp",
+          },
+        ],
+      };
+
+      expect(resolveBusinessAvatarUrl(business)).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/avatar/asset/avatar_256.webp"
+      );
+      expect(resolveBusinessCoverUrl(business)).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/cover/asset/cover_desktop_1600.webp"
+      );
+      expect(resolveBusinessAvatarUrl({ ...business, media_assets: [business.media_assets[0]] })).toBe(
+        "https://cdn.example.com/legacy-avatar.jpg"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
   });
 
   it("returns only real uploaded covers", () => {

@@ -23,6 +23,16 @@ describe("business listings page card hierarchy", () => {
     expect(source).toContain("Buyer price includes marketplace fee.");
   });
 
+  it("keeps the initial render deterministic for hydration", () => {
+    expect(source).toContain("const [viewMode, setViewMode] = useState(BUSINESS_LISTINGS_VIEW_GRID);");
+    expect(source).toContain("const [listings, setListings] = useState([]);");
+    expect(source).toContain("const [hasLoaded, setHasLoaded] = useState(false);");
+    expect(source).toContain("if (isHydrating) {");
+    expect(source).toContain("const cachedListings = readBusinessListingsCache();");
+    expect(source).toContain("window.localStorage.getItem(BUSINESS_LISTINGS_VIEW_STORAGE_KEY)");
+    expect(source).not.toContain("useState(() => initialListingsCache");
+  });
+
   it("uses a single status badge with out-of-stock precedence", () => {
     expect(source).toContain('const hasUnpublishedChanges = listing.has_unpublished_changes === true;');
     expect(source).toContain('"Changes not published"');
@@ -80,6 +90,7 @@ describe("business listings page card hierarchy", () => {
     expect(source).toContain(">Listing name<");
     expect(source).not.toContain(">Image<");
     expect(source).toContain('className="flex min-w-0 items-start gap-3"');
-    expect(source).toContain('objectFit: "cover"');
+    expect(source).toContain('className="h-full w-full bg-white object-contain object-center"');
+    expect(source).not.toContain('objectFit: "cover"');
   });
 });

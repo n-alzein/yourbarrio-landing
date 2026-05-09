@@ -83,6 +83,11 @@ describe("staged listing draft safety", () => {
     expect(ownedListingEditorDataSource).toContain("data.has_unpublished_changes === true");
   });
 
+  it("renders customer category listing product images with contain fit", () => {
+    expect(customerCategorySource).toContain("bg-white object-contain object-center");
+    expect(customerCategorySource).not.toContain("h-full w-full object-cover");
+  });
+
   it("keeps cart and order previews on explicit operational listing fields only", () => {
     expect(cartRouteSource).not.toContain("draft_data");
     expect(cartRouteSource).not.toContain("has_unpublished_changes");

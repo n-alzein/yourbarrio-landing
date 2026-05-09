@@ -122,7 +122,7 @@ export default async function CategoryListingsPage({ params }) {
                       <img
                         src={cover}
                         alt={item.title || "Listing"}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full bg-white object-contain object-center"
                       />
                     ) : (
                       <span className="text-xs text-slate-600">No image</span>

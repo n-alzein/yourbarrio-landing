@@ -18,6 +18,8 @@ type Props = {
   fill?: boolean;
   sizes?: string;
   priority?: boolean;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
   compact?: boolean;
   variant?: "avatar" | "cardHero" | "wordmark";
 };
@@ -31,6 +33,8 @@ export default function BusinessAvatarSurface({
   fill = true,
   sizes,
   priority = false,
+  loading = "lazy",
+  fetchPriority = "auto",
   compact = false,
   variant = "avatar",
 }: Props) {
@@ -58,6 +62,8 @@ export default function BusinessAvatarSurface({
       fill={fill}
       sizes={sizes}
       priority={priority}
+      loading={priority ? "eager" : loading}
+      fetchPriority={priority ? "high" : fetchPriority}
       className={[className, imageClassName].filter(Boolean).join(" ")}
       fallbackSrc={EMPTY_IMAGE_FALLBACK}
       decoding="async"

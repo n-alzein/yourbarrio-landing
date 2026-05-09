@@ -51,6 +51,8 @@ export default function NearbyBusinessCard({
   saveLoading = false,
   showSaveControl = true,
   registerCard,
+  coverLoading = "lazy",
+  coverFetchPriority = "auto",
 }) {
   const distanceLabel = formatDistance(business.distance_km ?? business.distanceKm ?? null);
   const locationLine = formatLocationLine(business);
@@ -98,12 +100,19 @@ export default function NearbyBusinessCard({
           aria-pressed={selected}
           aria-label={`Open ${businessName} profile`}
         >
-          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-t-[1.45rem] bg-slate-100">
+          <div
+            className="relative aspect-[16/9] w-full overflow-hidden rounded-t-[1.45rem] bg-slate-100"
+            data-testid="nearby-business-card-media"
+          >
             <BusinessAvatarSurface
               business={business}
               avatar={avatarImage}
               alt={business.name || "Business"}
               sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1535px) 33vw, 420px"
+              className="object-cover"
+              imageClassName="object-cover"
+              loading={coverLoading}
+              fetchPriority={coverFetchPriority}
               variant="cardHero"
             />
           </div>

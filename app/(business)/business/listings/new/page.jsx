@@ -25,6 +25,11 @@ import {
 import { validateImageFile } from "@/lib/storageUpload";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
+  commitTemporaryImages,
+  discardTemporaryImages,
+  uploadTemporaryImage,
+} from "@/lib/images/tempMediaClient";
+import {
   centsToDollarsInput,
   dollarsInputToCents,
 } from "@/lib/fulfillment";
@@ -290,16 +295,37 @@ export default function NewListingPage() {
         setPhotoError(validation.error);
         continue;
       }
-      accepted.push(
-        createLocalPhotoDraft(normalizedFile, {
+      const draft = createLocalPhotoDraft(normalizedFile, {
           source,
           normalization: {
             converted: normalizedFile !== file,
             raw: describeImageFile(file),
             normalized: describeImageFile(normalizedFile),
           },
-        })
-      );
+        });
+      try {
+        const uploaded = await uploadTemporaryImage({
+          file: normalizedFile,
+          purpose: "listing_image",
+        });
+        const objectPreviewUrl = draft.original.previewUrl;
+        if (objectPreviewUrl) URL.revokeObjectURL(objectPreviewUrl);
+        accepted.push({
+          ...draft,
+          original: {
+            ...draft.original,
+            previewUrl: uploaded.previewUrl,
+            path: uploaded.asset.source_path || null,
+          },
+          tempUpload: {
+            assetId: uploaded.asset.id,
+            uploadSessionId: uploaded.upload_session_id,
+          },
+        });
+      } catch (error) {
+        if (draft.original.previewUrl) URL.revokeObjectURL(draft.original.previewUrl);
+        setPhotoError(error?.message || "Image upload failed. Please try again.");
+      }
     }
 
     if (!accepted.length) return;
@@ -317,6 +343,13 @@ export default function NewListingPage() {
       const target = prev.find((photo) => photo.id === photoId);
       if (target?.status === "new" && target?.original?.previewUrl) {
         URL.revokeObjectURL(target.original.previewUrl);
+      }
+      if (target?.tempUpload?.assetId) {
+        discardTemporaryImages({ assetIds: [target.tempUpload.assetId] }).catch((error) => {
+          console.warn("[listing.photo] discard_temp_failed", {
+            message: error?.message || String(error),
+          });
+        });
       }
       return prev.filter((photo) => photo.id !== photoId);
     });
@@ -378,56 +411,45 @@ export default function NewListingPage() {
     }
   };
 
-  async function uploadPhotos() {
-    if (!photos.length) return [];
-    const client = getSupabaseBrowserClient() ?? supabase;
-    if (!client || !accountId) throw new Error("Connection not ready. Try again.");
+  const commitPendingPhotos = useCallback(async (listingId, currentPhotos) => {
+    const pending = currentPhotos.filter((photo) => photo?.tempUpload?.assetId);
+    if (!pending.length) return convertPhotoDraftsToSavedState(currentPhotos);
 
-    const uploaded = [];
-    for (const photo of photos) {
-      if (photo.status !== "new" || !photo.original.file) {
-        uploaded.push(photo);
-        continue;
-      }
+    const sortOrders = Object.fromEntries(
+      currentPhotos.map((photo, index) => [photo?.tempUpload?.assetId || photo?.id, index])
+    );
+    const payload = await commitTemporaryImages({
+      assetIds: pending.map((photo) => photo.tempUpload.assetId),
+      listingId,
+      businessId: accountId,
+      purpose: "listing_image",
+      sortOrders,
+    });
+    const variantsById = new Map(
+      (payload.listingPhotoVariants || []).map((variant) => [variant.id, variant])
+    );
 
-      const file = photo.original.file;
-      const fileName = `${accountId}-${Date.now()}-${crypto
-        .randomUUID?.()
-        ?.slice(0, 6) || Math.random().toString(36).slice(2, 8)}-${file.name}`;
-
-      const { data, error } = await withTimeout(
-        client.storage.from("listing-photos").upload(fileName, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type || "image/jpeg",
-        }),
-        UPLOAD_TIMEOUT_MS,
-        "Photo upload timed out. Please try again."
-      );
-
-      if (error) {
-        console.error("Photo upload failed", error);
-        throw new Error("Failed to upload one of the photos");
-      }
-
-      const { data: url } = client.storage
-        .from("listing-photos")
-        .getPublicUrl(fileName);
-
-      if (url?.publicUrl) {
-        uploaded.push({
+    return convertPhotoDraftsToSavedState(
+      currentPhotos.map((photo) => {
+        const committed = variantsById.get(photo?.tempUpload?.assetId);
+        if (!committed) return photo;
+        return {
           ...photo,
+          status: "existing",
+          mediaAssetId: committed.media_asset_id || committed.id,
+          tempUpload: null,
           original: {
             ...photo.original,
-            publicUrl: url.publicUrl,
-            path: `listing-photos/${fileName}`,
+            file: null,
+            previewUrl: committed.original?.url || photo.original?.previewUrl || null,
+            publicUrl: committed.original?.url || null,
+            path: committed.original?.path || null,
           },
-        });
-      }
-    }
-
-    return uploaded;
-  }
+          variants: committed.variants || null,
+        };
+      })
+    );
+  }, [accountId]);
 
   const persistListing = useCallback(async ({ targetStatus, source }) => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -469,15 +491,14 @@ export default function NewListingPage() {
     }
 
     try {
-      const uploadedPhotos = await withTimeout(
-        uploadPhotos(),
-        UPLOAD_TIMEOUT_MS * Math.max(1, photos.length),
-        "Photo upload timed out. Please try again."
-      );
-      const savedPhotos = convertPhotoDraftsToSavedState(uploadedPhotos);
-      const resolvedCoverImageId = resolveCoverImageId(savedPhotos, coverImageId);
-      const orderedSavedPhotos = orderPhotoDraftsWithCoverFirst(savedPhotos, resolvedCoverImageId);
-      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(orderedSavedPhotos);
+      const hasPendingPhotos = photos.some((photo) => photo?.tempUpload?.assetId);
+      const preCommitPhotos = hasPendingPhotos
+        ? photos.filter((photo) => !photo?.tempUpload?.assetId)
+        : convertPhotoDraftsToSavedState(photos);
+      const preCommitCoverImageId = resolveCoverImageId(preCommitPhotos, coverImageId);
+      const preCommitOrderedPhotos = orderPhotoDraftsWithCoverFirst(preCommitPhotos, preCommitCoverImageId);
+      const { photoUrls: preCommitPhotoUrls, photoVariants: preCommitPhotoVariants } =
+        buildListingPhotoPayloadFromDrafts(preCommitOrderedPhotos);
 
       const businessQuery = client
         .from("users")
@@ -525,9 +546,9 @@ export default function NewListingPage() {
             : null,
         inventory_last_updated_at: new Date().toISOString(),
         city: business?.city || null,
-        cover_image_id: resolvedCoverImageId,
-        photo_url: photoUrls.length ? JSON.stringify(photoUrls) : null,
-        photo_variants: photoVariants.length ? photoVariants : null,
+        cover_image_id: preCommitCoverImageId,
+        photo_url: preCommitPhotoUrls.length ? JSON.stringify(preCommitPhotoUrls) : null,
+        photo_variants: preCommitPhotoVariants.length ? preCommitPhotoVariants : null,
         pickup_enabled: form.pickupEnabled,
         local_delivery_enabled: form.localDeliveryEnabled,
         use_business_delivery_defaults: form.useBusinessDeliveryDefaults,
@@ -559,6 +580,32 @@ export default function NewListingPage() {
 
       if (!savedListing?.id) {
         throw new Error(isPublish ? "Listing publish did not complete." : "Draft save did not complete.");
+      }
+
+      const savedPhotos = await withTimeout(
+        commitPendingPhotos(savedListing.id, photos),
+        UPLOAD_TIMEOUT_MS * Math.max(1, photos.length),
+        "Photo processing timed out. Please try again."
+      );
+      const resolvedCoverImageId = resolveCoverImageId(savedPhotos, coverImageId);
+      const orderedSavedPhotos = orderPhotoDraftsWithCoverFirst(savedPhotos, resolvedCoverImageId);
+      const { photoUrls, photoVariants } = buildListingPhotoPayloadFromDrafts(orderedSavedPhotos);
+
+      if (hasPendingPhotos) {
+        const { error: mediaUpdateError } = await withTimeout(
+          client
+            .from("listings")
+            .update({
+              cover_image_id: resolvedCoverImageId,
+              photo_url: photoUrls.length ? JSON.stringify(photoUrls) : null,
+              photo_variants: photoVariants.length ? photoVariants : null,
+            })
+            .eq("id", savedListing.id)
+            .eq("business_id", accountId),
+          PUBLISH_TIMEOUT_MS,
+          "Saving photos timed out. Please try again."
+        );
+        if (mediaUpdateError) throw mediaUpdateError;
       }
 
       await saveListingVariants(
@@ -604,15 +651,17 @@ export default function NewListingPage() {
     }
   }, [
     accountId,
+    commitPendingPhotos,
     coverImageId,
     derivedVariantInventory.inventoryQuantity,
     derivedVariantInventory.inventoryStatus,
     form,
-    photos.length,
+    internalListingId,
+    listingOptions,
+    photos,
     publishValidation,
+    router,
     supabase,
-    uploadPhotos,
-    variantsEnabled,
   ]);
 
   useEffect(() => {

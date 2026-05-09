@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import type { SyntheticEvent } from "react";
 import { appendCrashLog } from "@/lib/crashlog";
 import { buildImageUrl } from "@/lib/imageUrl";
+import { isSavedMediaVariantUrl } from "@/lib/images/resolveMediaAssetUrl";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 
 const DATA_URI_RE = /^(data:|blob:)/i;
@@ -122,7 +123,7 @@ function FastImageInner({
     : undefined;
   const effectiveLoading = priority ? "eager" : loading || "lazy";
   const effectiveFetchPriority = priority ? "high" : fetchPriority || "auto";
-  const unoptimized = DATA_URI_RE.test(finalSrc);
+  const unoptimized = DATA_URI_RE.test(finalSrc) || isSavedMediaVariantUrl(finalSrc);
   const effectiveSizes = sizes || (fill ? "100vw" : undefined);
 
   const handleError = (event: SyntheticEvent<HTMLImageElement>) => {

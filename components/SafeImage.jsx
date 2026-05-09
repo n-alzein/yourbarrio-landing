@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { isSavedMediaVariantUrl } from "@/lib/images/resolveMediaAssetUrl";
 import { markImageFailed, resolveImageSrc } from "@/lib/safeImage";
 
 export default function SafeImage({
@@ -63,6 +64,7 @@ export default function SafeImage({
         data-placeholder={isPlaceholder ? "true" : undefined}
         onError={handleError}
         onLoad={handleLoad}
+        unoptimized={isSavedMediaVariantUrl(currentSrc)}
       />
     );
   }

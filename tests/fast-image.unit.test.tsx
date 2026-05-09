@@ -16,7 +16,7 @@ vi.mock("next/image", () => ({
       unoptimized,
       ...rest
     } = props;
-    return <img alt="" fetchPriority={fetchPriority} {...rest} />;
+    return <img alt="" data-unoptimized={unoptimized ? "true" : "false"} fetchPriority={fetchPriority} {...rest} />;
   },
 }));
 
@@ -64,5 +64,17 @@ describe("FastImage", () => {
     await waitFor(() => {
       expect(img.getAttribute("src")).toBe("/fallback.png");
     });
+  });
+
+  it("does not send saved Supabase variants back through image optimization", () => {
+    render(
+      <FastImage
+        src="https://example.supabase.co/storage/v1/object/public/business-photos/user/listing/asset/card_640.webp"
+        alt="Variant"
+        width={400}
+        height={300}
+      />
+    );
+    expect(screen.getByAltText("Variant")).toHaveAttribute("data-unoptimized", "true");
   });
 });

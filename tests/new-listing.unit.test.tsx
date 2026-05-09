@@ -8,7 +8,9 @@ let pushMock = vi.fn();
 let mockSupabase = null;
 let mockAuth = null;
 let insertMock = vi.fn();
+let updateMock = vi.fn();
 let fetchMock = vi.fn();
+let tempUploadCount = 0;
 const normalizeImageUploadMock = vi.fn(async (file) => file);
 const prepareEnhancementImageMock = vi.fn(async (file) => ({
   file,
@@ -44,6 +46,47 @@ vi.mock("@/lib/normalizeImageUpload", () => ({
   normalizeImageUpload: (...args) => normalizeImageUploadMock(...args),
   prepareEnhancementImage: (...args) => prepareEnhancementImageMock(...args),
   describeImageFile: (...args) => describeImageFileMock(...args),
+}));
+
+vi.mock("@/lib/images/tempMediaClient", () => ({
+  uploadTemporaryImage: async ({ file }) => {
+    tempUploadCount += 1;
+    const assetId = `temp-asset-${tempUploadCount}`;
+    await mockSupabase?.storage
+      ?.from("listing-photos")
+      ?.upload(
+        `user-1-${Date.now()}-${file.name}`,
+        file,
+        expect.objectContaining({ contentType: file.type || "image/jpeg" })
+      );
+    return {
+      ok: true,
+      previewUrl: `https://example.com/${file.name}`,
+      asset: {
+        id: assetId,
+        source_path: `tmp/user-1/session/${assetId}/source`,
+      },
+      upload_session_id: "session-1",
+    };
+  },
+  discardTemporaryImages: vi.fn(async () => ({ ok: true, deleted: 1 })),
+  commitTemporaryImages: async ({ assetIds }) => ({
+    ok: true,
+    listingPhotoVariants: assetIds.map((assetId) => ({
+      id: assetId,
+      media_asset_id: assetId,
+      original: {
+        url: `https://example.com/${assetId}/detail_1200.webp`,
+        path: `user-1/listings/listing-1/${assetId}/detail_1200.webp`,
+      },
+      variants: {
+        thumb_320: `https://example.com/${assetId}/thumb_320.webp`,
+        card_640: `https://example.com/${assetId}/card_640.webp`,
+        detail_1200: `https://example.com/${assetId}/detail_1200.webp`,
+      },
+      selectedVariant: "original",
+    })),
+  }),
 }));
 
 vi.mock("next/image", () => ({
@@ -124,6 +167,11 @@ function makeSupabaseMock({ insertError } = {}) {
       })),
     })),
   }));
+  updateMock = vi.fn(() => ({
+    eq: vi.fn(() => ({
+      eq: vi.fn(async () => ({ data: null, error: null })),
+    })),
+  }));
 
   return {
     storage: {
@@ -133,7 +181,7 @@ function makeSupabaseMock({ insertError } = {}) {
       if (table === "businesses") return businessesQuery;
       if (table === "users") return usersQuery;
       if (table === "listing_categories") return listingCategoriesQuery;
-      if (table === "listings") return { insert: insertMock };
+      if (table === "listings") return { insert: insertMock, update: updateMock };
       return { insert: insertMock };
     }),
     rpc: vi.fn(async () => ({ error: null })),
@@ -166,12 +214,18 @@ async function addPhoto(container) {
   await screen.findByRole("button", { name: "Enhance photo" });
 }
 
+function getLatestListingMediaUpdatePayload() {
+  return updateMock.mock.calls.at(-1)?.[0] || insertMock.mock.calls.at(-1)?.[0];
+}
+
 beforeEach(() => {
   pushMock = vi.fn();
   mockSupabase = null;
   mockAuth = null;
   insertMock = vi.fn();
+  updateMock = vi.fn();
   fetchMock = vi.fn();
+  tempUploadCount = 0;
   normalizeImageUploadMock.mockReset();
   normalizeImageUploadMock.mockImplementation(async (file) => file);
   prepareEnhancementImageMock.mockReset();
@@ -457,9 +511,10 @@ describe("NewListingPage", () => {
       expect(insertMock).toHaveBeenCalled();
     });
 
-    const firstPayload = insertMock.mock.calls[0][0];
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const firstPayload = getLatestListingMediaUpdatePayload();
     expect(JSON.parse(firstPayload.photo_url)[0]).toMatch(
-      /^https:\/\/example\.com\/user-1-.*-photo\.jpg$/
+      /^https:\/\/example\.com\/temp-asset-\d+\/detail_1200\.webp$/
     );
     expect(firstPayload.photo_variants[0].enhanced.url).toBe(
       "https://example.com/enhanced-photo.png"
@@ -502,7 +557,8 @@ describe("NewListingPage", () => {
       expect(insertMock).toHaveBeenCalled();
     });
 
-    const payload = insertMock.mock.calls[0][0];
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const payload = getLatestListingMediaUpdatePayload();
     expect(payload.photo_variants[0].selectedVariant).toBe("original");
   });
 
@@ -543,7 +599,8 @@ describe("NewListingPage", () => {
       expect(insertMock).toHaveBeenCalled();
     });
 
-    const payload = insertMock.mock.calls[0][0];
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const payload = getLatestListingMediaUpdatePayload();
     expect(JSON.parse(payload.photo_url)).toEqual(["https://example.com/enhanced-photo.png"]);
     expect(payload.photo_variants[0].selectedVariant).toBe("enhanced");
   });
@@ -621,9 +678,10 @@ describe("NewListingPage", () => {
       expect(pushMock).toHaveBeenCalledWith("/business/listings");
     });
 
-    const payload = insertMock.mock.calls[0][0];
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const payload = getLatestListingMediaUpdatePayload();
     expect(JSON.parse(payload.photo_url)[0]).toMatch(
-      /^https:\/\/example\.com\/user-1-.*-photo\.jpg$/
+      /^https:\/\/example\.com\/temp-asset-\d+\/detail_1200\.webp$/
     );
   });
 
@@ -711,7 +769,8 @@ describe("NewListingPage", () => {
       expect(insertMock).toHaveBeenCalled();
     });
 
-    const payload = insertMock.mock.calls.at(-1)[0];
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const payload = getLatestListingMediaUpdatePayload();
     expect(payload.cover_image_id).toBe("draft-uuid-2");
     expect(payload.photo_variants[0].id).toBe("draft-uuid-2");
   });
@@ -743,7 +802,8 @@ describe("NewListingPage", () => {
       expect(insertMock).toHaveBeenCalled();
     });
 
-    const payload = insertMock.mock.calls.at(-1)[0];
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const payload = getLatestListingMediaUpdatePayload();
     expect(payload.cover_image_id).toBe("draft-uuid-1");
     expect(payload.photo_variants[0].id).toBe("draft-uuid-1");
   });
