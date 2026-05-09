@@ -13,9 +13,10 @@ vi.mock("next/image", () => ({
       sizes,
       decoding,
       fetchPriority,
+      unoptimized,
       ...rest
     } = props;
-    return <img alt="" {...rest} />;
+    return <img alt="" fetchPriority={fetchPriority} {...rest} />;
   },
 }));
 

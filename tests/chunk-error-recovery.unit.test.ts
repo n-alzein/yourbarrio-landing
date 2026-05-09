@@ -55,6 +55,16 @@ describe("chunk error recovery", () => {
         status: 404,
       })
     ).toBe(true);
+    expect(
+      isChunkLoadError({
+        message: "GET /business-photos/missing-avatar.jpg failed with 404",
+      })
+    ).toBe(false);
+    expect(
+      isChunkLoadError({
+        message: "GET /business-gallery/missing-photo.jpg failed with 404",
+      })
+    ).toBe(false);
   });
 
   it("uses a sessionStorage guard to prevent recovery loops", () => {

@@ -13,6 +13,8 @@ const CHUNK_ERROR_PATTERNS = [
 ];
 
 const NEXT_STATIC_ASSET_PATTERN = /\/_next\/static\/(?:chunks|css)\//i;
+const NON_APP_ASSET_PATTERN =
+  /\/(?:api|business-photos|business-gallery|listing-photos|profile-photos|avatars)\//i;
 const HTTP_API_ERROR_PATTERNS = [
   /\b(?:401|403|404)\b/,
   /\bUnauthorized\b/i,
@@ -86,10 +88,54 @@ export function isChunkLoadError(error: unknown): boolean {
   if (!hasNextStaticAsset && status && status >= 400 && status < 500) {
     return false;
   }
+  if (!hasNextStaticAsset && NON_APP_ASSET_PATTERN.test(text)) {
+    return false;
+  }
   if (!hasNextStaticAsset && isHttpApiErrorText(text)) {
     return false;
   }
   return CHUNK_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+export function getChunkErrorDiagnostics(
+  error: unknown,
+  pathname = ""
+): {
+  name: string | null;
+  message: string | null;
+  stackFirstLine: string | null;
+  pathname: string;
+  matchedChunkSignature: boolean;
+} {
+  const record =
+    error && typeof error === "object" ? (error as Record<string, unknown>) : {};
+  const name =
+    typeof record.name === "string"
+      ? record.name
+      : error instanceof Error
+        ? error.name
+        : null;
+  const message =
+    typeof record.message === "string"
+      ? record.message
+      : error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : null;
+  const stack =
+    typeof record.stack === "string"
+      ? record.stack
+      : error instanceof Error
+        ? error.stack
+        : null;
+  return {
+    name,
+    message,
+    stackFirstLine: stack?.split("\n")[0] || null,
+    pathname,
+    matchedChunkSignature: isChunkLoadError(error),
+  };
 }
 
 export function hasChunkRecoveryGuard(storage: Storage | undefined | null): boolean {

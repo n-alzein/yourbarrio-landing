@@ -522,8 +522,10 @@ export default function SettingsPage() {
       .upload(fileName, file);
 
     if (!error) {
-      supabase.storage.from("business-photos").getPublicUrl(fileName);
-      const photoUrl = `business-photos/${fileName}`;
+      const { data: publicUrlData } = supabase.storage
+        .from("business-photos")
+        .getPublicUrl(fileName);
+      const photoUrl = publicUrlData?.publicUrl || `business-photos/${fileName}`;
 
       const { error: userPhotoError } = await supabase
         .from("users")

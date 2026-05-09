@@ -3,10 +3,21 @@
 import { useEffect } from "react";
 import { ChunkRecoveryFallback } from "@/components/ChunkErrorRecovery";
 import {
+  getChunkErrorDiagnostics,
   hasChunkRecoveryGuard,
   isChunkLoadError,
   markChunkRecoveryAttempted,
 } from "@/lib/chunkErrorRecovery";
+
+function shouldLogChunkDiagnostics() {
+  if (process.env.NEXT_PUBLIC_CHUNK_RECOVERY_DEBUG === "1") return true;
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage?.getItem("CHUNK_RECOVERY_DEBUG") === "1";
+  } catch {
+    return false;
+  }
+}
 
 export default function GlobalError({ error, reset }) {
   const isChunkError = isChunkLoadError(error);
@@ -21,7 +32,14 @@ export default function GlobalError({ error, reset }) {
       stack: error?.stack,
       pathname,
     });
-  }, [error]);
+    if (shouldLogChunkDiagnostics()) {
+      console.warn("[CHUNK_RECOVERY_DIAG]", {
+        source: "global-error",
+        result: isChunkError ? (alreadyRecovered ? "failed" : "refreshing") : "ignore",
+        ...getChunkErrorDiagnostics(error, pathname),
+      });
+    }
+  }, [alreadyRecovered, error, isChunkError]);
 
   useEffect(() => {
     if (!isChunkError || alreadyRecovered || typeof window === "undefined") return;

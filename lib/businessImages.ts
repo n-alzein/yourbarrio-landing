@@ -174,6 +174,28 @@ function toTrimmedString(value?: string | null): string | null {
   return trimmed || null;
 }
 
+function getSupabasePublicStorageBase(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return null;
+  return `${url.replace(/\/$/, "")}/storage/v1/object/public`;
+}
+
+function normalizeStoredBusinessImageUrl(value: string): string {
+  const trimmed = value.trim();
+  if (/^(https?:\/\/|data:|blob:)/i.test(trimmed)) return trimmed;
+  const key = trimmed.replace(/^\/+/, "");
+  if (
+    /^(?:public\/)?(?:business-photos|business-gallery|listing-photos|profile-photos|avatars)\//i.test(
+      key
+    )
+  ) {
+    const base = getSupabasePublicStorageBase();
+    if (base) return `${base}/${key}`;
+    return `/${key}`;
+  }
+  return trimmed;
+}
+
 function normalizePath(value: string): string {
   try {
     return new URL(value, "https://yourbarrio.local").pathname;
@@ -185,7 +207,9 @@ function normalizePath(value: string): string {
 function firstRealImageUrl(candidates: Array<string | null | undefined>): string | null {
   for (const candidate of candidates) {
     const value = toTrimmedString(candidate);
-    if (value && !isKnownBusinessPlaceholderImage(value)) return value;
+    if (value && !isKnownBusinessPlaceholderImage(value)) {
+      return normalizeStoredBusinessImageUrl(value);
+    }
   }
   return null;
 }

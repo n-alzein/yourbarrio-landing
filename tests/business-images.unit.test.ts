@@ -62,6 +62,45 @@ describe("business image resolvers", () => {
     );
   });
 
+  it("normalizes legacy Supabase bucket paths to public storage URLs when possible", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      expect(
+        getBusinessAvatarImage({
+          business_name: "Legacy Photo Shop",
+          profile_photo_url: "business-photos/avatar-123.jpg",
+        })
+      ).toEqual({
+        kind: "image",
+        src: "https://example.supabase.co/storage/v1/object/public/business-photos/avatar-123.jpg",
+      });
+      expect(
+        getBusinessCoverImage({
+          cover_photo_url: "business-photos/cover-123.jpg",
+        })
+      ).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/cover-123.jpg"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
+  it("keeps legacy bucket paths routable when the Supabase URL is unavailable", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    try {
+      expect(
+        getBusinessCoverImage({
+          cover_photo_url: "business-photos/cover-123.jpg",
+        })
+      ).toBe("/business-photos/cover-123.jpg");
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
   it("builds stable business initials", () => {
     expect(getBusinessInitials({ business_name: "Paper Harbor" })).toBe("PH");
     expect(getBusinessInitials({ business_name: "  123 Tech  " })).toBe("1T");

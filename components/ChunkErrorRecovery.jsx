@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   clearChunkRecoveryGuard,
+  getChunkErrorDiagnostics,
   hasChunkRecoveryGuard,
   isChunkLoadError,
   markChunkRecoveryAttempted,
@@ -14,13 +15,41 @@ function getSessionStorage() {
   return window.sessionStorage;
 }
 
+function shouldLogChunkRecoveryDiagnostics() {
+  if (process.env.NEXT_PUBLIC_CHUNK_RECOVERY_DEBUG === "1") return true;
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage?.getItem("CHUNK_RECOVERY_DEBUG") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function logChunkRecoveryDiagnostics(error, result, source) {
+  if (!shouldLogChunkRecoveryDiagnostics()) return;
+  const pathname =
+    typeof window !== "undefined" ? window.location.pathname || "" : "";
+  console.warn("[CHUNK_RECOVERY_DIAG]", {
+    source,
+    result,
+    ...getChunkErrorDiagnostics(error, pathname),
+  });
+}
+
 function recoverFromChunkError(error) {
   if (typeof window === "undefined") return "retry";
   const storage = getSessionStorage();
-  if (!isChunkLoadError(error)) return "ignore";
-  if (hasChunkRecoveryGuard(storage)) return "failed";
+  if (!isChunkLoadError(error)) {
+    logChunkRecoveryDiagnostics(error, "ignore", "recover");
+    return "ignore";
+  }
+  if (hasChunkRecoveryGuard(storage)) {
+    logChunkRecoveryDiagnostics(error, "failed", "recover");
+    return "failed";
+  }
 
   markChunkRecoveryAttempted(storage);
+  logChunkRecoveryDiagnostics(error, "refreshing", "recover");
   window.setTimeout(() => {
     window.location.reload();
   }, 80);
@@ -214,12 +243,7 @@ export class ChunkErrorBoundary extends React.Component {
       console.error("[APP_ERROR_BOUNDARY]", error, info);
       return;
     }
-    console.warn("[CHUNK_RECOVERY]", {
-      message: error?.message,
-      stack: error?.stack,
-      componentStack: info?.componentStack,
-      state: this.state.recoveryState,
-    });
+    logChunkRecoveryDiagnostics(error, this.state.recoveryState, "boundary");
     recoverFromChunkError(error);
   }
 
