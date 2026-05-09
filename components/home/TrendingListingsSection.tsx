@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { BrowseMode, ListingSummary } from "@/lib/browse/getHomeBrowseData";
 import { isSavedMediaVariantUrl } from "@/lib/images/resolveMediaAssetUrl";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
 import { getCustomerListingUrl, getListingUrl } from "@/lib/ids/publicRefs";
 import { sortListingsByAvailability } from "@/lib/inventory";
@@ -174,7 +174,7 @@ export default function TrendingListingsSection({
             const href =
               mode === "customer" ? getCustomerListingUrl(listing) : getListingUrl(listing);
             const imageSrc =
-              resolveListingCoverImageUrl(listing) || getListingCategoryPlaceholder(listing);
+              resolveListingCardImageUrl(listing) || getListingCategoryPlaceholder(listing);
             const businessName =
               String(listing?.business_name || "").trim() || "Local business";
             const displayPriceCents = getDisplayPriceCents(listing);

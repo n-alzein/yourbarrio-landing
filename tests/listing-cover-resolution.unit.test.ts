@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getSelectedPhotoUrl,
+  resolveListingCardImageUrl,
   resolveListingCoverImage,
   resolveListingCoverImageUrl,
 } from "@/lib/listingPhotos";
@@ -148,6 +149,68 @@ describe("listing cover resolution", () => {
       "https://example.com/full-original.jpg",
       "https://example.com/full-enhanced-2.jpg",
     ]);
+  });
+
+  it("uses the selected enhanced image for listing card thumbnails before stale generated variants", () => {
+    const listing = {
+      cover_image_id: "photo-1",
+      photo_url: JSON.stringify(["https://example.com/original.jpg"]),
+      photo_variants: [
+        {
+          id: "photo-1",
+          original: { url: "https://example.com/original.jpg" },
+          enhanced: { url: "https://example.com/enhanced.png" },
+          variants: {
+            card_640: "https://example.com/stale-card.webp",
+            thumb_320: "https://example.com/stale-thumb.webp",
+          },
+          selectedVariant: "enhanced",
+        },
+      ],
+    };
+
+    expect(resolveListingCardImageUrl(listing)).toBe("https://example.com/enhanced.png");
+    expect(resolveListingCoverImageUrl(listing)).toBe("https://example.com/enhanced.png");
+  });
+
+  it("uses active media card variants when the selected listing image is not enhanced", () => {
+    const listing = {
+      cover_image_id: "asset-1",
+      photo_variants: [
+        {
+          id: "asset-1",
+          media_asset_id: "asset-1",
+          original: { url: "https://example.com/detail.webp" },
+          variants: {
+            card_640: "https://example.com/card_640.webp",
+            thumb_320: "https://example.com/thumb_320.webp",
+          },
+          selectedVariant: "original",
+        },
+      ],
+    };
+
+    expect(resolveListingCardImageUrl(listing)).toBe("https://example.com/card_640.webp");
+  });
+
+  it("supports legacy card/thumb variant names before falling back to photo_url", () => {
+    expect(
+      resolveListingCardImageUrl({
+        photo_url: JSON.stringify(["https://example.com/original.jpg"]),
+        photo_variants: [
+          {
+            id: "photo-1",
+            original: { url: "https://example.com/original.jpg" },
+            variants: { card: "https://example.com/legacy-card.jpg" },
+            selectedVariant: "original",
+          },
+        ],
+      })
+    ).toBe("https://example.com/legacy-card.jpg");
+
+    expect(resolveListingCardImageUrl({ photo_url: "https://example.com/original.jpg" })).toBe(
+      "https://example.com/original.jpg"
+    );
   });
 
   it("supports draft photo arrays under the photos field used by some editor-shaped payloads", () => {

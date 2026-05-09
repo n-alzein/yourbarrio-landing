@@ -127,6 +127,44 @@ describe("listing cart-aware availability", () => {
     expect(image).not.toHaveClass("object-cover");
   });
 
+  it("renders saved listing enhanced thumbnails consistently with other card surfaces", () => {
+    render(
+      <ListingMarketplaceCard
+        fallbackLocationLabel="Long Beach"
+        variant="saved"
+        listing={{
+          id: "listing-enhanced",
+          public_id: "listing-enhanced",
+          title: "Background removed jacket",
+          price: 58,
+          business_id: "business-1",
+          business_name: "Barrio Threads",
+          photo_url: JSON.stringify(["https://example.com/original.jpg"]),
+          photo_variants: [
+            {
+              id: "photo-1",
+              original: { url: "https://example.com/original.jpg" },
+              enhanced: { url: "https://example.com/enhanced.png" },
+              variants: {
+                card_640: "https://example.com/stale-card.webp",
+                thumb_320: "https://example.com/stale-thumb.webp",
+              },
+              selectedVariant: "enhanced",
+            },
+          ],
+          cover_image_id: "photo-1",
+          inventory_status: "in_stock",
+          inventory_quantity: 1,
+        }}
+      />
+    );
+
+    const image = screen.getByAltText("Background removed jacket");
+    expect(image).toHaveAttribute("src", "https://example.com/enhanced.png");
+    expect(image).not.toHaveAttribute("src", "https://example.com/stale-card.webp");
+  });
+
+
   it("keeps default marketplace listing images product-safe for homepage cards", () => {
     render(
       <ListingMarketplaceCard

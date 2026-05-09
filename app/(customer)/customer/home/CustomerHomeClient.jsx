@@ -17,7 +17,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import FastImage from "@/components/FastImage";
 import {
   getAvailabilityBadgeStyle,
@@ -344,7 +344,7 @@ function CustomerHomePageInner({
           console.log("[CLICK_DIAG] TILE_POST", { tileId, href: window.location.href });
         });
       };
-  const coverFor = (listing) => resolveListingCoverImageUrl(listing) || null;
+  const coverFor = (listing) => resolveListingCardImageUrl(listing) || null;
 
   useEffect(() => {
     const urlQuery = (searchParams?.get("q") || "").trim();

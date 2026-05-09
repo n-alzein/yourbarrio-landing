@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Copy, LayoutGrid, Search, TableProperties } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { normalizeInventory } from "@/lib/inventory";
 import { useTheme } from "@/components/ThemeProvider";
 import SafeImage from "@/components/SafeImage";
@@ -720,7 +720,7 @@ export default function BusinessListingsPage() {
                       const editHref = `/business/listings/${encodeURIComponent(
                         getListingPublicRef(listing) || listing.id
                       )}/edit`;
-                      const coverImageUrl = resolveListingCoverImageUrl(listing);
+                      const coverImageUrl = resolveListingCardImageUrl(listing);
 
                       return (
                         <tr
@@ -900,14 +900,14 @@ export default function BusinessListingsPage() {
                         : "bg-slate-900 border-slate-700 hover:border-slate-600 hover:shadow-xl"
                     }`}
                   >
-                    {resolveListingCoverImageUrl(listing) ? (
+                    {resolveListingCardImageUrl(listing) ? (
                       <div
                         className={`relative h-56 w-full overflow-hidden ${
                           isLight ? "bg-white" : "bg-slate-800"
                         }`}
                       >
                         <SafeImage
-                          src={resolveListingCoverImageUrl(listing)}
+                          src={resolveListingCardImageUrl(listing)}
                           alt={listing.title}
                           className="h-full w-full transition-transform duration-300 group-hover:scale-105"
                           style={{ objectFit: "contain", objectPosition: "center" }}

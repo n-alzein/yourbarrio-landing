@@ -8,7 +8,7 @@ import {
 import { getLocationFromCookies } from "@/lib/location/getLocationFromCookies";
 import { findBusinessOwnerIdsForLocation } from "@/lib/location/businessLocationSearch";
 import { getNormalizedLocation, hasUsableLocationFilter } from "@/lib/location/filter";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { withListingPricing } from "@/lib/pricing";
 
 async function attachBusinessNames(client, listings) {
@@ -257,7 +257,7 @@ export async function GET(request) {
     listings = listings.map((listing) =>
       withListingPricing({
         ...listing,
-        photo_url: resolveListingCoverImageUrl(listing) || listing.photo_url || null,
+        photo_url: resolveListingCardImageUrl(listing) || listing.photo_url || null,
       })
     );
 

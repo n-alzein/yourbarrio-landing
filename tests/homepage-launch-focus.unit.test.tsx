@@ -24,6 +24,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/listingPhotos", () => ({
+  resolveListingCardImageUrl: () => null,
   resolveListingCoverImageUrl: () => null,
 }));
 

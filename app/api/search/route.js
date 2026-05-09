@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import {
   getListingsBrowseFilterCategoryNames,
   getListingsBrowseFilterCategorySlugs,
@@ -142,7 +142,7 @@ async function searchListings(supabase, term, category, { businessIds }) {
         listingCategorySlug: getListingCategorySlug(row, ""),
         listingCategoryName: getListingCategoryLabel(row, ""),
         city: row.city,
-        photo_url: resolveListingCoverImageUrl(row),
+        photo_url: resolveListingCardImageUrl(row),
         business_id: row.business_id,
         inventory_status: row.inventory_status,
         inventory_quantity: row.inventory_quantity,
@@ -178,7 +178,7 @@ async function searchListings(supabase, term, category, { businessIds }) {
     listingCategorySlug: getListingCategorySlug(row, ""),
     listingCategoryName: getListingCategoryLabel(row, ""),
     city: row.city,
-    photo_url: resolveListingCoverImageUrl(row),
+    photo_url: resolveListingCardImageUrl(row),
     business_id: row.business_id,
     inventory_status: row.inventory_status,
     inventory_quantity: row.inventory_quantity,

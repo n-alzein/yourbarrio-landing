@@ -90,6 +90,7 @@ describe("business listings page card hierarchy", () => {
     expect(source).toContain(">Listing name<");
     expect(source).not.toContain(">Image<");
     expect(source).toContain('className="flex min-w-0 items-start gap-3"');
+    expect(source).toContain("resolveListingCardImageUrl(listing)");
     expect(source).toContain('className="h-full w-full bg-white object-contain object-center"');
     expect(source).not.toContain('objectFit: "cover"');
   });

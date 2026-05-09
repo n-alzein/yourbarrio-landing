@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import SafeImage from "@/components/SafeImage";
 import {
   LISTING_CATEGORY_BY_SLUG,
@@ -165,7 +165,7 @@ export default async function CategoryListingsPage({
         ) : (
           <div className="grid gap-4 sm:gap-5 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {listings.map((item) => {
-              const cover = resolveListingCoverImageUrl(item);
+              const cover = resolveListingCardImageUrl(item);
               return (
                 <Link
                   key={item.id}

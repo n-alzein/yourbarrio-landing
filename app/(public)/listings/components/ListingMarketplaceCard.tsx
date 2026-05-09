@@ -11,7 +11,7 @@ import {
   getQuantityInCartForListingSelection,
   resolveListingQuantityState,
 } from "@/lib/cart/listingAvailability";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { getListingUrl } from "@/lib/ids/publicRefs";
 import { normalizeInventory } from "@/lib/inventory";
 import { calculateListingPricing } from "@/lib/pricing";
@@ -261,7 +261,7 @@ export default function ListingMarketplaceCard({
           }
         >
           <SafeImage
-            src={resolveListingCoverImageUrl(listing)}
+            src={resolveListingCardImageUrl(listing)}
             alt={listing.title || "Listing photo"}
             className={
               isSavedVariant

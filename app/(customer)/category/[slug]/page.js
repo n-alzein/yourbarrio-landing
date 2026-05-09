@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { getCustomerListingUrl } from "@/lib/ids/publicRefs";
 import {
   getListingCategory,
@@ -105,7 +105,7 @@ export default async function CategoryListingsPage({ params }) {
         ) : (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((item) => {
-              const cover = resolveListingCoverImageUrl(item);
+              const cover = resolveListingCardImageUrl(item);
               return (
                 <Link
                   key={item.id}
