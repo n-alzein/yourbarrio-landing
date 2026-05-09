@@ -46,7 +46,12 @@ export default function PublicBusinessProfileSkeleton({ withinProfileShell = fal
     <div className={outerClassName} data-testid="public-business-profile-skeleton">
       <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
         <div
-          className={`relative h-[360px] overflow-hidden sm:h-[320px] md:h-[300px] lg:h-[260px] xl:h-[280px] ${softSkeletonBlockClass}`}
+          className={`yb-public-business-profile-cover relative overflow-hidden ${softSkeletonBlockClass}`}
+          style={{
+            height: "var(--yb-business-profile-cover-height)",
+            minHeight: "var(--yb-business-profile-cover-height)",
+            maxHeight: "var(--yb-business-profile-cover-height)",
+          }}
           data-testid="public-business-profile-skeleton-cover"
           data-business-cover-source="defaultFallback"
         >

@@ -1104,10 +1104,19 @@ export function ProfileHero({
         <div
           data-testid="profile-hero-cover"
           data-business-cover-source={coverSource}
+          style={
+            isPublicFullBleed
+              ? {
+                  height: "var(--yb-business-profile-cover-height)",
+                  minHeight: "var(--yb-business-profile-cover-height)",
+                  maxHeight: "var(--yb-business-profile-cover-height)",
+                }
+              : undefined
+          }
           className={cx(
             "relative overflow-hidden",
             isPublicFullBleed
-              ? "h-[360px] sm:h-[320px] md:h-[300px] lg:h-[260px] xl:h-[280px]"
+              ? "yb-public-business-profile-cover"
               : isPreview
                 ? "h-[180px] sm:h-[220px] lg:h-[250px]"
                 : "h-[220px] sm:h-[260px] lg:h-[300px]"
@@ -1123,13 +1132,18 @@ export function ProfileHero({
               )}
             />
           ) : null}
-          <BusinessCoverSurface
-            business={profile}
-            src={coverSrc}
-            alt={`${name} cover`}
-            sizes="(max-width: 1280px) 100vw, 1200px"
-            priority
-          />
+          <div
+            className={isPublicFullBleed ? "yb-public-business-profile-cover-media" : "absolute inset-0"}
+            data-testid="profile-hero-cover-media"
+          >
+            <BusinessCoverSurface
+              business={profile}
+              src={coverSrc}
+              alt={`${name} cover`}
+              sizes="(max-width: 1280px) 100vw, 1200px"
+              priority
+            />
+          </div>
           {isPublicFullBleed ? (
             coverSource === "defaultFallback" ? (
               <>

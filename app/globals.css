@@ -66,6 +66,7 @@
   --yb-nav-h: 80px;
   --yb-nav-content-offset: 80px;
   --yb-nav-layout-h: 0px;
+  --yb-business-profile-cover-height: 360px;
 
   /* Legacy aliases (keep existing usages stable) */
   --background: var(--color-bg);
@@ -1485,6 +1486,52 @@ html[data-map-modal-open="1"] [data-home-tiles="1"] * {
 }
 html[data-map-modal-open="1"] [data-listing-tile="1"] {
   pointer-events: none !important;
+}
+
+.yb-public-business-profile-cover {
+  position: relative;
+  height: var(--yb-business-profile-cover-height, 360px);
+  min-height: var(--yb-business-profile-cover-height, 360px);
+  max-height: var(--yb-business-profile-cover-height, 360px);
+  overflow: hidden;
+}
+
+.yb-public-business-profile-cover-media {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 100%;
+}
+
+.yb-public-business-profile-cover-media > div,
+.yb-public-business-profile-cover-media > span,
+.yb-public-business-profile-cover-media img {
+  height: 100%;
+  min-height: 100%;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --yb-business-profile-cover-height: 320px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --yb-business-profile-cover-height: 300px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --yb-business-profile-cover-height: 260px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --yb-business-profile-cover-height: 280px;
+  }
 }
 
 /* Public/customer route wrappers force light background layers on first paint. */
