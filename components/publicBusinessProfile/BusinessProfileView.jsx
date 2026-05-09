@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
+import PublicBusinessProfileLayoutReset from "@/components/publicBusinessProfile/PublicBusinessProfileLayoutReset";
 import BusinessAbout from "@/components/publicBusinessProfile/BusinessAbout";
 import BusinessAnnouncementsPreview from "@/components/publicBusinessProfile/BusinessAnnouncementsPreview";
 import BusinessGalleryGrid from "@/components/publicBusinessProfile/BusinessGalleryGrid";
@@ -67,6 +68,9 @@ export default function BusinessProfileView({
       ].join(" ")}
       data-testid="public-business-profile-content"
     >
+      {heroVariant === "publicFullBleed" ? (
+        <PublicBusinessProfileLayoutReset />
+      ) : null}
       <PublicBusinessHero
         profile={profile}
         ratingSummary={ratingSummary}

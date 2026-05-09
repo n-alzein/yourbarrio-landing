@@ -1,12 +1,33 @@
 "use client";
 
+import { useLayoutEffect } from "react";
+import { usePathname } from "next/navigation";
 import NoticeBannerHost from "@/components/common/NoticeBannerHost";
+
+const STALE_PUBLIC_BANNER_HEIGHT_VARS = [
+  "--beta-banner-height",
+  "--yb-announcement-height",
+  "--yb-platform-announcement-height",
+  "--yb-notice-banner-height",
+  "--public-announcement-height",
+  "--public-route-announcement-height",
+];
+
+function resetPublicBannerOffsets() {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  STALE_PUBLIC_BANNER_HEIGHT_VARS.forEach((name) => {
+    root.style.setProperty(name, "0px");
+  });
+}
 
 export default function PublicRouteShell({
   children = null,
   className = "",
   gap = "none",
 }) {
+  const pathname = usePathname() || "/";
+  const showNoticeBanner = !(pathname === "/b" || pathname.startsWith("/b/"));
   const offsetGap =
     gap === "none"
       ? "0px"
@@ -24,6 +45,12 @@ export default function PublicRouteShell({
     "--public-shell-gap": offsetGap,
   };
 
+  useLayoutEffect(() => {
+    if (showNoticeBanner) return undefined;
+    resetPublicBannerOffsets();
+    return resetPublicBannerOffsets;
+  }, [showNoticeBanner, pathname]);
+
   return (
     <div
       className={`public-shell-content min-h-screen bg-[var(--yb-bg)] text-[var(--yb-text)]${className ? ` ${className}` : ""}`}
@@ -36,7 +63,7 @@ export default function PublicRouteShell({
         paddingTop: "var(--public-nav-offset)",
       }}
     >
-      <NoticeBannerHost audience="all" />
+      {showNoticeBanner ? <NoticeBannerHost audience="all" /> : null}
       <div style={{ paddingTop: "var(--public-shell-gap)" }}>{children}</div>
     </div>
   );

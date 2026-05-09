@@ -1,6 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 const profilePath = "/b/seed-shoreline-beauty";
+const announcementPayload = {
+  notice: {
+    id: "platform-announcement:test",
+    variant: "info",
+    priority: 900,
+    audience: "all",
+    title: "Platform announcement",
+    message: "Public banner test announcement",
+    dismissible: true,
+    sticky: false,
+  },
+};
 
 test.describe("public business profile hard refresh", () => {
   test.beforeEach(async ({ page }) => {
@@ -117,5 +129,64 @@ test.describe("public business profile hard refresh", () => {
         /fill.+height value of 0|height value of 0.+fill/i.test(message)
       )
     ).toEqual([]);
+  });
+
+  test("homepage announcement banner does not change business profile cover height", async ({
+    page,
+  }) => {
+    await page.route("**/api/platform-announcements/active", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(announcementPayload),
+      });
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const banner = page.getByText("Public banner test announcement").first();
+    await expect(banner).toBeVisible();
+    const bannerBox = await banner.boundingBox();
+    expect(bannerBox?.height).toBeGreaterThan(0);
+
+    await page.goto(profilePath, { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Public banner test announcement")).toHaveCount(0);
+    await expect(page.getByTestId("profile-hero-cover")).toBeVisible();
+    const profileCoverAfterBannerBox = await page
+      .getByTestId("profile-hero-cover")
+      .boundingBox();
+    const tabsAfterBannerBox = await page
+      .locator(".sticky")
+      .filter({ hasText: "About" })
+      .first()
+      .boundingBox();
+
+    expect(profileCoverAfterBannerBox?.height).toBeGreaterThanOrEqual(279);
+    expect(profileCoverAfterBannerBox?.height).toBeLessThanOrEqual(281);
+    expect(
+      (tabsAfterBannerBox?.y || 0) -
+        ((profileCoverAfterBannerBox?.y || 0) + (profileCoverAfterBannerBox?.height || 0))
+    ).toBeLessThanOrEqual(1);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const dismissButton = page.getByLabel("Dismiss notice");
+    await expect(dismissButton).toBeVisible();
+    await dismissButton.click();
+    await expect(page.getByText("Public banner test announcement")).toHaveCount(0);
+
+    await page.goto(profilePath, { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("profile-hero-cover")).toBeVisible();
+    const profileCoverAfterDismissBox = await page
+      .getByTestId("profile-hero-cover")
+      .boundingBox();
+    expect(profileCoverAfterDismissBox?.height).toBeGreaterThanOrEqual(279);
+    expect(profileCoverAfterDismissBox?.height).toBeLessThanOrEqual(281);
+    expect(Math.abs((profileCoverAfterDismissBox?.height || 0) - (profileCoverAfterBannerBox?.height || 0))).toBeLessThanOrEqual(1);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const profileCoverAfterHardRefreshBox = await page
+      .getByTestId("profile-hero-cover")
+      .boundingBox();
+    expect(profileCoverAfterHardRefreshBox?.height).toBeGreaterThanOrEqual(279);
+    expect(profileCoverAfterHardRefreshBox?.height).toBeLessThanOrEqual(281);
   });
 });
