@@ -91,6 +91,26 @@ describe("Edit listing save flow", () => {
     expect(editListingSource).toContain('router.push("/business/listings")');
   });
 
+  it("keeps new edit-page media commits inside the explicit save pipeline", () => {
+    const commitIndex = editListingSource.indexOf("async function commitPendingPhotos");
+    const saveIndex = editListingSource.indexOf("async function persistListing");
+    const addPhotoIndex = editListingSource.indexOf("const handleAddNewPhotos");
+    const setCoverIndex = editListingSource.indexOf("const handleSetCoverPhoto", addPhotoIndex);
+    const firstCommitCallAfterDefinition = editListingSource.indexOf(
+      "commitPendingPhotos(internalListingId, photos)",
+      commitIndex + 1
+    );
+
+    expect(commitIndex).toBeGreaterThan(-1);
+    expect(saveIndex).toBeGreaterThan(commitIndex);
+    expect(addPhotoIndex).toBeGreaterThan(-1);
+    expect(setCoverIndex).toBeGreaterThan(addPhotoIndex);
+    expect(firstCommitCallAfterDefinition).toBeGreaterThan(saveIndex);
+    expect(editListingSource.slice(addPhotoIndex, setCoverIndex)).not.toContain(
+      "commitTemporaryImages("
+    );
+  });
+
   it("keeps published edits published while staging draft changes separately", () => {
     expect(editListingSource).toContain('const publicationState = buildListingPublicationState(targetStatus);');
     expect(editListingSource).toContain("buildListingDraftData({");

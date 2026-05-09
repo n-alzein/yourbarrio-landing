@@ -14,7 +14,10 @@ import {
   createLocalPhotoDraft,
   getCoverPhotoDraft,
   getDraftDisplayUrl,
+  hasFailedPhotoUploads,
+  hasPendingPhotoUploads,
   orderPhotoDraftsWithCoverFirst,
+  revokeLocalPhotoDraftUrls,
   resolveCoverImageId,
 } from "@/lib/listingPhotoDrafts";
 import {
@@ -29,6 +32,7 @@ import {
   discardTemporaryImages,
   uploadTemporaryImage,
 } from "@/lib/images/tempMediaClient";
+import { useUnsavedListingCreateGuard } from "@/lib/useUnsavedListingCreateGuard";
 import {
   centsToDollarsInput,
   dollarsInputToCents,
@@ -105,6 +109,10 @@ export default function NewListingPage() {
   const [photos, setPhotos] = useState([]);
   const [coverImageId, setCoverImageId] = useState(null);
   const photosRef = useRef([]);
+  const uploadSessionIdRef = useRef(
+    `listing-create-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
+  const pendingRequestControllersRef = useRef(new Set());
   const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -116,11 +124,10 @@ export default function NewListingPage() {
   const previewHref = internalListingId
     ? `/business/listings/${encodeURIComponent(internalListingId)}/preview?fromEditor=1`
     : null;
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [touchedFields, setTouchedFields] = useState({});
+  const [hasAttemptedPublish, setHasAttemptedPublish] = useState(false);
   const [listingOptions, setListingOptions] = useState(createEmptyVariantPayload());
   const [listingOptionsErrors, setListingOptionsErrors] = useState(null);
-  const autosaveTimeoutRef = useRef(null);
   const lastSavedSignatureRef = useRef(null);
   const variantsEnabled = Boolean(listingOptions?.hasOptions);
   const activeVariantTotal = getActiveVariantQuantityTotal(listingOptions?.variants);
@@ -146,16 +153,14 @@ export default function NewListingPage() {
   }, [photos]);
 
   useEffect(() => {
-    setCoverImageId((current) => resolveCoverImageId(photos, current));
-  }, [photos]);
-
-  useEffect(() => {
     return () => {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
+      revokeLocalPhotoDraftUrls(photosRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    setCoverImageId((current) => resolveCoverImageId(photos, current));
+  }, [photos]);
 
   useEffect(() => {
     const client = getSupabaseBrowserClient() ?? supabase;
@@ -199,17 +204,26 @@ export default function NewListingPage() {
       }),
     [form, photos, businessFulfillmentDefaults, listingOptions]
   );
-  const draftSignature = useMemo(
-    () => buildListingSaveSignature({ form, photos, listingOptions, coverImageId }),
-    [form, photos, listingOptions, coverImageId]
-  );
   const hasDraftContent = useMemo(
     () => hasMeaningfulDraftContent({ form, photos, listingOptions }),
     [form, photos, listingOptions]
   );
-  const shouldShowFieldErrors = hasInteracted || Boolean(submitError);
-  const visibleFieldErrors = shouldShowFieldErrors ? publishValidation.fieldErrors : fieldErrors;
+  const shouldShowFieldError = useCallback(
+    (fieldName) => hasAttemptedPublish || Boolean(touchedFields[fieldName]),
+    [hasAttemptedPublish, touchedFields]
+  );
+  const visibleFieldErrors = useMemo(() => {
+    const errors = publishValidation.fieldErrors || {};
+    return Object.fromEntries(
+      Object.entries(errors).filter(([fieldName]) => shouldShowFieldError(fieldName))
+    );
+  }, [publishValidation.fieldErrors, shouldShowFieldError]);
   const publishDisabledReason = getListingPublishDisabledReason(publishValidation);
+  const hasPendingUploads = hasPendingPhotoUploads(photos);
+  const hasUploadFailures = hasFailedPhotoUploads(photos);
+  const shouldGuardCreateNavigation =
+    !internalListingId &&
+    (hasDraftContent || photos.length > 0 || hasPendingUploads || hasUploadFailures);
   const fulfillmentMode = useMemo(
     () => getFulfillmentModeFromBooleans(form.pickupEnabled, form.localDeliveryEnabled),
     [form.localDeliveryEnabled, form.pickupEnabled]
@@ -242,13 +256,18 @@ export default function NewListingPage() {
   }, [submitSuccess]);
 
   function markDirty() {
-    setHasInteracted(true);
     setSubmitError("");
     setSubmitSuccess("");
     if (saveState === "saved") {
       setSaveState("idle");
     }
   }
+
+  const markFieldTouched = useCallback((fieldName) => {
+    setTouchedFields((prev) =>
+      prev[fieldName] ? prev : { ...prev, [fieldName]: true }
+    );
+  }, []);
 
   function updateForm(nextValue) {
     markDirty();
@@ -257,11 +276,34 @@ export default function NewListingPage() {
     );
   }
 
+  const abortPendingPhotoRequests = useCallback(() => {
+    for (const controller of pendingRequestControllersRef.current) {
+      controller.abort();
+    }
+    pendingRequestControllersRef.current.clear();
+  }, []);
+
+  const { navigateWithGuard, markNavigationSafe } = useUnsavedListingCreateGuard({
+    enabled: shouldGuardCreateNavigation,
+    photos,
+    uploadSessionId: uploadSessionIdRef.current,
+    router,
+    abortPending: abortPendingPhotoRequests,
+    onDiscarded: () => {
+      setPhotos([]);
+      setCoverImageId(null);
+      setPhotoError("");
+      setSubmitError("");
+      setTouchedFields({});
+      setHasAttemptedPublish(false);
+    },
+  });
+
   const handleAddPhotos = async (files, inputMeta = {}) => {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;
+    markFieldTouched("photos");
 
-    const accepted = [];
     for (const file of incoming) {
       const source = inferListingPhotoSource(inputMeta);
       let normalizedFile;
@@ -303,45 +345,91 @@ export default function NewListingPage() {
             normalized: describeImageFile(normalizedFile),
           },
         });
+      const uploadingDraft = {
+        ...draft,
+        uploadStatus: "uploading",
+        uploadError: "",
+      };
+
+      markDirty();
+      setPhotoError("");
+      setPhotos((prev) => [...prev, uploadingDraft].slice(0, MAX_PHOTOS));
+      setCoverImageId((current) => current || uploadingDraft.id || null);
+
+      const uploadController = new AbortController();
+      pendingRequestControllersRef.current.add(uploadController);
       try {
         const uploaded = await uploadTemporaryImage({
           file: normalizedFile,
           purpose: "listing_image",
+          uploadSessionId: uploadSessionIdRef.current,
+          signal: uploadController.signal,
         });
-        const objectPreviewUrl = draft.original.previewUrl;
-        if (objectPreviewUrl) URL.revokeObjectURL(objectPreviewUrl);
-        accepted.push({
-          ...draft,
-          original: {
-            ...draft.original,
-            previewUrl: uploaded.previewUrl,
-            path: uploaded.asset.source_path || null,
-          },
-          tempUpload: {
-            assetId: uploaded.asset.id,
-            uploadSessionId: uploaded.upload_session_id,
-          },
-        });
+        setPhotos((prev) =>
+          prev.map((photo) =>
+            photo.id === draft.id
+              ? {
+                  ...photo,
+                  uploadStatus: "uploaded_temp",
+                  uploadError: "",
+                  original: {
+                    ...photo.original,
+                    publicUrl: uploaded.previewUrl,
+                    path: uploaded.asset.source_path || null,
+                  },
+                  tempUpload: {
+                    assetId: uploaded.asset.id,
+                    uploadSessionId: uploaded.upload_session_id,
+                  },
+                }
+              : photo
+          )
+        );
       } catch (error) {
-        if (draft.original.previewUrl) URL.revokeObjectURL(draft.original.previewUrl);
-        setPhotoError(error?.message || "Image upload failed. Please try again.");
+        if (uploadController.signal.aborted) continue;
+        setPhotos((prev) =>
+          prev.map((photo) =>
+            photo.id === draft.id
+              ? {
+                  ...photo,
+                  uploadStatus: "failed",
+                  uploadError: "Upload failed. Try again.",
+                }
+              : photo
+          )
+        );
+        setPhotoError(error?.message || "Upload failed. Try again.");
+      } finally {
+        pendingRequestControllersRef.current.delete(uploadController);
       }
     }
-
-    if (!accepted.length) return;
-
-    markDirty();
-    setPhotoError("");
-    setPhotos((prev) => [...prev, ...accepted].slice(0, MAX_PHOTOS));
-    setCoverImageId((current) => current || accepted[0]?.id || null);
   };
+
+  const handleStableRemotePreview = useCallback((photoId) => {
+    setPhotos((prev) =>
+      prev.map((photo) => {
+        if (photo.id !== photoId) return photo;
+        const previewUrl = photo?.original?.previewUrl;
+        if (!previewUrl?.startsWith?.("blob:") || !photo?.original?.publicUrl) return photo;
+        URL.revokeObjectURL(previewUrl);
+        return {
+          ...photo,
+          original: {
+            ...photo.original,
+            previewUrl: photo.original.publicUrl,
+          },
+        };
+      })
+    );
+  }, []);
 
   const handleRemovePhoto = (photoId) => {
     markDirty();
+    markFieldTouched("photos");
     enhancementAttemptsRef.current.delete(photoId);
     setPhotos((prev) => {
       const target = prev.find((photo) => photo.id === photoId);
-      if (target?.status === "new" && target?.original?.previewUrl) {
+      if (target?.original?.previewUrl?.startsWith?.("blob:")) {
         URL.revokeObjectURL(target.original.previewUrl);
       }
       if (target?.tempUpload?.assetId) {
@@ -445,6 +533,13 @@ export default function NewListingPage() {
             publicUrl: committed.original?.url || null,
             path: committed.original?.path || null,
           },
+          enhanced: committed.enhanced
+            ? {
+                ...(photo.enhanced || {}),
+                publicUrl: committed.enhanced.url || null,
+                path: committed.enhanced.path || null,
+              }
+            : photo.enhanced,
           variants: committed.variants || null,
         };
       })
@@ -454,41 +549,42 @@ export default function NewListingPage() {
   const persistListing = useCallback(async ({ targetStatus, source }) => {
     const client = getSupabaseBrowserClient() ?? supabase;
     if (!client || !accountId) {
-      if (source !== "autosave") {
-        setSubmitError("Connection not ready. Please try again.");
-      }
+      setSubmitError("Connection not ready. Please try again.");
       return { ok: false };
     }
 
     const isPublish = targetStatus === "published";
     const validation = publishValidation;
 
+    if (hasPendingUploads) {
+      setSubmitError("Photo uploads are still in progress. Please wait before saving.");
+      return { ok: false };
+    }
+    if (hasUploadFailures) {
+      setSubmitError("Remove failed photo uploads before saving.");
+      return { ok: false };
+    }
+
     if (!validation.listingOptionsValidation.ok) {
       setListingOptionsErrors(validation.listingOptionsValidation.errors);
-      if (source !== "autosave" || isPublish) {
-        setFieldErrors(validation.fieldErrors);
-        setSubmitError(
-          validation.fieldErrors.options || "Finish the product options section."
-        );
-      }
+      setSubmitError(
+        validation.fieldErrors.options || "Finish the product options section."
+      );
       return { ok: false };
     }
 
     if (isPublish && !validation.ok) {
-      setFieldErrors(validation.fieldErrors);
+      setHasAttemptedPublish(true);
       setSubmitError(validation.formError || "Complete the required fields before publishing.");
       return { ok: false };
     }
 
-    setFieldErrors(isPublish ? validation.fieldErrors : {});
     setListingOptionsErrors(null);
     setSaving(true);
     setSaveAction(source);
     setSaveState("saving");
     setSubmitError("");
-    if (source !== "autosave") {
-      setSubmitSuccess("");
-    }
+    setSubmitSuccess("");
 
     try {
       const hasPendingPhotos = photos.some((photo) => photo?.tempUpload?.assetId);
@@ -627,6 +723,7 @@ export default function NewListingPage() {
       setSaveState("saved");
 
       if (isPublish) {
+        markNavigationSafe();
         setSubmitSuccess("Listing published! Redirecting...");
         router.push("/business/listings");
       } else if (source === "manual") {
@@ -658,36 +755,38 @@ export default function NewListingPage() {
     form,
     internalListingId,
     listingOptions,
+    markNavigationSafe,
     photos,
     publishValidation,
     router,
     supabase,
+    hasPendingUploads,
+    hasUploadFailures,
   ]);
 
-  useEffect(() => {
-    if (!hasDraftContent) return;
-    if (!accountId) return;
-    if (saving) return;
-    if (draftSignature === lastSavedSignatureRef.current) return;
-
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current);
-    }
-
-    autosaveTimeoutRef.current = setTimeout(() => {
-      persistListing({ targetStatus: "draft", source: "autosave" });
-    }, 1500);
-
-    return () => {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
-    };
-  }, [accountId, draftSignature, hasDraftContent, persistListing, saving]);
+  const handleBackToListings = useCallback(() => {
+    void navigateWithGuard("/business/listings");
+  }, [navigateWithGuard]);
 
   async function handleEnhancePhoto(photoId) {
     const target = photosRef.current.find((photo) => photo.id === photoId);
     if (!target?.original?.file) return;
+    if (!target?.tempUpload?.assetId) {
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId
+            ? {
+                ...photo,
+                enhancement: {
+                  ...photo.enhancement,
+                  error: "Wait for the upload to finish before enhancing this photo.",
+                },
+              }
+            : photo
+        )
+      );
+      return;
+    }
     const attemptCount = (enhancementAttemptsRef.current.get(photoId) || 0) + 1;
     enhancementAttemptsRef.current.set(photoId, attemptCount);
 
@@ -714,6 +813,7 @@ export default function NewListingPage() {
       });
       const formData = new FormData();
       formData.append("image", prepared.file, prepared.file.name || "listing-photo.jpg");
+      formData.append("mediaAssetId", target.tempUpload.assetId);
       formData.append("background", target.enhancement.background);
       formData.append("imageSource", target.source || "unknown");
       formData.append("imageNormalized", String(Boolean(target.normalization?.converted)));
@@ -752,9 +852,14 @@ export default function NewListingPage() {
           describeImageFile(prepared.file)?.name === describeImageFile(target.original.file)?.name,
       });
 
+      const enhanceController = new AbortController();
+      pendingRequestControllersRef.current.add(enhanceController);
       const response = await fetch("/api/images/enhance", {
         method: "POST",
         body: formData,
+        signal: enhanceController.signal,
+      }).finally(() => {
+        pendingRequestControllersRef.current.delete(enhanceController);
       });
       const payload = await response.json();
 
@@ -816,6 +921,7 @@ export default function NewListingPage() {
         )
       );
     } catch (error) {
+      if (error?.name === "AbortError") return;
       if (process.env.NODE_ENV !== "production") {
         logListingPhotoDebug("enhance.catch", {
           source: target.source || "unknown",
@@ -848,7 +954,7 @@ export default function NewListingPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setHasInteracted(true);
+    setHasAttemptedPublish(true);
     await persistListing({ targetStatus: "published", source: "publish" });
   }
 
@@ -893,7 +999,7 @@ export default function NewListingPage() {
         <div className="mb-8">
           <button
             type="button"
-            onClick={() => router.push("/business/listings")}
+            onClick={handleBackToListings}
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
             disabled={saving}
             data-testid="listing-editor-exit"
@@ -913,7 +1019,7 @@ export default function NewListingPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           <div className="grid gap-8 lg:grid-cols-12 lg:items-start">
             <div className="order-1 space-y-6 lg:order-2 lg:col-span-5">
               <div className={`space-y-8 lg:sticky lg:top-24 ${columnSurface}`}>
@@ -929,6 +1035,7 @@ export default function NewListingPage() {
                   onChooseVariant={handleChooseVariant}
                   onBackgroundChange={handleBackgroundChange}
                   onSetCoverPhoto={handleSetCoverPhoto}
+                  onStableRemotePreview={handleStableRemotePreview}
                   canAddMore={photos.length < MAX_PHOTOS}
                 />
                 {visibleFieldErrors.photos ? (
@@ -965,6 +1072,7 @@ export default function NewListingPage() {
                       className={inputBase}
                       placeholder="Ex: House-made cold brew concentrate"
                       value={form.title}
+                      onBlur={() => markFieldTouched("title")}
                       onChange={(e) =>
                         updateForm((prev) => ({ ...prev, title: e.target.value }))
                       }
@@ -981,6 +1089,7 @@ export default function NewListingPage() {
                       onChange={(nextDescription) =>
                         updateForm((prev) => ({ ...prev, description: nextDescription }))
                       }
+                      onBlur={() => markFieldTouched("description")}
                       minHeight={180}
                       placeholder=""
                       helpText="Use headings, bullets, and links to make details easy to scan."
@@ -991,9 +1100,10 @@ export default function NewListingPage() {
                       category={form.category}
                       value={form.description}
                       targetId={internalListingId || undefined}
-                      onApply={(description) =>
-                        updateForm((prev) => ({ ...prev, description }))
-                      }
+                      onApply={(description) => {
+                        markFieldTouched("description");
+                        updateForm((prev) => ({ ...prev, description }));
+                      }}
                       context="listing-editor"
                     />
                     {visibleFieldErrors.description ? (
@@ -1010,6 +1120,7 @@ export default function NewListingPage() {
                         id="listing-category"
                         className={selectBase}
                         value={form.category}
+                        onBlur={() => markFieldTouched("category")}
                         onChange={(e) =>
                           updateForm((prev) => ({ ...prev, category: e.target.value }))
                         }
@@ -1042,6 +1153,7 @@ export default function NewListingPage() {
                         type="number"
                         placeholder="Ex: 49.99"
                         value={form.price}
+                        onBlur={() => markFieldTouched("price")}
                         onChange={(e) =>
                           updateForm((prev) => ({ ...prev, price: e.target.value }))
                         }
@@ -1252,6 +1364,7 @@ export default function NewListingPage() {
                           inputMode="decimal"
                           placeholder="Ex: 5.00"
                           value={form.deliveryFee}
+                          onBlur={() => markFieldTouched("deliveryFee")}
                           onChange={(e) =>
                             updateForm((prev) => ({
                               ...prev,
@@ -1300,8 +1413,18 @@ export default function NewListingPage() {
                   !previewHref ? (
                     <p className="text-slate-500">Save draft first to preview latest changes.</p>
                   ) : null}
-                  {!submitError && saveState !== "saving" && !submitSuccess && saveState !== "saved" && !publishValidation.ok ? (
-                    <p className="text-slate-500">{publishDisabledReason}</p>
+                  {!submitError &&
+                  saveState !== "saving" &&
+                  !submitSuccess &&
+                  saveState !== "saved" &&
+                  (hasPendingUploads || hasUploadFailures || !publishValidation.ok) ? (
+                    <p className="text-slate-500">
+                      {hasPendingUploads
+                        ? "Photo uploads are still in progress."
+                        : hasUploadFailures
+                          ? "Remove failed photo uploads before saving."
+                          : publishDisabledReason}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex flex-col-reverse gap-3 sm:flex-row">
@@ -1327,7 +1450,7 @@ export default function NewListingPage() {
                   <button
                     type="button"
                     onClick={handleSaveDraft}
-                    disabled={saving}
+                    disabled={saving || hasPendingUploads || hasUploadFailures}
                     className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Save draft
@@ -1335,7 +1458,7 @@ export default function NewListingPage() {
 
                   <button
                     type="submit"
-                    disabled={saving || !publishValidation.ok}
+                    disabled={saving || hasPendingUploads || hasUploadFailures}
                     className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {saving && saveAction === "publish" ? "Publishing..." : "Publish listing"}

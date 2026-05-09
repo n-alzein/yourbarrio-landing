@@ -34,6 +34,7 @@ function ToolButton({ onClick, active = false, disabled = false, label }) {
 export default function RichTextDescriptionEditor({
   value,
   onChange,
+  onBlur,
   label = "Description",
   helpText = "",
   error = "",
@@ -70,6 +71,12 @@ export default function RichTextDescriptionEditor({
         class:
           "yb-rich-editor prose prose-invert max-w-none px-4 py-3 text-sm text-white focus:outline-none",
         "aria-label": label,
+      },
+      handleDOMEvents: {
+        blur: () => {
+          onBlur?.();
+          return false;
+        },
       },
     },
     onUpdate: ({ editor: currentEditor }) => {

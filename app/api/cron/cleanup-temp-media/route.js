@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getMediaServiceClient } from "@/lib/images/mediaAssets.server";
+import {
+  getMediaAssetStoragePaths,
+  getMediaServiceClient,
+} from "@/lib/images/mediaAssets.server";
 import { redactMediaErrorMessage } from "@/lib/images/redactMediaError";
 
 const DEFAULT_BATCH_SIZE = 50;
@@ -52,17 +55,7 @@ export async function GET(request) {
   }
 
   for (const asset of assets || []) {
-    await removeStoragePaths(client, asset.bucket, [
-      asset.source_path,
-      asset.original_path,
-      asset.thumb_path,
-      asset.card_path,
-      asset.detail_path,
-      asset.cover_mobile_path,
-      asset.cover_desktop_path,
-      asset.avatar_128_path,
-      asset.avatar_256_path,
-    ]);
+    await removeStoragePaths(client, asset.bucket, getMediaAssetStoragePaths(asset));
   }
 
   if (assets?.length) {

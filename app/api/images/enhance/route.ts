@@ -6,6 +6,11 @@ import {
   enhancePhotoWithPhotoroom,
   type PhotoroomBackgroundMode,
 } from "@/lib/server/photoroom";
+import {
+  getMediaServiceClient,
+  MEDIA_BUCKET,
+} from "@/lib/images/mediaAssets.server";
+import { buildSupabasePublicUrl } from "@/lib/images/resolveMediaAssetUrl";
 
 const routeLimiter = rateLimit({ interval: 10 * 60_000, uniqueTokenPerInterval: 200 });
 const ALLOWED_BACKGROUNDS = new Set<PhotoroomBackgroundMode>(["original", "white", "soft_gray"]);
@@ -15,18 +20,10 @@ function buildDebugPayload(debug: Record<string, unknown>) {
   return debug;
 }
 
-function buildAssetPath({
-  userId,
-  extension,
-}: {
-  userId: string;
-  extension: string;
-}) {
-  const token =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return `enhanced/${userId}/${Date.now()}-${token}.${extension}`;
+function buildEnhancedPath(sourcePath: string | null) {
+  const basePath = String(sourcePath || "").replace(/\/source$/, "");
+  if (!basePath || !basePath.startsWith("tmp/")) return null;
+  return `${basePath}/enhanced.webp`;
 }
 
 export async function POST(request: Request) {
@@ -60,6 +57,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const image = formData.get("image");
+    const mediaAssetId = String(formData.get("mediaAssetId") || "").trim();
     const imageSource = String(formData.get("imageSource") || "unknown").trim() || "unknown";
     const imageNormalized = String(formData.get("imageNormalized") || "false").trim() === "true";
     const enhancementAttempt = Number(formData.get("enhancementAttempt") || 1);
@@ -79,6 +77,43 @@ export async function POST(request: Request) {
           error: { code: "INVALID_FILE", message: "Upload a supported image before enhancing it." },
         },
         { status: 400 }
+      );
+    }
+
+    if (!mediaAssetId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "MEDIA_ASSET_REQUIRED",
+            message: "Upload the image before enhancing it.",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const mediaClient = getMediaServiceClient();
+    const { data: mediaAsset, error: mediaAssetError } = await mediaClient
+      .from("media_assets")
+      .select("*")
+      .eq("id", mediaAssetId)
+      .eq("owner_user_id", access.effectiveUserId)
+      .eq("status", "temporary")
+      .maybeSingle();
+
+    if (mediaAssetError) throw mediaAssetError;
+    const path = buildEnhancedPath(mediaAsset?.source_path || mediaAsset?.original_path || null);
+    if (!mediaAsset || mediaAsset.bucket !== MEDIA_BUCKET || !path) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "MEDIA_ASSET_NOT_FOUND",
+            message: "Temporary upload could not be found.",
+          },
+        },
+        { status: 404 }
       );
     }
 
@@ -141,11 +176,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const path = buildAssetPath({
-      userId: access.effectiveUserId,
-      extension: enhanced.extension,
-    });
-
     if (process.env.NODE_ENV !== "production") {
       console.info("[images.enhance] upload_metadata", {
         userId: access.effectiveUserId,
@@ -158,12 +188,12 @@ export async function POST(request: Request) {
       });
     }
 
-    const { error: uploadError } = await access.client.storage
-      .from("listing-photos")
+    const { error: uploadError } = await mediaClient.storage
+      .from(MEDIA_BUCKET)
       .upload(path, new Uint8Array(enhanced.buffer), {
         contentType: enhanced.contentType,
         cacheControl: "3600",
-        upsert: false,
+        upsert: true,
       });
 
     if (uploadError) {
@@ -179,13 +209,19 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data } = access.client.storage.from("listing-photos").getPublicUrl(path);
+    const { error: updateError } = await mediaClient
+      .from("media_assets")
+      .update({ enhanced_path: path })
+      .eq("id", mediaAsset.id)
+      .eq("owner_user_id", access.effectiveUserId)
+      .eq("status", "temporary");
+    if (updateError) throw updateError;
 
     return NextResponse.json(
       {
         ok: true,
         image: {
-          publicUrl: data?.publicUrl || null,
+          publicUrl: buildSupabasePublicUrl(MEDIA_BUCKET, path),
           path,
           contentType: enhanced.contentType,
           isFallbackOriginal: false,

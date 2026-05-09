@@ -7,10 +7,15 @@ const migrationPath = path.join(
   process.cwd(),
   "supabase/migrations/20260509120000_add_media_assets_lifecycle.sql"
 );
+const enhancedPathMigrationPath = path.join(
+  process.cwd(),
+  "supabase/migrations/20260509171814_add_enhanced_path_to_media_assets.sql"
+);
 const initMigrationPath = path.join(process.cwd(), "supabase/migrations/20251205204210_init.sql");
 const stagingSchemaPath = path.join(process.cwd(), "staging-schema.sql");
 
 const migrationSource = readFileSync(migrationPath, "utf8");
+const enhancedPathMigrationSource = readFileSync(enhancedPathMigrationPath, "utf8");
 const initMigrationSource = readFileSync(initMigrationPath, "utf8");
 const stagingSchemaSource = readFileSync(stagingSchemaPath, "utf8");
 const imageVariantsSource = readFileSync(
@@ -72,6 +77,14 @@ describe("media_assets RLS hardening", () => {
     expect(migrationSource).toContain("status = 'active'");
   });
 
+  it("tracks enhanced listing files on the media asset lifecycle row", () => {
+    expect(migrationSource).toContain("enhanced_path text NULL");
+    expect(migrationSource).toContain("ADD COLUMN IF NOT EXISTS enhanced_path text NULL");
+    expect(enhancedPathMigrationSource).toContain(
+      "add column if not exists enhanced_path text null"
+    );
+  });
+
   it("keeps owner and business-owner read policies in place", () => {
     expect(migrationSource).toContain("CREATE POLICY media_assets_owner_select");
     expect(migrationSource).toContain("USING (auth.uid() = owner_user_id)");
@@ -122,9 +135,12 @@ describe("media asset server-operation hardening", () => {
     expect(commitRoute).toContain("ownerUserId: user.id");
     expect(cleanupRoute).toContain("process.env.CRON_SECRET");
     expect(cleanupRoute).toContain("status\", \"temporary\"");
+    expect(cleanupRoute).toContain("getMediaAssetStoragePaths(asset)");
     expect(mediaServer).toContain("getSupabaseServerClient as getServiceRoleClient");
     expect(mediaServer).toContain(".eq(\"owner_user_id\", ownerUserId)");
     expect(mediaServer).toContain(".eq(\"business_id\", ownerUserId)");
+    expect(mediaServer).toContain("asset?.enhanced_path");
+    expect(mediaServer).toContain("enhancedTempPath || tempPath");
   });
 });
 

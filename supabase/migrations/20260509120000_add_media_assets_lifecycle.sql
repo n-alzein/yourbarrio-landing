@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.media_assets (
   cover_desktop_path text NULL,
   avatar_128_path text NULL,
   avatar_256_path text NULL,
+  enhanced_path text NULL,
   public_url text NULL,
   width integer NULL,
   height integer NULL,
@@ -32,6 +33,9 @@ CREATE TABLE IF NOT EXISTS public.media_assets (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.media_assets
+  ADD COLUMN IF NOT EXISTS enhanced_path text NULL;
 
 DO $$
 BEGIN

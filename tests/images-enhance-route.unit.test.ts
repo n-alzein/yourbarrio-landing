@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getBusinessDataClientForRequestMock = vi.fn();
 const enhancePhotoWithPhotoroomMock = vi.fn();
+const getMediaServiceClientMock = vi.fn();
 const uploadMock = vi.fn();
-const getPublicUrlMock = vi.fn();
+const mediaUpdateMock = vi.fn();
+const mediaMaybeSingleMock = vi.fn();
 
 vi.mock("@/lib/business/getBusinessDataClientForRequest", () => ({
   getBusinessDataClientForRequest: (...args) =>
@@ -18,29 +20,64 @@ vi.mock("@/lib/server/photoroom", async () => {
   };
 });
 
+vi.mock("@/lib/images/mediaAssets.server", async () => {
+  const actual = await vi.importActual("@/lib/images/mediaAssets.server");
+  return {
+    ...actual,
+    MEDIA_BUCKET: "business-photos",
+    getMediaServiceClient: (...args) => getMediaServiceClientMock(...args),
+  };
+});
+
 describe("POST /api/images/enhance", () => {
   beforeEach(() => {
     getBusinessDataClientForRequestMock.mockReset();
     enhancePhotoWithPhotoroomMock.mockReset();
+    getMediaServiceClientMock.mockReset();
     uploadMock.mockReset();
-    getPublicUrlMock.mockReset();
+    mediaUpdateMock.mockReset();
+    mediaMaybeSingleMock.mockReset();
 
     uploadMock.mockResolvedValue({ error: null });
-    getPublicUrlMock.mockReturnValue({
-      data: { publicUrl: "https://example.com/enhanced.png" },
+    mediaUpdateMock.mockReturnValue({
+      eq: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(async () => ({ error: null })),
+        })),
+      })),
+    });
+    mediaMaybeSingleMock.mockResolvedValue({
+      data: {
+        id: "asset-1",
+        bucket: "business-photos",
+        source_path: "tmp/user-1/session-1/asset-1/source",
+      },
+      error: null,
     });
 
     getBusinessDataClientForRequestMock.mockResolvedValue({
       ok: true,
       effectiveUserId: "user-1",
-      client: {
-        storage: {
-          from: vi.fn(() => ({
-            upload: uploadMock,
-            getPublicUrl: getPublicUrlMock,
-          })),
-        },
+      client: {},
+    });
+    getMediaServiceClientMock.mockReturnValue({
+      storage: {
+        from: vi.fn(() => ({
+          upload: uploadMock,
+        })),
       },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: mediaMaybeSingleMock,
+              })),
+            })),
+          })),
+        })),
+        update: mediaUpdateMock,
+      })),
     });
   });
 
@@ -59,6 +96,7 @@ describe("POST /api/images/enhance", () => {
     const formData = new FormData();
     formData.append("image", new File(["photo"], "listing.jpg", { type: "image/jpeg" }));
     formData.append("background", "white");
+    formData.append("mediaAssetId", "asset-1");
 
     const response = await POST({
       formData: async () => formData,
@@ -70,7 +108,8 @@ describe("POST /api/images/enhance", () => {
     expect(payload).toMatchObject({
       ok: true,
       image: {
-        publicUrl: "https://example.com/enhanced.png",
+        publicUrl: expect.stringContaining("/business-photos/tmp/user-1/session-1/asset-1/enhanced.webp"),
+        path: "tmp/user-1/session-1/asset-1/enhanced.webp",
       },
       enhancement: {
         background: "white",
@@ -80,9 +119,14 @@ describe("POST /api/images/enhance", () => {
     });
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(uploadMock).toHaveBeenCalledWith(
-      expect.stringMatching(/^enhanced\/user-1\//),
+      "tmp/user-1/session-1/asset-1/enhanced.webp",
       expect.any(Uint8Array),
-      expect.objectContaining({ contentType: "image/png" })
+      expect.objectContaining({ contentType: "image/png", upsert: true })
+    );
+    expect(mediaUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enhanced_path: "tmp/user-1/session-1/asset-1/enhanced.webp",
+      })
     );
   });
 
@@ -102,6 +146,7 @@ describe("POST /api/images/enhance", () => {
     formData.append("image", new File(["photo"], "listing.jpg", { type: "image/jpeg" }));
     formData.append("background", "white");
     formData.append("imageSource", "mobile_camera");
+    formData.append("mediaAssetId", "asset-1");
 
     const response = await POST({
       formData: async () => formData,
@@ -131,6 +176,7 @@ describe("POST /api/images/enhance", () => {
     const { POST } = await import("@/app/api/images/enhance/route");
     const formData = new FormData();
     formData.append("image", new File(["photo"], "listing.jpg", { type: "image/jpeg" }));
+    formData.append("mediaAssetId", "asset-1");
 
     const response = await POST({
       formData: async () => formData,

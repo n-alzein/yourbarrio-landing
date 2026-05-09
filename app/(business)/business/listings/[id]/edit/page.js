@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
@@ -14,8 +14,11 @@ import {
   createLocalPhotoDraft,
   getCoverPhotoDraft,
   getDraftDisplayUrl,
+  hasFailedPhotoUploads,
+  hasPendingPhotoUploads,
   hydratePhotoDrafts,
   orderPhotoDraftsWithCoverFirst,
+  revokeLocalPhotoDraftUrls,
   resolveCoverImageId,
 } from "@/lib/listingPhotoDrafts";
 import {
@@ -139,6 +142,8 @@ export default function EditListingPage() {
   const [photoError, setPhotoError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const [touchedFields, setTouchedFields] = useState({});
+  const [hasAttemptedPublish, setHasAttemptedPublish] = useState(false);
   const [internalListingId, setInternalListingId] = useState(null);
   const [listingStatus, setListingStatus] = useState("draft");
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
@@ -161,7 +166,19 @@ export default function EditListingPage() {
       }),
     [form, photos, businessFulfillmentDefaults, listingOptions]
   );
+  const shouldShowFieldError = useCallback(
+    (fieldName) => hasAttemptedPublish || Boolean(touchedFields[fieldName]),
+    [hasAttemptedPublish, touchedFields]
+  );
+  const visibleFieldErrors = useMemo(() => {
+    const errors = publishValidation.fieldErrors || {};
+    return Object.fromEntries(
+      Object.entries(errors).filter(([fieldName]) => shouldShowFieldError(fieldName))
+    );
+  }, [publishValidation.fieldErrors, shouldShowFieldError]);
   const publishDisabledReason = getListingPublishDisabledReason(publishValidation);
+  const hasPendingUploads = hasPendingPhotoUploads(photos);
+  const hasUploadFailures = hasFailedPhotoUploads(photos);
   const fulfillmentMode = useMemo(
     () => getFulfillmentModeFromBooleans(form.pickupEnabled, form.localDeliveryEnabled),
     [form.localDeliveryEnabled, form.pickupEnabled]
@@ -180,6 +197,18 @@ export default function EditListingPage() {
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
+
+  const markFieldTouched = useCallback((fieldName) => {
+    setTouchedFields((prev) =>
+      prev[fieldName] ? prev : { ...prev, [fieldName]: true }
+    );
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      revokeLocalPhotoDraftUrls(photosRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setCoverImageId((current) => resolveCoverImageId(photos, current));
@@ -289,11 +318,11 @@ export default function EditListingPage() {
   const handleAddNewPhotos = async (files, inputMeta = {}) => {
     const incoming = Array.from(files || []);
     if (!incoming.length) return;
+    markFieldTouched("photos");
 
     const availableSlots = MAX_PHOTOS - photos.length;
     if (availableSlots <= 0) return;
 
-    const accepted = [];
     for (const file of incoming.slice(0, Math.max(0, availableSlots))) {
       const source = inferListingPhotoSource(inputMeta);
       let normalizedFile;
@@ -335,37 +364,75 @@ export default function EditListingPage() {
             normalized: describeImageFile(normalizedFile),
           },
         });
+      const uploadingDraft = {
+        ...draft,
+        uploadStatus: "uploading",
+        uploadError: "",
+      };
+
+      setPhotoError("");
+      setPhotos((prev) => [...prev, uploadingDraft].slice(0, MAX_PHOTOS));
+      setCoverImageId((current) => current || uploadingDraft.id || null);
+
       try {
         const uploaded = await uploadTemporaryImage({
           file: normalizedFile,
           purpose: "listing_image",
         });
-        const objectPreviewUrl = draft.original.previewUrl;
-        if (objectPreviewUrl) URL.revokeObjectURL(objectPreviewUrl);
-        accepted.push({
-          ...draft,
-          original: {
-            ...draft.original,
-            previewUrl: uploaded.previewUrl,
-            path: uploaded.asset.source_path || null,
-          },
-          tempUpload: {
-            assetId: uploaded.asset.id,
-            uploadSessionId: uploaded.upload_session_id,
-          },
-        });
+        setPhotos((prev) =>
+          prev.map((photo) =>
+            photo.id === draft.id
+              ? {
+                  ...photo,
+                  uploadStatus: "uploaded_temp",
+                  uploadError: "",
+                  original: {
+                    ...photo.original,
+                    publicUrl: uploaded.previewUrl,
+                    path: uploaded.asset.source_path || null,
+                  },
+                  tempUpload: {
+                    assetId: uploaded.asset.id,
+                    uploadSessionId: uploaded.upload_session_id,
+                  },
+                }
+              : photo
+          )
+        );
       } catch (error) {
-        if (draft.original.previewUrl) URL.revokeObjectURL(draft.original.previewUrl);
-        setPhotoError(error?.message || "Image upload failed. Please try again.");
+        setPhotos((prev) =>
+          prev.map((photo) =>
+            photo.id === draft.id
+              ? {
+                  ...photo,
+                  uploadStatus: "failed",
+                  uploadError: "Upload failed. Try again.",
+                }
+              : photo
+          )
+        );
+        setPhotoError(error?.message || "Upload failed. Try again.");
       }
     }
-
-    if (!accepted.length) return;
-
-    setPhotoError("");
-    setPhotos((prev) => [...prev, ...accepted]);
-    setCoverImageId((current) => current || accepted[0]?.id || null);
   };
+
+  const handleStableRemotePreview = useCallback((photoId) => {
+    setPhotos((prev) =>
+      prev.map((photo) => {
+        if (photo.id !== photoId) return photo;
+        const previewUrl = photo?.original?.previewUrl;
+        if (!previewUrl?.startsWith?.("blob:") || !photo?.original?.publicUrl) return photo;
+        URL.revokeObjectURL(previewUrl);
+        return {
+          ...photo,
+          original: {
+            ...photo.original,
+            previewUrl: photo.original.publicUrl,
+          },
+        };
+      })
+    );
+  }, []);
 
   const handleSetCoverPhoto = (photoId) => {
     setCoverImageId(photoId || null);
@@ -405,6 +472,13 @@ export default function EditListingPage() {
             publicUrl: committed.original?.url || null,
             path: committed.original?.path || null,
           },
+          enhanced: committed.enhanced
+            ? {
+                ...(photo.enhanced || {}),
+                publicUrl: committed.enhanced.url || null,
+                path: committed.enhanced.path || null,
+              }
+            : photo.enhanced,
           variants: committed.variants || null,
         };
       })
@@ -412,10 +486,11 @@ export default function EditListingPage() {
   }
 
   const handleRemovePhoto = (photoId) => {
+    markFieldTouched("photos");
     enhancementAttemptsRef.current.delete(photoId);
     setPhotos((prev) => {
       const target = prev.find((photo) => photo.id === photoId);
-      if (target?.status === "new" && target?.original?.previewUrl) {
+      if (target?.original?.previewUrl?.startsWith?.("blob:")) {
         URL.revokeObjectURL(target.original.previewUrl);
       }
       if (target?.tempUpload?.assetId) {
@@ -465,6 +540,22 @@ export default function EditListingPage() {
   async function handleEnhancePhoto(photoId) {
     const target = photosRef.current.find((photo) => photo.id === photoId);
     if (!target?.original?.file) return;
+    if (!target?.tempUpload?.assetId) {
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId
+            ? {
+                ...photo,
+                enhancement: {
+                  ...photo.enhancement,
+                  error: "Wait for the upload to finish before enhancing this photo.",
+                },
+              }
+            : photo
+        )
+      );
+      return;
+    }
     const attemptCount = (enhancementAttemptsRef.current.get(photoId) || 0) + 1;
     enhancementAttemptsRef.current.set(photoId, attemptCount);
 
@@ -491,6 +582,7 @@ export default function EditListingPage() {
       });
       const formData = new FormData();
       formData.append("image", prepared.file, prepared.file.name || "listing-photo.jpg");
+      formData.append("mediaAssetId", target.tempUpload.assetId);
       formData.append("background", target.enhancement.background);
       formData.append("imageSource", target.source || "unknown");
       formData.append("imageNormalized", String(Boolean(target.normalization?.converted)));
@@ -627,6 +719,15 @@ export default function EditListingPage() {
     }
 
     const isPublish = targetStatus === "published";
+    if (hasPendingUploads) {
+      setSubmitError("Photo uploads are still in progress. Please wait before saving.");
+      return { ok: false };
+    }
+    if (hasUploadFailures) {
+      setSubmitError("Remove failed photo uploads before saving.");
+      return { ok: false };
+    }
+
     if (!publishValidation.listingOptionsValidation.ok) {
       setListingOptionsErrors(publishValidation.listingOptionsValidation.errors);
       setSubmitError(
@@ -636,6 +737,7 @@ export default function EditListingPage() {
       return { ok: false };
     }
     if (isPublish && !publishValidation.ok) {
+      setHasAttemptedPublish(true);
       setSubmitError(
         publishValidation.formError || "Complete the required fields before publishing."
       );
@@ -797,8 +899,26 @@ export default function EditListingPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setHasAttemptedPublish(true);
     await persistListing("published");
   }
+
+  const handleBackToListings = useCallback(async () => {
+    const pendingAssetIds = photos
+      .map((photo) => photo?.tempUpload?.assetId)
+      .filter(Boolean);
+
+    if (pendingAssetIds.length) {
+      await discardTemporaryImages({ assetIds: pendingAssetIds }).catch((error) => {
+        console.warn("[listing.photo] discard_temp_failed", {
+          message: error?.message || String(error),
+        });
+      });
+    }
+
+    revokeLocalPhotoDraftUrls(photos);
+    router.push("/business/listings");
+  }, [photos, router]);
 
   if (loading) {
     return <div className="py-20 text-center text-slate-600">Loading listing...</div>;
@@ -837,7 +957,7 @@ export default function EditListingPage() {
         <div className="mb-8">
           <button
             type="button"
-            onClick={() => router.push("/business/listings")}
+            onClick={handleBackToListings}
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 underline-offset-4 transition hover:text-slate-900 hover:underline"
             disabled={saving}
             data-testid="listing-editor-exit"
@@ -869,7 +989,7 @@ export default function EditListingPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           <div className="grid gap-8 lg:grid-cols-12 lg:items-start">
             <div className="order-1 space-y-6 lg:order-2 lg:col-span-5">
               <div className={`space-y-8 lg:sticky lg:top-24 ${columnSurface}`}>
@@ -885,8 +1005,12 @@ export default function EditListingPage() {
                   onChooseVariant={handleChooseVariant}
                   onBackgroundChange={handleBackgroundChange}
                   onSetCoverPhoto={handleSetCoverPhoto}
+                  onStableRemotePreview={handleStableRemotePreview}
                   canAddMore={photos.length < MAX_PHOTOS}
                 />
+                {visibleFieldErrors.photos ? (
+                  <p className="text-sm text-rose-600">{visibleFieldErrors.photos}</p>
+                ) : null}
                 <div className="pt-1 sm:pt-2">
                   <ListingPreviewCard
                     title={form.title}
@@ -918,9 +1042,12 @@ export default function EditListingPage() {
                       className={inputBase}
                       placeholder="Ex: House-made cold brew concentrate"
                       value={form.title}
+                      onBlur={() => markFieldTouched("title")}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      required
                     />
+                    {visibleFieldErrors.title ? (
+                      <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.title}</p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -930,6 +1057,7 @@ export default function EditListingPage() {
                       onChange={(nextDescription) =>
                         setForm({ ...form, description: nextDescription })
                       }
+                      onBlur={() => markFieldTouched("description")}
                       minHeight={180}
                       placeholder="Share materials, flavors, or what makes it special."
                       helpText="Use headings, bullets, and links to make details easy to scan."
@@ -940,11 +1068,15 @@ export default function EditListingPage() {
                       category={form.category}
                       value={form.description}
                       targetId={internalListingId || listingRef || undefined}
-                      onApply={(description) =>
-                        setForm((prev) => ({ ...prev, description }))
-                      }
+                      onApply={(description) => {
+                        markFieldTouched("description");
+                        setForm((prev) => ({ ...prev, description }));
+                      }}
                       context="listing-editor"
                     />
+                    {visibleFieldErrors.description ? (
+                      <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.description}</p>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
@@ -956,10 +1088,10 @@ export default function EditListingPage() {
                         id="listing-category"
                         className={selectBase}
                         value={form.category}
+                        onBlur={() => markFieldTouched("category")}
                         onChange={(e) =>
                           setForm({ ...form, category: e.target.value })
                         }
-                        required
                       >
                         <option value="" className="text-black">
                           Select category
@@ -974,6 +1106,9 @@ export default function EditListingPage() {
                           </option>
                         ))}
                       </select>
+                      {visibleFieldErrors.category ? (
+                        <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.category}</p>
+                      ) : null}
                     </div>
 
                     <div>
@@ -986,10 +1121,13 @@ export default function EditListingPage() {
                         type="number"
                         placeholder="Ex: 49.99"
                         value={form.price}
+                        onBlur={() => markFieldTouched("price")}
                         onChange={(e) => setForm({ ...form, price: e.target.value })}
-                        required
                       />
                       <p className={helperBase}>Use numbers only. Currency is USD.</p>
+                      {visibleFieldErrors.price ? (
+                        <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.price}</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1185,6 +1323,7 @@ export default function EditListingPage() {
                           inputMode="decimal"
                           placeholder="Ex: 5.00"
                           value={form.deliveryFee}
+                          onBlur={() => markFieldTouched("deliveryFee")}
                           onChange={(e) =>
                             setForm((prev) => ({
                               ...prev,
@@ -1195,6 +1334,9 @@ export default function EditListingPage() {
                         <p className={helperBase}>
                           This fee is added on top of the item subtotal at checkout.
                         </p>
+                        {visibleFieldErrors.deliveryFee ? (
+                          <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.deliveryFee}</p>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -1231,8 +1373,17 @@ export default function EditListingPage() {
                   {!submitError && !saving && !submitSuccess && previewHref ? (
                     <p className="text-slate-500">Preview shows your latest saved changes.</p>
                   ) : null}
-                  {!submitError && !saving && !submitSuccess && !publishValidation.ok ? (
-                    <p className="text-slate-500">{publishDisabledReason}</p>
+                  {!submitError &&
+                  !saving &&
+                  !submitSuccess &&
+                  (hasPendingUploads || hasUploadFailures || !publishValidation.ok) ? (
+                    <p className="text-slate-500">
+                      {hasPendingUploads
+                        ? "Photo uploads are still in progress."
+                        : hasUploadFailures
+                          ? "Remove failed photo uploads before saving."
+                          : publishDisabledReason}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex flex-col-reverse gap-3 sm:flex-row">
@@ -1249,7 +1400,7 @@ export default function EditListingPage() {
                   <button
                     type="button"
                     onClick={handleSaveDraft}
-                    disabled={saving}
+                    disabled={saving || hasPendingUploads || hasUploadFailures}
                     className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Save draft
@@ -1257,7 +1408,7 @@ export default function EditListingPage() {
 
                   <button
                     type="submit"
-                    disabled={saving || !publishValidation.ok}
+                    disabled={saving || hasPendingUploads || hasUploadFailures}
                     className="yb-primary-button rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {saving && saveAction === "published"

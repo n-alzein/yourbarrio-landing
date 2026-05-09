@@ -133,6 +133,13 @@ describe("media asset lifecycle routes", () => {
         purpose: "listing_image",
         bucket: "business-photos",
         upload_session_id: "session-1",
+        expires_at: expect.any(String),
+      })
+    );
+    expect(insertMock.mock.calls[0][0]).toEqual(
+      expect.not.objectContaining({
+        listing_id: expect.anything(),
+        committed_at: expect.anything(),
       })
     );
   });
@@ -207,6 +214,7 @@ describe("media asset lifecycle routes", () => {
         id: "asset-1",
         bucket: "business-photos",
         source_path: "user-1/listings/listing-1/asset-1/source.webp",
+        enhanced_path: "user-1/listings/listing-1/asset-1/source.webp",
         card_path: "user-1/listings/listing-1/asset-1/card_640.webp",
         detail_path: "user-1/listings/listing-1/asset-1/detail_1200.webp",
       },
@@ -233,7 +241,29 @@ describe("media asset lifecycle routes", () => {
         card_640: expect.stringContaining("/business-photos/user-1/listings/listing-1/asset-1/card_640.webp"),
         detail_1200: expect.stringContaining("/business-photos/user-1/listings/listing-1/asset-1/detail_1200.webp"),
       },
+      enhanced: {
+        url: expect.stringContaining("/business-photos/user-1/listings/listing-1/asset-1/source.webp"),
+        path: "user-1/listings/listing-1/asset-1/source.webp",
+      },
     });
+  });
+
+  it("rejects listing image commits before a listing exists", async () => {
+    const { POST } = await import("@/app/api/media/commit/route");
+
+    const response = await POST({
+      ...mockRequest("http://localhost:3000/api/media/commit"),
+      json: async () => ({
+        assetIds: ["asset-1"],
+        businessId: "user-1",
+        purpose: "listing_image",
+      }),
+    } as unknown as Request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error.code).toBe("MISSING_LISTING");
+    expect(commitTemporaryMediaAssetsMock).not.toHaveBeenCalled();
   });
 
   it("cleanup route requires the configured cron secret", async () => {
@@ -249,6 +279,59 @@ describe("media asset lifecycle routes", () => {
     expect(response.status).toBe(401);
     expect(payload).toEqual({ ok: false, error: "Unauthorized" });
     expect(getMediaServiceClientMock).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it("cleanup route removes enhanced temp files with the original source", async () => {
+    vi.stubEnv("CRON_SECRET", "secret-123");
+    const cleanupRemoveMock = vi.fn(async () => ({ error: null }));
+    const cleanupUpdateMock = vi.fn(() => ({
+      in: vi.fn(async () => ({ error: null })),
+    }));
+    getMediaServiceClientMock.mockReturnValueOnce({
+      storage: {
+        from: vi.fn(() => ({
+          remove: cleanupRemoveMock,
+        })),
+      },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            lt: vi.fn(() => ({
+              order: vi.fn(() => ({
+                limit: vi.fn(async () => ({
+                  data: [
+                    {
+                      id: "asset-1",
+                      bucket: "business-photos",
+                      source_path: "tmp/user-1/session-1/asset-1/source",
+                      original_path: "tmp/user-1/session-1/asset-1/source",
+                      enhanced_path: "tmp/user-1/session-1/asset-1/enhanced.webp",
+                    },
+                  ],
+                  error: null,
+                })),
+              })),
+            })),
+          })),
+        })),
+        update: cleanupUpdateMock,
+      })),
+    });
+    const { GET } = await import("@/app/api/cron/cleanup-temp-media/route");
+
+    const response = await GET({
+      ...mockRequest("http://localhost:3000/api/cron/cleanup-temp-media"),
+      headers: new Headers({ authorization: "Bearer secret-123" }),
+    } as unknown as Request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({ ok: true, cleaned: 1 });
+    expect(cleanupRemoveMock).toHaveBeenCalledWith([
+      "tmp/user-1/session-1/asset-1/source",
+      "tmp/user-1/session-1/asset-1/enhanced.webp",
+    ]);
     vi.unstubAllEnvs();
   });
 });

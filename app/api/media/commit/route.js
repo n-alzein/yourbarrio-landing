@@ -40,14 +40,18 @@ export async function POST(request) {
     ? body.assetIds.map(String).filter(Boolean)
     : [];
   const purpose = String(body?.purpose || "").trim();
+  const listingId = body?.listingId ? String(body.listingId) : null;
   if (!assetIds.length) return jsonError("No temporary media assets provided.", 400, "NO_ASSETS");
   if (!ALLOWED_PURPOSES.has(purpose)) return jsonError("Unsupported media purpose.", 400, "BAD_PURPOSE");
+  if ((purpose === "listing_image" || purpose === "listing_cover") && !listingId) {
+    return jsonError("Listing media can only be saved after the listing exists.", 400, "MISSING_LISTING");
+  }
 
   try {
     const assets = await commitTemporaryMediaAssets({
       assetIds,
       businessId: body?.businessId ? String(body.businessId) : user.id,
-      listingId: body?.listingId ? String(body.listingId) : null,
+      listingId,
       purpose,
       ownerUserId: user.id,
       sortOrders: body?.sortOrders && typeof body.sortOrders === "object" ? body.sortOrders : {},

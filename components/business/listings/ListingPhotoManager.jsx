@@ -4,18 +4,55 @@ import { useId, useMemo, useState } from "react";
 import { ImagePlus, Sparkles, Trash2 } from "lucide-react";
 import {
   ENHANCEABLE_BACKGROUND_OPTIONS,
+  getDraftFallbackDisplayUrl,
   getDraftDisplayUrl,
 } from "@/lib/listingPhotoDrafts";
 
-function PhotoSurface({ src, alt, className = "" }) {
+function getPhotoStateLabel(photo) {
+  if (photo?.enhancement?.isProcessing) return "Enhancing...";
+  if (photo?.uploadStatus === "uploading" || photo?.uploadStatus === "local_preview") {
+    return "Uploading...";
+  }
+  if (photo?.uploadStatus === "failed") return "Upload failed. Try again.";
+  return "";
+}
+
+function PhotoSurface({ src, fallbackSrc, alt, className = "", onStableLoad }) {
+  const [loadedSrc, setLoadedSrc] = useState(null);
+  const hasFallback = Boolean(fallbackSrc && fallbackSrc !== src);
+  const primaryLoaded = Boolean(src && loadedSrc === src);
+
   return (
     <div
       className={`rounded-2xl border border-slate-100 bg-slate-50 p-3 ${className}`}
       style={{ backgroundColor: "#F9FAFB", borderColor: "#F1F5F9" }}
     >
-      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[18px] bg-white">
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[18px] bg-white">
+        {hasFallback ? (
+          <img
+            src={fallbackSrc}
+            alt=""
+            aria-hidden="true"
+            className={`h-full w-full bg-white object-contain transition-opacity ${
+              primaryLoaded ? "opacity-0" : "opacity-100"
+            }`}
+          />
+        ) : null}
         {src ? (
-          <img src={src} alt={alt} className="h-full w-full bg-white object-contain" />
+          <img
+            src={src}
+            alt={alt}
+            onLoad={() => {
+              setLoadedSrc(src);
+              if (src && !src.startsWith("blob:")) onStableLoad?.();
+            }}
+            onError={() => setLoadedSrc(null)}
+            className={`${
+              hasFallback ? "absolute inset-0" : ""
+            } h-full w-full bg-white object-contain transition-opacity ${
+              hasFallback && !primaryLoaded ? "opacity-0" : "opacity-100"
+            }`}
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-white text-sm text-slate-400">
             No preview
@@ -38,6 +75,7 @@ export default function ListingPhotoManager({
   onChooseVariant,
   onBackgroundChange,
   onSetCoverPhoto,
+  onStableRemotePreview,
   canAddMore,
 }) {
   const inputId = useId();
@@ -59,8 +97,12 @@ export default function ListingPhotoManager({
     Boolean(selectedPhoto?.enhanced?.publicUrl);
   // Keep enhancement available for photos added in the current editor session even after draft autosave
   // converts them into persisted draft rows. Hydrated pre-existing photos do not carry `source`.
+  const selectedUploadPending = ["local_preview", "uploading"].includes(selectedPhoto?.uploadStatus);
   const canConfigureEnhancement =
-    (isUnsavedSelectedPhoto || isSessionAddedDraftPhoto) && !hasUnsavedEnhancedPhoto;
+    (isUnsavedSelectedPhoto || isSessionAddedDraftPhoto) &&
+    !hasUnsavedEnhancedPhoto &&
+    !selectedUploadPending &&
+    selectedPhoto?.uploadStatus !== "failed";
   const resolvedCoverImageId =
     (typeof coverImageId === "string" && photos?.some((photo) => photo?.id === coverImageId)
       ? coverImageId
@@ -127,9 +169,22 @@ export default function ListingPhotoManager({
               ) : null}
               <PhotoSurface
                 src={getDraftDisplayUrl(selectedPhoto)}
+                fallbackSrc={getDraftFallbackDisplayUrl(selectedPhoto)}
                 alt="Selected listing photo"
                 className="aspect-[4/3]"
+                onStableLoad={() => onStableRemotePreview?.(selectedPhoto.id)}
               />
+              {getPhotoStateLabel(selectedPhoto) ? (
+                <div
+                  className={`absolute bottom-3 left-3 z-10 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm ${
+                    selectedPhoto?.uploadStatus === "failed"
+                      ? "border-rose-200 bg-rose-50/95 text-rose-700"
+                      : "border-slate-200 bg-white/95 text-slate-700"
+                  }`}
+                >
+                  {getPhotoStateLabel(selectedPhoto)}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -263,9 +318,22 @@ export default function ListingPhotoManager({
                         ) : null}
                         <PhotoSurface
                           src={getDraftDisplayUrl(photo)}
+                          fallbackSrc={getDraftFallbackDisplayUrl(photo)}
                           alt={`Listing photo ${index + 1}`}
                           className="aspect-square rounded-none"
+                          onStableLoad={() => onStableRemotePreview?.(photo.id)}
                         />
+                        {getPhotoStateLabel(photo) ? (
+                          <div
+                            className={`absolute bottom-2 left-2 right-2 z-10 truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold ${
+                              photo?.uploadStatus === "failed"
+                                ? "border-rose-200 bg-rose-50/95 text-rose-700"
+                                : "border-slate-200 bg-white/95 text-slate-700"
+                            }`}
+                          >
+                            {getPhotoStateLabel(photo)}
+                          </div>
+                        ) : null}
                       </div>
                     </button>
                   </div>
