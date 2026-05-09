@@ -23,7 +23,7 @@ test("public business profile stays visible for guests when auth and business me
     await route.fulfill({ status: 404, body: "missing test media" });
   });
 
-  await page.goto("/b/seed-shoreline-beauty");
+  await page.goto("/b/seed-shoreline-beauty", { waitUntil: "domcontentloaded" });
 
   await expect(page.getByTestId("public-business-profile-content")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shoreline Beauty" })).toBeVisible();

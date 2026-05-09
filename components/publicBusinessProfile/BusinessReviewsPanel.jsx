@@ -59,7 +59,8 @@ async function fetchPublicReviewFeed({
   });
   if (!response.ok) return single ? null : [];
   const payload = await response.json();
-  return payload?.reviews ?? (single ? null : []);
+  if (single) return payload?.reviews && typeof payload.reviews === "object" ? payload.reviews : null;
+  return Array.isArray(payload?.reviews) ? payload.reviews : [];
 }
 
 function buildSummaryFromReviews(items = []) {
@@ -136,8 +137,11 @@ export default function BusinessReviewsPanel({
   const { supabase } = useAuth();
   const { openModal } = useModal();
   const viewer = useViewerContext();
-  const [reviews, setReviews] = useState(initialReviews || []);
-  const [summary, setSummary] = useState(() => normalizeSummary(ratingSummary, []));
+  const initialReviewList = Array.isArray(initialReviews) ? initialReviews : [];
+  const [reviews, setReviews] = useState(initialReviewList);
+  const [summary, setSummary] = useState(() =>
+    normalizeSummary(ratingSummary, initialReviewList)
+  );
   const [loadingMore, setLoadingMore] = useState(false);
   const [customerProfiles, setCustomerProfiles] = useState({});
   const [customerReviewId, setCustomerReviewId] = useState(null);

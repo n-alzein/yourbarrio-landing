@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { appendCrashLog } from "@/lib/crashlog";
+import {
+  reportClientError,
+  shouldSendGlobalClientErrorDiagnostics,
+} from "@/lib/clientErrorDiagnostics";
 import { usePathname } from "next/navigation";
 
 export default function CrashLoggerClient() {
@@ -12,6 +16,7 @@ export default function CrashLoggerClient() {
     if (typeof window === "undefined") return undefined;
     if (mountedRef.current) return undefined;
     mountedRef.current = true;
+    const sendRemoteDiagnostics = shouldSendGlobalClientErrorDiagnostics();
 
     const handleError = (event) => {
       try {
@@ -23,6 +28,13 @@ export default function CrashLoggerClient() {
           colno: event?.colno,
           stack: event?.error?.stack,
         });
+        if (sendRemoteDiagnostics) {
+          reportClientError({
+            error: event?.error || event?.message || "Unknown browser error",
+            source: "window-error",
+            pathname: window.location?.pathname || pathname || "",
+          });
+        }
       } catch {
         /* no-op */
       }
@@ -34,6 +46,13 @@ export default function CrashLoggerClient() {
           kind: "unhandledrejection",
           reason: event?.reason,
         });
+        if (sendRemoteDiagnostics) {
+          reportClientError({
+            error: event?.reason || "Unhandled promise rejection",
+            source: "unhandledrejection",
+            pathname: window.location?.pathname || pathname || "",
+          });
+        }
       } catch {
         /* no-op */
       }
@@ -47,7 +66,7 @@ export default function CrashLoggerClient() {
       window.removeEventListener("error", handleError);
       window.removeEventListener("unhandledrejection", handleRejection);
     };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

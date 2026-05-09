@@ -15,18 +15,21 @@ export default function BusinessGalleryGrid({
   renderTileActions = null,
 }) {
   const [activeIndex, setActiveIndex] = useState(null);
+  const photoList = useMemo(() => (Array.isArray(photos) ? photos : []), [photos]);
 
   const activePhoto = useMemo(() => {
     if (activeIndex === null) return null;
-    return photos?.[activeIndex] || null;
-  }, [activeIndex, photos]);
+    return photoList[activeIndex] || null;
+  }, [activeIndex, photoList]);
 
   useEffect(() => {
     if (activeIndex === null) return undefined;
     const handleKey = (event) => {
       if (event.key === "Escape") setActiveIndex(null);
       if (event.key === "ArrowRight") {
-        setActiveIndex((prev) => (prev === null ? prev : Math.min(prev + 1, photos.length - 1)));
+        setActiveIndex((prev) =>
+          prev === null ? prev : Math.min(prev + 1, photoList.length - 1)
+        );
       }
       if (event.key === "ArrowLeft") {
         setActiveIndex((prev) => (prev === null ? prev : Math.max(prev - 1, 0)));
@@ -34,7 +37,7 @@ export default function BusinessGalleryGrid({
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [activeIndex, photos?.length]);
+  }, [activeIndex, photoList.length]);
 
   return (
     <ProfileSection
@@ -44,7 +47,7 @@ export default function BusinessGalleryGrid({
       action={headerAction}
       className={className}
     >
-      {!photos?.length ? (
+      {!photoList.length ? (
         <ProfileEmptyState
           title="Gallery coming soon"
           detail="Photos will appear here when available."
@@ -53,7 +56,7 @@ export default function BusinessGalleryGrid({
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {photos.map((photo, index) => (
+          {photoList.map((photo, index) => (
             <div
               key={photo.id || index}
               className="group relative aspect-[4/3] overflow-hidden rounded-[16px] border border-slate-100 bg-slate-100 shadow-sm"
@@ -119,7 +122,7 @@ export default function BusinessGalleryGrid({
                 {activePhoto.caption}
               </p>
             ) : null}
-            {photos.length > 1 ? (
+            {photoList.length > 1 ? (
               <>
                 <button
                   type="button"
@@ -134,7 +137,7 @@ export default function BusinessGalleryGrid({
                   type="button"
                   onClick={() =>
                     setActiveIndex((prev) =>
-                      prev === null ? prev : Math.min(prev + 1, photos.length - 1)
+                      prev === null ? prev : Math.min(prev + 1, photoList.length - 1)
                     )
                   }
                   className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white p-2 text-slate-900 shadow-lg"

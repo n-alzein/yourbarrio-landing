@@ -22,6 +22,36 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/business/getPublicBusinessByPublicId", () => ({
   getPublicBusinessByPublicId: vi.fn(async (publicId: string) => {
+    if (publicId === "834bcb5d7c") {
+      return {
+        id: "22222222-2222-4222-8222-222222222222",
+        owner_user_id: "22222222-2222-4222-8222-222222222222",
+        business_row_id: "biz-row-2",
+        public_id: "834bcb5d7c",
+        business_name: "Production Sparse Shop",
+        business_type: null,
+        full_name: null,
+        category: null,
+        description: null,
+        website: null,
+        phone: null,
+        profile_photo_url: null,
+        cover_photo_url: null,
+        address: null,
+        address_2: null,
+        city: null,
+        state: null,
+        postal_code: null,
+        latitude: null,
+        longitude: null,
+        hours_json: null,
+        social_links_json: null,
+        is_internal: false,
+        verification_status: "manually_verified",
+        account_status: "active",
+        deleted_at: null,
+      };
+    }
     if (publicId !== "eaca122466") return null;
     return {
       id: "11111111-1111-4111-8111-111111111111",
@@ -156,6 +186,17 @@ describe("PublicBusinessProfilePage", () => {
   it("opens by public_id without requiring coordinates or listings", async () => {
     const result = await PublicBusinessProfilePage({
       params: Promise.resolve({ id: "eaca122466" }),
+      searchParams: Promise.resolve({}),
+    });
+
+    expect(result).toBeTruthy();
+    expect(notFoundMock).not.toHaveBeenCalled();
+    expect(permanentRedirectMock).not.toHaveBeenCalled();
+  });
+
+  it("opens production-style short public ids with nullable profile fields", async () => {
+    const result = await PublicBusinessProfilePage({
+      params: Promise.resolve({ id: "834bcb5d7c" }),
       searchParams: Promise.resolve({}),
     });
 

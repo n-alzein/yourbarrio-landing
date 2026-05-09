@@ -190,4 +190,46 @@ describe("BusinessProfileView", () => {
     expect(screen.getByRole("button", { name: "Delete photo-2" })).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { name: "Gallery" })).toHaveLength(1);
   });
+
+  it("renders a logged-out public profile with nullable production-like fields", () => {
+    render(
+      <BusinessProfileView
+        mode="public"
+        profile={{
+          id: "834bcb5d7c",
+          owner_user_id: null,
+          public_id: "834bcb5d7c",
+          business_name: "Sparse Shop",
+          full_name: null,
+          business_type: null,
+          category: null,
+          city: null,
+          state: null,
+          description: null,
+          phone: null,
+          website: null,
+          address: null,
+          hours_json: null,
+          social_links_json: null,
+          profile_photo_url: null,
+          cover_photo_url: null,
+        }}
+        businessId="834bcb5d7c"
+        publicPath="/b/834bcb5d7c"
+        ratingSummary={null}
+        listings={null}
+        reviews={null}
+        announcements={null}
+        gallery={null}
+        heroVariant="publicFullBleed"
+      />
+    );
+
+    expect(screen.getByTestId("public-business-profile-content")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Sparse Shop" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("This business has not added a full description yet.")).toBeInTheDocument();
+    expect(screen.getAllByText("No reviews yet").length).toBeGreaterThan(0);
+    expect(screen.queryByText("We need one more refresh")).not.toBeInTheDocument();
+    expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+  });
 });

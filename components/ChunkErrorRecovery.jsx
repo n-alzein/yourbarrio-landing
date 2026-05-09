@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { reportClientError } from "@/lib/clientErrorDiagnostics";
 import {
   clearChunkRecoveryGuard,
   getChunkErrorDiagnostics,
@@ -49,6 +50,7 @@ function recoverFromChunkError(error) {
   }
 
   markChunkRecoveryAttempted(storage);
+  reportClientError({ error, source: "chunk-recovery" });
   logChunkRecoveryDiagnostics(error, "refreshing", "recover");
   window.setTimeout(() => {
     window.location.reload();
@@ -240,7 +242,10 @@ export class ChunkErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     if (!isChunkLoadError(error)) {
-      console.error("[APP_ERROR_BOUNDARY]", error, info);
+      reportClientError({ error, source: "chunk-boundary" });
+      if (shouldLogChunkRecoveryDiagnostics()) {
+        console.error("[APP_ERROR_BOUNDARY]", error, info);
+      }
       return;
     }
     logChunkRecoveryDiagnostics(error, this.state.recoveryState, "boundary");

@@ -42,6 +42,7 @@ export default function BusinessListingsGrid({
   priceMode = "allIn",
 }) {
   const router = useRouter();
+  const listingList = Array.isArray(listings) ? listings : [];
 
   return (
     <ProfileSection
@@ -51,7 +52,7 @@ export default function BusinessListingsGrid({
       action={headerAction}
       className={className}
     >
-      {!listings?.length ? (
+      {!listingList.length ? (
         <ProfileEmptyState
           title="No listings yet"
           detail="Available products and services will appear here."
@@ -60,9 +61,10 @@ export default function BusinessListingsGrid({
       ) : (
         <div className="-mx-1 px-1">
           <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {listings.map((item) => {
+            {listingList.map((item, index) => {
               const cover = resolveListingMedia(item).coverImageUrl;
-              const href = itemHrefResolver(item);
+              const resolvedHref = itemHrefResolver?.(item);
+              const href = typeof resolvedHref === "string" && resolvedHref ? resolvedHref : "#";
               const categoryLabel = getListingCategoryLabel(item, "Listing");
               const displayPriceCents = getDisplayPriceCents(item);
               const priceLabel =
@@ -71,10 +73,14 @@ export default function BusinessListingsGrid({
                   : formatPriceCents(displayPriceCents);
               return (
                 <Link
-                  key={item.id}
+                  key={item.id || item.public_id || index}
                   href={href}
-                  onPointerEnter={() => router.prefetch(href)}
-                  onFocus={() => router.prefetch(href)}
+                  onPointerEnter={() => {
+                    if (href !== "#") router.prefetch(href);
+                  }}
+                  onFocus={() => {
+                    if (href !== "#") router.prefetch(href);
+                  }}
                   className="group flex w-[calc((100%-1rem)/2)] min-w-[calc((100%-1rem)/2)] shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md sm:w-[18.5rem] sm:min-w-[18.5rem] md:w-[19.5rem] md:min-w-[19.5rem] lg:w-[18rem] lg:min-w-[18rem] xl:w-[17rem] xl:min-w-[17rem]"
                 >
                   <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-white">

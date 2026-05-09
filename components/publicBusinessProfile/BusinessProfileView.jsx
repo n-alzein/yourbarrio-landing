@@ -48,6 +48,11 @@ export default function BusinessProfileView({
   navClassName = "",
 }) {
   const [contentVisible, setContentVisible] = useState(false);
+  const safeListings = Array.isArray(listings) ? listings : [];
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
+  const safeAnnouncements = Array.isArray(announcements) ? announcements : [];
+  const safeGallery = Array.isArray(gallery) ? gallery : [];
+  const businessName = profile?.business_name || profile?.full_name || "business";
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setContentVisible(true));
@@ -86,7 +91,7 @@ export default function BusinessProfileView({
         />
 
         <BusinessListingsGrid
-          listings={listings}
+          listings={safeListings}
           className={sectionClassName}
           headerAction={listingsHeaderAction}
           itemHrefResolver={listingsItemHrefResolver}
@@ -96,10 +101,10 @@ export default function BusinessProfileView({
         <ViewerContextEnhancer>
           <BusinessReviewsPanel
             businessId={businessId}
-            businessName={profile?.business_name || profile?.full_name || "business"}
-            initialReviews={reviews}
+            businessName={businessName}
+            initialReviews={safeReviews}
             ratingSummary={ratingSummary}
-            reviewCount={ratingSummary?.count || reviews?.length || 0}
+            reviewCount={ratingSummary?.count || safeReviews.length || 0}
             loading={loading}
             className={reviewsClassName}
             mode={mode}
@@ -108,7 +113,7 @@ export default function BusinessProfileView({
         </ViewerContextEnhancer>
 
         <BusinessAnnouncementsPreview
-          announcements={announcements}
+          announcements={safeAnnouncements}
           className={sectionClassName}
           headerAction={updatesHeaderAction}
           renderItemActions={updatesRenderItemActions}
@@ -116,7 +121,7 @@ export default function BusinessProfileView({
         {updatesSupplement ? <div>{updatesSupplement}</div> : null}
 
         <BusinessGalleryGrid
-          photos={gallery}
+          photos={safeGallery}
           className={sectionClassName}
           headerAction={galleryHeaderAction}
           renderTileActions={galleryTileActions}
