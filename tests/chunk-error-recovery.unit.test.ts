@@ -35,6 +35,28 @@ describe("chunk error recovery", () => {
     expect(isChunkLoadError(null)).toBe(false);
   });
 
+  it("does not classify normal API auth failures as stale app asset failures", () => {
+    expect(
+      isChunkLoadError({
+        name: "ApiError",
+        message: "GET /api/me failed with 401 Unauthorized",
+        status: 401,
+      })
+    ).toBe(false);
+    expect(
+      isChunkLoadError({
+        message: "Failed to fetch dynamically imported module while handling /api/me",
+        status: 401,
+      })
+    ).toBe(false);
+    expect(
+      isChunkLoadError({
+        message: "GET /_next/static/chunks/app.js failed",
+        status: 404,
+      })
+    ).toBe(true);
+  });
+
   it("uses a sessionStorage guard to prevent recovery loops", () => {
     window.sessionStorage.clear();
     const error = new Error("ChunkLoadError: Loading chunk 99 failed.");

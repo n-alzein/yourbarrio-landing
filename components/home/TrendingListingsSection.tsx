@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import type { BrowseMode, ListingSummary } from "@/lib/browse/getHomeBrowseData";
 import { resolveListingCoverImageUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
@@ -89,6 +90,7 @@ export default function TrendingListingsSection({
   variant = "featured",
   excludeListingIds = [],
 }: TrendingListingsSectionProps) {
+  const router = useRouter();
   const safeListings = useMemo(
     () => (Array.isArray(listings) ? listings : []),
     [listings]
@@ -177,12 +179,18 @@ export default function TrendingListingsSection({
             const displayPriceCents = getDisplayPriceCents(listing);
             const displayPrice =
               displayPriceCents > 0 ? formatPriceCents(displayPriceCents) : formatPrice(listing.price);
+            const prefetchListing = () => {
+              if (href && href !== "/listings" && href !== "/customer/listings") {
+                router.prefetch(href);
+              }
+            };
 
             return (
               <Link
                 key={listing.public_id || listing.id || `${listing.title}-${index}`}
                 href={href}
-                prefetch={false}
+                onPointerEnter={prefetchListing}
+                onFocus={prefetchListing}
                 className={
                   isNewSection
                     ? "group flex h-full w-[42vw] min-w-[42vw] snap-start flex-col gap-1 transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0] sm:w-[190px] sm:min-w-[190px] md:w-[210px] md:min-w-[210px] lg:w-[220px] lg:min-w-[220px]"

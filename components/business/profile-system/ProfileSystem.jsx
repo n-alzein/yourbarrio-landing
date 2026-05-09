@@ -380,6 +380,7 @@ function HeroMetadata({ location, ratingSummary, businessType, profile }) {
 function HeroActionIconButton({ href, icon: Icon, label, onClick, variant = "default" }) {
   const baseClassName = cx(
     "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-[#f3efff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
+    variant === "elevated" ? "h-11 w-11 rounded-[16px] md:h-10 md:w-10 md:rounded-full" : "",
     variant === "elevated" ? "border border-slate-200 bg-white shadow-sm" : ""
   );
 
@@ -418,6 +419,8 @@ function HeroActionButton({
   tone = "outline",
   onClick,
   variant = "default",
+  className: classNameOverride = "",
+  mobileIconOnly = false,
 }) {
   const className = cx(
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2",
@@ -425,9 +428,11 @@ function HeroActionButton({
       ? "dashboard-primary-action bg-[#6E34FF] text-white shadow-[0_16px_34px_-24px_rgba(106,61,240,0.75)] hover:bg-[#5E2DE0]"
       : variant === "elevated"
         ? "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
-        : "border border-slate-300 bg-white text-slate-800 hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]"
+        : "border border-slate-300 bg-white text-slate-800 hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6]",
+    classNameOverride
   );
   const primaryStyle = tone === "primary" ? { color: "#ffffff" } : undefined;
+  const labelClassName = mobileIconOnly ? "sr-only md:not-sr-only" : "";
 
   if (href) {
     return (
@@ -435,19 +440,28 @@ function HeroActionButton({
         href={href}
         target={href.startsWith("tel:") ? undefined : "_blank"}
         rel={href.startsWith("tel:") ? undefined : "noreferrer"}
+        aria-label={mobileIconOnly ? label : undefined}
+        title={mobileIconOnly ? label : undefined}
         className={className}
         style={primaryStyle}
       >
         {Icon ? <Icon className="h-4 w-4" style={primaryStyle} /> : null}
-        <span style={primaryStyle}>{label}</span>
+        <span className={labelClassName} style={primaryStyle}>{label}</span>
       </a>
     );
   }
 
   return (
-    <button type="button" onClick={onClick} className={className} style={primaryStyle}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={mobileIconOnly ? label : undefined}
+      title={mobileIconOnly ? label : undefined}
+      className={className}
+      style={primaryStyle}
+    >
       {Icon ? <Icon className="h-4 w-4" style={primaryStyle} /> : null}
-      <span style={primaryStyle}>{label}</span>
+      <span className={labelClassName} style={primaryStyle}>{label}</span>
     </button>
   );
 }
@@ -625,7 +639,7 @@ function HeroPreviewActions({
   if (variant === "elevated") {
     return (
       <div className="flex w-full flex-col gap-2 lg:items-end">
-        <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
+        <div className="flex w-full items-center justify-between gap-2 md:flex-wrap md:justify-start lg:justify-end">
           {directions ? (
             <HeroActionButton
               href={directions}
@@ -633,6 +647,8 @@ function HeroPreviewActions({
               label="Directions"
               tone="primary"
               variant={variant}
+              mobileIconOnly
+              className="h-11 w-11 min-h-11 rounded-[16px] p-0 text-xs shadow-[0_14px_32px_-18px_rgba(106,61,240,0.78)] md:h-auto md:w-auto md:min-h-11 md:rounded-[14px] md:px-4 md:py-2.5 md:text-sm"
             />
           ) : null}
           {website ? (
@@ -641,6 +657,8 @@ function HeroPreviewActions({
               icon={Globe}
               label="Website"
               variant={variant}
+              mobileIconOnly
+              className="h-11 w-11 min-h-11 rounded-[16px] p-0 text-xs md:h-auto md:w-auto md:min-h-11 md:rounded-[14px] md:px-4 md:py-2.5 md:text-sm"
             />
           ) : null}
           {profile?.phone ? (
@@ -649,8 +667,36 @@ function HeroPreviewActions({
               icon={Phone}
               label="Call"
               variant={variant}
+              mobileIconOnly
+              className="h-11 w-11 min-h-11 rounded-[16px] p-0 text-xs md:h-auto md:w-auto md:min-h-11 md:rounded-[14px] md:px-4 md:py-2.5 md:text-sm"
             />
           ) : null}
+          {canMessageDirectly ? (
+            <button
+              type="button"
+              onClick={handleMessage}
+              disabled={messageLoading}
+              aria-label={messageLoading ? "Opening message" : "Message"}
+              title={messageLoading ? "Opening message" : "Message"}
+              className="inline-flex h-11 w-11 min-h-11 shrink-0 items-center justify-center rounded-[16px] border border-slate-200 bg-white p-0 text-slate-700 shadow-sm transition hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 disabled:opacity-70 md:hidden"
+            >
+              {messageLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircle className="h-4 w-4" />
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleGuestMessageIntent}
+              aria-label="Sign in to message"
+              title="Sign in to message"
+              className="inline-flex h-11 w-11 min-h-11 shrink-0 items-center justify-center rounded-[16px] border border-slate-200 bg-white p-0 text-slate-700 shadow-sm transition hover:border-[#c8b9ff] hover:bg-[#f8f5ff] hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 md:hidden"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          )}
           {showSaveBusinessButton ? (
             <SaveBusinessButton
               business={{
@@ -661,7 +707,7 @@ function HeroPreviewActions({
               loading={savingBusinessIds.has(saveBusinessId)}
               onToggle={toggleSavedBusiness}
               variant="hero"
-              className="border border-slate-200 bg-white shadow-sm ring-0"
+              className="h-11 w-11 rounded-[16px] border border-slate-200 bg-white p-0 shadow-sm ring-0 md:rounded-[14px]"
             />
           ) : null}
           <HeroActionIconButton
@@ -677,7 +723,7 @@ function HeroPreviewActions({
             type="button"
             onClick={handleMessage}
             disabled={messageLoading}
-            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-full px-2 text-sm font-medium text-slate-500/90 transition hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 disabled:opacity-70 lg:self-end"
+            className="hidden min-h-8 items-center justify-center gap-2 self-center rounded-full px-2 text-center text-sm font-medium text-slate-500/90 transition hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 disabled:opacity-70 md:inline-flex md:self-auto lg:self-end"
           >
             <MessageCircle className="h-4 w-4 text-slate-500/80" />
             {messageLoading ? "Opening..." : "Message"}
@@ -686,7 +732,7 @@ function HeroPreviewActions({
           <button
             type="button"
             onClick={handleGuestMessageIntent}
-            className="inline-flex min-h-8 items-center justify-center gap-2 rounded-full px-2 text-sm font-medium text-slate-500/90 transition hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 lg:self-end"
+            className="hidden min-h-8 items-center justify-center gap-2 self-center rounded-full px-2 text-center text-sm font-medium text-slate-500/90 transition hover:text-[#5b37d6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8b9ff] focus-visible:ring-offset-2 md:inline-flex md:self-auto lg:self-end"
           >
             <MessageCircle className="h-4 w-4 text-slate-500/80" />
             Sign in to message
@@ -821,7 +867,7 @@ function PreviewHeroCard({
     <div
       className={cx(
         isCoverIntegrated
-          ? "absolute inset-x-0 bottom-0 z-10 px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8"
+          ? "absolute inset-x-0 top-44 z-10 px-5 pb-0 sm:top-40 sm:px-6 md:bottom-0 md:top-auto md:px-4 md:pb-6 lg:px-8"
           : "relative z-10 px-4 sm:px-6 lg:px-8",
         isElevated ? "mx-auto -mt-12 max-w-[1180px] sm:-mt-14 lg:-mt-[4.25rem]" : "",
         !isElevated && !isCoverIntegrated ? "-mt-10 sm:-mt-14" : ""
@@ -837,7 +883,83 @@ function PreviewHeroCard({
             : "rounded-[28px] border border-slate-200/90 p-4 shadow-[0_28px_80px_-42px_rgba(15,23,42,0.4)] backdrop-blur sm:p-5 lg:p-6"
         )}
       >
-        <div className={cx("flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between", isCoverIntegrated ? "lg:gap-8" : "")}>
+        {isCoverIntegrated ? (
+          <div
+            className="relative flex flex-col px-0 pb-1 md:hidden"
+            data-testid="profile-hero-mobile-identity"
+          >
+            <div
+              className="pointer-events-none absolute -inset-x-6 -top-7 h-[132px] rounded-[999px] bg-[radial-gradient(ellipse_at_38%_56%,rgba(255,252,246,0.88)_0%,rgba(255,252,246,0.72)_38%,rgba(255,252,246,0.32)_66%,rgba(255,252,246,0)_100%)] blur-[10px]"
+              aria-hidden="true"
+            />
+            <div className="relative z-10 flex items-end gap-3.5 text-left">
+              <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-[24px] border border-white bg-slate-100 shadow-[0_18px_42px_-26px_rgba(15,23,42,0.55)] ring-1 ring-slate-200/90">
+                <BusinessAvatarSurface
+                  business={profile}
+                  avatar={avatarImage}
+                  alt={`${name} logo`}
+                  sizes="88px"
+                  priority
+                  compact={false}
+                  variant="wordmark"
+                />
+                {viewerMode === "owner" && editMode && onAvatarUpload ? (
+                  <label className="absolute bottom-2 right-2 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white bg-white text-slate-700 shadow">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        onAvatarUpload(file);
+                      }}
+                      disabled={uploading?.avatar}
+                    />
+                    {uploading?.avatar ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Pencil className="h-4 w-4" />
+                    )}
+                  </label>
+                ) : null}
+              </div>
+              <div className="min-w-0 flex-1 pb-2">
+                <h1 className="max-w-full text-[1.82rem] font-semibold leading-[0.98] tracking-[-0.04em] text-slate-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.58)] [text-wrap:balance] min-[390px]:text-[2rem]">
+                  {name}
+                </h1>
+                <div className="[&>div:first-child]:mt-2 [&>div:first-child]:gap-x-2.5 [&>div:first-child]:gap-y-1 [&>div:first-child]:text-[13px] [&>div:first-child]:font-medium [&>div:first-child]:leading-none [&>div:first-child]:text-slate-700 [&>div:first-child]:drop-shadow-[0_1px_0_rgba(255,255,255,0.6)] [&>div:first-child>*+*]:border-l [&>div:first-child>*+*]:border-slate-300/90 [&>div:first-child>*+*]:pl-2.5 [&>div:first-child_svg]:h-[18px] [&>div:first-child_svg]:w-[18px] [&>div:last-child]:hidden">
+                  <HeroMetadata
+                    location={location}
+                    ratingSummary={ratingSummary}
+                    businessType={null}
+                    profile={profile}
+                  />
+                </div>
+                {headerDescription ? (
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">
+                    {headerDescription}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-5 w-full">
+              <HeroPreviewActions
+                profile={profile}
+                publicPath={publicPath}
+                viewerMode={viewerMode}
+                ownerPrimaryAction={ownerPrimaryAction}
+                ownerSecondaryActions={ownerSecondaryActions}
+                variant={actionsVariant}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          className={cx("flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between", isCoverIntegrated ? "hidden md:flex lg:gap-8" : "")}
+          data-testid={isCoverIntegrated ? "profile-hero-desktop-identity" : undefined}
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:min-w-0 lg:flex-1">
             <div
               className={cx(

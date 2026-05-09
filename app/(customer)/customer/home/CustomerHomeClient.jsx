@@ -11,7 +11,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
@@ -132,6 +133,7 @@ function CustomerHomePageInner({
   initialListings = [],
   initialCity = null,
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loadingUser } = useAuth();
   const { theme, hydrated } = useTheme();
@@ -620,16 +622,19 @@ function CustomerHomePageInner({
                         isLight
                       );
                       const displayPrice = formatListingDisplayPrice(item);
+                      const listingHref = `${isPublicMode ? "/listings" : "/customer/listings"}/${item.id}`;
+                      const prefetchListing = () => router.prefetch(listingHref);
                       return (
-                      <a
+                      <Link
                         key={item.id}
-                        href={`${isPublicMode ? "/listings" : "/customer/listings"}/${item.id}`}
+                        href={listingHref}
                         className="group rounded-xl border border-white/12 bg-white/5 hover:border-white/30 hover:bg-white/10 transition overflow-hidden flex gap-3 pointer-events-auto touch-manipulation"
-                        target="_self"
                         data-safe-nav="1"
                         data-clickdiag={clickDiagEnabled ? "tile" : undefined}
                         data-clickdiag-tile-id={clickDiagEnabled ? item.id : undefined}
                         data-clickdiag-bound={clickDiagEnabled ? "tile" : undefined}
+                        onPointerEnter={prefetchListing}
+                        onFocus={prefetchListing}
                         onClickCapture={diagTileClick("REACT_TILE_CAPTURE", item.id || idx)}
                         onClick={diagTileClick("REACT_TILE_BUBBLE", item.id || idx)}
                       >
@@ -681,7 +686,7 @@ function CustomerHomePageInner({
                             </p>
                           ) : null}
                         </div>
-                      </a>
+                      </Link>
                       );
                     })}
                   </div>

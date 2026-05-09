@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Heart, ShoppingCart } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { useCart } from "@/components/cart/CartProvider";
@@ -150,6 +150,11 @@ export default function ListingMarketplaceCard({
         : added
           ? "Added"
           : "Add to cart";
+  const prefetchListing = useCallback(() => {
+    if (listingHref && listingHref !== "/listings") {
+      router.prefetch(listingHref);
+    }
+  }, [listingHref, router]);
 
   useEffect(() => {
     if (!listing?.id || seeded) return undefined;
@@ -187,6 +192,7 @@ export default function ListingMarketplaceCard({
   const handleAddToCart = async () => {
     if (!listing?.id || isOutOfStock || seeded || adding) return;
     if (shouldRouteToDetailsBeforeCart) {
+      prefetchListing();
       router.push(listingHref);
       return;
     }
@@ -244,7 +250,8 @@ export default function ListingMarketplaceCard({
       <Link
         href={listingHref}
         className="flex min-h-0 flex-1 cursor-pointer flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8c73bb59] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf6f0]"
-        prefetch={false}
+        onPointerEnter={prefetchListing}
+        onFocus={prefetchListing}
       >
         <div
           className={

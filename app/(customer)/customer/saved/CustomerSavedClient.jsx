@@ -707,6 +707,9 @@ export default function CustomerSavedClient({
                   ))}
                 </div>
                 <p className="pt-2 text-xs text-slate-400">{statsSummary}</p>
+                {loading && hasLoaded ? (
+                  <p className="pt-1 text-xs text-slate-400">Updating...</p>
+                ) : null}
                 <div className="mt-4 border-b border-slate-200" />
               </div>
             ) : (
@@ -741,7 +744,13 @@ export default function CustomerSavedClient({
             </div>
           ) : null}
 
-          {isAuthed && totalSavedAll === 0 ? (
+          {isAuthed && !hasLoaded && loading ? (
+            <div className="rounded-2xl border border-slate-100 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
+              Loading saved items...
+            </div>
+          ) : null}
+
+          {isAuthed && hasLoaded && totalSavedAll === 0 ? (
             <div className="rounded-3xl border border-slate-100 bg-white px-6 py-14 text-center shadow-[0_1px_2px_rgba(15,23,42,0.035)]">
               <div className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-700">
                 <Heart className="h-7 w-7" />
@@ -761,13 +770,13 @@ export default function CustomerSavedClient({
             </div>
           ) : null}
 
-          {isAuthed && totalSavedAll > 0 && activeTab === "listings" && saved.length === 0 ? (
+          {isAuthed && hasLoaded && totalSavedAll > 0 && activeTab === "listings" && saved.length === 0 ? (
             <div className="rounded-2xl border border-slate-100 bg-white px-6 py-10 text-center text-sm text-slate-500">
               No saved listings yet.
             </div>
           ) : null}
 
-          {isAuthed && totalSavedAll > 0 && activeTab === "shops" && savedShops.length === 0 ? (
+          {isAuthed && hasLoaded && totalSavedAll > 0 && activeTab === "shops" && savedShops.length === 0 ? (
             <div className="rounded-2xl border border-slate-100 bg-white px-6 py-10 text-center text-sm text-slate-500">
               No saved shops yet.
             </div>

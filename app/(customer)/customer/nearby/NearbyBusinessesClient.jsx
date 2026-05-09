@@ -117,6 +117,29 @@ const getBusinessSelection = (business) => {
   };
 };
 
+const getNearbyStorageKey = (locationKey) =>
+  locationKey
+    ? `yb_customer_nearby_businesses_${locationKey}`
+    : "yb_customer_nearby_businesses";
+
+const readNearbyCacheSnapshot = (key) => {
+  if (typeof window === "undefined" || !key) {
+    return { businesses: [], cached: false };
+  }
+  try {
+    const cached = window.sessionStorage.getItem(key);
+    if (cached === null) return { businesses: [], cached: false };
+    const parsed = JSON.parse(cached);
+    if (Array.isArray(parsed)) return { businesses: parsed, cached: true };
+    if (Array.isArray(parsed?.businesses)) {
+      return { businesses: parsed.businesses, cached: true };
+    }
+  } catch {
+    /* ignore cache read errors */
+  }
+  return { businesses: [], cached: false };
+};
+
 export default function NearbyBusinessesClient() {
   const router = useRouter();
   const { user, loadingUser } = useAuth();
@@ -127,9 +150,8 @@ export default function NearbyBusinessesClient() {
   const mapEnabled = process.env.NEXT_PUBLIC_HOME_BISECT_MAP !== "0";
   const mapAvailable = mapEnabled && process.env.NEXT_PUBLIC_DISABLE_MAP !== "1";
   const locationKey = getLocationCacheKey(location);
-  const storageKey = locationKey
-    ? `yb_customer_nearby_businesses_${locationKey}`
-    : "yb_customer_nearby_businesses";
+  const storageKey = getNearbyStorageKey(locationKey);
+  const initialNearbyCache = { businesses: [], cached: false };
 
   const [search, setSearch] = useState("");
   const [businessTypeFilter, setBusinessTypeFilter] = useState("All");
@@ -140,10 +162,13 @@ export default function NearbyBusinessesClient() {
   const [preciseLocationLoading, setPreciseLocationLoading] = useState(false);
   const [visibleBusinessCount, setVisibleBusinessCount] = useState(INITIAL_VISIBLE_BUSINESSES);
 
-  const [ybBusinesses, setYbBusinesses] = useState([]);
-  const [ybBusinessesLoading, setYbBusinessesLoading] = useState(true);
+  const [ybBusinesses, setYbBusinesses] = useState(initialNearbyCache.businesses);
+  const [ybBusinessesLoading, setYbBusinessesLoading] = useState(
+    !initialNearbyCache.cached
+  );
+  const [ybBusinessesRefreshing, setYbBusinessesRefreshing] = useState(false);
   const [ybBusinessesError, setYbBusinessesError] = useState(null);
-  const [hasLoadedYb, setHasLoadedYb] = useState(false);
+  const [hasLoadedYb, setHasLoadedYb] = useState(initialNearbyCache.cached);
 
   const [hoveredBusinessId, setHoveredBusinessId] = useState(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState(null);
@@ -157,24 +182,17 @@ export default function NearbyBusinessesClient() {
   } = useSavedBusinesses();
 
   const cardRefs = useRef(new Map());
-  const hasLoadedYbRef = useRef(false);
+  const hasLoadedYbRef = useRef(initialNearbyCache.cached);
   const ybRequestIdRef = useRef(0);
 
   useEffect(() => {
-    const initial = (() => {
-      if (typeof window === "undefined") return [];
-      try {
-        const cached = sessionStorage.getItem(storageKey);
-        const parsed = cached ? JSON.parse(cached) : [];
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    })();
+    const initial = readNearbyCacheSnapshot(storageKey);
 
-    setYbBusinesses(initial);
-    setHasLoadedYb(initial.length > 0);
-    setYbBusinessesLoading(initial.length === 0);
+    setYbBusinesses(initial.businesses);
+    setHasLoadedYb(initial.cached);
+    hasLoadedYbRef.current = initial.cached;
+    setYbBusinessesLoading(!initial.cached);
+    setYbBusinessesRefreshing(false);
     setYbBusinessesError(null);
   }, [storageKey]);
 
@@ -232,7 +250,9 @@ export default function NearbyBusinessesClient() {
     if (!locationKey) {
       setYbBusinesses([]);
       setHasLoadedYb(true);
+      hasLoadedYbRef.current = true;
       setYbBusinessesLoading(false);
+      setYbBusinessesRefreshing(false);
       setYbBusinessesError(null);
       return;
     }
@@ -240,7 +260,9 @@ export default function NearbyBusinessesClient() {
     let active = true;
     const loadYb = async () => {
       const requestId = ++ybRequestIdRef.current;
-      setYbBusinessesLoading((prev) => (hasLoadedYbRef.current ? prev : true));
+      const hasRenderableData = hasLoadedYbRef.current;
+      setYbBusinessesLoading(!hasRenderableData);
+      setYbBusinessesRefreshing(hasRenderableData);
       setYbBusinessesError(null);
 
       try {
@@ -292,8 +314,10 @@ export default function NearbyBusinessesClient() {
             if (active && requestId === ybRequestIdRef.current) {
               setYbBusinesses([]);
               setHasLoadedYb(true);
+              hasLoadedYbRef.current = true;
               setYbBusinessesError("Still loading businesses. Please refresh to retry.");
               setYbBusinessesLoading(false);
+              setYbBusinessesRefreshing(false);
             }
             return;
           }
@@ -364,13 +388,17 @@ export default function NearbyBusinessesClient() {
         const next = mapped.length ? mapped : [];
         setYbBusinesses((prev) => (isSameBusinessList(prev, next) ? prev : next));
         setHasLoadedYb(true);
+        hasLoadedYbRef.current = true;
         if (!next.length) {
           setYbBusinessesError("No businesses available for this location yet.");
         }
 
         if (typeof window !== "undefined") {
           try {
-            sessionStorage.setItem(storageKey, JSON.stringify(next));
+            sessionStorage.setItem(
+              storageKey,
+              JSON.stringify({ businesses: next, loadedAt: Date.now() })
+            );
           } catch {
             /* ignore cache errors */
           }
@@ -380,10 +408,12 @@ export default function NearbyBusinessesClient() {
         if (!active || requestId !== ybRequestIdRef.current) return;
         setYbBusinesses((prev) => (isSameBusinessList(prev, []) ? prev : []));
         setHasLoadedYb(true);
+        hasLoadedYbRef.current = true;
         setYbBusinessesError("Could not load businesses yet. Please try again.");
       } finally {
         if (active && requestId === ybRequestIdRef.current) {
           setYbBusinessesLoading(false);
+          setYbBusinessesRefreshing(false);
         }
       }
     };
@@ -691,6 +721,8 @@ export default function NearbyBusinessesClient() {
                 businesses={filteredBusinesses}
                 visibleBusinesses={visibleBusinesses}
                 loading={ybBusinessesLoading && !hasLoadedYb}
+                loaded={hasLoadedYb}
+                refreshing={ybBusinessesRefreshing && hasLoadedYb}
                 error={ybBusinessesError}
                 activeBusinessId={activeBusinessId}
                 selectedBusinessId={selectedBusinessId}

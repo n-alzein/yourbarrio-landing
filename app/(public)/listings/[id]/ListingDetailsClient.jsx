@@ -118,6 +118,15 @@ function getGalleryRenderSrc(image, fallbackSrc) {
   return resolved ? resolved.trim() : fallbackSrc || null;
 }
 
+function listingMatchesRef(listing, listingRef) {
+  if (!listing || !listingRef) return false;
+  const normalizedRef = String(listingRef).trim().toLowerCase();
+  if (!normalizedRef) return false;
+  const listingId = listing.id ? String(listing.id).trim().toLowerCase() : "";
+  const publicId = listing.public_id ? String(listing.public_id).trim().toLowerCase() : "";
+  return normalizedRef === listingId || normalizedRef === publicId;
+}
+
 export default function ListingDetailsClient({
   params,
   backHref = "/",
@@ -157,6 +166,7 @@ export default function ListingDetailsClient({
   const [listing, setListing] = useState(initialListing);
   const [business, setBusiness] = useState(initialBusiness);
   const [loading, setLoading] = useState(!initialListing);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [fulfillmentType, setFulfillmentType] = useState("pickup");
@@ -172,12 +182,19 @@ export default function ListingDetailsClient({
   const [reportToast, setReportToast] = useState(null);
   const [listingMenuOpen, setListingMenuOpen] = useState(false);
   const [listingOptions, setListingOptions] = useState(initialListingOptions);
+  const [listingOptionsLoaded, setListingOptionsLoaded] = useState(Boolean(initialListingOptions));
   const [selectedVariantOptions, setSelectedVariantOptions] = useState({});
   const [serverAvailableQuantityBySelection, setServerAvailableQuantityBySelection] = useState({});
   const [previewCloseHelp, setPreviewCloseHelp] = useState("");
   const seededListing = isSeededListing(listing, { business });
   const toastTimerRef = useRef(null);
   const listingMenuRef = useRef(null);
+  const latestListingRef = useRef(initialListing);
+
+  useEffect(() => {
+    latestListingRef.current = listing;
+  }, [listing]);
+
   const getCurrentPath = useCallback(() => {
     if (typeof window !== "undefined") {
       return `${window.location.pathname}${window.location.search}`;
@@ -211,14 +228,15 @@ export default function ListingDetailsClient({
     let isMounted = true;
     const accountId = user?.id || null;
     const shouldUseServer = Boolean(accountId);
+    const hasRenderableListing = listingMatchesRef(latestListingRef.current, listingRef);
 
     async function load() {
-      if (initialListing) {
-        setLoading(false);
-        return;
-      }
       if (!listingRef) return;
-      setLoading(true);
+      setLoading(!hasRenderableListing);
+      setRefreshing(hasRenderableListing);
+      if (!hasRenderableListing) {
+        setListingOptionsLoaded(false);
+      }
       setError(null);
 
       try {
@@ -241,6 +259,7 @@ export default function ListingDetailsClient({
           setBusiness(payload?.business ?? null);
           setIsSaved(Boolean(payload?.isSaved));
           setListingOptions(payload?.listingOptions || null);
+          setListingOptionsLoaded(true);
           return;
         }
 
@@ -262,7 +281,10 @@ export default function ListingDetailsClient({
 
         if (!isMounted) return;
         setListing(item);
-        setListingOptions(await getListingVariants(client, item.id));
+        const nextListingOptions = await getListingVariants(client, item.id);
+        if (!isMounted) return;
+        setListingOptions(nextListingOptions);
+        setListingOptionsLoaded(true);
 
         const { data: biz } = await client
           .from("businesses")
@@ -285,9 +307,17 @@ export default function ListingDetailsClient({
         }
       } catch (err) {
         console.error("Failed to load listing", err);
-        if (isMounted) setError("We couldn’t load this item. Try again.");
+        if (isMounted) {
+          setError("We couldn’t load this item. Try again.");
+          if (hasRenderableListing) {
+            setListingOptionsLoaded(true);
+          }
+        }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }
 
@@ -296,7 +326,7 @@ export default function ListingDetailsClient({
     return () => {
       isMounted = false;
     };
-  }, [initialListing, supabase, listingRef, user?.id]);
+  }, [supabase, listingRef, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -858,17 +888,15 @@ export default function ListingDetailsClient({
     }
   }, [previewBanner?.editorHref, previewBanner?.isFromEditorPreview]);
 
-  if (loading) {
+  if (loading && !listing) {
     return (
       <div
-        className="min-h-screen px-4 md:px-8 lg:px-12 py-12"
+        className="min-h-[45vh] px-4 pb-3 pt-4 md:px-8 md:pb-2 md:pt-3 lg:px-12"
         style={{ background: "var(--background)", color: "var(--text)" }}
       >
-        <div className="max-w-6xl mx-auto animate-pulse space-y-6">
-          <div className="h-4 w-32 rounded-full" style={{ background: "var(--surface)" }} />
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 h-[460px] rounded-2xl" style={{ background: "var(--surface)" }} />
-            <div className="h-[460px] rounded-2xl" style={{ background: "var(--surface)" }} />
+        <div className="mx-auto max-w-6xl">
+          <div className="h-0.5 w-full overflow-hidden rounded-full bg-slate-200/70">
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-slate-400/70" />
           </div>
         </div>
       </div>
@@ -974,6 +1002,7 @@ export default function ListingDetailsClient({
       : "Delivery available";
   const quantityControlsDisabled =
     seededListing ||
+    !listingOptionsLoaded ||
     isOutOfStock ||
     purchaseRestricted ||
     purchaseEligibilityPending ||
@@ -983,11 +1012,17 @@ export default function ListingDetailsClient({
     quantity < selectableQuantityCap && !quantityControlsDisabled;
   const addToCartDisabled =
     seededListing ||
+    !listingOptionsLoaded ||
     isOutOfStock ||
     cartActionLoading ||
     (hasVariantOptions && !selectedVariant?.id);
   const inlineStatusMessage =
     statusMessage === "No items in cart." ? "" : statusMessage || availabilityStatusMessage;
+  const addToCartButtonLabel = seededListing ? "Coming soon" : !listingOptionsLoaded
+    ? "Checking options..."
+    : cartActionLoading
+      ? "Adding..."
+      : "Add to cart";
 
   return (
     <>
@@ -1035,6 +1070,9 @@ export default function ListingDetailsClient({
             >
               <ArrowLeft className="h-4 w-4" /> {backLabel}
             </Link>
+            {refreshing ? (
+              <span className="text-xs font-medium text-slate-500">Updating...</span>
+            ) : null}
           </div>
         ) : null}
 
@@ -1654,7 +1692,7 @@ export default function ListingDetailsClient({
                             : "0 12px 24px -20px rgba(110,52,255,0.38)",
                         }}
                       >
-                        {seededListing ? "Coming soon" : cartActionLoading ? "Adding..." : "Add to cart"}
+                        {addToCartButtonLabel}
                       </button>
                     </div>
                   )}

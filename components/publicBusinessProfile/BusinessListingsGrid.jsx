@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import FastImage from "@/components/FastImage";
 import { ArrowUpRight, MapPin, Tag } from "lucide-react";
 import { resolveListingMedia } from "@/lib/resolveListingMedia";
@@ -40,6 +41,8 @@ export default function BusinessListingsGrid({
   itemHrefResolver = getListingUrl,
   priceMode = "allIn",
 }) {
+  const router = useRouter();
+
   return (
     <ProfileSection
       id="listings"
@@ -59,6 +62,7 @@ export default function BusinessListingsGrid({
           <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {listings.map((item) => {
               const cover = resolveListingMedia(item).coverImageUrl;
+              const href = itemHrefResolver(item);
               const categoryLabel = getListingCategoryLabel(item, "Listing");
               const displayPriceCents = getDisplayPriceCents(item);
               const priceLabel =
@@ -68,7 +72,9 @@ export default function BusinessListingsGrid({
               return (
                 <Link
                   key={item.id}
-                  href={itemHrefResolver(item)}
+                  href={href}
+                  onPointerEnter={() => router.prefetch(href)}
+                  onFocus={() => router.prefetch(href)}
                   className="group flex w-[calc((100%-1rem)/2)] min-w-[calc((100%-1rem)/2)] shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md sm:w-[18.5rem] sm:min-w-[18.5rem] md:w-[19.5rem] md:min-w-[19.5rem] lg:w-[18rem] lg:min-w-[18rem] xl:w-[17rem] xl:min-w-[17rem]"
                 >
                   <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-white">

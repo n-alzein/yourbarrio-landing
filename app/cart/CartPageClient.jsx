@@ -130,6 +130,7 @@ export default function CartPageClient({ suppressEmptyState = false }) {
     [vendorGroups]
   );
   const total = allItemsSubtotal + deliveryFees + fees;
+  const hasRenderableCart = vendorGroups.length > 0 || items.length > 0;
 
   useEffect(() => {
     const syncCheckoutIntent = () => {
@@ -293,7 +294,7 @@ export default function CartPageClient({ suppressEmptyState = false }) {
 
   const shouldSuppressCartEmptyState =
     cartStatus !== "ready" ||
-    loading ||
+    (loading && !hasRenderableCart) ||
     !checkoutIntentChecked ||
     checkoutHandoffActive ||
     Boolean(checkoutIntent?.redirectTo) ||
@@ -362,6 +363,9 @@ export default function CartPageClient({ suppressEmptyState = false }) {
           <p className="text-xs uppercase tracking-[0.2em] opacity-70">Cart</p>
           <h1 className="text-3xl font-semibold">Review your cart</h1>
           <p className="text-sm opacity-75">Checkout separately with each business.</p>
+          {loading && hasRenderableCart ? (
+            <p className="text-xs opacity-60">Updating cart...</p>
+          ) : null}
           {visibleCartError ? (
             <p className="text-sm text-rose-300">{visibleCartError}</p>
           ) : null}

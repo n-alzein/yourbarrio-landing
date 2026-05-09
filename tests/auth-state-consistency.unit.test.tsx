@@ -108,6 +108,7 @@ function AuthProbe() {
       <div data-testid="initialized">{String(auth.authInitialized)}</div>
       <div data-testid="user-id">{auth.user?.id || ""}</div>
       <div data-testid="profile-id">{auth.profile?.id || ""}</div>
+      <div data-testid="role">{auth.role || ""}</div>
       <div data-testid="display-name">{displayName}</div>
       <div data-testid="avatar">{avatar}</div>
       <button type="button" onClick={() => void auth.refreshProfile()}>
@@ -400,6 +401,46 @@ describe("auth state consistency", () => {
         credentials: "include",
       })
     );
+  });
+
+  it("treats /api/me 401 as an expected guest state on public business pages", async () => {
+    pathname = "/b/834bcb5d7c";
+    mockSupabase = makeSupabase({
+      getSessionImpl: vi.fn().mockResolvedValue({
+        data: { session: null },
+        error: null,
+      }),
+    });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        user: null,
+        profile: null,
+        accountContext: {
+          role: "guest",
+          isAuthenticated: false,
+          isRoleResolved: true,
+        },
+      }),
+    } as Response);
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+        <h1>Barrio Boutique</h1>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated");
+      expect(screen.getByTestId("initialized")).toHaveTextContent("true");
+    });
+    expect(screen.getByTestId("user-id")).toHaveTextContent("");
+    expect(screen.getByTestId("profile-id")).toHaveTextContent("");
+    expect(screen.getByTestId("role")).toHaveTextContent("");
+    expect(screen.getByRole("heading", { name: "Barrio Boutique" })).toBeInTheDocument();
+    expect(screen.queryByText("We need one more refresh")).not.toBeInTheDocument();
   });
 
   it("does not downgrade an OAuth handoff landing to guest on a transient empty server snapshot", async () => {

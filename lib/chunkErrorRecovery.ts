@@ -12,6 +12,15 @@ const CHUNK_ERROR_PATTERNS = [
   /\/_next\/static\/(?:chunks|css)\//i,
 ];
 
+const NEXT_STATIC_ASSET_PATTERN = /\/_next\/static\/(?:chunks|css)\//i;
+const HTTP_API_ERROR_PATTERNS = [
+  /\b(?:401|403|404)\b/,
+  /\bUnauthorized\b/i,
+  /\bForbidden\b/i,
+  /\bNot Found\b/i,
+  /\/api\//i,
+];
+
 function collectErrorText(value: unknown, seen = new Set<unknown>()): string {
   if (!value || seen.has(value)) return "";
   seen.add(value);
@@ -44,9 +53,42 @@ function collectErrorText(value: unknown, seen = new Set<unknown>()): string {
   return "";
 }
 
+function collectErrorStatus(value: unknown, seen = new Set<unknown>()): number | null {
+  if (!value || seen.has(value)) return null;
+  seen.add(value);
+
+  if (typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const status = record.status ?? record.statusCode;
+  if (typeof status === "number") return status;
+  if (typeof status === "string") {
+    const parsed = Number.parseInt(status, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return (
+    collectErrorStatus(record.reason, seen) ??
+    collectErrorStatus(record.error, seen) ??
+    collectErrorStatus(record.cause, seen) ??
+    collectErrorStatus(record.target, seen) ??
+    collectErrorStatus(record.srcElement, seen)
+  );
+}
+
+function isHttpApiErrorText(text: string): boolean {
+  return HTTP_API_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 export function isChunkLoadError(error: unknown): boolean {
   const text = collectErrorText(error);
   if (!text) return false;
+  const hasNextStaticAsset = NEXT_STATIC_ASSET_PATTERN.test(text);
+  const status = collectErrorStatus(error);
+  if (!hasNextStaticAsset && status && status >= 400 && status < 500) {
+    return false;
+  }
+  if (!hasNextStaticAsset && isHttpApiErrorText(text)) {
+    return false;
+  }
   return CHUNK_ERROR_PATTERNS.some((pattern) => pattern.test(text));
 }
 

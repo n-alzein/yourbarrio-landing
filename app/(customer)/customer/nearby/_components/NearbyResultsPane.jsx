@@ -20,6 +20,8 @@ export default function NearbyResultsPane({
   businesses,
   visibleBusinesses,
   loading,
+  loaded = false,
+  refreshing = false,
   error,
   isMobile = false,
   activeBusinessId,
@@ -37,7 +39,7 @@ export default function NearbyResultsPane({
   onLoadMore,
   onResetFilters,
 }) {
-  if (loading) {
+  if (loading && !loaded) {
     return (
       <div
         className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
@@ -57,6 +59,14 @@ export default function NearbyResultsPane({
         className="px-2 py-10 text-center"
         data-testid="nearby-results-empty"
       >
+        {refreshing ? (
+          <div className="mb-4 flex justify-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-500 shadow-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+              Updating...
+            </span>
+          </div>
+        ) : null}
         <p className="text-lg font-semibold text-slate-950">
           {error ? "Growing in your area" : "No matches for these filters"}
         </p>
@@ -76,6 +86,14 @@ export default function NearbyResultsPane({
 
   return (
     <div className="space-y-6">
+      {refreshing ? (
+        <div className="flex justify-end">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-500 shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            Updating...
+          </span>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="nearby-results-list">
         {(visibleBusinesses || businesses).map((business) => (
           <NearbyBusinessCard

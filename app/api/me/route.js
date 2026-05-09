@@ -13,14 +13,15 @@ export async function GET(request) {
 
   const jsonResponse = NextResponse.json(
     {
-      user: accountContext.user,
-      profile: accountContext.profile,
+      user: accountContext.isAuthenticated ? accountContext.user : null,
+      profile: accountContext.isAuthenticated ? accountContext.profile : null,
       accountContext: {
-        role: accountContext.role,
+        role: accountContext.isAuthenticated ? accountContext.role : "guest",
         isRoleResolved: accountContext.isRoleResolved,
         businessRowExists: accountContext.businessRowExists,
         canPurchase: accountContext.canPurchase,
         isBusiness: accountContext.isBusiness,
+        isAuthenticated: accountContext.isAuthenticated,
       },
     },
     { status: accountContext.isAuthenticated ? 200 : 401 }

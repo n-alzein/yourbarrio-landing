@@ -235,6 +235,7 @@ export default function CheckoutPage() {
   const tax = pricing.taxCents / 100;
   const total = pricing.totalCents / 100;
   const hasInvalidCheckoutItems = stockIssues.length > 0;
+  const hasRenderableCheckoutCart = vendorGroups.length > 0;
 
   useEffect(() => {
     setHydrated(true);
@@ -502,7 +503,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (!hydrated || loading) {
+  if (!hydrated || (loading && !hasRenderableCheckoutCart)) {
     return (
       <div className="min-h-screen px-4 md:px-8 lg:px-12 py-12" style={{ background: "var(--background)", color: "var(--text)" }}>
         <div className="max-w-5xl mx-auto h-64 rounded-3xl animate-pulse" style={{ background: "var(--surface)" }} />
@@ -618,6 +619,9 @@ export default function CheckoutPage() {
             <p className="mt-4 min-w-0 break-words text-sm opacity-65">
               Pickup from {vendor?.business_name || vendor?.full_name || selectedGroup.business_name || "Local vendor"}
             </p>
+            {loading ? (
+              <p className="mt-2 text-xs opacity-60">Updating cart...</p>
+            ) : null}
           </div>
 
           <div className="grid w-full max-w-full min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
@@ -881,16 +885,18 @@ export default function CheckoutPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting || hasInvalidCheckoutItems}
+                  disabled={submitting || loading || hasInvalidCheckoutItems}
                   className="w-full max-w-full whitespace-normal rounded-[8px] px-5 py-3 text-center text-sm font-semibold leading-tight transition disabled:cursor-not-allowed"
                   style={{
                     background: "linear-gradient(135deg, #7c3aed, #a855f7)",
                     color: "white",
-                    opacity: submitting || hasInvalidCheckoutItems ? 0.72 : 1,
+                    opacity: submitting || loading || hasInvalidCheckoutItems ? 0.72 : 1,
                   }}
                 >
                   {submitting
                     ? "Preparing secure checkout…"
+                    : loading
+                      ? "Updating cart..."
                     : hasInvalidCheckoutItems
                       ? "Update cart to continue"
                       : "Continue to payment"}

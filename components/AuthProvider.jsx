@@ -1090,6 +1090,9 @@ async function fetchProfile(user) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 401) {
+          return { profile: null, error: null };
+        }
         if (res.status !== 401) {
           const nowFail = Date.now();
           profileFetchFailureTimestamps = profileFetchFailureTimestamps.filter(
@@ -1213,6 +1216,13 @@ async function fetchServerAccountSnapshot(reason = "bootstrap") {
     });
     const payload = await res.json().catch(() => ({}));
     const user = payload?.user ?? null;
+    if (res.status === 401) {
+      logAuthConsistency("server_snapshot:guest", {
+        reason,
+        status: res.status,
+      });
+      return { user: null, profile: null, role: null, error: null };
+    }
     if (!res.ok || !user?.id) {
       logAuthConsistency("server_snapshot:empty", {
         reason,

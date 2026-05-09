@@ -59,6 +59,7 @@ vi.mock("@/components/FastImage", () => ({
 const profile = {
   id: "00000000-0000-0000-0000-000000000111",
   owner_user_id: "00000000-0000-0000-0000-000000000111",
+  business_row_id: "business-row-111",
   public_id: "shop-111",
   business_name: "Barrio Boutique",
   business_type: "boutique",
@@ -222,5 +223,49 @@ describe("ProfileHero preview actions", () => {
       });
     });
     expect(pushMock).toHaveBeenCalledWith("/customer/messages/conversation-123");
+  });
+
+  it("keeps the public full-bleed mobile hero identity and actions mobile-scoped", () => {
+    render(
+      <PublicBusinessHero
+        mode="public"
+        profile={profile}
+        ratingSummary={{ count: 3, average: 4.7 }}
+        publicPath="/b/shop-111"
+        variant="publicFullBleed"
+      />
+    );
+
+    const mobileIdentity = screen.getByTestId("profile-hero-mobile-identity");
+    const desktopIdentity = screen.getByTestId("profile-hero-desktop-identity");
+
+    expect(mobileIdentity).toHaveClass("md:hidden");
+    expect(mobileIdentity).toHaveTextContent("Barrio Boutique");
+    expect(
+      mobileIdentity.querySelector("[data-business-avatar-placeholder]")
+    ).toBeInTheDocument();
+    expect(desktopIdentity).toHaveClass("hidden", "md:flex");
+    expect(mobileIdentity.querySelector(".flex.items-end")).toBeInTheDocument();
+
+    const mobileActions = mobileIdentity.querySelectorAll("a,button");
+    expect(
+      Array.from(mobileActions).map((node) => node.getAttribute("aria-label") || node.textContent)
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Directions"),
+        expect.stringContaining("Website"),
+        expect.stringContaining("Call"),
+        "Save business",
+        "Share",
+        expect.stringContaining("Sign in to message"),
+      ])
+    );
+
+    for (const label of ["Directions", "Website", "Call"]) {
+      const action = mobileIdentity.querySelector(`[aria-label="${label}"]`);
+      expect(action).toBeInTheDocument();
+      expect(action).toHaveClass("h-11", "w-11", "md:w-auto");
+      expect(action?.querySelector("span")).toHaveClass("sr-only", "md:not-sr-only");
+    }
   });
 });
