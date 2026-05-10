@@ -5,10 +5,10 @@ const OFFLINE_URL = "/offline";
 const PRECACHE_URLS = [
   OFFLINE_URL,
   "/manifest.webmanifest",
+  "/YB_AppLogo.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
-  "/icons/apple-touch-icon.png",
   "/logo-off.png",
 ];
 
@@ -46,11 +46,11 @@ const STATIC_FILE_PATHS = new Set([
   "/business-placeholder2-off.png",
   "/business-placeholder2-off2.png",
   "/customer-placeholder.png",
-  "/favicon.ico",
   "/google-icon.svg",
   "/logo.png",
   "/logo-off.png",
   "/manifest.webmanifest",
+  "/YB_AppLogo.png",
   "/YBpin.png",
 ]);
 

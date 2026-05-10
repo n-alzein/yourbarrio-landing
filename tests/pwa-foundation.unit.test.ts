@@ -19,7 +19,7 @@ describe("PWA foundation", () => {
     expect(manifest.theme_color).toBe("#111827");
     expect(manifest.icons).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ src: "/YB_AppLogo.png", sizes: "851x863" }),
+        expect.objectContaining({ src: "/YB_AppLogo.png", sizes: "1254x1254" }),
         expect.objectContaining({ src: "/icons/icon-192.png", sizes: "192x192" }),
         expect.objectContaining({ src: "/icons/icon-512.png", sizes: "512x512" }),
         expect.objectContaining({
@@ -53,5 +53,7 @@ describe("PWA foundation", () => {
     expect(sw).toContain('request.mode === "navigate"');
     expect(sw).toContain("networkFirstNavigation");
     expect(sw).not.toContain("beforeinstallprompt");
+    expect(sw).not.toContain("/favicon.ico");
+    expect(sw).not.toContain("/icons/apple-touch-icon.png");
   });
 });

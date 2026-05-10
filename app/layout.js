@@ -21,16 +21,9 @@ export const metadata = {
     statusBarStyle: "default",
   },
   icons: {
-    icon: [
-      { url: "/YB_AppLogo.png", type: "image/png" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
+    icon: [{ url: "/YB_AppLogo.png", sizes: "1254x1254", type: "image/png" }],
     shortcut: [{ url: "/YB_AppLogo.png", type: "image/png" }],
-    apple: [
-      { url: "/YB_AppLogo.png", type: "image/png" },
-      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    apple: [{ url: "/YB_AppLogo.png", sizes: "1254x1254", type: "image/png" }],
   },
   other: {
     "yb-shell-root": "root",
