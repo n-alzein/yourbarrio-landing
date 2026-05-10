@@ -81,10 +81,10 @@ export default async function AdminDashboardPage({
         </div>
       </header>
 
-      <div className="mt-4 md:mt-6">
+      <div className="mt-4 grid gap-4 md:mt-6 lg:grid-cols-2">
         <AdminSection
           title="Launch snapshot"
-          description="Prelaunch readiness and key blockers"
+          description="Prelaunch readiness and supply blockers"
           action={<p className="text-[11px] text-neutral-600 sm:text-xs">Live admin data</p>}
         >
           <LaunchSnapshotList
@@ -112,34 +112,43 @@ export default async function AdminDashboardPage({
                 definition: "Real businesses that do not yet have a published real listing.",
               },
               {
-                label: "Published listings",
-                value: kpis.listings.published,
-                definition: "All published listings, including demo/seeded listings.",
-              },
-              {
                 label: "Demo/internal listings",
                 value: kpis.listings.publishedDemoOrInternal,
                 definition:
                   "Published listings excluded from real inventory because they are demo/seeded, internal, test, suspended, or missing a business.",
               },
+            ]}
+          />
+        </AdminSection>
+
+        <AdminSection title="Customer snapshot" description="Testing activity and early intent">
+          <LaunchSnapshotList
+            rows={[
               {
                 label: "Customer intent",
                 value: kpis.customerIntent.score,
                 definition: "Recent saves, cart additions, and orders used as early testing signals.",
               },
               {
-                label: "Open issues",
-                value: issueCount,
-                tone: issueCount > 0 ? "attention" : "default",
-                definition: "Open moderation and support items that may require admin action.",
+                label: "New customers 7d",
+                value: kpis.users.newCustomers7d,
               },
               {
-                label: "Users",
-                value: kpis.users.total,
+                label: "Saved businesses",
+                value: kpis.customerIntent.savedBusinessesTotal,
               },
               {
-                label: "Businesses",
-                value: kpis.users.businessesTotal,
+                label: "Saved listings",
+                value: kpis.customerIntent.savedListingsTotal,
+              },
+              {
+                label: "Active carts",
+                value: kpis.customerIntent.activeCarts,
+                definition: "Current active cart records, not necessarily 7-day activity.",
+              },
+              {
+                label: "Orders 7d",
+                value: kpis.customerIntent.orders7d,
               },
             ]}
           />
@@ -155,30 +164,6 @@ export default async function AdminDashboardPage({
             issueCount={issueCount}
             moderationIssueCount={kpis.issues.openModerationFlags}
           />
-        </AdminSection>
-      </div>
-
-      <div className="mt-6 md:mt-8">
-        <AdminSection title="Customer testing" description="Aggregate 7-day intent signals from existing tables">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <DashboardMiniStat label="New customers 7d" value={kpis.users.newCustomers7d} />
-            <DashboardMiniStat
-              label="Saved businesses"
-              value={kpis.customerIntent.savedBusinessesTotal}
-              helper={formatRecentHelper(kpis.customerIntent.savedBusinesses7d)}
-            />
-            <DashboardMiniStat
-              label="Saved listings"
-              value={kpis.customerIntent.savedListingsTotal}
-              helper={formatRecentHelper(kpis.customerIntent.savedListings7d)}
-            />
-            <DashboardMiniStat
-              label="Active carts"
-              value={kpis.customerIntent.activeCarts}
-              definition="Current active cart records, not necessarily 7-day activity."
-            />
-            <DashboardMiniStat label="Orders 7d" value={kpis.customerIntent.orders7d} />
-          </div>
         </AdminSection>
       </div>
 
@@ -445,36 +430,6 @@ function NeedsAttentionList({
   }
 
   return <div className="space-y-2">{rows}</div>;
-}
-
-function DashboardMiniStat({
-  label,
-  value,
-  helper,
-  definition,
-}: {
-  label: string;
-  value: number | string | null;
-  helper?: string | null;
-  definition?: string;
-}) {
-  const displayValue =
-    value === null ? "N/A" : typeof value === "number" ? value.toLocaleString() : value;
-
-  return (
-    <div className="rounded-md bg-white/[0.025] px-2.5 py-2 sm:px-3">
-      <div className="flex min-w-0 items-center gap-1">
-        <p className="truncate text-[10px] font-medium text-neutral-500 sm:text-xs">{label}</p>
-        {definition ? <AdminInfoTooltip label={`${label} definition`}>{definition}</AdminInfoTooltip> : null}
-      </div>
-      <p className="mt-1 text-base font-semibold text-neutral-100 sm:text-lg">{displayValue}</p>
-      {helper ? <p className="mt-0.5 truncate text-[10px] text-neutral-500 sm:text-xs">{helper}</p> : null}
-    </div>
-  );
-}
-
-function formatRecentHelper(value: number | null) {
-  return value === null ? "recent unavailable" : `${value.toLocaleString()} in last 7d`;
 }
 
 function AttentionRow({
