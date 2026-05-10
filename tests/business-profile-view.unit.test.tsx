@@ -223,6 +223,50 @@ describe("BusinessProfileView", () => {
     }
   });
 
+  it("renders linked business cover media variants before legacy cover URLs", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      render(
+        <BusinessProfileView
+          mode="public"
+          {...baseProps}
+          profile={{
+            ...baseProps.profile,
+            cover_photo_url: "https://legacy.example.com/cover.jpg",
+            cover_media_asset_id: "cover-asset-1",
+            business_cover_media_asset: {
+              purpose: "business_cover",
+              bucket: "business-photos",
+              cover_desktop_path: "owner/cover/asset/cover_desktop_1600.webp",
+              cover_mobile_path: "owner/cover/asset/cover_mobile_900.webp",
+            },
+          }}
+        />
+      );
+
+      expect(screen.getByTestId("profile-hero-cover")).toHaveAttribute(
+        "data-business-cover-source",
+        "uploaded"
+      );
+      expect(screen.getByAltText("Barrio Boutique cover")).toHaveAttribute(
+        "src",
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/cover/asset/cover_desktop_1600.webp"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
+  it("uses the default cover fallback when no uploaded cover is available", () => {
+    render(<BusinessProfileView mode="public" {...baseProps} />);
+
+    expect(screen.getByTestId("profile-hero-cover")).toHaveAttribute(
+      "data-business-cover-source",
+      "defaultFallback"
+    );
+  });
+
   it("renders a logged-out public profile with nullable production-like fields", () => {
     render(
       <BusinessProfileView

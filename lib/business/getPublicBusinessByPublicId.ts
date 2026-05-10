@@ -1,7 +1,9 @@
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import {
   applyPublicBusinessVisibility,
+  isPublicBusinessCoverMediaSelectError,
   mapPublicBusinessRow,
+  PUBLIC_BUSINESS_LEGACY_SELECT,
   PUBLIC_BUSINESS_SELECT,
   type PublicBusiness,
   type PublicBusinessRow,
@@ -20,18 +22,26 @@ export async function getPublicBusinessByPublicId(
   if (!trimmedPublicId) return null;
 
   const supabase = options.client ?? getPublicSupabaseServerClient();
-  const query = applyPublicBusinessVisibility(
-    supabase
-      .from("businesses")
-      .select(PUBLIC_BUSINESS_SELECT)
-      .eq("public_id", trimmedPublicId),
-    options
-  );
+  const runQuery = (select: string) =>
+    applyPublicBusinessVisibility(
+      supabase
+        .from("businesses")
+        .select(select)
+        .eq("public_id", trimmedPublicId),
+      options
+    ).maybeSingle();
 
-  const { data, error } = (await query.maybeSingle()) as {
+  let { data, error } = (await runQuery(PUBLIC_BUSINESS_SELECT)) as {
     data: PublicBusinessRow | null;
     error: { code?: string | null; message?: string | null } | null;
   };
+
+  if (error && isPublicBusinessCoverMediaSelectError(error)) {
+    ({ data, error } = (await runQuery(PUBLIC_BUSINESS_LEGACY_SELECT)) as {
+      data: PublicBusinessRow | null;
+      error: { code?: string | null; message?: string | null } | null;
+    });
+  }
 
   if (error) {
     console.warn("[public-business] businesses public_id lookup failed", {

@@ -14,6 +14,7 @@ export type BusinessImageInput = {
   logo_url?: string | null;
   profile_photo_url?: string | null;
   cover_photo_url?: string | null;
+  cover_media_asset_id?: string | null;
   bucket?: string | null;
   purpose?: string | null;
   avatar_128_path?: string | null;

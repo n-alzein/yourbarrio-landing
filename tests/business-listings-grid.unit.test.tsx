@@ -31,8 +31,16 @@ const listings = [
     city: "Los Angeles",
     photo_url: "/cold-brew.jpg",
     photo_variants: [
-      { id: "photo-1", original: { url: "/cold-brew.jpg", path: null } },
-      { id: "photo-2", original: { url: "/cold-brew-cover.jpg", path: null } },
+      {
+        id: "photo-1",
+        original: { url: "/cold-brew.jpg", path: null },
+        variants: { card_640: "/cold-brew-card.webp" },
+      },
+      {
+        id: "photo-2",
+        original: { url: "/cold-brew-cover.jpg", path: null },
+        variants: { card_640: "/cold-brew-cover-card.webp" },
+      },
     ],
     cover_image_id: "photo-2",
     public_id: "listing-1",
@@ -77,7 +85,7 @@ describe("BusinessListingsGrid", () => {
     expect(cards[0].className).toContain("sm:w-[18.5rem]");
   });
 
-  it("uses cover_image_id for the visible listing image and falls back when absent", () => {
+  it("uses optimized cover variants for the visible listing image and falls back when absent", () => {
     const { container } = render(
       <BusinessListingsGrid
         listings={listings}
@@ -86,12 +94,35 @@ describe("BusinessListingsGrid", () => {
     );
 
     const images = screen.getAllByRole("img");
-    expect(images[0]).toHaveAttribute("src", "/cold-brew-cover.jpg");
+    expect(images[0]).toHaveAttribute("src", "/cold-brew-cover-card.webp");
     expect(images[1]).toHaveAttribute("src", "/pan-dulce-full.jpg");
     expect(images[0]).toHaveClass("object-contain");
 
     const imageFrame = container.querySelector(".aspect-\\[4\\/3\\]");
     expect(imageFrame).toHaveClass("bg-white", "flex", "items-center", "justify-center");
+  });
+
+  it("falls back to legacy photo_url when embedded listing variants are absent", () => {
+    render(
+      <BusinessListingsGrid
+        listings={[
+          {
+            id: "legacy-listing",
+            title: "Legacy Listing",
+            price: 10,
+            category: "food-drink",
+            photo_url: "/legacy-listing.jpg",
+            public_id: "legacy-listing",
+          },
+        ]}
+        itemHrefResolver={(item) => `/listings/${item.public_id}`}
+      />
+    );
+
+    expect(screen.getByRole("img", { name: "Legacy Listing" })).toHaveAttribute(
+      "src",
+      "/legacy-listing.jpg"
+    );
   });
 
   it("removes the top category pill while keeping category metadata below the title", () => {

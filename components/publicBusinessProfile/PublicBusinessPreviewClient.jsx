@@ -20,6 +20,11 @@ import {
   BUSINESS_GALLERY_WITH_MEDIA_SELECT,
   isBusinessGalleryMediaSelectError,
 } from "@/lib/businessGalleryPhotos";
+import {
+  PUBLIC_BUSINESS_LEGACY_SELECT,
+  PUBLIC_BUSINESS_SELECT,
+  isPublicBusinessCoverMediaSelectError,
+} from "@/lib/business/publicBusinessQuery";
 import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
 import { withListingPricing } from "@/lib/pricing";
 
@@ -202,9 +207,7 @@ export default function PublicBusinessPreviewClient({
 
       const profileQuery = client
         .from("businesses")
-        .select(
-          "id,owner_user_id,public_id,business_name,category,description,website,phone,address,city,profile_photo_url,cover_photo_url,hours_json,social_links_json,verification_status"
-        )
+        .select(PUBLIC_BUSINESS_SELECT)
         .eq("owner_user_id", businessId)
         .maybeSingle();
 
@@ -231,7 +234,7 @@ export default function PublicBusinessPreviewClient({
       const listingsQuery = client
         .from("listings")
         .select(
-          "id,business_id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,created_at"
+          "id,business_id,title,price,category,category_id,category_info:business_categories(name,slug),city,photo_url,photo_variants,cover_image_id,created_at"
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
@@ -261,6 +264,14 @@ export default function PublicBusinessPreviewClient({
         ratingsQuery,
         reviewsPromise,
       ]);
+
+      if (profileResult?.error && isPublicBusinessCoverMediaSelectError(profileResult.error)) {
+        profileResult = await client
+          .from("businesses")
+          .select(PUBLIC_BUSINESS_LEGACY_SELECT)
+          .eq("owner_user_id", businessId)
+          .maybeSingle();
+      }
 
       if (galleryResult?.error && isBusinessGalleryMediaSelectError(galleryResult.error)) {
         galleryResult = await client

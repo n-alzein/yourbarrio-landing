@@ -80,7 +80,7 @@ export default async function BusinessProfileRoute() {
   const listingsQuery = supabase
     .from("listings")
     .select(
-      "id, public_id, business_id, title, price, category, listing_category, category_id, photo_url, created_at"
+      "id, public_id, business_id, title, price, category, listing_category, category_id, photo_url, photo_variants, cover_image_id, created_at"
     )
     .eq("business_id", effectiveUserId)
     .order("created_at", { ascending: false });
@@ -140,6 +140,8 @@ export default async function BusinessProfileRoute() {
     social_links_json: rawProfile.social_links_json ?? null,
     profile_photo_url: rawProfile.profile_photo_url,
     cover_photo_url: rawProfile.cover_photo_url,
+    cover_media_asset_id: rawProfile.cover_media_asset_id ?? null,
+    business_cover_media_asset: rawProfile.business_cover_media_asset ?? null,
   } : null) || {
     id: effectiveUserId,
     business_name: "",
@@ -167,6 +169,8 @@ export default async function BusinessProfileRoute() {
     social_links_json: null,
     profile_photo_url: "",
     cover_photo_url: "",
+    cover_media_asset_id: null,
+    business_cover_media_asset: null,
   };
 
   const ratingSummary = buildRatingSummary(reviewRatingsResult.data || []);

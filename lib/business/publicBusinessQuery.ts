@@ -2,7 +2,25 @@ import { buildBusinessTaxonomyPayload } from "@/lib/taxonomy/compat";
 
 export const PUBLIC_VERIFIED_BUSINESS_STATUSES = ["auto_verified", "manually_verified"];
 
-export const PUBLIC_BUSINESS_SELECT = [
+export const PUBLIC_BUSINESS_COVER_MEDIA_ASSET_SELECT = [
+  "id",
+  "bucket",
+  "purpose",
+  "status",
+  "source_path",
+  "original_path",
+  "cover_mobile_path",
+  "cover_desktop_path",
+  "public_url",
+  "width",
+  "height",
+  "mime_type",
+  "size_bytes",
+  "created_at",
+  "updated_at",
+].join(",");
+
+const PUBLIC_BUSINESS_BASE_FIELDS = [
   "id",
   "owner_user_id",
   "account_status",
@@ -34,6 +52,14 @@ export const PUBLIC_BUSINESS_SELECT = [
   "social_links_json",
   "is_internal",
   "verification_status",
+];
+
+export const PUBLIC_BUSINESS_LEGACY_SELECT = PUBLIC_BUSINESS_BASE_FIELDS.join(",");
+
+export const PUBLIC_BUSINESS_SELECT = [
+  ...PUBLIC_BUSINESS_BASE_FIELDS,
+  "cover_media_asset_id",
+  `business_cover_media_asset:media_assets!businesses_cover_media_asset_id_fkey(${PUBLIC_BUSINESS_COVER_MEDIA_ASSET_SELECT})`,
 ].join(",");
 
 export type PublicBusiness = {
@@ -53,6 +79,8 @@ export type PublicBusiness = {
   phone: string | null;
   profile_photo_url: string | null;
   cover_photo_url: string | null;
+  cover_media_asset_id?: string | null;
+  business_cover_media_asset?: Record<string, unknown> | null;
   address: string | null;
   address_2: string | null;
   city: string | null;
@@ -87,6 +115,8 @@ export type PublicBusinessRow = {
   phone: string | null;
   profile_photo_url: string | null;
   cover_photo_url: string | null;
+  cover_media_asset_id?: string | null;
+  business_cover_media_asset?: Record<string, unknown> | null;
   address: string | null;
   address_2: string | null;
   city: string | null;
@@ -125,6 +155,19 @@ export function applyPublicBusinessVisibility(query: any, options: { viewerCanSe
   return nextQuery;
 }
 
+export function isPublicBusinessCoverMediaSelectError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: string | null; message?: string | null; details?: string | null };
+  const code = String(err.code || "");
+  const message = String(err.message || err.details || "");
+  return (
+    code === "42703" ||
+    code === "PGRST200" ||
+    code === "PGRST201" ||
+    /cover_media_asset_id|media_assets|relationship|foreign key/i.test(message)
+  );
+}
+
 export function mapPublicBusinessRow(data: PublicBusinessRow): PublicBusiness {
   const taxonomy = buildBusinessTaxonomyPayload({
     business_type: data.business_type,
@@ -148,6 +191,11 @@ export function mapPublicBusinessRow(data: PublicBusinessRow): PublicBusiness {
     phone: data.phone ?? null,
     profile_photo_url: data.profile_photo_url ?? null,
     cover_photo_url: data.cover_photo_url ?? null,
+    cover_media_asset_id: data.cover_media_asset_id ?? null,
+    business_cover_media_asset:
+      data.business_cover_media_asset && typeof data.business_cover_media_asset === "object"
+        ? data.business_cover_media_asset
+        : null,
     address: data.address ?? null,
     address_2: data.address_2 ?? null,
     city: data.city ?? null,

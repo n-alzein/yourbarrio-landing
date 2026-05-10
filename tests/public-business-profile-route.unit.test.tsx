@@ -181,6 +181,18 @@ const publicBusinessProfileSource = readFileSync(
   path.join(process.cwd(), "app/(public)/(marketing)/b/[id]/page.jsx"),
   "utf8"
 );
+const businessProfilePageSource = readFileSync(
+  path.join(process.cwd(), "app/(business)/business/profile/page.js"),
+  "utf8"
+);
+const businessPreviewPageSource = readFileSync(
+  path.join(process.cwd(), "app/(business)/business/preview/page.js"),
+  "utf8"
+);
+const publicBusinessPreviewClientSource = readFileSync(
+  path.join(process.cwd(), "components/publicBusinessProfile/PublicBusinessPreviewClient.jsx"),
+  "utf8"
+);
 
 describe("PublicBusinessProfilePage", () => {
   it("opens by public_id without requiring coordinates or listings", async () => {
@@ -208,5 +220,18 @@ describe("PublicBusinessProfilePage", () => {
   it("reads public business listings from public_listings_v instead of base listings", () => {
     expect(publicBusinessProfileSource).toContain('.from("public_listings_v")');
     expect(publicBusinessProfileSource).not.toContain('.from("listings")');
+  });
+
+  it("selects listing media variant fields for embedded business profile listing cards", () => {
+    for (const source of [
+      publicBusinessProfileSource,
+      businessProfilePageSource,
+      businessPreviewPageSource,
+      publicBusinessPreviewClientSource,
+    ]) {
+      expect(source).toContain("photo_variants");
+      expect(source).toContain("cover_image_id");
+      expect(source).toContain("photo_url");
+    }
   });
 });

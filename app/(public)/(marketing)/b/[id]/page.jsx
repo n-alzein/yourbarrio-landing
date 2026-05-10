@@ -202,7 +202,7 @@ function buildListingsQuery(supabase, businessId, limit, filters, viewerCanSeeIn
   let query = supabase
     .from("public_listings_v")
     .select(
-      "id,public_id,business_id,title,price,category,listing_category,category_id,city,photo_url,created_at,is_internal"
+      "id,public_id,business_id,title,price,category,listing_category,category_id,city,photo_url,photo_variants,cover_image_id,created_at,is_internal"
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })

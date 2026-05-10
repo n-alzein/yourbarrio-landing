@@ -23,32 +23,10 @@ import {
   fetchBusinessReviews,
 } from "@/lib/publicBusinessProfile/reviews";
 import { fetchBusinessGalleryPhotos } from "@/lib/businessGalleryPhotos";
+import { getBusinessByUserId } from "@/lib/business/getBusinessByUserId";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const PROFILE_FIELDS = [
-  "id",
-  "public_id",
-  "role",
-  "business_name",
-  "full_name",
-  "category",
-  "description",
-  "website",
-  "phone",
-  "address",
-  "address_2",
-  "city",
-  "state",
-  "postal_code",
-  "latitude",
-  "longitude",
-  "profile_photo_url",
-  "cover_photo_url",
-  "hours_json",
-  "social_links_json",
-].join(",");
 
 function buildRatingSummary(rows) {
   const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -87,26 +65,18 @@ async function safeQuery(promise, fallback, label) {
 }
 
 async function fetchProfile(supabase, id) {
-  const { data, error } = await supabase
-    .from("users")
-    .select(PROFILE_FIELDS)
-    .eq("id", id)
-    .eq("role", "business")
-    .maybeSingle();
-
-  if (error) {
-    console.error("[business preview] profile query failed", error);
-    return null;
-  }
-
-  return data ?? null;
+  return getBusinessByUserId({
+    client: supabase,
+    userId: id,
+    selfHeal: false,
+  });
 }
 
 function buildListingsQuery(supabase, businessId, limit, filters) {
   let query = supabase
     .from("listings")
     .select(
-      "id,public_id,business_id,title,description,price,category,listing_category,category_id,city,photo_url,created_at"
+      "id,public_id,business_id,title,description,price,category,listing_category,category_id,city,photo_url,photo_variants,cover_image_id,created_at"
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })

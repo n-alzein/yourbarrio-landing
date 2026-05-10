@@ -187,27 +187,36 @@ export default function BusinessProfilePage({
         purpose: type === "avatar" ? "business_avatar" : "business_cover",
       });
       const publicUrl = committed.profileUrl;
+      const mediaAssetId = committed?.assets?.[0]?.id || null;
 
       if (!publicUrl) throw new Error("Upload failed to return a URL.");
 
-      const payload =
+      const userPayload =
         type === "avatar"
           ? { profile_photo_url: publicUrl }
           : { cover_photo_url: publicUrl };
-      const filteredPayload = filterPayloadByProfile(payload, profile);
-      if (!Object.keys(filteredPayload).length) {
+      const businessPayload =
+        type === "cover" && mediaAssetId
+          ? { cover_photo_url: publicUrl, cover_media_asset_id: mediaAssetId }
+          : userPayload;
+      const filteredUserPayload = filterPayloadByProfile(userPayload, profile);
+      const filteredBusinessPayload = filterPayloadByProfile(businessPayload, {
+        ...profile,
+        cover_media_asset_id: profile?.cover_media_asset_id ?? null,
+      });
+      if (!Object.keys(filteredUserPayload).length) {
         showToast("error", "Photo fields are not available in your profile schema.");
         return;
       }
 
-      setProfile((prev) => ({ ...prev, ...filteredPayload }));
+      setProfile((prev) => ({ ...prev, ...filteredBusinessPayload }));
       if (!client?.storage) {
         showToast("error", "Storage client is not ready. Please refresh.");
         return;
       }
       const { error } = await client
         .from("users")
-        .update(filteredPayload)
+        .update(filteredUserPayload)
         .eq("id", businessId);
 
       if (error) {
@@ -215,10 +224,21 @@ export default function BusinessProfilePage({
         return;
       }
 
-      const { error: businessPhotoError } = await client
+      let { error: businessPhotoError } = await client
         .from("businesses")
-        .update(filteredPayload)
+        .update(filteredBusinessPayload)
         .eq("owner_user_id", businessId);
+
+      if (
+        businessPhotoError &&
+        type === "cover" &&
+        /cover_media_asset_id|column/i.test(String(businessPhotoError.message || ""))
+      ) {
+        ({ error: businessPhotoError } = await client
+          .from("businesses")
+          .update(filteredUserPayload)
+          .eq("owner_user_id", businessId));
+      }
 
       if (businessPhotoError) {
         showToast(

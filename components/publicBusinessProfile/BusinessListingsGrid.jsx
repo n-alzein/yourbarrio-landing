@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FastImage from "@/components/FastImage";
 import { ArrowUpRight, MapPin, Tag } from "lucide-react";
+import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { resolveListingMedia } from "@/lib/resolveListingMedia";
 import { getListingUrl } from "@/lib/ids/publicRefs";
 import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
@@ -62,7 +63,7 @@ export default function BusinessListingsGrid({
         <div className="-mx-1 px-1">
           <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {listingList.map((item, index) => {
-              const cover = resolveListingMedia(item).coverImageUrl;
+              const cover = resolveListingCardImageUrl(item) || resolveListingMedia(item).coverImageUrl;
               const resolvedHref = itemHrefResolver?.(item);
               const href = typeof resolvedHref === "string" && resolvedHref ? resolvedHref : "#";
               const categoryLabel = getListingCategoryLabel(item, "Listing");

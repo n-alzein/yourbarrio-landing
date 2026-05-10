@@ -171,6 +171,11 @@ export async function POST(req) {
     longitude: coords?.lng ?? null,
     updated_at: new Date().toISOString(),
   };
+  const nextCoverPhotoUrl = userPayload.cover_photo_url || "";
+  const previousCoverPhotoUrl =
+    existingBusiness.cover_photo_url || existingUser.cover_photo_url || "";
+  const coverPhotoUrlChanged =
+    hasOwn(body, "cover_photo_url") && nextCoverPhotoUrl !== previousCoverPhotoUrl;
 
   const { data: updatedUser, error: userUpdateError } = await supabase
     .from("users")
@@ -203,6 +208,7 @@ export async function POST(req) {
     postal_code: mergedLocation.postal_code || null,
     profile_photo_url: userPayload.profile_photo_url || null,
     cover_photo_url: userPayload.cover_photo_url || null,
+    ...(coverPhotoUrlChanged ? { cover_media_asset_id: null } : {}),
     hours_json: userPayload.hours_json,
     social_links_json: userPayload.social_links_json,
     latitude: coords?.lat ?? null,
@@ -229,11 +235,25 @@ export async function POST(req) {
     updated_at: new Date().toISOString(),
   };
 
-  const { data: updatedBusiness, error: businessUpsertError } = await supabase
+  let { data: updatedBusiness, error: businessUpsertError } = await supabase
     .from("businesses")
     .upsert(businessPayload, { onConflict: "owner_user_id", ignoreDuplicates: false })
     .select("*")
     .maybeSingle();
+
+  if (
+    businessUpsertError &&
+    Object.prototype.hasOwnProperty.call(businessPayload, "cover_media_asset_id") &&
+    /cover_media_asset_id|column/i.test(String(businessUpsertError.message || ""))
+  ) {
+    const legacyBusinessPayload = { ...businessPayload };
+    delete legacyBusinessPayload.cover_media_asset_id;
+    ({ data: updatedBusiness, error: businessUpsertError } = await supabase
+      .from("businesses")
+      .upsert(legacyBusinessPayload, { onConflict: "owner_user_id", ignoreDuplicates: false })
+      .select("*")
+      .maybeSingle());
+  }
 
   if (businessUpsertError) {
     return NextResponse.json(

@@ -92,6 +92,29 @@ describe("business image resolvers", () => {
     }
   });
 
+  it("prefers a directly linked business cover media asset over the legacy cover URL", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      expect(
+        resolveBusinessCoverUrl({
+          cover_photo_url: "https://cdn.example.com/legacy-cover.jpg",
+          cover_media_asset_id: "cover-asset-1",
+          business_cover_media_asset: {
+            purpose: "business_cover",
+            bucket: "business-photos",
+            cover_mobile_path: "owner/cover/asset/cover_mobile_900.webp",
+            cover_desktop_path: "owner/cover/asset/cover_desktop_1600.webp",
+          },
+        })
+      ).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/cover/asset/cover_desktop_1600.webp"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
   it("returns only real uploaded covers", () => {
     expect(
       getBusinessCoverImage({
