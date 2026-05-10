@@ -166,7 +166,8 @@ export default function BusinessReviewsPanel({
   const [replyError, setReplyError] = useState("");
   const [replyLoading, setReplyLoading] = useState(false);
 
-  const customerId = viewer.user?.id || null;
+  const isOwnerMode = mode === "owner";
+  const customerId = isOwnerMode ? null : viewer.user?.id || null;
 
   const reviewAverage = reviews.length
     ? reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) /
@@ -190,8 +191,6 @@ export default function BusinessReviewsPanel({
   }, [summary, totalReviews]);
 
   const canLoadMore = reviews.length < totalReviews;
-  const isOwnerMode = mode === "owner";
-
   const handleLoadMore = async () => {
     if (!businessId || loadingMore) return;
     setLoadingMore(true);
@@ -369,7 +368,8 @@ export default function BusinessReviewsPanel({
     let active = true;
     const ids = Array.from(new Set(reviews.map((item) => item.customer_id).filter(Boolean)));
     const missing = ids.filter((id) => {
-      const profile = customerProfiles[id];
+      const reviewWithProfile = reviews.find((item) => item.customer_id === id);
+      const profile = customerProfiles[id] || reviewWithProfile?.author_profile;
       return !profile || (!profile.display_name && !profile.avatar_url);
     });
     if (!missing.length) return () => {};
@@ -734,9 +734,9 @@ export default function BusinessReviewsPanel({
   const isOwnBusiness = Boolean(
     isBusinessViewer && viewer.user?.id && businessId && viewer.user.id === businessId
   );
-  const showReviewForm = viewer.isCustomer && !customerReviewId;
-  const showLoginPrompt = viewer.status === "guest";
-  const showBusinessNote = isBusinessViewer;
+  const showReviewForm = !isOwnerMode && viewer.isCustomer && !customerReviewId;
+  const showLoginPrompt = !isOwnerMode && viewer.status === "guest";
+  const showBusinessNote = !isOwnerMode && isBusinessViewer;
 
   const handlePromptLogin = () => {
     const next = getCurrentPath();

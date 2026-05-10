@@ -8,12 +8,36 @@ import { getCurrentAccountContext } from "@/lib/auth/getCurrentAccountContext";
 import { normalizeAuthUser } from "@/lib/auth/normalizeAuthUser";
 import { resolveAvatarUrl } from "@/lib/avatarUrl";
 import { Analytics } from "@vercel/analytics/react";
+import PwaServiceWorkerRegistration from "@/components/PwaServiceWorkerRegistration";
 
 export const metadata = {
   title: "YourBarrio - Shop Local",
   description: "YourBarrio neighborhood discovery landing page",
+  manifest: "/manifest.webmanifest",
+  applicationName: "YourBarrio",
+  appleWebApp: {
+    capable: true,
+    title: "YourBarrio",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/YB_AppLogo.png", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: [{ url: "/YB_AppLogo.png", type: "image/png" }],
+    apple: [
+      { url: "/YB_AppLogo.png", type: "image/png" },
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   other: {
     "yb-shell-root": "root",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-title": "YourBarrio",
+    "apple-mobile-web-app-status-bar-style": "default",
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -87,6 +111,7 @@ export default async function RootLayout({ children, auth, businessAuth }) {
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1"
         />
+        <meta name="theme-color" content="#111827" />
         {imageHosts.map((host) => (
           <link key={`preconnect-${host}`} rel="preconnect" href={host} />
         ))}
@@ -101,6 +126,7 @@ export default async function RootLayout({ children, auth, businessAuth }) {
           {auth}
           {businessAuth}
         </AppShell>
+        <PwaServiceWorkerRegistration />
         {/* Vercel Web Analytics: global passive tracking; keep at root and avoid page-level duplicates. */}
         <Analytics />
       </body>

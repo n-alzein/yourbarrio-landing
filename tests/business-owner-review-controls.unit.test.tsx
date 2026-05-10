@@ -76,6 +76,51 @@ describe("Business owner review controls", () => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("confirm", vi.fn(() => true));
+    viewerContext = {
+      status: "authenticated",
+      role: "business",
+      user: null,
+      profile: null,
+      loading: false,
+      isAuthenticated: true,
+      isCustomer: false,
+      isBusiness: true,
+      isAdmin: false,
+      isInternal: false,
+    };
+  });
+
+  it("does not render customer review entry points in owner mode", () => {
+    viewerContext = {
+      status: "authenticated",
+      role: "customer",
+      user: { id: "customer-1" },
+      profile: null,
+      loading: false,
+      isAuthenticated: true,
+      isCustomer: true,
+      isBusiness: false,
+      isAdmin: false,
+      isInternal: false,
+    };
+
+    render(
+      <BusinessReviewsPanel
+        mode="owner"
+        businessId="00000000-0000-0000-0000-000000000111"
+        initialReviews={reviews}
+        ratingSummary={{
+          count: 2,
+          average: 4.5,
+          breakdown: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 1 },
+        }}
+        reviewCount={2}
+      />
+    );
+
+    expect(screen.queryByText("Leave a review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sign in to write a review")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Reply" })).toHaveLength(2);
   });
 
   it("updates review count and rating summary after an owner deletes a review", async () => {
@@ -133,7 +178,7 @@ describe("Business owner review controls", () => {
           expect.objectContaining({ method: "DELETE" }),
         ],
         [
-          "/api/public-business-reviews?businessId=00000000-0000-0000-0000-000000000111&limit=2",
+          "/api/public-business-reviews?businessId=00000000-0000-0000-0000-000000000111&limit=6",
           expect.objectContaining({ credentials: "same-origin" }),
         ],
       ])
