@@ -15,6 +15,11 @@ import {
   sanitizePublicProfile,
   sanitizeReviews,
 } from "@/lib/publicBusinessProfile/normalize";
+import {
+  BUSINESS_GALLERY_LEGACY_SELECT,
+  BUSINESS_GALLERY_WITH_MEDIA_SELECT,
+  isBusinessGalleryMediaSelectError,
+} from "@/lib/businessGalleryPhotos";
 import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
 import { withListingPricing } from "@/lib/pricing";
 
@@ -217,7 +222,7 @@ export default function PublicBusinessPreviewClient({
 
       const galleryQuery = client
         .from("business_gallery_photos")
-        .select("id,business_id,photo_url,caption,sort_order,created_at")
+        .select(BUSINESS_GALLERY_WITH_MEDIA_SELECT)
         .eq("business_id", businessId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false })
@@ -241,7 +246,7 @@ export default function PublicBusinessPreviewClient({
         limit: 10,
       });
 
-      const [
+      let [
         profileResult,
         announcementsResult,
         galleryResult,
@@ -256,6 +261,16 @@ export default function PublicBusinessPreviewClient({
         ratingsQuery,
         reviewsPromise,
       ]);
+
+      if (galleryResult?.error && isBusinessGalleryMediaSelectError(galleryResult.error)) {
+        galleryResult = await client
+          .from("business_gallery_photos")
+          .select(BUSINESS_GALLERY_LEGACY_SELECT)
+          .eq("business_id", businessId)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false })
+          .limit(12);
+      }
 
       console.log("[public business] reviews load", {
         businessId,

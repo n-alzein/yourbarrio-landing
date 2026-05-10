@@ -1,5 +1,6 @@
 import BusinessProfilePage from "@/components/business/profile/BusinessProfilePage";
 import { requireEffectiveRole } from "@/lib/auth/requireEffectiveRole";
+import { fetchBusinessGalleryPhotos } from "@/lib/businessGalleryPhotos";
 import { getBusinessByUserId } from "@/lib/business/getBusinessByUserId";
 
 async function safeQuery(promise, fallback, label) {
@@ -71,13 +72,6 @@ function buildRatingSummary(rows) {
 export default async function BusinessProfileRoute() {
   const { supabase, effectiveUserId } = await requireEffectiveRole("business");
 
-  const galleryQuery = supabase
-    .from("business_gallery_photos")
-    .select("id, business_id, photo_url, caption, sort_order, created_at")
-    .eq("business_id", effectiveUserId)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: false });
-
   const reviewRatingQuery = supabase
     .from("business_reviews")
     .select("rating")
@@ -108,7 +102,7 @@ export default async function BusinessProfileRoute() {
           console.error("[business profile] profile query failed", error);
           return { data: null, count: 0, error };
         }),
-      safeQuery(galleryQuery, [], "gallery"),
+      safeQuery(fetchBusinessGalleryPhotos(supabase, effectiveUserId), [], "gallery"),
       fetchReviewList(supabase, effectiveUserId),
       safeQuery(reviewRatingQuery, [], "review ratings"),
       safeQuery(listingsQuery, [], "listings"),

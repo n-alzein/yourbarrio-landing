@@ -111,11 +111,14 @@ describe("public business profile loading states", () => {
   it("renders a visible cover, avatar, hours, and listings skeleton aligned to the profile layout", () => {
     render(<PublicBusinessProfileSkeleton />);
 
-    expect(screen.getByTestId("public-business-profile-skeleton-cover")).toHaveClass(
-      "h-[360px]",
-      "sm:h-[320px]",
-      "lg:h-[260px]"
-    );
+    const cover = screen.getByTestId("public-business-profile-skeleton-cover");
+    expect(cover).toHaveClass("yb-public-business-profile-cover", "relative", "overflow-hidden");
+    expect(cover).toHaveStyle({
+      height: "var(--yb-business-profile-cover-height)",
+      minHeight: "var(--yb-business-profile-cover-height)",
+      maxHeight: "var(--yb-business-profile-cover-height)",
+    });
+    expect(cover).toHaveAttribute("data-business-cover-source", "defaultFallback");
     expect(screen.getByTestId("public-business-profile-skeleton-avatar")).toHaveClass(
       "h-20",
       "w-20",

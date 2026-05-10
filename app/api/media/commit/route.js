@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabaseServer";
 import {
   commitTemporaryMediaAssets,
+  mediaAssetToBusinessGalleryPhoto,
   mediaAssetToListingPhotoVariant,
   mediaAssetToProfileUrl,
 } from "@/lib/images/mediaAssets.server";
@@ -61,6 +62,8 @@ export async function POST(request) {
       ok: true,
       assets,
       listingPhotoVariants: assets.map(mediaAssetToListingPhotoVariant),
+      businessGalleryPhotos:
+        purpose === "business_gallery" ? assets.map(mediaAssetToBusinessGalleryPhoto) : [],
       profileUrl:
         purpose === "business_cover"
           ? mediaAssetToProfileUrl(assets[0], "business_cover_desktop")

@@ -10,7 +10,7 @@ import {
   commitTemporaryImages,
   uploadTemporaryImage,
 } from "@/lib/images/tempMediaClient";
-import { uploadPublicImage } from "@/lib/storageUpload";
+import { uploadBusinessGalleryPhoto } from "@/lib/images/businessGalleryClient";
 import { ProfilePageShell } from "@/components/business/profile-system/ProfileSystem";
 import BusinessProfileView from "@/components/publicBusinessProfile/BusinessProfileView";
 import OverviewEditor from "@/components/business/profile/OverviewEditor";
@@ -254,30 +254,11 @@ export default function BusinessProfilePage({
     setGalleryUploading(true);
     try {
       for (const file of files) {
-        const { publicUrl } = await uploadPublicImage({
+        const data = await uploadBusinessGalleryPhoto({
           supabase: client,
-          bucket: "business-gallery",
+          businessId,
           file,
-          pathPrefix: `${businessId}/gallery`,
-          maxSizeMB: 8,
         });
-
-        if (!publicUrl) {
-          throw new Error("Upload failed to return a URL.");
-        }
-
-        const { data, error } = await client
-          .from("business_gallery_photos")
-          .insert({
-            business_id: businessId,
-            photo_url: publicUrl,
-            caption: null,
-            sort_order: 0,
-          })
-          .select("*")
-          .single();
-
-        if (error) throw error;
         if (data) {
           setGallery((prev) => [data, ...prev]);
         }

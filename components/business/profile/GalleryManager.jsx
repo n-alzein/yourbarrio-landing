@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import FastImage from "@/components/FastImage";
-import { uploadPublicImage } from "@/lib/storageUpload";
+import { resolveBusinessGalleryImageUrl } from "@/lib/businessGalleryPhotos";
+import { uploadBusinessGalleryPhoto } from "@/lib/images/businessGalleryClient";
 
 export default function GalleryManager({
   photos,
@@ -58,28 +59,11 @@ export default function GalleryManager({
         setPhotos((prev) => [optimistic, ...prev]);
 
         try {
-          const { publicUrl } = await uploadPublicImage({
+          const data = await uploadBusinessGalleryPhoto({
             supabase,
-            bucket: "business-gallery",
+            businessId,
             file,
-            pathPrefix: `${businessId}/gallery`,
-            maxSizeMB: 8,
           });
-
-          if (!publicUrl) throw new Error("Upload failed to return a URL.");
-
-          const { data, error } = await supabase
-            .from("business_gallery_photos")
-            .insert({
-              business_id: businessId,
-              photo_url: publicUrl,
-              caption: null,
-              sort_order: 0,
-            })
-            .select("*")
-            .single();
-
-          if (error) throw error;
 
           setPhotos((prev) =>
             prev.map((item) => (item.id === optimisticId ? data : item))
@@ -143,7 +127,7 @@ export default function GalleryManager({
               className="group relative aspect-[4/3] overflow-hidden rounded-[24px] bg-slate-100"
             >
               <FastImage
-                src={photo.photo_url}
+                src={resolveBusinessGalleryImageUrl(photo, { useCase: "card" })}
                 alt={photo.caption || "Business photo"}
                 className="object-cover"
                 fill

@@ -191,6 +191,38 @@ describe("BusinessProfileView", () => {
     expect(screen.getAllByRole("heading", { name: "Gallery" })).toHaveLength(1);
   });
 
+  it("renders optimized business gallery variants when media assets are available", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      render(
+        <BusinessProfileView
+          mode="public"
+          {...baseProps}
+          gallery={[
+            {
+              id: "photo-asset-1",
+              photo_url: "https://legacy.example.com/original.jpg",
+              caption: "Optimized photo",
+              media_asset: {
+                bucket: "business-photos",
+                card_path: "owner/gallery/asset/card_640.webp",
+                detail_path: "owner/gallery/asset/detail_1200.webp",
+              },
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByAltText("Optimized photo")).toHaveAttribute(
+        "src",
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/gallery/asset/card_640.webp"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
   it("renders a logged-out public profile with nullable production-like fields", () => {
     render(
       <BusinessProfileView

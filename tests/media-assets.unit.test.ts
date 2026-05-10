@@ -248,6 +248,51 @@ describe("media asset lifecycle routes", () => {
     });
   });
 
+  it("commit returns business gallery variant metadata for gallery uploads", async () => {
+    commitTemporaryMediaAssetsMock.mockResolvedValue([
+      {
+        id: "asset-gallery-1",
+        bucket: "business-photos",
+        source_path: "user-1/gallery/asset-gallery-1/source.webp",
+        thumb_path: "user-1/gallery/asset-gallery-1/thumb_320.webp",
+        card_path: "user-1/gallery/asset-gallery-1/card_640.webp",
+        detail_path: "user-1/gallery/asset-gallery-1/detail_1200.webp",
+        public_url: "https://cdn.example.com/source.webp",
+      },
+    ]);
+    const { POST } = await import("@/app/api/media/commit/route");
+
+    const response = await POST({
+      ...mockRequest("http://localhost:3000/api/media/commit"),
+      json: async () => ({
+        assetIds: ["asset-gallery-1"],
+        businessId: "user-1",
+        purpose: "business_gallery",
+      }),
+    } as unknown as Request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.businessGalleryPhotos[0]).toMatchObject({
+      media_asset_id: "asset-gallery-1",
+      photo_url: expect.stringContaining(
+        "/business-photos/user-1/gallery/asset-gallery-1/detail_1200.webp"
+      ),
+      variants: {
+        thumb_320: expect.stringContaining(
+          "/business-photos/user-1/gallery/asset-gallery-1/thumb_320.webp"
+        ),
+        card_640: expect.stringContaining(
+          "/business-photos/user-1/gallery/asset-gallery-1/card_640.webp"
+        ),
+        detail_1200: expect.stringContaining(
+          "/business-photos/user-1/gallery/asset-gallery-1/detail_1200.webp"
+        ),
+      },
+    });
+  });
+
   it("rejects listing image commits before a listing exists", async () => {
     const { POST } = await import("@/app/api/media/commit/route");
 

@@ -22,6 +22,7 @@ import {
 import {
   fetchBusinessReviews,
 } from "@/lib/publicBusinessProfile/reviews";
+import { fetchBusinessGalleryPhotos } from "@/lib/businessGalleryPhotos";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -166,15 +167,11 @@ async function fetchAnnouncements(supabase, businessId) {
 }
 
 async function fetchGallery(supabase, businessId) {
-  const query = supabase
-    .from("business_gallery_photos")
-    .select("id,business_id,photo_url,caption,sort_order,created_at")
-    .eq("business_id", businessId)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: false })
-    .limit(12);
-
-  const result = await safeQuery(query, [], "gallery");
+  const result = await safeQuery(
+    fetchBusinessGalleryPhotos(supabase, businessId, { limit: 12 }),
+    [],
+    "gallery"
+  );
   return result.data || [];
 }
 

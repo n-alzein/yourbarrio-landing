@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FastImage from "@/components/FastImage";
 import { Camera, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { resolveBusinessGalleryImageUrl } from "@/lib/businessGalleryPhotos";
 import {
   ProfileEmptyState,
   ProfileSection,
@@ -68,7 +69,7 @@ export default function BusinessGalleryGrid({
                 aria-label={photo.caption || "Open gallery photo"}
               />
               <FastImage
-                src={photo.photo_url || "/business-placeholder.png"}
+                src={resolveBusinessGalleryImageUrl(photo, { useCase: "card" })}
                 alt={photo.caption || "Gallery photo"}
                 className="object-cover transition duration-300 group-hover:scale-[1.02]"
                 fill
@@ -108,7 +109,7 @@ export default function BusinessGalleryGrid({
             </button>
             <div className="relative h-[68vh] overflow-hidden rounded-[28px] bg-black">
               <FastImage
-                src={activePhoto.photo_url || "/business-placeholder.png"}
+                src={resolveBusinessGalleryImageUrl(activePhoto, { useCase: "detail" })}
                 alt={activePhoto.caption || "Gallery photo"}
                 className="object-contain"
                 fill
