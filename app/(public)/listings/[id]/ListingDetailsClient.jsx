@@ -1142,7 +1142,7 @@ export default function ListingDetailsClient({
                       fill
                       sizes="(max-width: 1024px) 100vw, 66vw"
                       useNextImage
-                      loading="lazy"
+                      priority
                       onError={() => {
                         const fallback = getListingCategoryPlaceholder(listing);
                         if (heroSrc !== fallback) {

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -141,9 +142,12 @@ vi.mock("@/lib/publicVisibility", () => ({
 
 vi.mock("@/components/publicBusinessProfile/BusinessProfileView", () => ({
   __esModule: true,
-  default: ({ profile, listings }: any) => (
+  default: ({ profile, listings, initialContentVisible }: any) => (
     <div data-testid="profile-view">
-      <span>{profile.business_name}</span>
+      <h1>{profile.business_name}</h1>
+      <span>{profile.business_type || profile.category || "Local business"}</span>
+      <span>{profile.city}</span>
+      <span data-testid="initial-content-visible">{String(Boolean(initialContentVisible))}</span>
       <span>listings:{listings.length}</span>
     </div>
   ),
@@ -195,6 +199,10 @@ const publicBusinessPreviewClientSource = readFileSync(
 );
 
 describe("PublicBusinessProfilePage", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("opens by public_id without requiring coordinates or listings", async () => {
     const result = await PublicBusinessProfilePage({
       params: Promise.resolve({ id: "eaca122466" }),
@@ -202,6 +210,11 @@ describe("PublicBusinessProfilePage", () => {
     });
 
     expect(result).toBeTruthy();
+    render(result as any);
+    expect(screen.getByRole("heading", { name: "Test Store 2" })).toBeInTheDocument();
+    expect(screen.getByText("Retail")).toBeInTheDocument();
+    expect(screen.getByText("Los Angeles")).toBeInTheDocument();
+    expect(screen.getByTestId("initial-content-visible")).toHaveTextContent("true");
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(permanentRedirectMock).not.toHaveBeenCalled();
   });
@@ -220,6 +233,12 @@ describe("PublicBusinessProfilePage", () => {
   it("reads public business listings from public_listings_v instead of base listings", () => {
     expect(publicBusinessProfileSource).toContain('.from("public_listings_v")');
     expect(publicBusinessProfileSource).not.toContain('.from("listings")');
+  });
+
+  it("does not block the public profile route on gallery or announcements", () => {
+    expect(publicBusinessProfileSource).not.toContain("getPublicGalleryCached");
+    expect(publicBusinessProfileSource).not.toContain("getPublicAnnouncementsCached");
+    expect(publicBusinessProfileSource).not.toContain("fetchBusinessGalleryPhotos");
   });
 
   it("selects listing media variant fields for embedded business profile listing cards", () => {

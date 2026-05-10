@@ -30,6 +30,8 @@ function createRequest(body = {}) {
 
 function createSupabaseMock({
   rpcError = null,
+  existingUserOverride = {},
+  existingBusinessOverride = {},
   businessRowOverride = {},
   businessUpsertError = null,
   userUpsertError = null,
@@ -56,7 +58,7 @@ function createSupabaseMock({
     select: vi.fn(() => ({
       eq: vi.fn(() => ({
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { public_id: "abc123", is_internal: false },
+          data: { public_id: "abc123", latitude: null, longitude: null, ...existingUserOverride },
           error: null,
         }),
       })),
@@ -67,7 +69,7 @@ function createSupabaseMock({
     select: vi.fn(() => ({
       eq: vi.fn(() => ({
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { is_internal: false, latitude: null, longitude: null },
+          data: { latitude: null, longitude: null, ...existingBusinessOverride },
           error: null,
         }),
       })),
@@ -201,6 +203,72 @@ describe("POST /api/businesses", () => {
         onConflict: "owner_user_id",
         ignoreDuplicates: false,
       }
+    );
+  });
+
+  it("does not include internal flags in normal onboarding upserts", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ is_internal: true }));
+    expect(response.status).toBe(200);
+
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ is_internal: expect.anything() }),
+      expect.any(Object)
+    );
+    expect(supabase.from("businesses").upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ is_internal: expect.anything() }),
+      expect.any(Object)
+    );
+  });
+
+  it("updates an existing incomplete business with public phone while account phone stays notifications-only", async () => {
+    const supabase = createSupabaseMock({
+      existingUserOverride: {
+        phone: "(562) 000-0000",
+        is_internal: true,
+      },
+      existingBusinessOverride: {
+        phone: "(562) 111-1111",
+        is_internal: true,
+      },
+      businessRowOverride: {
+        phone: "(562) 222-2222",
+      },
+    });
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(
+      createRequest({
+        notifications_phone: "+1 562 555 0101",
+        phone: "+1 562 222 2222",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "(562) 555-0101",
+      }),
+      expect.any(Object)
+    );
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        phone: "(562) 222-2222",
+        is_internal: expect.anything(),
+      }),
+      expect.any(Object)
+    );
+    expect(supabase.from("businesses").upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "(562) 222-2222",
+      }),
+      expect.any(Object)
+    );
+    expect(supabase.from("businesses").upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ is_internal: expect.anything() }),
+      expect.any(Object)
     );
   });
 

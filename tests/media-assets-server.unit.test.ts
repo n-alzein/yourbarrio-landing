@@ -160,6 +160,103 @@ describe("media asset server lifecycle helpers", () => {
     ]);
   });
 
+  it("removes temporary source objects when commit variant generation fails", async () => {
+    const downloadMock = vi.fn(async () => ({
+      data: {
+        arrayBuffer: async () => new TextEncoder().encode("source").buffer,
+      },
+      error: null,
+    }));
+    const removeMock = vi.fn(async () => ({ error: null }));
+    const updateMock = vi.fn(() => ({
+      eq: vi.fn(() => ({
+        eq: vi.fn(async () => ({ error: null })),
+      })),
+    }));
+
+    const client = {
+      storage: {
+        from: vi.fn(() => ({
+          download: downloadMock,
+          remove: removeMock,
+        })),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "businesses") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: { id: "business-1", owner_user_id: "user-1" },
+                  error: null,
+                })),
+              })),
+            })),
+          };
+        }
+        if (table === "listings") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn(async () => ({
+                    data: { id: "listing-1", business_id: "user-1" },
+                    error: null,
+                  })),
+                })),
+              })),
+            })),
+          };
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                in: vi.fn(async () => ({
+                  data: [
+                    {
+                      id: "asset",
+                      bucket: "business-photos",
+                      owner_user_id: "user-1",
+                      status: "temporary",
+                      source_path: "tmp/user/session/asset/source",
+                      original_path: "tmp/user/session/asset/source",
+                      enhanced_path: "tmp/user/session/asset/enhanced.webp",
+                    },
+                  ],
+                  error: null,
+                })),
+              })),
+            })),
+          })),
+          update: updateMock,
+        };
+      }),
+    };
+
+    getSupabaseServerClientMock.mockReturnValue(client);
+    generateAndUploadImageVariantsMock.mockRejectedValue(new Error("variant generation failed"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { commitTemporaryMediaAssets } = await import("@/lib/images/mediaAssets.server");
+    await expect(
+      commitTemporaryMediaAssets({
+        assetIds: ["asset"],
+        businessId: "user-1",
+        listingId: "listing-1",
+        purpose: "listing_image",
+        ownerUserId: "user-1",
+      })
+    ).rejects.toThrow("variant generation failed");
+
+    expect(removeMock).toHaveBeenCalledWith([
+      "tmp/user/session/asset/source",
+      "tmp/user/session/asset/enhanced.webp",
+    ]);
+    expect(updateMock).toHaveBeenCalledWith({ status: "failed" });
+    errorSpy.mockRestore();
+  });
+
   it("discarding temporary media removes both source and enhanced files idempotently", async () => {
     const removeMock = vi.fn(async () => ({ error: { message: "missing object" } }));
     const updateMock = vi.fn(() => ({

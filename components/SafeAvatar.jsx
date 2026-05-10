@@ -140,6 +140,7 @@ export default function SafeAvatar({
       identityType={identityType}
       style={style}
       showFallbackInitially={shouldShowInitialFallback}
+      stableFallbackInitially={!isHydrated}
       onResolvedLoad={(loadedSrc) => {
         if (loadedSrc && loadedSrc !== resolvedFallback) {
           setLastValidAvatarUrl(loadedSrc);
@@ -173,6 +174,7 @@ function SafeAvatarInner({
   identityType,
   style,
   showFallbackInitially,
+  stableFallbackInitially,
   onResolvedLoad,
   onResolvedError,
   hasNextAvatarCandidate,
@@ -186,7 +188,7 @@ function SafeAvatarInner({
     avatarImgProps.referrerPolicy ??
     (/^https?:\/\//i.test(currentSrc || "") ? "no-referrer" : undefined);
 
-  const initials = useMemo(
+  const resolvedInitials = useMemo(
     () =>
       getAvatarInitials(
         identityType === "business"
@@ -204,6 +206,7 @@ function SafeAvatarInner({
       ) || "YB",
     [businessName, displayName, email, fullName, identityType, name]
   );
+  const initials = stableFallbackInitially ? "YB" : resolvedInitials;
   const label = alt || fullName || displayName || name || businessName || email || "Avatar";
   const borderRadius = shape === "square" || shape === "rounded-square" ? "1rem" : "9999px";
   const avatarStyle = {

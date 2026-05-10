@@ -84,6 +84,18 @@ describe("POST /api/account/profile phone normalization", () => {
     );
   });
 
+  it("ignores client-submitted internal flags on private account saves", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ phone: "562-123-4567", is_internal: true }));
+
+    expect(response.status).toBe(200);
+    expect(supabase.usersUpdatePayload).toEqual(
+      expect.not.objectContaining({ is_internal: expect.anything() })
+    );
+  });
+
   it("persists full name and returns the updated safe profile", async () => {
     const supabase = createSupabaseMock();
     createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);

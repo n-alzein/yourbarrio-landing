@@ -237,7 +237,6 @@ export async function POST(req) {
     delivery_notes: hasOwn(body, "delivery_notes")
       ? trimString(body.delivery_notes)
       : existingBusiness.delivery_notes ?? null,
-    is_internal: existingBusiness.is_internal === true || existingUser.is_internal === true,
     updated_at: new Date().toISOString(),
   };
 

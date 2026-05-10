@@ -138,6 +138,7 @@ export default function EditListingPage() {
   const [photos, setPhotos] = useState([]);
   const [coverImageId, setCoverImageId] = useState(null);
   const photosRef = useRef([]);
+  const savingRef = useRef(false);
   const enhancementAttemptsRef = useRef(new Map());
   const [photoError, setPhotoError] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -198,6 +199,10 @@ export default function EditListingPage() {
     photosRef.current = photos;
   }, [photos]);
 
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+
   const markFieldTouched = useCallback((fieldName) => {
     setTouchedFields((prev) =>
       prev[fieldName] ? prev : { ...prev, [fieldName]: true }
@@ -206,6 +211,18 @@ export default function EditListingPage() {
 
   useEffect(() => {
     return () => {
+      if (!savingRef.current) {
+        const pendingAssetIds = photosRef.current
+          .map((photo) => photo?.tempUpload?.assetId)
+          .filter(Boolean);
+        if (pendingAssetIds.length) {
+          discardTemporaryImages({ assetIds: pendingAssetIds }).catch((error) => {
+            console.warn("[listing.photo] discard_temp_failed", {
+              message: error?.message || String(error),
+            });
+          });
+        }
+      }
       revokeLocalPhotoDraftUrls(photosRef.current);
     };
   }, []);

@@ -9,8 +9,6 @@ import BusinessProfileView from "@/components/publicBusinessProfile/BusinessProf
 import PublicBusinessPreviewClient from "@/components/publicBusinessProfile/PublicBusinessPreviewClient";
 import ProfileViewTracker from "@/components/publicBusinessProfile/ProfileViewTracker";
 import {
-  sanitizeAnnouncements,
-  sanitizeGalleryPhotos,
   sanitizeListings,
   sanitizePublicProfile,
   sanitizeReviews,
@@ -19,7 +17,6 @@ import { fetchBusinessReviews } from "@/lib/publicBusinessProfile/reviews";
 import { getCurrentViewerVisibilityGate } from "@/lib/publicVisibility";
 import { withListingPricing } from "@/lib/pricing";
 import { getBusinessAvatarImage, getBusinessCoverImage } from "@/lib/businessImages";
-import { fetchBusinessGalleryPhotos } from "@/lib/businessGalleryPhotos";
 
 const PUBLIC_CACHE_SECONDS = 300;
 const PERF_ENV_FLAG = "YB_PROFILE_PERF";
@@ -274,31 +271,6 @@ async function fetchListingsForViewer(supabase, businessId, limit, viewerCanSeeI
   return [];
 }
 
-async function fetchAnnouncements(supabase, businessId) {
-  const nowIso = new Date().toISOString();
-  const query = supabase
-    .from("business_announcements")
-    .select("id,business_id,title,body,starts_at,ends_at,created_at")
-    .eq("business_id", businessId)
-    .eq("is_published", true)
-    .or(`starts_at.is.null,starts_at.lte.${nowIso}`)
-    .or(`ends_at.is.null,ends_at.gte.${nowIso}`)
-    .order("created_at", { ascending: false })
-    .limit(3);
-
-  const result = await safeQuery(query, [], "announcements");
-  return result.data || [];
-}
-
-async function fetchGallery(supabase, businessId) {
-  const result = await safeQuery(
-    fetchBusinessGalleryPhotos(supabase, businessId, { limit: 12 }),
-    [],
-    "gallery"
-  );
-  return result.data || [];
-}
-
 async function fetchReviews(supabase, businessId) {
   return fetchBusinessReviews(supabase, { businessId, limit: 10 });
 }
@@ -334,24 +306,6 @@ const getPublicListingsCached = unstable_cache(
     return fetchListingsWithFallback(supabase, businessId, limit);
   },
   ["public-business-listings"],
-  { revalidate: PUBLIC_CACHE_SECONDS }
-);
-
-const getPublicGalleryCached = unstable_cache(
-  async (businessId) => {
-    const supabase = getPublicSupabaseServerClient();
-    return fetchGallery(supabase, businessId);
-  },
-  ["public-business-gallery"],
-  { revalidate: PUBLIC_CACHE_SECONDS }
-);
-
-const getPublicAnnouncementsCached = unstable_cache(
-  async (businessId) => {
-    const supabase = getPublicSupabaseServerClient();
-    return fetchAnnouncements(supabase, businessId);
-  },
-  ["public-business-announcements"],
   { revalidate: PUBLIC_CACHE_SECONDS }
 );
 
@@ -513,14 +467,8 @@ export default async function PublicBusinessProfilePage({
     notFound();
   }
 
-  const [galleryResult, announcementsResult, listingsResult, reviewsResult, reviewRatings] =
+  const [listingsResult, reviewsResult, reviewRatings] =
     await Promise.all([
-      perf.time("gallery", () =>
-        getPublicGalleryCached(businessId)
-      ),
-      perf.time("announcements", () =>
-        getPublicAnnouncementsCached(businessId)
-      ),
       perf.time("listings", () =>
         viewerCanSeeInternalContent
           ? fetchListingsForViewer(viewerClient, businessId, 24, viewerCanSeeInternalContent)
@@ -534,8 +482,6 @@ export default async function PublicBusinessProfilePage({
       ),
     ]);
 
-  const gallery = sanitizeGalleryPhotos(galleryResult);
-  const announcements = sanitizeAnnouncements(announcementsResult);
   const listings = sanitizeListings(listingsResult);
   const reviews = sanitizeReviews(reviewsResult);
 
@@ -566,12 +512,14 @@ export default async function PublicBusinessProfilePage({
           ratingSummary={ratingSummary}
           listings={listings}
           reviews={reviews}
-          announcements={announcements}
-          gallery={gallery}
+          announcements={[]}
+          gallery={[]}
           sectionClassName={sectionShellClassName}
           reviewsClassName={reviewsShellClassName}
           heroVariant="publicFullBleed"
           navClassName="mb-5"
+          initialContentVisible
+          deferSecondaryPublicData
         />
       </div>
     </div>

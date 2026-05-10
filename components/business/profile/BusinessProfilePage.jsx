@@ -8,6 +8,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { getBusinessPublicUrl } from "@/lib/ids/publicRefs";
 import {
   commitTemporaryImages,
+  discardTemporaryImages,
   uploadTemporaryImage,
 } from "@/lib/images/tempMediaClient";
 import { uploadBusinessGalleryPhoto } from "@/lib/images/businessGalleryClient";
@@ -185,20 +186,24 @@ export default function BusinessProfilePage({
       return;
     }
     setUploading((prev) => ({ ...prev, [type]: true }));
+    let tempAssetId = null;
+    let committedAsset = null;
 
     try {
       const tempUpload = await uploadTemporaryImage({
         file,
         purpose: type === "avatar" ? "business_avatar" : "business_cover",
       });
+      tempAssetId = tempUpload?.asset?.id || null;
       const committed = await commitTemporaryImages({
-        assetIds: [tempUpload.asset.id],
+        assetIds: [tempAssetId],
         businessId,
         purpose: type === "avatar" ? "business_avatar" : "business_cover",
       });
       const publicUrl = committed.profileUrl;
       const mediaAsset = committed?.assets?.[0] || null;
       const mediaAssetId = mediaAsset?.id || null;
+      committedAsset = mediaAsset;
 
       if (!publicUrl) throw new Error("Upload failed to return a URL.");
 
@@ -291,6 +296,9 @@ export default function BusinessProfilePage({
       refreshProfile?.();
       showToast("success", "Photo uploaded.");
     } catch (err) {
+      if (tempAssetId && !committedAsset) {
+        await discardTemporaryImages({ assetIds: [tempAssetId] }).catch(() => {});
+      }
       showToast("error", err.message || "Failed to upload photo.");
     } finally {
       setUploading((prev) => ({ ...prev, [type]: false }));

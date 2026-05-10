@@ -10,6 +10,7 @@ const refreshProfileMock = vi.hoisted(() => vi.fn());
 const updateProfileMock = vi.hoisted(() => vi.fn());
 const uploadTemporaryImageMock = vi.hoisted(() => vi.fn());
 const commitTemporaryImagesMock = vi.hoisted(() => vi.fn());
+const discardTemporaryImagesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/AuthProvider", () => ({
   useAuth: () => ({
@@ -33,6 +34,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 vi.mock("@/lib/images/tempMediaClient", () => ({
   uploadTemporaryImage: uploadTemporaryImageMock,
   commitTemporaryImages: commitTemporaryImagesMock,
+  discardTemporaryImages: discardTemporaryImagesMock,
 }));
 
 vi.mock("@/lib/ids/publicRefs", () => ({
@@ -70,6 +72,8 @@ describe("BusinessProfilePage", () => {
     updateProfileMock.mockClear();
     uploadTemporaryImageMock.mockReset();
     commitTemporaryImagesMock.mockReset();
+    discardTemporaryImagesMock.mockReset();
+    discardTemporaryImagesMock.mockResolvedValue({ ok: true, deleted: 1 });
     updateMock.mockReset();
     updateMock.mockReturnValue({
       eq: vi.fn().mockResolvedValue({ error: null }),
@@ -170,5 +174,38 @@ describe("BusinessProfilePage", () => {
         }),
       });
     });
+  });
+
+  it("discards an uncommitted header upload when commit fails", async () => {
+    uploadTemporaryImageMock.mockResolvedValue({
+      asset: { id: "temp-cover-1" },
+    });
+    commitTemporaryImagesMock.mockRejectedValue(new Error("commit failed"));
+
+    render(
+      <BusinessProfilePage
+        initialProfile={{
+          id: "00000000-0000-0000-0000-000000000111",
+          business_name: "Barrio Boutique",
+          profile_photo_url: "",
+          cover_photo_url: "",
+        }}
+        initialGallery={[]}
+        initialReviews={[]}
+        initialListings={[]}
+        initialAnnouncements={[]}
+        ratingSummary={{ count: 0, average: 0, breakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }}
+      />
+    );
+
+    const latestProps = businessProfileViewMock.mock.calls.at(-1)?.[0];
+    await act(async () => {
+      await latestProps.heroProps.onCoverUpload(
+        new File(["cover"], "cover.png", { type: "image/png" })
+      );
+    });
+
+    expect(discardTemporaryImagesMock).toHaveBeenCalledWith({ assetIds: ["temp-cover-1"] });
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

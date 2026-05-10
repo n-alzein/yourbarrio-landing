@@ -111,6 +111,13 @@ describe("Edit listing save flow", () => {
     );
   });
 
+  it("discards pending temporary edit uploads on unmount when not saving", () => {
+    expect(editListingSource).toContain("const savingRef = useRef(false);");
+    expect(editListingSource).toContain("savingRef.current = saving;");
+    expect(editListingSource).toContain("if (!savingRef.current)");
+    expect(editListingSource).toContain("discardTemporaryImages({ assetIds: pendingAssetIds })");
+  });
+
   it("keeps published edits published while staging draft changes separately", () => {
     expect(editListingSource).toContain('const publicationState = buildListingPublicationState(targetStatus);');
     expect(editListingSource).toContain("buildListingDraftData({");

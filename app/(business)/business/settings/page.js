@@ -29,6 +29,7 @@ import {
 } from "@/lib/utils/formatUSPhone";
 import {
   commitTemporaryImages,
+  discardTemporaryImages,
   uploadTemporaryImage,
 } from "@/lib/images/tempMediaClient";
 
@@ -40,7 +41,7 @@ function parseOptionalNonNegativeNumber(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : Number.NaN;
 }
 
-const editableSections = new Set(["profile", "address", "fulfillment"]);
+const editableSections = new Set(["profile", "accountContact", "address", "fulfillment"]);
 
 const settingsPanelClassName =
   "overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)]";
@@ -186,7 +187,8 @@ export default function SettingsPage() {
 
   const buildInitialForm = (profile, accountPhone = profile?.phone || "") => ({
     full_name: profile?.business_name || profile?.full_name || "",
-    phone: formatUSPhone(accountPhone),
+    public_phone: formatUSPhone(profile?.phone || ""),
+    private_phone: formatUSPhone(accountPhone),
     city: profile?.city || "",
     address: profile?.address || "",
     address_2: profile?.address_2 || "",
@@ -237,7 +239,7 @@ export default function SettingsPage() {
   const handleFieldChange = (key, value) => {
     setForm((prev) => ({
       ...prev,
-      [key]: key === "phone" ? formatUSPhone(value) : value,
+      [key]: key === "public_phone" || key === "private_phone" ? formatUSPhone(value) : value,
     }));
     setFieldErrors((prev) => {
       if (!prev[key]) return prev;
@@ -385,14 +387,20 @@ export default function SettingsPage() {
   async function handleSave() {
     if (!user) return;
     const normalizedAddress = normalizeAddressPayload(form);
-    const validationErrors = validateAddressFields(normalizedAddress);
-    if (isIncompleteUSPhone(form.phone)) {
-      validationErrors.phone = "Enter a complete 10-digit US phone number.";
+    const validationErrors =
+      activeSection === "address"
+        ? validateAddressFields(normalizedAddress)
+        : {};
+    if (activeSection === "profile" && isIncompleteUSPhone(form.public_phone)) {
+      validationErrors.public_phone = "Enter a complete 10-digit US phone number.";
+    }
+    if (activeSection === "accountContact" && isIncompleteUSPhone(form.private_phone)) {
+      validationErrors.private_phone = "Enter a complete 10-digit US phone number.";
     }
     const fulfillmentValidation = validateFulfillmentFields(form);
     const nextFieldErrors = {
       ...validationErrors,
-      ...fulfillmentValidation.errors,
+      ...(activeSection === "fulfillment" ? fulfillmentValidation.errors : {}),
     };
 
     if (Object.keys(nextFieldErrors).length > 0) {
@@ -404,49 +412,47 @@ export default function SettingsPage() {
     setSaving(true);
     setFieldErrors({});
 
-    const updates = {
+    const businessProfileUpdates = {
       full_name: form.full_name,
       business_name: form.full_name,
+      website: form.website,
+      phone: normalizeUSPhoneForStorage(form.public_phone),
+      profile_photo_url: form.profile_photo_url,
+    };
+    const addressUpdates = {
       city: normalizedAddress.city || null,
       address: normalizedAddress.address || null,
       address_2: normalizedAddress.address_2 || null,
       state: normalizedAddress.state || null,
       postal_code: normalizedAddress.postal_code || null,
-      website: form.website,
-      profile_photo_url: form.profile_photo_url,
-      pickup_enabled_default:
-        fulfillmentValidation.payload.pickup_enabled_default,
-      local_delivery_enabled_default:
-        fulfillmentValidation.payload.local_delivery_enabled_default,
-      default_delivery_fee_cents:
-        fulfillmentValidation.payload.default_delivery_fee_cents,
+    };
+    const fulfillmentUpdates = {
+      pickup_enabled_default: fulfillmentValidation.payload.pickup_enabled_default,
+      local_delivery_enabled_default: fulfillmentValidation.payload.local_delivery_enabled_default,
+      default_delivery_fee_cents: fulfillmentValidation.payload.default_delivery_fee_cents,
       delivery_radius_miles: fulfillmentValidation.payload.delivery_radius_miles,
-      delivery_min_order_cents:
-        fulfillmentValidation.payload.delivery_min_order_cents,
+      delivery_min_order_cents: fulfillmentValidation.payload.delivery_min_order_cents,
       delivery_notes: fulfillmentValidation.payload.delivery_notes,
     };
+    const updates =
+      activeSection === "profile"
+        ? businessProfileUpdates
+        : activeSection === "address"
+        ? addressUpdates
+        : activeSection === "fulfillment"
+        ? fulfillmentUpdates
+        : null;
 
     let saveError = null;
     let savedProfile = null;
     let savedAccountProfile = null;
     try {
-      const response = await fetch("/api/business/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        saveError = { message: payload?.error || "Failed to save settings." };
-      } else {
-        savedProfile = payload?.profile || null;
-      }
-      if (!saveError) {
+      if (activeSection === "accountContact") {
         const accountResponse = await fetch("/api/account/profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            phone: normalizeUSPhoneForStorage(form.phone),
+            phone: normalizeUSPhoneForStorage(form.private_phone),
           }),
         });
         const accountPayload = await accountResponse.json().catch(() => ({}));
@@ -454,6 +460,18 @@ export default function SettingsPage() {
           saveError = { message: accountPayload?.error || "Failed to save settings." };
         } else {
           savedAccountProfile = accountPayload?.profile || null;
+        }
+      } else if (updates) {
+        const response = await fetch("/api/business/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          saveError = { message: payload?.error || "Failed to save settings." };
+        } else {
+          savedProfile = payload?.profile || null;
         }
       }
     } catch (error) {
@@ -463,12 +481,16 @@ export default function SettingsPage() {
     setSaving(false);
     setActiveSection(null);
 
-    if (!saveError && savedProfile) {
+    if (!saveError) {
       refreshProfile();
-      const nextForm = buildInitialForm({
-        ...profile,
-        ...savedProfile,
-      }, savedAccountProfile?.phone ?? profile?.phone ?? "");
+      const nextForm = buildInitialForm(
+        {
+          ...profile,
+          phone: form.public_phone,
+          ...(savedProfile || {}),
+        },
+        savedAccountProfile?.phone ?? form.private_phone ?? profile?.phone ?? ""
+      );
       setInitialForm(nextForm);
       setForm(nextForm);
       showToast("success", "Settings updated.");
@@ -528,20 +550,24 @@ export default function SettingsPage() {
     if (!file) return;
 
     setPhotoUploading(true);
+    let tempAssetId = null;
+    let committedAsset = null;
 
     try {
       const tempUpload = await uploadTemporaryImage({
         file,
         purpose: "business_avatar",
       });
+      tempAssetId = tempUpload?.asset?.id || null;
       const committed = await commitTemporaryImages({
-        assetIds: [tempUpload.asset.id],
+        assetIds: [tempAssetId],
         businessId: user.id,
         purpose: "business_avatar",
       });
       const photoUrl = committed.profileUrl;
       const mediaAsset = committed?.assets?.[0] || null;
       const mediaAssetId = mediaAsset?.id || null;
+      committedAsset = mediaAsset;
       if (!photoUrl) throw new Error("Upload failed to return a URL.");
 
       const { error: userPhotoError } = await supabase
@@ -609,6 +635,9 @@ export default function SettingsPage() {
         showToast("success", "Photo uploaded.");
       }
     } catch (error) {
+      if (tempAssetId && !committedAsset) {
+        await discardTemporaryImages({ assetIds: [tempAssetId] }).catch(() => {});
+      }
       showToast("error", error.message || "Failed to upload photo.");
     }
 
@@ -629,6 +658,7 @@ export default function SettingsPage() {
       : primaryProvider.charAt(0).toUpperCase() + primaryProvider.slice(1)
     : userEmail || "Email";
   const isEditingProfile = activeSection === "profile";
+  const isEditingAccountContact = activeSection === "accountContact";
   const isEditingAddress = activeSection === "address";
   const isEditingFulfillment = activeSection === "fulfillment";
   const isEditingAnySection = activeSection !== null;
@@ -701,8 +731,8 @@ export default function SettingsPage() {
         <div className={settingsPanelClassName}>
           <div className="divide-y divide-slate-100">
           <SettingsSection
-            title="Profile"
-            description="Update the business details customers see across YourBarrio."
+            title="Business profile"
+            description="Manage the business details customers see on YourBarrio."
             action={
               <SectionActionButton
                 onClick={() => beginSectionEdit("profile")}
@@ -806,26 +836,26 @@ export default function SettingsPage() {
                   </Field>
 
                   <Field
-                    label="Your phone number"
-                    id="phone"
-                    error={fieldErrors.phone}
+                    label="Public phone number"
+                    id="public_phone"
+                    helper="Shown on your business profile so customers can contact your shop."
+                    error={fieldErrors.public_phone}
                     labelClassName={fieldLabelClassName}
                     helperClassName={fieldHelperClassName}
                     errorClassName={fieldErrorClassName}
-                    hideEmptyHelper
                   >
                     {isEditingProfile ? (
                       <input
-                        id="phone"
+                        id="public_phone"
                         type="tel"
-                        value={form.phone}
+                        value={form.public_phone}
                         onChange={(e) =>
-                          handleFieldChange("phone", e.target.value)
+                          handleFieldChange("public_phone", e.target.value)
                         }
                         className={businessInputClassName}
                       />
                     ) : (
-                      <ReadOnlyField value={form.phone} />
+                      <ReadOnlyField value={form.public_phone} />
                     )}
                   </Field>
                 </FieldGrid>
@@ -854,6 +884,70 @@ export default function SettingsPage() {
                 </Field>
               </div>
             </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Account contact"
+            description="Manage private contact details used for account access and business notifications."
+            action={
+              <SectionActionButton
+                onClick={() => beginSectionEdit("accountContact")}
+                disabled={isEditingAnySection && !isEditingAccountContact}
+              >
+                {isEditingAccountContact ? "Editing" : "Edit"}
+              </SectionActionButton>
+            }
+            footer={
+              isEditingAccountContact ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={cancelSectionEdit}
+                    className={secondaryButtonClassName}
+                  >
+                    Cancel
+                  </button>
+                  <SectionSaveButton
+                    onClick={handleSave}
+                    disabled={!hasChanges || saving}
+                  >
+                    {saving ? "Saving..." : "Save changes"}
+                  </SectionSaveButton>
+                </>
+              ) : null
+            }
+            className={sectionRowClassName}
+            headerClassName={sectionHeaderClassName}
+            bodyClassName={sectionBodyClassName}
+            footerClassName={sectionFooterClassName}
+            titleClassName={sectionTitleClassName}
+            descriptionClassName={sectionDescriptionClassName}
+          >
+            <FieldGrid className="gap-5 sm:grid-cols-2">
+              <Field
+                label="Private account phone"
+                id="private_phone"
+                helper="Not shown publicly. Used for account updates and business notifications."
+                error={fieldErrors.private_phone}
+                labelClassName={fieldLabelClassName}
+                helperClassName={fieldHelperClassName}
+                errorClassName={fieldErrorClassName}
+              >
+                {isEditingAccountContact ? (
+                  <input
+                    id="private_phone"
+                    type="tel"
+                    value={form.private_phone}
+                    onChange={(e) =>
+                      handleFieldChange("private_phone", e.target.value)
+                    }
+                    className={businessInputClassName}
+                  />
+                ) : (
+                  <ReadOnlyField value={form.private_phone} />
+                )}
+              </Field>
+            </FieldGrid>
           </SettingsSection>
 
           <SettingsSection
