@@ -1,12 +1,11 @@
 import Link from "next/link";
 import AdminPage from "@/app/admin/_components/AdminPage";
 import AdminFlash from "@/app/admin/_components/AdminFlash";
+import AdminInfoTooltip from "@/app/admin/_components/AdminInfoTooltip";
+import AdminListingActivityChart from "@/app/admin/_components/AdminListingActivityChart";
+import AdminSection from "@/app/admin/_components/AdminSection";
 import AdminUserSignupsChart from "@/app/admin/_components/AdminUserSignupsChart";
-import RecentAuditActivity from "@/app/admin/_components/RecentAuditActivity";
-import {
-  getCachedPendingBusinessVerificationsCount,
-  listPendingBusinessVerifications,
-} from "@/lib/admin/businessVerification";
+import { getAdminDashboardKpis } from "@/lib/admin/dashboardKpis";
 import { requireAdminRole } from "@/lib/admin/permissions";
 import { getAdminDataClient } from "@/lib/supabase/admin";
 
@@ -16,15 +15,6 @@ import { getAdminDataClient } from "@/lib/supabase/admin";
  * - Prior overcount came from `admin_total_users_count()` reading `auth.users`, which can include auth-only users
  *   that are not platform accounts in `public.users`, inflating the dashboard total.
  */
-
-async function getCount(client: any, table: string, apply?: (query: any) => any) {
-  let query = client.from(table).select("id", { count: "exact", head: true });
-  if (apply) query = apply(query);
-  const { count } = await query;
-  return count || 0;
-}
-
-const AUDIT_PAGE_SIZE = 10;
 
 function formatBucketLabel(bucketStart: string) {
   const [year, month, day] = bucketStart.split("-").map(Number);
@@ -36,168 +26,480 @@ function formatBucketLabel(bucketStart: string) {
   });
 }
 
-function formatRelativeTime(value: string | null) {
-  if (!value) return "-";
-  const then = new Date(value).getTime();
-  if (!Number.isFinite(then)) return "-";
-  const diffSeconds = Math.round((then - Date.now()) / 1000);
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ["day", 24 * 3600],
-    ["hour", 3600],
-    ["minute", 60],
-  ];
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-  for (const [unit, seconds] of units) {
-    if (Math.abs(diffSeconds) >= seconds) {
-      return rtf.format(Math.round(diffSeconds / seconds), unit);
-    }
-  }
-  return "just now";
-}
-
 export default async function AdminDashboardPage({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireAdminRole("admin_readonly");
-  const { client } = await getAdminDataClient();
+  const { client } = await getAdminDataClient({ mode: "service" });
   const diagEnabled =
     String(process.env.AUTH_GUARD_DIAG || "") === "1" ||
     String(process.env.NEXT_PUBLIC_AUTH_DIAG || "") === "1";
 
-  const [newUsers7dResult, totalUsersCountResult, signupsSeriesResult] = await Promise.all([
-    client.rpc("count_new_users_last_days", { p_days: 7 }),
-    client.rpc("admin_total_users_count"),
-    client.rpc("admin_user_signups_timeseries", {
-      p_days: 30,
-    }),
-  ]);
-  const newUsers7dCount = newUsers7dResult.data;
-  const totalUsersCount = totalUsersCountResult.data;
-  const signupsSeriesData = signupsSeriesResult.data;
+  const kpis = await getAdminDashboardKpis(client);
 
-  const [
-    totalAccountsDistinct,
-    totalBusinesses,
-    newUsers7d,
-    openModeration,
-    openSupport,
-    recentAudit,
-    pendingVerificationCount,
-    recentPendingVerificationRows,
-  ] =
-    await Promise.all([
-      getCount(client, "users"),
-      getCount(client, "users", (q) => q.eq("role", "business")),
-      Promise.resolve(Number(newUsers7dCount || 0)),
-      getCount(client, "moderation_flags", (q) => q.eq("status", "open")),
-      getCount(client, "support_tickets", (q) => q.in("status", ["open", "pending"])),
-      client
-        .from("admin_audit_log")
-        .select("id, action, target_type, target_id, actor_user_id, created_at")
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(AUDIT_PAGE_SIZE + 1),
-      getCachedPendingBusinessVerificationsCount(),
-      listPendingBusinessVerifications({
-        status: "pending",
-        from: 0,
-        to: 9,
-      }).then((result) => result.rows),
-    ]);
-
-  const totalUsers = Number(totalAccountsDistinct || 0);
-  const allAuditRows = recentAudit.data || [];
-  const initialAuditRows = allAuditRows.slice(0, AUDIT_PAGE_SIZE);
-  const initialAuditHasMore = allAuditRows.length > AUDIT_PAGE_SIZE;
-  const signupRows = Array.isArray(signupsSeriesData) ? signupsSeriesData : [];
-  const signupChartData = signupRows.map((row: any) => ({
-    bucketStart: String(row.bucket_start),
-    label: formatBucketLabel(String(row.bucket_start)),
-    customerCount: Number(row.customer_count || 0),
-    businessCount: Number(row.business_count || 0),
+  const signupRows = kpis.users.signupSeries30d;
+  const signupChartData = signupRows.map((row) => ({
+    bucketStart: String(row.bucketStart),
+    label: formatBucketLabel(String(row.bucketStart)),
+    customerCount: Number(row.customerCount || 0),
+    businessCount: Number(row.businessCount || 0),
+  }));
+  const listingActivityData = kpis.listingActivity.map((row) => ({
+    bucketStart: String(row.bucketStart),
+    label: formatBucketLabel(String(row.bucketStart)),
+    realCreated: Number(row.realCreated || 0),
+    demoInternalCreated: Number(row.demoInternalCreated || 0),
+    totalCreated: Number(row.totalCreated || 0),
   }));
 
   if (diagEnabled) {
     console.warn("[admin-dashboard] totals diagnostics", {
-      totalUsersFromPublicUsers: totalAccountsDistinct,
-      totalUsersFromLegacyRpcAuthUsers: Number(totalUsersCount || 0),
+      totalUsersFromPublicUsers: kpis.users.total,
       signupsSeriesRows: signupRows.length,
-      joinUsedForTotal: false,
+      launchReadyBusinesses: kpis.businesses.launchReady,
+      publishedRealListings: kpis.listings.publishedReal,
       distinctApplied: true,
-      totalUsersDisplayed: totalUsers,
+      totalUsersDisplayed: kpis.users.total,
     });
   }
 
+  const pendingVerificationCount = kpis.businesses.pendingVerification;
+  const issueCount = kpis.issues.total;
+
   return (
-    <AdminPage>
+    <AdminPage className="space-y-0">
       <AdminFlash searchParams={searchParams} />
-      <header>
-        <h2 className="text-xl font-semibold">Dashboard</h2>
-        <p className="text-sm text-neutral-400">Admin platform summary and latest activity.</p>
+
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-normal text-neutral-50 sm:text-2xl">Dashboard</h2>
+          <p className="mt-0.5 text-[11px] text-neutral-500 sm:mt-1 sm:text-sm">
+            Admin platform summary and latest activity.
+          </p>
+        </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Total users" value={totalUsers} />
-        <StatCard label="Total businesses" value={totalBusinesses} />
-        <StatCard label="New users (7d)" value={newUsers7d} />
-        <StatCard label="Open moderation flags" value={openModeration} />
-        <StatCard label="Open support tickets" value={openSupport} />
+      <div className="mt-4 md:mt-6">
+        <AdminSection
+          title="Launch snapshot"
+          description="Prelaunch readiness and key blockers"
+          action={<p className="text-[11px] text-neutral-600 sm:text-xs">Live admin data</p>}
+        >
+          <LaunchSnapshotList
+            rows={[
+              {
+                label: "Launch-ready businesses",
+                value: `${kpis.businesses.launchReady.toLocaleString()} / ${kpis.targets.launchReadyBusinesses.toLocaleString()}`,
+                definition:
+                  "Real, non-internal businesses with required profile details and at least one published real listing.",
+              },
+              {
+                label: "Published real listings",
+                value: kpis.listings.publishedReal,
+                definition: "Published listings excluding demo/seeded, internal, or test content.",
+              },
+              {
+                label: "Businesses pending verification",
+                value: kpis.businesses.pendingVerification,
+                tone: kpis.businesses.pendingVerification > 0 ? "attention" : "default",
+              },
+              {
+                label: "Businesses with no published listings",
+                value: kpis.businesses.missingPublishedListings,
+                tone: kpis.businesses.missingPublishedListings > 0 ? "attention" : "default",
+                definition: "Real businesses that do not yet have a published real listing.",
+              },
+              {
+                label: "Published listings",
+                value: kpis.listings.published,
+                definition: "All published listings, including demo/seeded listings.",
+              },
+              {
+                label: "Demo/internal listings",
+                value: kpis.listings.publishedDemoOrInternal,
+                definition:
+                  "Published listings excluded from real inventory because they are demo/seeded, internal, test, suspended, or missing a business.",
+              },
+              {
+                label: "Customer intent",
+                value: kpis.customerIntent.score,
+                definition: "Recent saves, cart additions, and orders used as early testing signals.",
+              },
+              {
+                label: "Open issues",
+                value: issueCount,
+                tone: issueCount > 0 ? "attention" : "default",
+                definition: "Open moderation and support items that may require admin action.",
+              },
+              {
+                label: "Users",
+                value: kpis.users.total,
+              },
+              {
+                label: "Businesses",
+                value: kpis.users.businessesTotal,
+              },
+            ]}
+          />
+        </AdminSection>
       </div>
 
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-base font-semibold">Pending Verifications</h3>
-            <p className="text-sm text-neutral-400">{pendingVerificationCount} pending</p>
-          </div>
-          <Link
-            href="/admin/verification"
-            className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-100 hover:border-neutral-500"
-          >
-            View all
-          </Link>
-        </div>
+      <div className="mt-6 md:mt-8">
+        <AdminSection title="Needs attention">
+          <NeedsAttentionList
+            pendingVerificationCount={pendingVerificationCount}
+            missingPublishedListings={kpis.businesses.missingPublishedListings}
+            missingImages={kpis.listings.missingImage}
+            issueCount={issueCount}
+            moderationIssueCount={kpis.issues.openModerationFlags}
+          />
+        </AdminSection>
+      </div>
 
-        {pendingVerificationCount === 0 ? (
-          <div className="rounded border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-100">
-            No pending verifications.
+      <div className="mt-6 md:mt-8">
+        <AdminSection title="Customer testing" description="Aggregate 7-day intent signals from existing tables">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <DashboardMiniStat label="New customers 7d" value={kpis.users.newCustomers7d} />
+            <DashboardMiniStat
+              label="Saved businesses"
+              value={kpis.customerIntent.savedBusinessesTotal}
+              helper={formatRecentHelper(kpis.customerIntent.savedBusinesses7d)}
+            />
+            <DashboardMiniStat
+              label="Saved listings"
+              value={kpis.customerIntent.savedListingsTotal}
+              helper={formatRecentHelper(kpis.customerIntent.savedListings7d)}
+            />
+            <DashboardMiniStat
+              label="Active carts"
+              value={kpis.customerIntent.activeCarts}
+              definition="Current active cart records, not necessarily 7-day activity."
+            />
+            <DashboardMiniStat label="Orders 7d" value={kpis.customerIntent.orders7d} />
           </div>
-        ) : (
-          <div className="space-y-2">
-            {recentPendingVerificationRows.map((row) => (
-              <Link
-                key={row.owner_user_id}
-                href={`/admin/users/${encodeURIComponent(row.owner_user_id)}`}
-                className="block rounded border border-neutral-800 bg-neutral-950/60 px-3 py-2 hover:border-neutral-600"
-              >
-                <p className="text-sm font-medium text-neutral-100">{row.business_name || "Unnamed business"}</p>
-                <p className="text-xs text-neutral-400">
-                  {(row.city || "No city")} · {formatRelativeTime(row.created_at)}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
+        </AdminSection>
+      </div>
+
+      <div className="mt-6 md:mt-8">
+        <AdminSection title="Business activation" description="Where businesses are getting stuck before launch readiness">
+          <BusinessActivationFunnel
+            stages={[
+              {
+                label: "Business accounts",
+                value: kpis.businessActivation.businessAccounts,
+                helper: "role = business",
+              },
+              {
+                label: "Profiles completed",
+                value: kpis.businessActivation.profilesCompleted,
+                helper: "required public fields",
+              },
+              {
+                label: "Pending verification",
+                value: kpis.businessActivation.verificationSubmitted,
+                helper: "pending admin review",
+              },
+              {
+                label: "Has real listing",
+                value: kpis.businessActivation.hasPublishedRealListing,
+                helper: "published real inventory",
+              },
+              {
+                label: "Launch-ready",
+                value: kpis.businessActivation.launchReady,
+                helper: "profile + real listing",
+              },
+            ]}
+          />
+        </AdminSection>
+      </div>
+
+      <section className="mt-9 md:mt-10">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-100 sm:text-base">Marketplace activity</h3>
+          <p className="mt-1 hidden text-sm text-neutral-500 sm:block">Inventory creation and published marketplace composition.</p>
+        </div>
+        <div className="mt-4 grid gap-4 md:mt-5 lg:grid-cols-2">
+          <AdminSection title="Listing activity" description="Listings created in the last 30 days">
+            <AdminListingActivityChart data={listingActivityData} />
+          </AdminSection>
+
+          <AdminSection title="Published inventory" description="Real versus demo/internal published listings">
+            <MarketplaceComposition
+              real={kpis.marketplaceComposition.publishedReal}
+              demoInternal={kpis.marketplaceComposition.publishedDemoInternal}
+              total={kpis.marketplaceComposition.publishedTotal}
+            />
+          </AdminSection>
+        </div>
       </section>
 
-      <AdminUserSignupsChart data={signupChartData} />
-
-      <RecentAuditActivity
-        initialRows={initialAuditRows}
-        initialHasMore={initialAuditHasMore}
-        pageSize={AUDIT_PAGE_SIZE}
-      />
+      <section className="mt-6 md:mt-8">
+        <AdminSection title="Customer activity" description="Customer and business account creation">
+          <AdminUserSignupsChart data={signupChartData} compact />
+        </AdminSection>
+      </section>
     </AdminPage>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function LaunchSnapshotList({
+  rows,
+}: {
+  rows: Array<{
+    label: string;
+    value: number | string | null;
+    definition?: string;
+    tone?: "default" | "attention";
+  }>;
+}) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="text-xs text-neutral-400">{label}</div>
-      <div className="mt-1 text-xl font-semibold">{value.toLocaleString()}</div>
+    <div className="divide-y divide-neutral-800/70">
+      {rows.map((row) => (
+        <LaunchSnapshotRow key={row.label} {...row} />
+      ))}
+    </div>
+  );
+}
+
+function LaunchSnapshotRow({
+  label,
+  value,
+  definition,
+  tone = "default",
+}: {
+  label: string;
+  value: number | string | null;
+  definition?: string;
+  tone?: "default" | "attention";
+}) {
+  const displayValue =
+    value === null ? "N/A" : typeof value === "number" ? value.toLocaleString() : value;
+  const valueClass =
+    tone === "attention" ? "text-amber-200" : "text-neutral-50";
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <p className="text-[13px] font-medium text-neutral-300 sm:text-sm">{label}</p>
+        {definition ? <AdminInfoTooltip label={`${label} definition`}>{definition}</AdminInfoTooltip> : null}
+      </div>
+      <p className={`shrink-0 text-right text-sm font-semibold tabular-nums sm:text-base ${valueClass}`}>
+        {displayValue}
+      </p>
+    </div>
+  );
+}
+
+function BusinessActivationFunnel({
+  stages,
+}: {
+  stages: Array<{ label: string; value: number; helper: string }>;
+}) {
+  const maxValue = Math.max(...stages.map((stage) => stage.value), 1);
+
+  return (
+    <div className="space-y-2.5">
+      {stages.map((stage, index) => {
+        const width = Math.max((stage.value / maxValue) * 100, stage.value > 0 ? 6 : 0);
+        return (
+          <div key={stage.label} className="grid gap-2 sm:grid-cols-[minmax(0,180px)_1fr_minmax(72px,auto)] sm:items-center">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-[10px] font-semibold text-neutral-400">
+                  {index + 1}
+                </span>
+                <p className="truncate text-sm font-medium text-neutral-100">{stage.label}</p>
+              </div>
+              <p className="mt-0.5 pl-7 text-[11px] text-neutral-500">{stage.helper}</p>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-neutral-950/80">
+              <div
+                className="h-full rounded-full bg-neutral-500/70"
+                style={{ width: `${width}%` }}
+                aria-hidden="true"
+              />
+            </div>
+            <p className="text-right text-sm font-semibold text-neutral-100 sm:text-base">{stage.value.toLocaleString()}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MarketplaceComposition({
+  real,
+  demoInternal,
+  total,
+}: {
+  real: number;
+  demoInternal: number;
+  total: number;
+}) {
+  const realPercent = total > 0 ? (real / total) * 100 : 0;
+  const demoPercent = total > 0 ? (demoInternal / total) * 100 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-2xl font-semibold text-neutral-50">{total.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-neutral-500">published listings</p>
+        </div>
+        <div className="text-right text-xs text-neutral-500">
+          <p>
+            <span className="font-semibold text-neutral-100">{real.toLocaleString()}</span> real
+          </p>
+          <p>
+            <span className="font-semibold text-neutral-100">{demoInternal.toLocaleString()}</span> demo/internal
+          </p>
+        </div>
+      </div>
+
+      <div className="h-3 overflow-hidden rounded-full bg-neutral-950/80">
+        <div className="flex h-full w-full">
+          <div className="h-full bg-emerald-400/80" style={{ width: `${realPercent}%` }} aria-hidden="true" />
+          <div className="h-full bg-violet-300/70" style={{ width: `${demoPercent}%` }} aria-hidden="true" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-md bg-white/[0.025] px-3 py-2">
+          <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+            <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+            Real inventory
+          </div>
+          <p className="mt-1 text-sm font-semibold text-neutral-100">{real.toLocaleString()}</p>
+        </div>
+        <div className="rounded-md bg-white/[0.025] px-3 py-2">
+          <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+            <span className="h-2 w-2 rounded-full bg-violet-300/70" />
+            Demo/internal
+          </div>
+          <p className="mt-1 text-sm font-semibold text-neutral-100">{demoInternal.toLocaleString()}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NeedsAttentionList({
+  pendingVerificationCount,
+  missingPublishedListings,
+  missingImages,
+  issueCount,
+  moderationIssueCount,
+}: {
+  pendingVerificationCount: number;
+  missingPublishedListings: number;
+  missingImages: number;
+  issueCount: number;
+  moderationIssueCount: number;
+}) {
+  const rows = [
+    pendingVerificationCount > 0 ? (
+      <AttentionRow
+        key="verification"
+        label={`${pendingVerificationCount.toLocaleString()} ${
+          pendingVerificationCount === 1 ? "business is" : "businesses are"
+        } waiting for verification`}
+        detail="Review pending requests before they appear fully trusted."
+        href="/admin/verification"
+        actionLabel="Open queue"
+      />
+    ) : null,
+    missingPublishedListings > 0 ? (
+      <AttentionRow
+        key="missing-listings"
+        label={`${missingPublishedListings.toLocaleString()} businesses have no published real listings`}
+        detail="Use the business list to identify owners who need listing help."
+        href="/admin/businesses"
+        actionLabel="View businesses"
+      />
+    ) : null,
+    missingImages > 0 ? (
+      <AttentionRow
+        key="missing-images"
+        label={`${missingImages.toLocaleString()} real listings are missing images`}
+        detail="Listings with missing media are less useful during testing."
+        href="/admin/listings"
+        actionLabel="View listings"
+      />
+    ) : null,
+    issueCount > 0 ? (
+      <AttentionRow
+        key="issues"
+        label={`${issueCount.toLocaleString()} open moderation/support issues`}
+        detail="Open moderation flags and support tickets only."
+        href={moderationIssueCount > 0 ? "/admin/moderation" : "/admin/support"}
+        actionLabel="Review issues"
+      />
+    ) : null,
+  ].filter(Boolean);
+
+  if (!rows.length) {
+    return <p className="text-sm text-neutral-400">No urgent admin actions right now.</p>;
+  }
+
+  return <div className="space-y-2">{rows}</div>;
+}
+
+function DashboardMiniStat({
+  label,
+  value,
+  helper,
+  definition,
+}: {
+  label: string;
+  value: number | string | null;
+  helper?: string | null;
+  definition?: string;
+}) {
+  const displayValue =
+    value === null ? "N/A" : typeof value === "number" ? value.toLocaleString() : value;
+
+  return (
+    <div className="rounded-md bg-white/[0.025] px-2.5 py-2 sm:px-3">
+      <div className="flex min-w-0 items-center gap-1">
+        <p className="truncate text-[10px] font-medium text-neutral-500 sm:text-xs">{label}</p>
+        {definition ? <AdminInfoTooltip label={`${label} definition`}>{definition}</AdminInfoTooltip> : null}
+      </div>
+      <p className="mt-1 text-base font-semibold text-neutral-100 sm:text-lg">{displayValue}</p>
+      {helper ? <p className="mt-0.5 truncate text-[10px] text-neutral-500 sm:text-xs">{helper}</p> : null}
+    </div>
+  );
+}
+
+function formatRecentHelper(value: number | null) {
+  return value === null ? "recent unavailable" : `${value.toLocaleString()} in last 7d`;
+}
+
+function AttentionRow({
+  label,
+  detail,
+  href,
+  actionLabel,
+}: {
+  label: string;
+  detail: string;
+  href: string;
+  actionLabel: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border-t border-neutral-800/70 pt-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-sm text-neutral-100">{label}</p>
+        <p className="mt-0.5 text-xs text-neutral-500">{detail}</p>
+      </div>
+      <Link
+        href={href}
+        className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md bg-[#6e34ff]/15 px-3 py-1.5 text-xs font-medium text-[#ddd6fe] hover:bg-[#6e34ff]/25 sm:min-h-0"
+      >
+        {actionLabel}
+      </Link>
     </div>
   );
 }

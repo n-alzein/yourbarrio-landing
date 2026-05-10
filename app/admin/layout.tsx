@@ -45,22 +45,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   return (
     <AdminShellClient
-      sidebarExpandedContent={
+      sidebarContent={
         <AdminSidebar
           roles={admin.roles}
           emailOrId={admin.user.email || admin.user.id}
           strictPermissionBypassUsed={admin.strictPermissionBypassUsed}
           pendingVerificationCount={pendingVerificationCount}
-          collapsed={false}
-        />
-      }
-      sidebarCollapsedContent={
-        <AdminSidebar
-          roles={admin.roles}
-          emailOrId={admin.user.email || admin.user.id}
-          strictPermissionBypassUsed={admin.strictPermissionBypassUsed}
-          pendingVerificationCount={pendingVerificationCount}
-          collapsed
         />
       }
       statusContent={

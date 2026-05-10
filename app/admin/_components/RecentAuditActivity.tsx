@@ -22,6 +22,7 @@ type RecentAuditActivityProps = {
   initialRows: AuditRow[];
   initialHasMore: boolean;
   pageSize: number;
+  compact?: boolean;
 };
 
 function pad2(value: number) {
@@ -40,10 +41,35 @@ function formatAuditTimestamp(value: string) {
   return `${mm}/${dd}/${yyyy}, ${hh}:${min}:${ss} UTC`;
 }
 
+function formatRelativeTime(value: string) {
+  const then = new Date(value).getTime();
+  if (!Number.isFinite(then)) return "-";
+  const diffSeconds = Math.round((then - Date.now()) / 1000);
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ["day", 24 * 3600],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  for (const [unit, seconds] of units) {
+    if (Math.abs(diffSeconds) >= seconds) {
+      return rtf.format(Math.round(diffSeconds / seconds), unit);
+    }
+  }
+  return "just now";
+}
+
+function compactId(value: string | null) {
+  if (!value) return "-";
+  if (value.length <= 14) return value;
+  return `${value.slice(0, 8)}...${value.slice(-4)}`;
+}
+
 export default function RecentAuditActivity({
   initialRows,
   initialHasMore,
   pageSize,
+  compact = false,
 }: RecentAuditActivityProps) {
   const [rows, setRows] = useState(initialRows);
   const [page, setPage] = useState(1);
@@ -73,6 +99,61 @@ export default function RecentAuditActivity({
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (compact) {
+    const mobileRows = rows.slice(0, 3);
+    const desktopRows = rows.slice(0, 6);
+    const renderFeedRows = (feedRows: AuditRow[]) => (
+      <div className="divide-y divide-neutral-800/70">
+        {feedRows.map((row) => (
+          <div key={row.id} className="py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-neutral-200">{row.action || "Unknown action"}</p>
+                <p className="mt-1 truncate text-xs text-neutral-500">
+                  {row.target_type || "target"}:{compactId(row.target_id)}
+                </p>
+              </div>
+              <time
+                dateTime={row.created_at}
+                title={formatAuditTimestamp(row.created_at)}
+                className="shrink-0 text-xs text-neutral-500"
+              >
+                {formatRelativeTime(row.created_at)}
+              </time>
+            </div>
+            <p className="mt-1 truncate font-mono text-[11px] text-neutral-600">{compactId(row.actor_user_id || "system")}</p>
+          </div>
+        ))}
+        {!feedRows.length ? (
+          <div className="py-5 text-center text-sm text-neutral-500">No audit records yet.</div>
+        ) : null}
+      </div>
+    );
+
+    return (
+      <div>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-semibold text-neutral-100">Recent audit activity</h4>
+            <p className="mt-1 hidden text-xs text-neutral-500 sm:block">Latest admin actions</p>
+          </div>
+          <Link href="/admin/audit" className="text-xs font-medium text-[#c4b5fd] hover:text-[#ddd6fe]">
+            View all
+          </Link>
+        </div>
+
+        <div className="sm:hidden">
+          {renderFeedRows(mobileRows)}
+        </div>
+        <div className="hidden sm:block">
+          {renderFeedRows(desktopRows)}
+        </div>
+
+        {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
+      </div>
+    );
   }
 
   return (

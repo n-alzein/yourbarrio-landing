@@ -1,5 +1,5 @@
-import Link from "next/link";
 import AdminLogoutButton from "@/app/admin/_components/AdminLogoutButton";
+import AdminNavLink from "@/app/admin/_components/AdminNavLink";
 import { ADMIN_ROLES, canAdmin, getHighestAdminRole, type AdminRole } from "@/lib/admin/permissions";
 import { formatAdminRoleLabel } from "@/lib/admin/roleLabels";
 
@@ -7,7 +7,6 @@ type AdminNavProps = {
   roles: string[];
   strictPermissionBypassUsed?: boolean;
   variant?: "vertical" | "horizontal";
-  collapsed?: boolean;
   pendingVerificationCount?: number;
 };
 
@@ -15,7 +14,6 @@ export default function AdminNav({
   roles,
   strictPermissionBypassUsed = false,
   variant = "vertical",
-  collapsed = false,
   pendingVerificationCount = 0,
 }: AdminNavProps) {
   const normalizedRoles = roles.filter((role): role is AdminRole =>
@@ -49,59 +47,32 @@ export default function AdminNav({
 
   return (
     <nav className={isHorizontal ? "overflow-x-auto whitespace-nowrap" : "grid gap-2"}>
-      {!isHorizontal && !collapsed ? (
-        <div className="rounded-md border border-indigo-800/70 bg-indigo-950/60 px-3 py-2 text-xs uppercase tracking-wide text-indigo-100">
-          Admin role: {formatAdminRoleLabel(currentRole)}
+      {!isHorizontal ? (
+        <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+          {formatAdminRoleLabel(currentRole)}
         </div>
       ) : null}
-      <div className={isHorizontal ? "flex items-center gap-2 pb-1" : "grid gap-2"}>
+      <div className={isHorizontal ? "flex items-center gap-2 pb-1" : "grid gap-1"}>
         {navItems.map((item) => (
-          <Link
+          <AdminNavLink
             key={item.href}
             href={item.href}
-            title={collapsed && !isHorizontal ? item.label : undefined}
-            aria-label={collapsed && !isHorizontal ? item.label : undefined}
-            className={
-              isHorizontal
-                ? "inline-flex rounded-full border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm text-neutral-100 hover:border-neutral-500"
-                : collapsed
-                  ? "inline-flex h-11 w-11 items-center justify-center rounded-md border border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-neutral-600"
-                  : "inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-600"
-            }
+            label={item.label}
+            isHorizontal={isHorizontal}
+            badgeCount={item.badgeCount}
           >
             <NavIcon name={item.icon} />
-            {!collapsed || isHorizontal ? (
-              <span className="flex min-w-0 items-center gap-2">
-                <span>{item.label}</span>
-                {typeof item.badgeCount === "number" ? (
-                  <span
-                    className={`inline-flex min-w-[2rem] items-center justify-center rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${
-                      item.badgeCount > 0
-                        ? "border-red-700/70 bg-red-950/80 text-red-100"
-                        : "border-transparent text-transparent"
-                    }`}
-                    aria-label={item.badgeCount > 0 ? `${item.badgeCount} pending verifications` : undefined}
-                  >
-                    {item.badgeCount > 99 ? "99+" : item.badgeCount > 0 ? item.badgeCount : 0}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
-          </Link>
+          </AdminNavLink>
         ))}
         <AdminLogoutButton
-          title={collapsed && !isHorizontal ? "Log out" : undefined}
-          ariaLabel={collapsed && !isHorizontal ? "Log out" : undefined}
           className={
             isHorizontal
-              ? "inline-flex rounded-full border border-red-900 bg-red-950 px-3 py-1.5 text-sm text-red-100 hover:border-red-700"
-              : collapsed
-                ? "inline-flex h-11 w-11 items-center justify-center rounded-md border border-red-900 bg-red-950 text-red-100 hover:border-red-700"
-                : "inline-flex w-full items-center gap-2 rounded-md border border-red-900 bg-red-950 px-3 py-2 text-left text-sm text-red-100 hover:border-red-700"
+              ? "inline-flex rounded-full px-3 py-1.5 text-sm text-rose-200 hover:bg-rose-500/10 hover:text-rose-100"
+              : "mt-2 inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-rose-200 hover:bg-rose-500/10 hover:text-rose-100"
           }
         >
           <NavIcon name="logout" />
-          {!collapsed || isHorizontal ? <span>Log out</span> : null}
+          <span>Log out</span>
         </AdminLogoutButton>
       </div>
     </nav>

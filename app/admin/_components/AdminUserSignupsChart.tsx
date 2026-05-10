@@ -20,6 +20,7 @@ type SignupChartRow = {
 
 type AdminUserSignupsChartProps = {
   data: SignupChartRow[];
+  compact?: boolean;
 };
 
 const customerColor = "#38bdf8";
@@ -42,17 +43,39 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export default function AdminUserSignupsChart({ data }: AdminUserSignupsChartProps) {
+export default function AdminUserSignupsChart({ data, compact = false }: AdminUserSignupsChartProps) {
+  const totalCustomers = data.reduce((sum, row) => sum + row.customerCount, 0);
+  const totalBusinesses = data.reduce((sum, row) => sum + row.businessCount, 0);
+  const totalSignups = totalCustomers + totalBusinesses;
+
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-      <div className="mb-3">
-        <h3 className="font-medium">User signups (last 30 days)</h3>
-        <p className="text-xs text-neutral-400">Customers vs Businesses</p>
+    <div>
+      <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
+        <div>
+          <h4 className="text-[13px] font-semibold text-neutral-100 sm:text-sm">User signups</h4>
+          <p className="mt-1 hidden text-xs text-neutral-500 sm:block">Last 30 days, customers vs businesses</p>
+          {compact ? (
+            <div className="mt-1.5 flex items-center gap-3 text-[11px] text-neutral-500 sm:mt-2">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: customerColor }} />
+                Customers
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: businessColor }} />
+                Businesses
+              </span>
+            </div>
+          ) : null}
+        </div>
+        <div className="text-right">
+          <p className="text-base font-semibold text-neutral-50 sm:text-lg">{totalSignups.toLocaleString()}</p>
+          <p className="text-xs text-neutral-500">total</p>
+        </div>
       </div>
-      <div className="h-72 w-full">
+      <div className={compact ? "h-36 w-full sm:h-52" : "h-72 w-full"}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(115,115,115,0.4)" vertical={false} />
+          <BarChart data={data} margin={compact ? { top: 8, right: 4, left: -24, bottom: 0 } : { top: 10, right: 10, left: -20, bottom: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(115,115,115,0.18)" vertical={false} />
             <XAxis
               dataKey="label"
               tickLine={false}
@@ -67,12 +90,15 @@ export default function AdminUserSignupsChart({ data }: AdminUserSignupsChartPro
               tick={{ fontSize: 11, fill: "#a3a3a3" }}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ fontSize: "12px" }} />
+            {!compact ? <Legend wrapperStyle={{ fontSize: "12px", color: "#a3a3a3" }} /> : null}
             <Bar dataKey="customerCount" name="Customers" fill={customerColor} radius={[4, 4, 0, 0]} />
             <Bar dataKey="businessCount" name="Businesses" fill={businessColor} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
+      {totalSignups === 0 ? (
+        <p className="mt-2 text-xs text-neutral-500">No signup volume in this window yet.</p>
+      ) : null}
     </div>
   );
 }

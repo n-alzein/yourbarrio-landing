@@ -57,8 +57,8 @@ export async function logAdminAction(
   const payload = {
     p_action: String(action ?? ""),
     p_actor_user_id: normalizedActorUserId,
-    p_target_type: String(targetType ?? ""),
-    p_target_id: String(targetId ?? ""),
+    p_target_type: targetType ? String(targetType).trim() || null : null,
+    p_target_id: targetId ? String(targetId).trim() || null : null,
     p_meta: meta ?? {},
   };
 
