@@ -155,8 +155,18 @@ function StateSelect({ id, value, onChange, className = "", error = false }) {
   );
 }
 
+function publishBusinessAvatarUpdate(payload) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("yb:business-avatar-updated", { detail: payload }));
+  try {
+    const channel = new BroadcastChannel("yb-business-avatar");
+    channel.postMessage(payload);
+    channel.close();
+  } catch {}
+}
+
 export default function SettingsPage() {
-  const { user, profile, supabase, loadingUser, logout, refreshProfile } =
+  const { user, profile, supabase, loadingUser, logout, refreshProfile, updateProfile } =
     useAuth();
   const router = useRouter();
 
@@ -530,6 +540,8 @@ export default function SettingsPage() {
         purpose: "business_avatar",
       });
       const photoUrl = committed.profileUrl;
+      const mediaAsset = committed?.assets?.[0] || null;
+      const mediaAssetId = mediaAsset?.id || null;
       if (!photoUrl) throw new Error("Upload failed to return a URL.");
 
       const { error: userPhotoError } = await supabase
@@ -537,10 +549,26 @@ export default function SettingsPage() {
         .update({ profile_photo_url: photoUrl })
         .eq("id", user.id);
 
-      const { error: businessPhotoError } = await supabase
+      let businessPhotoError = null;
+      const businessPhotoPayload = {
+        profile_photo_url: photoUrl,
+        ...(mediaAssetId ? { avatar_media_asset_id: mediaAssetId } : {}),
+      };
+      ({ error: businessPhotoError } = await supabase
         .from("businesses")
-        .update({ profile_photo_url: photoUrl })
-        .eq("owner_user_id", user.id);
+        .update(businessPhotoPayload)
+        .eq("owner_user_id", user.id));
+
+      if (
+        businessPhotoError &&
+        mediaAssetId &&
+        /avatar_media_asset_id|column/i.test(String(businessPhotoError.message || ""))
+      ) {
+        ({ error: businessPhotoError } = await supabase
+          .from("businesses")
+          .update({ profile_photo_url: photoUrl })
+          .eq("owner_user_id", user.id));
+      }
 
       if (userPhotoError) {
         showToast("error", userPhotoError.message || "Failed to save photo.");
@@ -552,6 +580,24 @@ export default function SettingsPage() {
         ...prev,
         profile_photo_url: photoUrl,
       }));
+      setInitialForm((prev) => ({
+        ...prev,
+        profile_photo_url: photoUrl,
+      }));
+      updateProfile?.({
+        ...(profile || {}),
+        id: user.id,
+        profile_photo_url: photoUrl,
+        ...(mediaAssetId ? { avatar_media_asset_id: mediaAssetId } : {}),
+        ...(mediaAsset ? { business_avatar_media_asset: mediaAsset } : {}),
+        updated_at: new Date().toISOString(),
+      });
+      publishBusinessAvatarUpdate({
+        businessId: user.id,
+        profile_photo_url: photoUrl,
+        avatar_media_asset_id: mediaAssetId,
+        business_avatar_media_asset: mediaAsset,
+      });
       refreshProfile?.();
 
       if (businessPhotoError) {

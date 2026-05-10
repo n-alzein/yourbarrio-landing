@@ -20,6 +20,8 @@ export type UnifiedBusiness = {
   website: string | null;
   phone: string | null;
   profile_photo_url: string | null;
+  avatar_media_asset_id?: string | null;
+  business_avatar_media_asset?: Record<string, unknown> | null;
   cover_photo_url: string | null;
   cover_media_asset_id?: string | null;
   business_cover_media_asset?: Record<string, unknown> | null;
@@ -79,6 +81,25 @@ const BUSINESS_COVER_MEDIA_ASSET_SELECT = [
   "updated_at",
 ].join(",");
 
+const BUSINESS_AVATAR_MEDIA_ASSET_SELECT = [
+  "id",
+  "bucket",
+  "purpose",
+  "status",
+  "source_path",
+  "original_path",
+  "avatar_128_path",
+  "avatar_256_path",
+  "avatar_512_path",
+  "public_url",
+  "width",
+  "height",
+  "mime_type",
+  "size_bytes",
+  "created_at",
+  "updated_at",
+].join(",");
+
 const BUSINESS_BASE_FIELDS = [
   "id",
   "owner_user_id",
@@ -119,6 +140,8 @@ const BUSINESS_LEGACY_SELECT = BUSINESS_BASE_FIELDS.join(",");
 
 const BUSINESS_SELECT = [
   ...BUSINESS_BASE_FIELDS,
+  "avatar_media_asset_id",
+  `business_avatar_media_asset:media_assets!businesses_avatar_media_asset_id_fkey(${BUSINESS_AVATAR_MEDIA_ASSET_SELECT})`,
   "cover_media_asset_id",
   `business_cover_media_asset:media_assets!businesses_cover_media_asset_id_fkey(${BUSINESS_COVER_MEDIA_ASSET_SELECT})`,
 ].join(",");
@@ -174,14 +197,14 @@ function canFallbackFromBusinesses(error: any): boolean {
   );
 }
 
-function isCoverMediaSelectError(error: any): boolean {
+function isBusinessMediaSelectError(error: any): boolean {
   const code = String(error?.code || "").trim();
   const message = String(error?.message || error?.details || "");
   return (
     code === "42703" ||
     code === "PGRST200" ||
     code === "PGRST201" ||
-    /cover_media_asset_id|media_assets|relationship|foreign key/i.test(message)
+    /avatar_media_asset_id|cover_media_asset_id|media_assets|relationship|foreign key/i.test(message)
   );
 }
 
@@ -204,6 +227,11 @@ function mapFromBusinesses(row: any, userRow: any | null): UnifiedBusiness {
     website: row?.website ?? userRow?.website ?? null,
     phone: row?.phone ?? null,
     profile_photo_url: row?.profile_photo_url ?? userRow?.profile_photo_url ?? null,
+    avatar_media_asset_id: row?.avatar_media_asset_id ?? null,
+    business_avatar_media_asset:
+      row?.business_avatar_media_asset && typeof row.business_avatar_media_asset === "object"
+        ? row.business_avatar_media_asset
+        : null,
     cover_photo_url: row?.cover_photo_url ?? userRow?.cover_photo_url ?? null,
     cover_media_asset_id: row?.cover_media_asset_id ?? null,
     business_cover_media_asset:
@@ -265,6 +293,8 @@ function mapFromLegacyUser(userRow: any): UnifiedBusiness {
     website: userRow?.website ?? null,
     phone: userRow?.phone ?? null,
     profile_photo_url: userRow?.profile_photo_url ?? null,
+    avatar_media_asset_id: null,
+    business_avatar_media_asset: null,
     cover_photo_url: userRow?.cover_photo_url ?? null,
     cover_media_asset_id: null,
     business_cover_media_asset: null,
@@ -365,7 +395,7 @@ export async function getBusinessByUserId({
 
   let businessRes = await runBusinessQuery(BUSINESS_SELECT);
 
-  if (businessRes.error && isCoverMediaSelectError(businessRes.error)) {
+  if (businessRes.error && isBusinessMediaSelectError(businessRes.error)) {
     businessRes = await runBusinessQuery(BUSINESS_LEGACY_SELECT);
   }
 

@@ -478,6 +478,8 @@ export default function GoogleMapClient({
                   : "Local Business",
                 source: "supabase_users",
                 profile_photo_url: row.profile_photo_url || null,
+                avatar_media_asset_id: row.avatar_media_asset_id || null,
+                business_avatar_media_asset: row.business_avatar_media_asset || null,
                 description: row.description || "",
                 website: row.website || "",
               };

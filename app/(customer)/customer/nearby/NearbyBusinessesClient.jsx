@@ -61,7 +61,12 @@ const timeValue = (value) => {
 
 const getBusinessQualityScore = (business) => {
   let score = 0;
-  if (business?.avatar_url || business?.logo_url || business?.profile_photo_url) score += 2;
+  if (
+    business?.avatar_media_asset_id ||
+    business?.avatar_url ||
+    business?.logo_url ||
+    business?.profile_photo_url
+  ) score += 2;
   if (business?.description && String(business.description).trim().length >= 24) score += 2;
   if (business?.website) score += 1;
   if (business?.city && business?.state) score += 1;
@@ -199,6 +204,43 @@ export default function NearbyBusinessesClient() {
   useEffect(() => {
     hasLoadedYbRef.current = hasLoadedYb;
   }, [hasLoadedYb]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const applyAvatarUpdate = (payload) => {
+      const businessId = String(payload?.businessId || "").trim();
+      if (!businessId) return;
+      const patch = {
+        profile_photo_url: payload.profile_photo_url || "",
+        avatar_media_asset_id: payload.avatar_media_asset_id || null,
+        business_avatar_media_asset: payload.business_avatar_media_asset || null,
+      };
+      const matchesBusiness = (business) =>
+        String(business?.id || "") === businessId ||
+        String(business?.owner_user_id || "") === businessId;
+      setYbBusinesses((prev) =>
+        prev.map((business) => (matchesBusiness(business) ? { ...business, ...patch } : business))
+      );
+      setSelectedBusiness((prev) =>
+        prev && matchesBusiness(prev) ? { ...prev, ...patch } : prev
+      );
+    };
+
+    const handleWindowUpdate = (event) => applyAvatarUpdate(event.detail);
+    window.addEventListener("yb:business-avatar-updated", handleWindowUpdate);
+
+    let channel = null;
+    try {
+      channel = new BroadcastChannel("yb-business-avatar");
+      channel.onmessage = (event) => applyAvatarUpdate(event.data);
+    } catch {}
+
+    return () => {
+      window.removeEventListener("yb:business-avatar-updated", handleWindowUpdate);
+      if (channel) channel.close();
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -356,6 +398,8 @@ export default function NearbyBusinessesClient() {
               website: row.website || "",
               avatar_url: row.avatar_url || "",
               logo_url: row.logo_url || "",
+              avatar_media_asset_id: row.avatar_media_asset_id || null,
+              business_avatar_media_asset: row.business_avatar_media_asset || null,
               cover_photo_url: row.cover_photo_url || "",
               profile_photo_url: row.profile_photo_url || "",
               verification_status: row.verification_status || "",

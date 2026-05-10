@@ -20,6 +20,25 @@ export const PUBLIC_BUSINESS_COVER_MEDIA_ASSET_SELECT = [
   "updated_at",
 ].join(",");
 
+export const PUBLIC_BUSINESS_AVATAR_MEDIA_ASSET_SELECT = [
+  "id",
+  "bucket",
+  "purpose",
+  "status",
+  "source_path",
+  "original_path",
+  "avatar_128_path",
+  "avatar_256_path",
+  "avatar_512_path",
+  "public_url",
+  "width",
+  "height",
+  "mime_type",
+  "size_bytes",
+  "created_at",
+  "updated_at",
+].join(",");
+
 const PUBLIC_BUSINESS_BASE_FIELDS = [
   "id",
   "owner_user_id",
@@ -58,6 +77,8 @@ export const PUBLIC_BUSINESS_LEGACY_SELECT = PUBLIC_BUSINESS_BASE_FIELDS.join(",
 
 export const PUBLIC_BUSINESS_SELECT = [
   ...PUBLIC_BUSINESS_BASE_FIELDS,
+  "avatar_media_asset_id",
+  `business_avatar_media_asset:media_assets!businesses_avatar_media_asset_id_fkey(${PUBLIC_BUSINESS_AVATAR_MEDIA_ASSET_SELECT})`,
   "cover_media_asset_id",
   `business_cover_media_asset:media_assets!businesses_cover_media_asset_id_fkey(${PUBLIC_BUSINESS_COVER_MEDIA_ASSET_SELECT})`,
 ].join(",");
@@ -78,6 +99,8 @@ export type PublicBusiness = {
   website: string | null;
   phone: string | null;
   profile_photo_url: string | null;
+  avatar_media_asset_id?: string | null;
+  business_avatar_media_asset?: Record<string, unknown> | null;
   cover_photo_url: string | null;
   cover_media_asset_id?: string | null;
   business_cover_media_asset?: Record<string, unknown> | null;
@@ -114,6 +137,8 @@ export type PublicBusinessRow = {
   website: string | null;
   phone: string | null;
   profile_photo_url: string | null;
+  avatar_media_asset_id?: string | null;
+  business_avatar_media_asset?: Record<string, unknown> | null;
   cover_photo_url: string | null;
   cover_media_asset_id?: string | null;
   business_cover_media_asset?: Record<string, unknown> | null;
@@ -155,7 +180,7 @@ export function applyPublicBusinessVisibility(query: any, options: { viewerCanSe
   return nextQuery;
 }
 
-export function isPublicBusinessCoverMediaSelectError(error: unknown): boolean {
+export function isPublicBusinessMediaSelectError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const err = error as { code?: string | null; message?: string | null; details?: string | null };
   const code = String(err.code || "");
@@ -164,9 +189,11 @@ export function isPublicBusinessCoverMediaSelectError(error: unknown): boolean {
     code === "42703" ||
     code === "PGRST200" ||
     code === "PGRST201" ||
-    /cover_media_asset_id|media_assets|relationship|foreign key/i.test(message)
+    /avatar_media_asset_id|cover_media_asset_id|media_assets|relationship|foreign key/i.test(message)
   );
 }
+
+export const isPublicBusinessCoverMediaSelectError = isPublicBusinessMediaSelectError;
 
 export function mapPublicBusinessRow(data: PublicBusinessRow): PublicBusiness {
   const taxonomy = buildBusinessTaxonomyPayload({
@@ -190,6 +217,11 @@ export function mapPublicBusinessRow(data: PublicBusinessRow): PublicBusiness {
     website: data.website ?? null,
     phone: data.phone ?? null,
     profile_photo_url: data.profile_photo_url ?? null,
+    avatar_media_asset_id: data.avatar_media_asset_id ?? null,
+    business_avatar_media_asset:
+      data.business_avatar_media_asset && typeof data.business_avatar_media_asset === "object"
+        ? data.business_avatar_media_asset
+        : null,
     cover_photo_url: data.cover_photo_url ?? null,
     cover_media_asset_id: data.cover_media_asset_id ?? null,
     business_cover_media_asset:

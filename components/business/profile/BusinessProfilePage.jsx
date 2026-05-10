@@ -25,6 +25,16 @@ function filterPayloadByProfile(payload, profile) {
   );
 }
 
+function publishBusinessAvatarUpdate(payload) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("yb:business-avatar-updated", { detail: payload }));
+  try {
+    const channel = new BroadcastChannel("yb-business-avatar");
+    channel.postMessage(payload);
+    channel.close();
+  } catch {}
+}
+
 export default function BusinessProfilePage({
   initialProfile,
   initialGallery,
@@ -33,7 +43,7 @@ export default function BusinessProfilePage({
   initialAnnouncements,
   ratingSummary,
 }) {
-  const { supabase, user, profile: authProfile, refreshProfile } = useAuth();
+  const { supabase, user, profile: authProfile, refreshProfile, updateProfile } = useAuth();
 
   const [profile, setProfile] = useState(initialProfile);
   const [gallery, setGallery] = useState(initialGallery);
@@ -187,7 +197,8 @@ export default function BusinessProfilePage({
         purpose: type === "avatar" ? "business_avatar" : "business_cover",
       });
       const publicUrl = committed.profileUrl;
-      const mediaAssetId = committed?.assets?.[0]?.id || null;
+      const mediaAsset = committed?.assets?.[0] || null;
+      const mediaAssetId = mediaAsset?.id || null;
 
       if (!publicUrl) throw new Error("Upload failed to return a URL.");
 
@@ -196,12 +207,22 @@ export default function BusinessProfilePage({
           ? { profile_photo_url: publicUrl }
           : { cover_photo_url: publicUrl };
       const businessPayload =
-        type === "cover" && mediaAssetId
+        type === "avatar" && mediaAssetId
+          ? {
+              profile_photo_url: publicUrl,
+              avatar_media_asset_id: mediaAssetId,
+            }
+          : type === "cover" && mediaAssetId
           ? { cover_photo_url: publicUrl, cover_media_asset_id: mediaAssetId }
           : userPayload;
+      const localBusinessPayload =
+        type === "avatar" && mediaAsset
+          ? { ...businessPayload, business_avatar_media_asset: mediaAsset }
+          : businessPayload;
       const filteredUserPayload = filterPayloadByProfile(userPayload, profile);
       const filteredBusinessPayload = filterPayloadByProfile(businessPayload, {
         ...profile,
+        avatar_media_asset_id: profile?.avatar_media_asset_id ?? null,
         cover_media_asset_id: profile?.cover_media_asset_id ?? null,
       });
       if (!Object.keys(filteredUserPayload).length) {
@@ -209,7 +230,7 @@ export default function BusinessProfilePage({
         return;
       }
 
-      setProfile((prev) => ({ ...prev, ...filteredBusinessPayload }));
+      setProfile((prev) => ({ ...prev, ...localBusinessPayload }));
       if (!client?.storage) {
         showToast("error", "Storage client is not ready. Please refresh.");
         return;
@@ -231,8 +252,10 @@ export default function BusinessProfilePage({
 
       if (
         businessPhotoError &&
-        type === "cover" &&
-        /cover_media_asset_id|column/i.test(String(businessPhotoError.message || ""))
+        ((type === "cover" &&
+          /cover_media_asset_id|column/i.test(String(businessPhotoError.message || ""))) ||
+          (type === "avatar" &&
+            /avatar_media_asset_id|column/i.test(String(businessPhotoError.message || ""))))
       ) {
         ({ error: businessPhotoError } = await client
           .from("businesses")
@@ -248,6 +271,23 @@ export default function BusinessProfilePage({
         return;
       }
 
+      if (type === "avatar") {
+        const avatarUpdatePayload = {
+          businessId,
+          profile_photo_url: publicUrl,
+          avatar_media_asset_id: mediaAssetId,
+          business_avatar_media_asset: mediaAsset,
+        };
+        updateProfile?.({
+          ...(authProfile || {}),
+          id: businessId,
+          profile_photo_url: publicUrl,
+          ...(mediaAssetId ? { avatar_media_asset_id: mediaAssetId } : {}),
+          ...(mediaAsset ? { business_avatar_media_asset: mediaAsset } : {}),
+          updated_at: new Date().toISOString(),
+        });
+        publishBusinessAvatarUpdate(avatarUpdatePayload);
+      }
       refreshProfile?.();
       showToast("success", "Photo uploaded.");
     } catch (err) {

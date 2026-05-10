@@ -13,12 +13,14 @@ export type BusinessImageInput = {
   avatar_url?: string | null;
   logo_url?: string | null;
   profile_photo_url?: string | null;
+  avatar_media_asset_id?: string | null;
   cover_photo_url?: string | null;
   cover_media_asset_id?: string | null;
   bucket?: string | null;
   purpose?: string | null;
   avatar_128_path?: string | null;
   avatar_256_path?: string | null;
+  avatar_512_path?: string | null;
   cover_mobile_path?: string | null;
   cover_desktop_path?: string | null;
   business_avatar_media_asset?: Record<string, unknown> | null;
@@ -243,15 +245,22 @@ function findMediaAssetByPurpose(
 }
 
 export function resolveBusinessAvatarUrl(business: BusinessImageInput = {}): string | null {
+  const linkedAvatarAsset =
+    business.business_avatar_media_asset &&
+    (business.avatar_media_asset_id || getMediaAssetPurpose(business.business_avatar_media_asset) === "business_avatar")
+      ? business.business_avatar_media_asset
+      : null;
   const avatarAsset =
-    findMediaAssetByPurpose(business, new Set(["business_avatar", "user_avatar"])) ||
-    (business.avatar_256_path || business.avatar_128_path
+    linkedAvatarAsset ||
+    (business.avatar_512_path || business.avatar_256_path || business.avatar_128_path
       ? {
           bucket: business.bucket || "business-photos",
+          avatar_512_path: business.avatar_512_path,
           avatar_256_path: business.avatar_256_path,
           avatar_128_path: business.avatar_128_path,
         }
-      : null);
+      : null) ||
+    findMediaAssetByPurpose(business, new Set(["business_avatar"]));
   const mediaAssetUrl = avatarAsset
     ? resolveMediaAssetUrl(avatarAsset, "avatar_profile")
     : null;

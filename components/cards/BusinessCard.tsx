@@ -15,6 +15,8 @@ type BusinessCardProps = {
     state?: string | null;
     avatar_url?: string | null;
     logo_url?: string | null;
+    avatar_media_asset_id?: string | null;
+    business_avatar_media_asset?: Record<string, unknown> | null;
     profile_photo_url?: string | null;
     cover_photo_url?: string | null;
     distanceMiles?: number | null;

@@ -92,6 +92,109 @@ describe("business image resolvers", () => {
     }
   });
 
+  it("prefers an explicitly linked business avatar media asset over legacy avatar fields", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      expect(
+        resolveBusinessAvatarUrl({
+          avatar_media_asset_id: "avatar-asset-1",
+          business_avatar_media_asset: {
+            id: "avatar-asset-1",
+            purpose: "business_avatar",
+            bucket: "business-photos",
+            avatar_128_path: "owner/avatar/asset/avatar_128.webp",
+            avatar_256_path: "owner/avatar/asset/avatar_256.webp",
+            avatar_512_path: "owner/avatar/asset/avatar_512.webp",
+            public_url: "https://cdn.example.com/avatar-public-url.webp",
+          },
+          avatar_url: "https://cdn.example.com/avatar-url.jpg",
+          logo_url: "https://cdn.example.com/logo.png",
+          profile_photo_url: "https://cdn.example.com/legacy-avatar.jpg",
+        })
+      ).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/avatar/asset/avatar_512.webp"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
+  it("falls back through avatar media variants before legacy URLs", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    try {
+      expect(
+        resolveBusinessAvatarUrl({
+          avatar_media_asset_id: "avatar-asset-1",
+          business_avatar_media_asset: {
+            id: "avatar-asset-1",
+            purpose: "business_avatar",
+            bucket: "business-photos",
+            avatar_256_path: "owner/avatar/asset/avatar_256.webp",
+            avatar_128_path: "owner/avatar/asset/avatar_128.webp",
+          },
+          profile_photo_url: "https://cdn.example.com/profile.jpg",
+        })
+      ).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/avatar/asset/avatar_256.webp"
+      );
+
+      expect(
+        resolveBusinessAvatarUrl({
+          avatar_media_asset_id: "avatar-asset-1",
+          business_avatar_media_asset: {
+            id: "avatar-asset-1",
+            purpose: "business_avatar",
+            bucket: "business-photos",
+            avatar_128_path: "owner/avatar/asset/avatar_128.webp",
+          },
+          logo_url: "https://cdn.example.com/logo.png",
+        })
+      ).toBe(
+        "https://example.supabase.co/storage/v1/object/public/business-photos/owner/avatar/asset/avatar_128.webp"
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    }
+  });
+
+  it("does not use user avatar media assets for business avatar resolution", () => {
+    expect(
+      resolveBusinessAvatarUrl({
+        profile_photo_url: "https://cdn.example.com/business-profile.jpg",
+        media_assets: [
+          {
+            purpose: "user_avatar",
+            bucket: "business-photos",
+            avatar_256_path: "owner/avatar/user-avatar/avatar_256.webp",
+          },
+        ],
+      })
+    ).toBe("https://cdn.example.com/business-profile.jpg");
+  });
+
+  it("preserves legacy avatar fallbacks and placeholder behavior", () => {
+    expect(
+      getBusinessAvatarImage({
+        business_name: "Logo Shop",
+        logo_url: "https://cdn.example.com/logo.png",
+      })
+    ).toEqual({ kind: "image", src: "https://cdn.example.com/logo.png" });
+
+    expect(
+      getBusinessAvatarImage({
+        business_name: "Legacy Photo Shop",
+        profile_photo_url: "https://cdn.example.com/profile.jpg",
+      })
+    ).toEqual({ kind: "image", src: "https://cdn.example.com/profile.jpg" });
+
+    expect(getBusinessAvatarImage({ business_name: "Paper Harbor" })).toMatchObject({
+      kind: "placeholder",
+      initials: "PH",
+    });
+  });
+
   it("prefers a directly linked business cover media asset over the legacy cover URL", () => {
     const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";

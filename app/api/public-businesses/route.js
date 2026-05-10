@@ -71,7 +71,7 @@ function daysSince(value) {
 
 function getCompletenessScore(row) {
   let score = 0;
-  if (row?.profile_photo_url || row?.cover_photo_url) score += 2;
+  if (row?.avatar_media_asset_id || row?.profile_photo_url || row?.cover_photo_url) score += 2;
   if (row?.description && String(row.description).trim().length >= 24) score += 2;
   if (row?.website) score += 1;
   if (row?.address && row?.city && row?.state) score += 1;

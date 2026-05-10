@@ -21,6 +21,26 @@ describe("settings phone separation", () => {
     expect(source).not.toContain("getCustomerProfileCompletion");
   });
 
+  it("business avatar upload pushes the saved avatar into auth profile context before refresh", () => {
+    const source = read("app/(business)/business/settings/page.js");
+    const updateIndex = source.indexOf("updateProfile?.({");
+    const refreshIndex = source.indexOf("refreshProfile?.();", updateIndex);
+
+    expect(source).toContain("business_avatar_media_asset: mediaAsset");
+    expect(updateIndex).toBeGreaterThan(-1);
+    expect(refreshIndex).toBeGreaterThan(updateIndex);
+  });
+
+  it("auth profile updates also patch the cached business object for navbar consumers", () => {
+    const source = read("components/AuthProvider.jsx");
+
+    expect(source).toContain("const mergedBusiness =");
+    expect(source).toContain("currentState.business?.owner_user_id === currentState.user?.id");
+    expect(source).toContain("...currentState.business");
+    expect(source).toContain("...nextProfile");
+    expect(source).toContain("business: mergedBusiness");
+  });
+
   it("customer settings saves the private phone through the account profile API", () => {
     const source = read("app/(customer)/customer/settings/page.js");
 

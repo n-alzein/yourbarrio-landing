@@ -28,6 +28,22 @@ describe("media asset URL resolver", () => {
     vi.unstubAllEnvs();
   });
 
+  it("prefers the largest avatar profile variant", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    const asset = {
+      bucket: "business-photos",
+      avatar_128_path: "business/avatar_128.webp",
+      avatar_256_path: "business/avatar_256.webp",
+      avatar_512_path: "business/avatar_512.webp",
+    };
+
+    expect(resolveMediaAssetUrl(asset, "avatar_profile")).toBe(
+      "https://example.supabase.co/storage/v1/object/public/business-photos/business/avatar_512.webp"
+    );
+    expect(resolveVariantPath(asset, "avatar_profile")).toBe("business/avatar_512.webp");
+    vi.unstubAllEnvs();
+  });
+
   it("preserves absolute URLs and local fallback paths", () => {
     expect(buildSupabasePublicUrl("business-photos", "https://cdn.example/image.webp")).toBe(
       "https://cdn.example/image.webp"

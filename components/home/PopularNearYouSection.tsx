@@ -34,6 +34,8 @@ type NearbyBusiness = {
   city?: string | null;
   state?: string | null;
   profile_photo_url?: string | null;
+  avatar_media_asset_id?: string | null;
+  business_avatar_media_asset?: Record<string, unknown> | null;
   cover_photo_url?: string | null;
   verification_status?: string | null;
   latitude?: number | string | null;

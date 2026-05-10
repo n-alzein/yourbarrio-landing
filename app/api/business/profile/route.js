@@ -65,7 +65,7 @@ export async function POST(req) {
     supabase
       .from("businesses")
       .select(
-        "owner_user_id,public_id,is_internal,business_name,business_type_id,business_type,category,description,website,phone,address,address_2,city,state,postal_code,profile_photo_url,cover_photo_url,latitude,longitude,hours_json,social_links_json,pickup_enabled_default,local_delivery_enabled_default,default_delivery_fee_cents,delivery_radius_miles,delivery_min_order_cents,delivery_notes"
+        "owner_user_id,public_id,is_internal,business_name,business_type_id,business_type,category,description,website,phone,address,address_2,city,state,postal_code,profile_photo_url,avatar_media_asset_id,cover_photo_url,latitude,longitude,hours_json,social_links_json,pickup_enabled_default,local_delivery_enabled_default,default_delivery_fee_cents,delivery_radius_miles,delivery_min_order_cents,delivery_notes"
       )
       .eq("owner_user_id", user.id)
       .maybeSingle(),
@@ -172,8 +172,13 @@ export async function POST(req) {
     updated_at: new Date().toISOString(),
   };
   const nextCoverPhotoUrl = userPayload.cover_photo_url || "";
+  const nextProfilePhotoUrl = userPayload.profile_photo_url || "";
+  const previousProfilePhotoUrl =
+    existingBusiness.profile_photo_url || existingUser.profile_photo_url || "";
   const previousCoverPhotoUrl =
     existingBusiness.cover_photo_url || existingUser.cover_photo_url || "";
+  const profilePhotoUrlChanged =
+    hasOwn(body, "profile_photo_url") && nextProfilePhotoUrl !== previousProfilePhotoUrl;
   const coverPhotoUrlChanged =
     hasOwn(body, "cover_photo_url") && nextCoverPhotoUrl !== previousCoverPhotoUrl;
 
@@ -207,6 +212,7 @@ export async function POST(req) {
     state: mergedLocation.state || null,
     postal_code: mergedLocation.postal_code || null,
     profile_photo_url: userPayload.profile_photo_url || null,
+    ...(profilePhotoUrlChanged ? { avatar_media_asset_id: null } : {}),
     cover_photo_url: userPayload.cover_photo_url || null,
     ...(coverPhotoUrlChanged ? { cover_media_asset_id: null } : {}),
     hours_json: userPayload.hours_json,
@@ -243,11 +249,13 @@ export async function POST(req) {
 
   if (
     businessUpsertError &&
-    Object.prototype.hasOwnProperty.call(businessPayload, "cover_media_asset_id") &&
-    /cover_media_asset_id|column/i.test(String(businessUpsertError.message || ""))
+    (Object.prototype.hasOwnProperty.call(businessPayload, "cover_media_asset_id") ||
+      Object.prototype.hasOwnProperty.call(businessPayload, "avatar_media_asset_id")) &&
+    /avatar_media_asset_id|cover_media_asset_id|column/i.test(String(businessUpsertError.message || ""))
   ) {
     const legacyBusinessPayload = { ...businessPayload };
     delete legacyBusinessPayload.cover_media_asset_id;
+    delete legacyBusinessPayload.avatar_media_asset_id;
     ({ data: updatedBusiness, error: businessUpsertError } = await supabase
       .from("businesses")
       .upsert(legacyBusinessPayload, { onConflict: "owner_user_id", ignoreDuplicates: false })

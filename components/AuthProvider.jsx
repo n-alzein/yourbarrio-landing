@@ -2302,9 +2302,20 @@ export function AuthProvider({
       nextProfile,
       currentState.user
     );
+    const mergedBusiness =
+      currentState.business?.owner_user_id === currentState.user?.id ||
+      currentState.business?.id === currentState.user?.id
+        ? {
+            ...currentState.business,
+            ...nextProfile,
+            id: currentState.business?.id ?? nextProfile.id,
+            owner_user_id: currentState.business?.owner_user_id ?? nextProfile.id,
+          }
+        : currentState.business;
     const nextRole = resolveRole(mergedProfile, currentState.user, currentState.role);
     updateAuthState({
       profile: mergedProfile,
+      business: mergedBusiness,
       role: nextRole,
     });
   }, []);

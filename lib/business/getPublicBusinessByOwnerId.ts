@@ -1,7 +1,7 @@
 import { getPublicSupabaseServerClient } from "@/lib/supabasePublicServer";
 import {
   applyPublicBusinessVisibility,
-  isPublicBusinessCoverMediaSelectError,
+  isPublicBusinessMediaSelectError,
   mapPublicBusinessRow,
   PUBLIC_BUSINESS_LEGACY_SELECT,
   PUBLIC_BUSINESS_SELECT,
@@ -39,7 +39,7 @@ export async function getPublicBusinessByOwnerId(
     error: { code?: string | null; message?: string | null } | null;
   };
 
-  if (error && isPublicBusinessCoverMediaSelectError(error)) {
+  if (error && isPublicBusinessMediaSelectError(error)) {
     ({ data, error } = (await runQuery(PUBLIC_BUSINESS_LEGACY_SELECT)) as {
       data: PublicBusinessRow | null;
       error: { code?: string | null; message?: string | null } | null;
