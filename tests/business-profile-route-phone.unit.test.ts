@@ -183,6 +183,9 @@ describe("POST /api/business/profile phone normalization", () => {
     expect(supabase.usersUpdatePayload).toEqual(
       expect.not.objectContaining({ phone: expect.anything() })
     );
+    expect(supabase.usersUpdatePayload).toEqual(
+      expect.not.objectContaining({ email: expect.anything() })
+    );
     expect(supabase.businessUpsertPayload).toEqual(
       expect.objectContaining({ phone: "(562) 123-4567" })
     );
@@ -202,6 +205,18 @@ describe("POST /api/business/profile phone normalization", () => {
     );
     expect(supabase.businessUpsertPayload).toEqual(
       expect.not.objectContaining({ is_internal: expect.anything() })
+    );
+  });
+
+  it("ignores client-submitted email because email is auth-owned", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ email: "" }));
+
+    expect(response.status).toBe(200);
+    expect(supabase.usersUpdatePayload).toEqual(
+      expect.not.objectContaining({ email: expect.anything() })
     );
   });
 

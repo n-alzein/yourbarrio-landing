@@ -6,7 +6,7 @@ import type { AdminApiAuthFailure } from "@/lib/admin/requireAdminApiRole";
 import { getAdminServiceRoleClient } from "@/lib/supabase/admin";
 
 const updateEmailSchema = z.object({
-  newEmail: z.string().email().max(320),
+  newEmail: z.string().trim().email().max(320),
   reason: z.string().trim().min(10).max(500),
 });
 const paramsSchema = z.object({
@@ -59,6 +59,20 @@ export async function POST(
   const updateResult = await adminClient.auth.admin.updateUserById(normalizedTargetUserId, { email: newEmail });
   if (updateResult.error) {
     return NextResponse.json({ error: updateResult.error.message || "Failed to update email" }, { status: 500 });
+  }
+
+  const { error: publicEmailSyncError } = await adminClient
+    .from("users")
+    .update({
+      email: newEmail,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", normalizedTargetUserId);
+  if (publicEmailSyncError) {
+    return NextResponse.json(
+      { error: publicEmailSyncError.message || "Failed to sync account email" },
+      { status: 500 }
+    );
   }
 
   let signOutError: string | null = null;

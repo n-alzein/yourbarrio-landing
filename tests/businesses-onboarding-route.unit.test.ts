@@ -35,6 +35,7 @@ function createSupabaseMock({
   businessRowOverride = {},
   businessUpsertError = null,
   userUpsertError = null,
+  authEmail = "biz@example.com",
 } = {}) {
   const businessRow = {
     id: "biz-1",
@@ -102,7 +103,7 @@ function createSupabaseMock({
         data: {
           user: {
             id: "11111111-1111-4111-8111-111111111111",
-            email: "biz@example.com",
+            email: authEmail,
           },
         },
         error: null,
@@ -165,6 +166,7 @@ describe("POST /api/businesses", () => {
     expect(supabase.from("users").upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "11111111-1111-4111-8111-111111111111",
+        email: "biz@example.com",
         role: "business",
         full_name: "Pan Dulce Market",
         business_name: "Pan Dulce Market",
@@ -173,6 +175,37 @@ describe("POST /api/businesses", () => {
         onConflict: "id",
         ignoreDuplicates: false,
       }
+    );
+  });
+
+  it("fills users.email from the authenticated auth user, not onboarding form data", async () => {
+    const supabase = createSupabaseMock({ authEmail: "  BizOwner@Example.COM  " });
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ email: "attacker@example.com" }));
+    expect(response.status).toBe(200);
+
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "bizowner@example.com",
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("does not overwrite an existing user email with blank auth email during onboarding", async () => {
+    const supabase = createSupabaseMock({
+      authEmail: "",
+      existingUserOverride: { email: "existing@example.com" },
+    });
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest());
+    expect(response.status).toBe(200);
+
+    expect(supabase.from("users").upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ email: expect.anything() }),
+      expect.any(Object)
     );
   });
 

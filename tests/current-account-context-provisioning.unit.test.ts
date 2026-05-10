@@ -139,6 +139,64 @@ function createSupabaseWithTombstoneThenRecoveredProfile() {
   };
 }
 
+function createSupabaseWithBlankEmailThenRecoveredProfile() {
+  const user = {
+    id: "11111111-1111-4111-8111-111111111111",
+    email: "GoogleUser@Example.com",
+    app_metadata: {},
+    user_metadata: {
+      full_name: "Google User",
+      picture: "https://lh3.googleusercontent.com/google.jpg",
+    },
+  };
+  const blankEmailProfile = {
+    id: user.id,
+    email: "",
+    role: "business",
+    full_name: "Google User",
+    profile_photo_url: "https://lh3.googleusercontent.com/google.jpg",
+    account_status: "active",
+    deleted_at: null,
+    anonymized_at: null,
+  };
+  const recoveredProfile = {
+    ...blankEmailProfile,
+    email: "googleuser@example.com",
+  };
+  const usersMaybeSingle = vi
+    .fn()
+    .mockResolvedValueOnce({ data: blankEmailProfile, error: null })
+    .mockResolvedValueOnce({ data: recoveredProfile, error: null });
+  const businessesMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+  const from = vi.fn((table: string) => {
+    const maybeSingle = table === "users" ? usersMaybeSingle : businessesMaybeSingle;
+    return {
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle,
+        })),
+      })),
+    };
+  });
+
+  return {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user },
+        error: null,
+      }),
+    },
+    from,
+    __mocks: {
+      user,
+      blankEmailProfile,
+      recoveredProfile,
+      usersMaybeSingle,
+      businessesMaybeSingle,
+    },
+  };
+}
+
 describe("getCurrentAccountContext provisioning recovery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -202,5 +260,30 @@ describe("getCurrentAccountContext provisioning recovery", () => {
     expect(context.user?.id).toBe(supabase.__mocks.user.id);
     expect(context.profile).toEqual(supabase.__mocks.recoveredProfile);
     expect(context.role).toBe("customer");
+  });
+
+  it("repairs and refetches an active public.users row with blank email", async () => {
+    const supabase = createSupabaseWithBlankEmailThenRecoveredProfile();
+    ensureUserProvisionedForUserMock.mockResolvedValue({
+      userCreated: false,
+      userRepaired: false,
+      role: "business",
+    });
+
+    const context = await getCurrentAccountContext({
+      supabase,
+      source: "unit_test",
+    });
+
+    expect(ensureUserProvisionedForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: supabase.__mocks.user.id,
+        email: "GoogleUser@Example.com",
+        source: "unit_test",
+      })
+    );
+    expect(supabase.__mocks.usersMaybeSingle).toHaveBeenCalledTimes(2);
+    expect(context.profile).toEqual(supabase.__mocks.recoveredProfile);
+    expect(context.role).toBe("business");
   });
 });

@@ -31,6 +31,10 @@ function hasOwn(body, key) {
   return Object.prototype.hasOwnProperty.call(body || {}, key);
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export async function POST(req) {
   const response = NextResponse.next();
   const supabase = createSupabaseRouteHandlerClient(req, response);
@@ -151,7 +155,8 @@ export async function POST(req) {
       ? pickString(body, "description")
       : existingUser.description || existingBusiness.description || "",
     website: normalizedWebsite,
-    email: hasOwn(body, "email") ? pickString(body, "email") : existingUser.email || "",
+    // Email is an auth-owned field. Profile saves must not blank or change the
+    // public.users mirror; use an auth email-change flow instead.
     address: mergedLocation.address,
     address_2: mergedLocation.address_2,
     city: mergedLocation.city,
@@ -275,6 +280,7 @@ export async function POST(req) {
       ...updatedBusiness,
       id: user.id,
       owner_user_id: user.id,
+      email: normalizeEmail(updatedUser?.email),
     },
     coordinates: coords,
   });

@@ -150,6 +150,49 @@ describe("ensureUserProvisionedForUser", () => {
     );
   });
 
+  it("repairs an active blank email from auth without overwriting other app profile fields", async () => {
+    const client = createClient({
+      existingUser: {
+        id: "11111111-1111-4111-8111-111111111111",
+        email: "",
+        role: "business",
+        full_name: "Chosen Business Name",
+        profile_photo_url: "https://cdn.example.com/app-avatar.jpg",
+        account_status: "active",
+        deleted_at: null,
+        anonymized_at: null,
+        is_internal: false,
+        password_set: true,
+      },
+    });
+    getSupabaseServerClientMock.mockReturnValue(client);
+
+    const result = await ensureUserProvisionedForUser({
+      userId: "11111111-1111-4111-8111-111111111111",
+      email: "Owner@Example.com",
+      fullName: "Auth Name",
+      avatarUrl: "https://lh3.googleusercontent.com/auth.jpg",
+      fallbackRole: "customer",
+      source: "unit_test",
+    });
+
+    expect(result).toEqual({
+      userCreated: false,
+      userRepaired: false,
+      role: "business",
+    });
+    expect(client.__mocks.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "owner@example.com",
+        full_name: "Chosen Business Name",
+        profile_photo_url: "https://cdn.example.com/app-avatar.jpg",
+        role: "business",
+        password_set: true,
+      }),
+      { onConflict: "id", ignoreDuplicates: false }
+    );
+  });
+
   it("repairs tombstoned placeholder rows from the active auth identity", async () => {
     const userId = "11111111-1111-4111-8111-111111111111";
     const client = createClient({

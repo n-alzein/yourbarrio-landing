@@ -18,6 +18,10 @@ function normalizeWebsite(value) {
   return `https://${trimmed}`;
 }
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export async function POST(req) {
   try {
     const response = NextResponse.next();
@@ -108,9 +112,10 @@ export async function POST(req) {
       );
     }
     const normalizedPhone = normalizeUSPhoneForStorage(phone);
+    const normalizedAuthEmail = normalizeEmail(user.email);
     const { data: existingUser, error: userReadError } = await supabase
       .from("users")
-      .select("public_id,latitude,longitude")
+      .select("public_id,email,latitude,longitude")
       .eq("id", user.id)
       .maybeSingle();
     const { data: existingBusiness } = await supabase
@@ -158,6 +163,9 @@ export async function POST(req) {
       longitude: geo?.lng ?? null,
       updated_at: new Date().toISOString(),
     };
+    if (normalizedAuthEmail) {
+      usersPayload.email = normalizedAuthEmail;
+    }
 
     const { error: userUpsertError } = await supabase.from("users").upsert(usersPayload, {
       onConflict: "id",
