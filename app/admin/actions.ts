@@ -485,6 +485,18 @@ function toErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function toModerationActionErrorMessage(error: unknown, fallback: string) {
+  const message = toErrorMessage(error);
+  if (
+    /log_admin_action/i.test(message) ||
+    /function .* does not exist/i.test(message) ||
+    /could not choose a best candidate function/i.test(message)
+  ) {
+    return fallback;
+  }
+  return message;
+}
+
 function revalidateModerationReturnTo(returnTo: string) {
   const pathOnly = (returnTo || "/admin/moderation").split("?")[0] || "/admin/moderation";
   revalidatePath("/admin/moderation");
@@ -535,7 +547,13 @@ export async function takeModerationCaseAction(formData: FormData) {
         returnTo,
       },
     });
-    redirect(withMessage(returnTo, "err", toErrorMessage(error)));
+    redirect(
+      withMessage(
+        returnTo,
+        "err",
+        toModerationActionErrorMessage(error, "Could not take this moderation case. Please try again.")
+      )
+    );
   }
 }
 
@@ -580,7 +598,13 @@ export async function updateModerationFlagAction(formData: FormData) {
         returnTo,
       },
     });
-    redirect(withMessage(returnTo, "err", toErrorMessage(error)));
+    redirect(
+      withMessage(
+        returnTo,
+        "err",
+        toModerationActionErrorMessage(error, "Could not update this moderation case. Please try again.")
+      )
+    );
   }
 }
 
@@ -624,7 +648,13 @@ export async function hideListingAndResolveModerationFlagAction(formData: FormDa
         returnTo,
       },
     });
-    redirect(withMessage(returnTo, "err", toErrorMessage(error)));
+    redirect(
+      withMessage(
+        returnTo,
+        "err",
+        toModerationActionErrorMessage(error, "Could not hide this listing and resolve the case. Please try again.")
+      )
+    );
   }
 }
 
@@ -668,7 +698,13 @@ export async function hideReviewAndResolveModerationFlagAction(formData: FormDat
         returnTo,
       },
     });
-    redirect(withMessage(returnTo, "err", toErrorMessage(error)));
+    redirect(
+      withMessage(
+        returnTo,
+        "err",
+        toModerationActionErrorMessage(error, "Could not hide this review and resolve the case. Please try again.")
+      )
+    );
   }
 }
 
