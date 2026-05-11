@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -50,27 +49,15 @@ export default function AdminUserSignupsChart({ data, compact = false }: AdminUs
 
   return (
     <div>
-      <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
-        <div>
-          <h4 className="text-[13px] font-semibold text-neutral-100 sm:text-sm">User signups</h4>
-          <p className="mt-1 hidden text-xs text-neutral-500 sm:block">Last 30 days, customers vs businesses</p>
-          {compact ? (
-            <div className="mt-1.5 flex items-center gap-3 text-[11px] text-neutral-500 sm:mt-2">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: customerColor }} />
-                Customers
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: businessColor }} />
-                Businesses
-              </span>
-            </div>
-          ) : null}
-        </div>
-        <div className="text-right">
-          <p className="text-base font-semibold text-neutral-50 sm:text-lg">{totalSignups.toLocaleString()}</p>
-          <p className="text-xs text-neutral-500">total</p>
-        </div>
+      <div className="mb-2 flex items-center gap-3 text-[11px] text-neutral-500 sm:mb-3">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: customerColor }} />
+          Customers
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: businessColor }} />
+          Businesses
+        </span>
       </div>
       <div className={compact ? "h-36 w-full sm:h-52" : "h-72 w-full"}>
         <ResponsiveContainer width="100%" height="100%">
@@ -90,7 +77,6 @@ export default function AdminUserSignupsChart({ data, compact = false }: AdminUs
               tick={{ fontSize: 11, fill: "#a3a3a3" }}
             />
             <Tooltip content={<CustomTooltip />} />
-            {!compact ? <Legend wrapperStyle={{ fontSize: "12px", color: "#a3a3a3" }} /> : null}
             <Bar dataKey="customerCount" name="Customers" fill={customerColor} radius={[4, 4, 0, 0]} />
             <Bar dataKey="businessCount" name="Businesses" fill={businessColor} radius={[4, 4, 0, 0]} />
           </BarChart>

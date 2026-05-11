@@ -222,7 +222,12 @@ export default async function AdminDashboardPage({
       </section>
 
       <section className="mt-6 md:mt-8">
-        <AdminSection title="Customer activity" description="Customer and business account creation">
+        <AdminSection title="Account growth" description="New customer and business accounts in the last 30 days">
+          <AccountGrowthTotals
+            customers={kpis.users.customersTotal}
+            businesses={kpis.users.businessesTotal}
+            total={kpis.users.total}
+          />
           <AdminUserSignupsChart data={signupChartData} compact />
         </AdminSection>
       </section>
@@ -367,6 +372,33 @@ function MarketplaceComposition({
           <p className="mt-1 text-sm font-semibold text-neutral-100">{demoInternal.toLocaleString()}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AccountGrowthTotals({
+  customers,
+  businesses,
+  total,
+}: {
+  customers: number;
+  businesses: number;
+  total: number;
+}) {
+  return (
+    <div className="mb-3 grid gap-2 sm:grid-cols-3">
+      <AccountGrowthTotal label="Total customers" value={customers} />
+      <AccountGrowthTotal label="Total businesses" value={businesses} />
+      <AccountGrowthTotal label="Total accounts" value={total} />
+    </div>
+  );
+}
+
+function AccountGrowthTotal({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md bg-white/[0.025] px-3 py-2">
+      <p className="text-[11px] font-medium text-neutral-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-neutral-100 sm:text-base">{value.toLocaleString()}</p>
     </div>
   );
 }
