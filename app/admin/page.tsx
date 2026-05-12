@@ -5,6 +5,7 @@ import AdminInfoTooltip from "@/app/admin/_components/AdminInfoTooltip";
 import AdminListingActivityChart from "@/app/admin/_components/AdminListingActivityChart";
 import AdminSection from "@/app/admin/_components/AdminSection";
 import AdminUserSignupsChart from "@/app/admin/_components/AdminUserSignupsChart";
+import { getCustomerBusinessAccountTotal } from "@/lib/admin/accountGrowth";
 import { getAdminDashboardKpis } from "@/lib/admin/dashboardKpis";
 import { requireAdminRole } from "@/lib/admin/permissions";
 import { getAdminDataClient } from "@/lib/supabase/admin";
@@ -226,7 +227,6 @@ export default async function AdminDashboardPage({
           <AccountGrowthTotals
             customers={kpis.users.customersTotal}
             businesses={kpis.users.businessesTotal}
-            total={kpis.users.total}
           />
           <AdminUserSignupsChart data={signupChartData} compact />
         </AdminSection>
@@ -291,28 +291,36 @@ function BusinessActivationFunnel({
   const maxValue = Math.max(...stages.map((stage) => stage.value), 1);
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2 sm:space-y-2.5">
       {stages.map((stage, index) => {
         const width = Math.max((stage.value / maxValue) * 100, stage.value > 0 ? 6 : 0);
         return (
-          <div key={stage.label} className="grid gap-2 sm:grid-cols-[minmax(0,180px)_1fr_minmax(72px,auto)] sm:items-center">
+          <div
+            key={stage.label}
+            className="grid grid-cols-[auto_minmax(92px,1fr)_minmax(38px,0.6fr)_auto] items-center gap-2 sm:grid-cols-[minmax(0,180px)_1fr_minmax(72px,auto)]"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-[10px] font-semibold text-neutral-400 sm:hidden">
+              {index + 1}
+            </span>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-[10px] font-semibold text-neutral-400">
+                <span className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-[10px] font-semibold text-neutral-400 sm:flex">
                   {index + 1}
                 </span>
                 <p className="truncate text-sm font-medium text-neutral-100">{stage.label}</p>
               </div>
-              <p className="mt-0.5 pl-7 text-[11px] text-neutral-500">{stage.helper}</p>
+              <p className="mt-0.5 truncate text-[10px] text-neutral-500 sm:pl-7 sm:text-[11px]">{stage.helper}</p>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-neutral-950/80">
+            <div className="h-1.5 overflow-hidden rounded-full bg-neutral-950/80 sm:h-2">
               <div
                 className="h-full rounded-full bg-neutral-500/70"
                 style={{ width: `${width}%` }}
                 aria-hidden="true"
               />
             </div>
-            <p className="text-right text-sm font-semibold text-neutral-100 sm:text-base">{stage.value.toLocaleString()}</p>
+            <p className="shrink-0 text-right text-sm font-semibold tabular-nums text-neutral-100 sm:text-base">
+              {stage.value.toLocaleString()}
+            </p>
           </div>
         );
       })}
@@ -379,17 +387,17 @@ function MarketplaceComposition({
 function AccountGrowthTotals({
   customers,
   businesses,
-  total,
 }: {
   customers: number;
   businesses: number;
-  total: number;
 }) {
+  const customerBusinessTotal = getCustomerBusinessAccountTotal({ customers, businesses });
+
   return (
     <div className="mb-3 grid gap-2 sm:grid-cols-3">
       <AccountGrowthTotal label="Total customers" value={customers} />
       <AccountGrowthTotal label="Total businesses" value={businesses} />
-      <AccountGrowthTotal label="Total accounts" value={total} />
+      <AccountGrowthTotal label="Customer + business accounts" value={customerBusinessTotal} />
     </div>
   );
 }
