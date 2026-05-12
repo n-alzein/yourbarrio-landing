@@ -50,19 +50,15 @@ export default function AdminListingActivityChart({ data }: AdminListingActivity
   return (
     <div>
       <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
-        <div>
-          <h4 className="text-[13px] font-semibold text-neutral-100 sm:text-sm">Listings created</h4>
-          <p className="mt-1 hidden text-xs text-neutral-500 sm:block">Last 30 days, real vs demo/internal</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 sm:mt-2">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: realColor }} />
-              Real
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: demoInternalColor }} />
-              Demo/internal
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-neutral-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: realColor }} />
+            Real
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: demoInternalColor }} />
+            Demo/internal
+          </span>
         </div>
         <div className="text-right">
           <p className="text-base font-semibold text-neutral-50 sm:text-lg">{totalCreated.toLocaleString()}</p>

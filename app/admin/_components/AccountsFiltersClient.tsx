@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminTableToolbar from "@/app/admin/_components/AdminTableToolbar";
-import type { AdminUserRoleFilter } from "@/lib/admin/users";
+import type { AdminBusinessInventoryFilter, AdminUserRoleFilter } from "@/lib/admin/users";
 
 type InternalFilter = "all" | "true" | "false";
 
@@ -11,6 +11,7 @@ type AccountsFiltersClientProps = {
   presetRole?: Exclude<AdminUserRoleFilter, "all">;
   initialRole: AdminUserRoleFilter;
   initialInternal: InternalFilter;
+  initialBusinessInventoryFilter: AdminBusinessInventoryFilter;
   initialQuery: string;
   initialPageSize: number;
 };
@@ -25,6 +26,7 @@ export default function AccountsFiltersClient({
   presetRole,
   initialRole,
   initialInternal,
+  initialBusinessInventoryFilter,
   initialQuery,
   initialPageSize,
 }: AccountsFiltersClientProps) {
@@ -36,6 +38,9 @@ export default function AccountsFiltersClient({
   const urlQuery = searchParams.get("q") || "";
   const urlRole = (searchParams.get("role") || initialRole) as AdminUserRoleFilter;
   const urlInternal = (searchParams.get("internal") || initialInternal) as InternalFilter;
+  const urlBusinessInventoryFilter = (
+    searchParams.get("filter") || initialBusinessInventoryFilter
+  ) as AdminBusinessInventoryFilter;
   const urlPageSize = normalizePageSize(searchParams.get("pageSize"), initialPageSize);
   const effectiveRole = presetRole || urlRole;
   const internalLabel = presetRole === "business" ? "Internal/test business" : "Internal tester access";
@@ -123,6 +128,22 @@ export default function AccountsFiltersClient({
               <option value="false">No</option>
             </select>
           </label>
+
+          {presetRole === "business" ? (
+            <label className="flex items-center gap-2 rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm">
+              <span className="text-neutral-400">Inventory:</span>
+              <select
+                value={urlBusinessInventoryFilter}
+                onChange={(event) =>
+                  updateQueryParams({ filter: event.target.value }, { resetPage: true })
+                }
+                className="bg-transparent text-sm outline-none"
+              >
+                <option value="none">All</option>
+                <option value="no-published-listings">No published real listings</option>
+              </select>
+            </label>
+          ) : null}
         </>
       }
       right={

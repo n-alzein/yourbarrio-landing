@@ -1,11 +1,10 @@
 import Link from "next/link";
+import AdminAccountGrowthCard from "@/app/admin/_components/AdminAccountGrowthCard";
 import AdminPage from "@/app/admin/_components/AdminPage";
 import AdminFlash from "@/app/admin/_components/AdminFlash";
 import AdminInfoTooltip from "@/app/admin/_components/AdminInfoTooltip";
-import AdminListingActivityChart from "@/app/admin/_components/AdminListingActivityChart";
+import AdminListingActivityCard from "@/app/admin/_components/AdminListingActivityCard";
 import AdminSection from "@/app/admin/_components/AdminSection";
-import AdminUserSignupsChart from "@/app/admin/_components/AdminUserSignupsChart";
-import { getCustomerBusinessAccountTotal } from "@/lib/admin/accountGrowth";
 import { getAdminDashboardKpis } from "@/lib/admin/dashboardKpis";
 import { requireAdminRole } from "@/lib/admin/permissions";
 import { getAdminDataClient } from "@/lib/supabase/admin";
@@ -40,25 +39,34 @@ export default async function AdminDashboardPage({
 
   const kpis = await getAdminDashboardKpis(client);
 
-  const signupRows = kpis.users.signupSeries30d;
-  const signupChartData = signupRows.map((row) => ({
+  const mapSignupRows = (rows: typeof kpis.users.signupSeries30d) => rows.map((row) => ({
     bucketStart: String(row.bucketStart),
     label: formatBucketLabel(String(row.bucketStart)),
     customerCount: Number(row.customerCount || 0),
     businessCount: Number(row.businessCount || 0),
   }));
-  const listingActivityData = kpis.listingActivity.map((row) => ({
+  const signupChartRanges = {
+    "7d": mapSignupRows(kpis.users.signupSeries7d),
+    "30d": mapSignupRows(kpis.users.signupSeries30d),
+    ytd: mapSignupRows(kpis.users.signupSeriesYtd),
+  };
+  const mapListingRows = (rows: typeof kpis.listingActivity) => rows.map((row) => ({
     bucketStart: String(row.bucketStart),
     label: formatBucketLabel(String(row.bucketStart)),
     realCreated: Number(row.realCreated || 0),
     demoInternalCreated: Number(row.demoInternalCreated || 0),
     totalCreated: Number(row.totalCreated || 0),
   }));
+  const listingActivityRanges = {
+    "7d": mapListingRows(kpis.listingActivity7d),
+    "30d": mapListingRows(kpis.listingActivity),
+    ytd: mapListingRows(kpis.listingActivityYtd),
+  };
 
   if (diagEnabled) {
     console.warn("[admin-dashboard] totals diagnostics", {
       totalUsersFromPublicUsers: kpis.users.total,
-      signupsSeriesRows: signupRows.length,
+      signupsSeriesRows: kpis.users.signupSeries30d.length,
       launchReadyBusinesses: kpis.businesses.launchReady,
       publishedRealListings: kpis.listings.publishedReal,
       distinctApplied: true,
@@ -208,11 +216,9 @@ export default async function AdminDashboardPage({
           <p className="mt-1 hidden text-sm text-neutral-500 sm:block">Inventory creation and published marketplace composition.</p>
         </div>
         <div className="mt-4 grid gap-4 md:mt-5 lg:grid-cols-2">
-          <AdminSection title="Listing activity" description="Listings created in the last 30 days">
-            <AdminListingActivityChart data={listingActivityData} />
-          </AdminSection>
+          <AdminListingActivityCard ranges={listingActivityRanges} />
 
-          <AdminSection title="Published inventory" description="Real versus demo/internal published listings">
+          <AdminSection title="Published inventory" description="Total published listings split by real vs demo/internal">
             <MarketplaceComposition
               real={kpis.marketplaceComposition.publishedReal}
               demoInternal={kpis.marketplaceComposition.publishedDemoInternal}
@@ -223,13 +229,11 @@ export default async function AdminDashboardPage({
       </section>
 
       <section className="mt-6 md:mt-8">
-        <AdminSection title="Account growth" description="New customer and business accounts in the last 30 days">
-          <AccountGrowthTotals
-            customers={kpis.users.customersTotal}
-            businesses={kpis.users.businessesTotal}
-          />
-          <AdminUserSignupsChart data={signupChartData} compact />
-        </AdminSection>
+        <AdminAccountGrowthCard
+          customers={kpis.users.customersTotal}
+          businesses={kpis.users.businessesTotal}
+          ranges={signupChartRanges}
+        />
       </section>
     </AdminPage>
   );
@@ -337,34 +341,25 @@ function MarketplaceComposition({
   demoInternal: number;
   total: number;
 }) {
-  const realPercent = total > 0 ? (real / total) * 100 : 0;
-  const demoPercent = total > 0 ? (demoInternal / total) * 100 : 0;
+  const displayedTotal = real + demoInternal;
+  const realPercent = displayedTotal > 0 ? (real / displayedTotal) * 100 : 0;
+  const demoPercent = displayedTotal > 0 ? (demoInternal / displayedTotal) * 100 : 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-2xl font-semibold text-neutral-50">{total.toLocaleString()}</p>
-          <p className="mt-1 text-xs text-neutral-500">published listings</p>
-        </div>
-        <div className="text-right text-xs text-neutral-500">
-          <p>
-            <span className="font-semibold text-neutral-100">{real.toLocaleString()}</span> real
-          </p>
-          <p>
-            <span className="font-semibold text-neutral-100">{demoInternal.toLocaleString()}</span> demo/internal
-          </p>
-        </div>
+    <div>
+      <div className="rounded-md bg-white/[0.025] px-3 py-2.5">
+        <p className="text-2xl font-semibold text-neutral-50">{displayedTotal.toLocaleString()}</p>
+        <p className="mt-1 text-xs text-neutral-500">total published listings</p>
       </div>
 
-      <div className="h-3 overflow-hidden rounded-full bg-neutral-950/80">
+      <div className="mt-6 h-3 overflow-hidden rounded-full bg-neutral-950/80">
         <div className="flex h-full w-full">
           <div className="h-full bg-emerald-400/80" style={{ width: `${realPercent}%` }} aria-hidden="true" />
           <div className="h-full bg-violet-300/70" style={{ width: `${demoPercent}%` }} aria-hidden="true" />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2">
         <div className="rounded-md bg-white/[0.025] px-3 py-2">
           <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
             <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
@@ -380,33 +375,6 @@ function MarketplaceComposition({
           <p className="mt-1 text-sm font-semibold text-neutral-100">{demoInternal.toLocaleString()}</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function AccountGrowthTotals({
-  customers,
-  businesses,
-}: {
-  customers: number;
-  businesses: number;
-}) {
-  const customerBusinessTotal = getCustomerBusinessAccountTotal({ customers, businesses });
-
-  return (
-    <div className="mb-3 grid gap-2 sm:grid-cols-3">
-      <AccountGrowthTotal label="Total customers" value={customers} />
-      <AccountGrowthTotal label="Total businesses" value={businesses} />
-      <AccountGrowthTotal label="Customer + business accounts" value={customerBusinessTotal} />
-    </div>
-  );
-}
-
-function AccountGrowthTotal({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md bg-white/[0.025] px-3 py-2">
-      <p className="text-[11px] font-medium text-neutral-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-neutral-100 sm:text-base">{value.toLocaleString()}</p>
     </div>
   );
 }
@@ -441,8 +409,8 @@ function NeedsAttentionList({
         key="missing-listings"
         label={`${missingPublishedListings.toLocaleString()} businesses have no published real listings`}
         detail="Use the business list to identify owners who need listing help."
-        href="/admin/businesses"
-        actionLabel="View businesses"
+        href="/admin/businesses?filter=no-published-listings"
+        actionLabel={`View ${missingPublishedListings.toLocaleString()} businesses`}
       />
     ) : null,
     missingImages > 0 ? (

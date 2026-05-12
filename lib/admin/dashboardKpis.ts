@@ -58,7 +58,17 @@ export type AdminDashboardKpis = {
     businessesTotal: number;
     newCustomers7d: number;
     newBusinesses7d: number;
+    signupSeries7d: Array<{
+      bucketStart: string;
+      customerCount: number;
+      businessCount: number;
+    }>;
     signupSeries30d: Array<{
+      bucketStart: string;
+      customerCount: number;
+      businessCount: number;
+    }>;
+    signupSeriesYtd: Array<{
       bucketStart: string;
       customerCount: number;
       businessCount: number;
@@ -102,6 +112,18 @@ export type AdminDashboardKpis = {
     score: number;
   };
   listingActivity: Array<{
+    bucketStart: string;
+    realCreated: number;
+    demoInternalCreated: number;
+    totalCreated: number;
+  }>;
+  listingActivity7d: Array<{
+    bucketStart: string;
+    realCreated: number;
+    demoInternalCreated: number;
+    totalCreated: number;
+  }>;
+  listingActivityYtd: Array<{
     bucketStart: string;
     realCreated: number;
     demoInternalCreated: number;
@@ -253,6 +275,13 @@ function buildSignupSeries(rows: UserKpiRow[], days = 30) {
   }
 
   return Array.from(byDate.values());
+}
+
+function getYtdDayCount() {
+  const today = new Date();
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const start = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+  return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
 }
 
 function buildListingActivitySeries(
@@ -409,7 +438,9 @@ export async function getAdminDashboardKpis(client: AdminDataClient): Promise<Ad
       businessesTotal: businessAccountsTotal || 0,
       newCustomers7d: newCustomers7d || 0,
       newBusinesses7d: newBusinesses7d || 0,
+      signupSeries7d: buildSignupSeries(users, 7),
       signupSeries30d: buildSignupSeries(users, 30),
+      signupSeriesYtd: buildSignupSeries(users, getYtdDayCount()),
     },
     businesses: {
       total: eligibleBusinesses.length,
@@ -449,6 +480,8 @@ export async function getAdminDashboardKpis(client: AdminDataClient): Promise<Ad
       score: customerIntentScore,
     },
     listingActivity: buildListingActivitySeries(listings, businessByOwnerId, 30),
+    listingActivity7d: buildListingActivitySeries(listings, businessByOwnerId, 7),
+    listingActivityYtd: buildListingActivitySeries(listings, businessByOwnerId, getYtdDayCount()),
     marketplaceComposition: {
       publishedReal: realPublishedListings.length,
       publishedDemoInternal: demoOrInternalPublishedListings.length,

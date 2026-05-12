@@ -49,15 +49,21 @@ export default function AdminUserSignupsChart({ data, compact = false }: AdminUs
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-3 text-[11px] text-neutral-500 sm:mb-3">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: customerColor }} />
-          Customers
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: businessColor }} />
-          Businesses
-        </span>
+      <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[11px] text-neutral-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: customerColor }} />
+            Customers
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: businessColor }} />
+            Businesses
+          </span>
+        </div>
+        <div className="text-right">
+          <p className="text-base font-semibold text-neutral-50 sm:text-lg">{totalSignups.toLocaleString()}</p>
+          <p className="text-xs text-neutral-500">new accounts</p>
+        </div>
       </div>
       <div className={compact ? "h-36 w-full sm:h-52" : "h-72 w-full"}>
         <ResponsiveContainer width="100%" height="100%">

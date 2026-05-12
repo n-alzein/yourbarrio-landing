@@ -11,11 +11,13 @@ import { normalizeIdValue, parseEntityDisplayId } from "@/lib/entityIds";
  */
 
 export type AdminUserRoleFilter = "all" | "customer" | "business" | "admin";
+export type AdminBusinessInventoryFilter = "none" | "no-published-listings";
 
 export type FetchAdminUsersParams = {
   client: any;
   usingServiceRole: boolean;
   role?: AdminUserRoleFilter;
+  businessInventoryFilter?: AdminBusinessInventoryFilter;
   includeInternal?: boolean;
   q?: string;
   from?: number;
@@ -57,6 +59,25 @@ type AdminUsersResult = {
   fallbackUsed: boolean;
   error?: any;
   diag: AdminUsersDiag;
+};
+
+type BusinessInventoryRow = {
+  owner_user_id: string | null;
+  public_id?: string | null;
+  business_name?: string | null;
+  is_internal: boolean | null;
+  is_seeded: boolean | null;
+  verification_status: string | null;
+};
+
+type ListingInventoryRow = {
+  business_id: string | null;
+  status: string | null;
+  is_seeded: boolean | null;
+  is_internal: boolean | null;
+  is_test: boolean | null;
+  admin_hidden: boolean | null;
+  deleted_at: string | null;
 };
 
 const adminDiagEnabled =
@@ -140,6 +161,52 @@ function normalizeRole(value: string | null | undefined) {
   if (role === "business") return "business" as const;
   if (role === "admin") return "admin" as const;
   return "customer" as const;
+}
+
+function normalizeStatus(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isFilled(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isEligibleRealBusiness(row: BusinessInventoryRow | undefined) {
+  return Boolean(row) && row?.is_internal !== true && row?.is_seeded !== true && normalizeStatus(row?.verification_status) !== "suspended";
+}
+
+function isPublishedListing(row: ListingInventoryRow) {
+  return normalizeStatus(row.status) === "published" && row.admin_hidden !== true && !isFilled(row.deleted_at);
+}
+
+function isPublishedRealListing(row: ListingInventoryRow, business: BusinessInventoryRow | undefined) {
+  return (
+    isPublishedListing(row) &&
+    row.is_seeded !== true &&
+    row.is_internal !== true &&
+    row.is_test !== true &&
+    isEligibleRealBusiness(business)
+  );
+}
+
+function matchesAdminUserSearch(row: AdminUserRow, q: string, business?: BusinessInventoryRow) {
+  const safe = String(q || "").trim().toLowerCase();
+  if (!safe) return true;
+  const haystack = [
+    row.id,
+    row.public_id,
+    row.email,
+    row.full_name,
+    row.phone,
+    row.business_name,
+    row.city,
+    business?.public_id,
+    business?.business_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(safe);
 }
 
 function normalizeRows(
@@ -408,11 +475,130 @@ async function fetchBusinessesByOwnerIds({
   };
 }
 
+async function fetchBusinessesWithoutPublishedRealListings({
+  client,
+  includeInternal,
+  q,
+  from,
+  to,
+  usingServiceRole,
+}: {
+  client: any;
+  includeInternal: boolean | undefined;
+  q: string;
+  from: number;
+  to: number;
+  usingServiceRole: boolean;
+}): Promise<AdminUsersResult> {
+  const { roleKeysByUserId, error: adminRoleMembersError } = await getAdminRoleMembers(client);
+  const [businessesResult, listingsResult] = await Promise.all([
+    client
+      .from("businesses")
+      .select("owner_user_id, public_id, business_name, is_internal, is_seeded, verification_status"),
+    client
+      .from("listings")
+      .select("business_id, status, is_seeded, is_internal, is_test, admin_hidden, deleted_at"),
+  ]);
+
+  const diag: AdminUsersDiag = {
+    path: "service-business-id-query",
+    usingServiceRole,
+  };
+
+  if (adminRoleMembersError) {
+    console.warn("[admin-accounts] admin_role_members read failed", {
+      code: adminRoleMembersError.code,
+      message: adminRoleMembersError.message,
+      details: adminRoleMembersError.details,
+    });
+  }
+
+  const error = businessesResult.error || listingsResult.error;
+  if (error) {
+    return {
+      rows: [],
+      count: 0,
+      fallbackUsed: false,
+      error,
+      diag,
+    };
+  }
+
+  const businessByOwnerId = new Map<string, BusinessInventoryRow>();
+  for (const business of (Array.isArray(businessesResult.data) ? businessesResult.data : []) as BusinessInventoryRow[]) {
+    const ownerId = String(business?.owner_user_id || "").trim();
+    if (!ownerId || !isEligibleRealBusiness(business)) continue;
+    if (includeInternal === true) continue;
+    if (includeInternal === false && business.is_internal === true) continue;
+    businessByOwnerId.set(ownerId, business);
+  }
+
+  const ownersWithPublishedRealListing = new Set<string>();
+  for (const listing of (Array.isArray(listingsResult.data) ? listingsResult.data : []) as ListingInventoryRow[]) {
+    const ownerId = String(listing?.business_id || "").trim();
+    if (!ownerId) continue;
+    const business = businessByOwnerId.get(ownerId);
+    if (isPublishedRealListing(listing, business)) {
+      ownersWithPublishedRealListing.add(ownerId);
+    }
+  }
+
+  const ownerUserIds = Array.from(businessByOwnerId.keys()).filter(
+    (ownerId) => !ownersWithPublishedRealListing.has(ownerId)
+  );
+
+  if (!ownerUserIds.length) {
+    return {
+      rows: [],
+      count: 0,
+      fallbackUsed: false,
+      diag,
+    };
+  }
+
+  const { data, error: usersError } = await client
+    .from("users")
+    .select("id, public_id, email, full_name, phone, business_name, role, is_internal, city, created_at")
+    .in("id", ownerUserIds);
+
+  if (usersError) {
+    return {
+      rows: [],
+      count: 0,
+      fallbackUsed: false,
+      error: usersError,
+      diag,
+    };
+  }
+
+  const normalized = normalizeRows(Array.isArray(data) ? data : [], roleKeysByUserId).filter(
+    (row) => row.account_role === "business"
+  );
+  const filtered = normalized
+    .map((row) => ({
+      ...row,
+      is_internal: businessByOwnerId.get(row.id)?.is_internal === true,
+    }))
+    .filter((row) => matchesAdminUserSearch(row, q, businessByOwnerId.get(row.id)));
+
+  filtered.sort((left, right) =>
+    String(right.created_at || "").localeCompare(String(left.created_at || ""))
+  );
+
+  return {
+    rows: filtered.slice(from, to + 1),
+    count: filtered.length,
+    fallbackUsed: false,
+    diag,
+  };
+}
+
 export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<AdminUsersResult> {
   const {
     client,
     usingServiceRole,
     role = "all",
+    businessInventoryFilter = "none",
     includeInternal,
     q = "",
     from = 0,
@@ -420,6 +606,17 @@ export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<Ad
   } = params;
 
   const trimmedQuery = String(q || "").trim();
+  if (usingServiceRole && role === "business" && businessInventoryFilter === "no-published-listings") {
+    return fetchBusinessesWithoutPublishedRealListings({
+      client,
+      includeInternal,
+      q,
+      from,
+      to,
+      usingServiceRole: true,
+    });
+  }
+
   if (usingServiceRole && role === "business" && trimmedQuery) {
     const businessMatch = await resolveBusinessOwnerIdsForSearch(client, trimmedQuery);
     if (businessMatch.ownerUserIds.length > 0) {

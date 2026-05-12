@@ -6,6 +6,7 @@ import { getCachedPendingBusinessVerificationsCount } from "@/lib/admin/business
 import { requireAdminRole } from "@/lib/admin/permissions";
 import {
   fetchAdminUsers,
+  type AdminBusinessInventoryFilter,
   type AdminUserRoleFilter,
 } from "@/lib/admin/users";
 import { getAdminDataClient } from "@/lib/supabase/admin";
@@ -53,6 +54,14 @@ function normalizeInternalFilter(params: Record<string, string | string[] | unde
   return "all";
 }
 
+function normalizeBusinessInventoryFilter(
+  params: Record<string, string | string[] | undefined>
+): AdminBusinessInventoryFilter {
+  const raw = asString(params.filter).trim().toLowerCase();
+  if (raw === "no-published-listings") return "no-published-listings";
+  return "none";
+}
+
 function normalizePage(value: string | string[] | undefined) {
   const parsed = Number(asString(value, "1"));
   if (!Number.isFinite(parsed) || parsed < 1) return 1;
@@ -96,6 +105,8 @@ export default async function AccountsList({
   const q = asString(searchParams.q).trim();
   const role = normalizeRoleFilter(searchParams.role, presetRole);
   const internal = normalizeInternalFilter(searchParams);
+  const businessInventoryFilter =
+    presetRole === "business" ? normalizeBusinessInventoryFilter(searchParams) : "none";
   const includeInternal =
     internal === "true" ? true : internal === "false" ? false : undefined;
   const page = normalizePage(searchParams.page);
@@ -111,6 +122,7 @@ export default async function AccountsList({
     client,
     usingServiceRole,
     role,
+    businessInventoryFilter,
     includeInternal,
     q,
     from,
@@ -153,6 +165,7 @@ export default async function AccountsList({
         role,
         internal,
         q,
+        businessInventoryFilter,
         from,
         to,
       },
@@ -166,6 +179,14 @@ export default async function AccountsList({
   queryBase.set("internal", internal);
   queryBase.set("pageSize", String(pageSize));
   if (q) queryBase.set("q", q);
+  if (businessInventoryFilter !== "none") queryBase.set("filter", businessInventoryFilter);
+  const clearInventoryFilterParams = new URLSearchParams(queryBase);
+  clearInventoryFilterParams.delete("filter");
+  clearInventoryFilterParams.set("page", "1");
+  const clearInventoryFilterQuery = clearInventoryFilterParams.toString();
+  const clearInventoryFilterHref = clearInventoryFilterQuery
+    ? `${basePath}?${clearInventoryFilterQuery}`
+    : basePath;
 
   return (
     <AdminPage>
@@ -197,9 +218,27 @@ export default async function AccountsList({
         presetRole={presetRole}
         initialRole={role}
         initialInternal={internal}
+        initialBusinessInventoryFilter={businessInventoryFilter}
         initialQuery={q}
         initialPageSize={pageSize}
       />
+
+      {isBusinessList && businessInventoryFilter === "no-published-listings" ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-neutral-800 bg-neutral-900/60 px-3 py-2">
+          <span className="rounded-full border border-sky-700/60 bg-sky-950/50 px-2 py-0.5 text-xs font-medium text-sky-200">
+            No published real listings
+          </span>
+          <span className="text-xs text-neutral-500">
+            Showing real businesses with no published real inventory.
+          </span>
+          <Link
+            href={clearInventoryFilterHref}
+            className="text-xs font-medium text-sky-300 hover:text-sky-200"
+          >
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
 
       {isBusinessList && showVerificationQueueBanner ? (
         <div className="flex flex-wrap items-center gap-2">
