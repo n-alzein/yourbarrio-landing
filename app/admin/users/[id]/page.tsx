@@ -17,6 +17,7 @@ import AdminUserProfileEditor from "@/app/admin/users/[id]/_components/AdminUser
 import AdminUserRoleEditor from "@/app/admin/users/[id]/_components/AdminUserRoleEditor";
 import AdminUserSecurityActions from "@/app/admin/users/[id]/_components/AdminUserSecurityActions";
 import AdminRestoreAccountButton from "@/app/admin/users/[id]/_components/AdminRestoreAccountButton";
+import HardDeleteFakeTestAccountButton from "@/app/admin/users/[id]/_components/HardDeleteFakeTestAccountButton";
 import DeleteUserButton from "@/app/admin/users/[ref]/_components/DeleteUserButton";
 import { getActorAdminRoleKeys } from "@/lib/admin/getActorAdminRoleKeys";
 import {
@@ -110,7 +111,7 @@ export default async function AdminUserDetailPage({
   const { data: userDetail } = await client
     .from("users")
     .select(
-      "id, public_id, email, full_name, phone, role, is_internal, business_name, business_type, category, website, address, address_2, city, state, postal_code, account_status, deletion_requested_at, scheduled_purge_at, deleted_at, restored_at, created_at, updated_at"
+      "id, public_id, email, full_name, phone, role, is_internal, allow_hard_delete, business_name, business_type, category, website, address, address_2, city, state, postal_code, account_status, deletion_requested_at, scheduled_purge_at, deleted_at, restored_at, created_at, updated_at"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -155,6 +156,10 @@ export default async function AdminUserDetailPage({
   const canDeleteAnyUserNotes = admin.strictPermissionBypassUsed || actorRoleKeys.includes("admin_super");
   const canSeePermissionsTab = actorRoleKeys.includes("admin_super") || actorRoleKeys.includes("admin_ops");
   const canVerificationManage = actorRoleKeys.includes("admin_super") || actorRoleKeys.includes("admin_ops");
+  const canHardDelete =
+    Boolean(userDetail?.allow_hard_delete) ||
+    Boolean(userDetail?.is_internal) ||
+    Boolean(business?.is_internal);
   const { data: notesRows, error: notesError } = authedClient
     ? await authedClient.rpc("admin_list_user_notes", {
         p_target_user_id: user.id,
@@ -452,6 +457,13 @@ export default async function AdminUserDetailPage({
             <h3 className="mb-2 font-medium text-rose-100">Danger zone</h3>
             <p className="mb-3 text-sm text-rose-200/80">Permanently deleting a user cannot be undone.</p>
             <DeleteUserButton targetUserId={user.id} actorRoleKeys={actorRoleKeys} />
+            <div className="mt-3 border-t border-rose-900/70 pt-3">
+              <HardDeleteFakeTestAccountButton
+                targetUserId={user.id}
+                actorRoleKeys={actorRoleKeys}
+                isEligible={canHardDelete}
+              />
+            </div>
           </div>
         </div>
 
