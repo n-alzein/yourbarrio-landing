@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
@@ -39,6 +39,7 @@ import { useLocation } from "@/components/location/LocationProvider";
 import FeedbackSection from "@/components/browse/FeedbackSection";
 import { getListingCategoryLabel } from "@/lib/taxonomy/compat";
 import { calculateListingPricing } from "@/lib/pricing";
+import { getDefaultLaunchLocation, withLocationHref } from "@/lib/location";
 
 const HomeGuard = dynamic(() => import("@/components/debug/HomeGuard"), { ssr: false });
 
@@ -138,7 +139,7 @@ function CustomerHomePageInner({
   const { user, loadingUser } = useAuth();
   const { theme, hydrated } = useTheme();
   const isLight = hydrated ? theme === "light" : true;
-  const { location, hasLocation, hydrated: locationHydrated } = useLocation();
+  const { location, hasLocation, hydrated: locationHydrated, setLocation } = useLocation();
   const activeCity = String(location?.city || initialCity || "").trim();
   // Slightly stronger light-theme tones to preserve contrast on white surfaces.
   const textTone = useMemo(
@@ -395,16 +396,16 @@ function CustomerHomePageInner({
 
         if (!isActive || requestId !== homeListingsRequestIdRef.current) return;
         if (!response.ok) {
-          setHomeListings((current) => (current.length > 0 ? current : []));
+          setHomeListings([]);
           return;
         }
 
         const nextListings = Array.isArray(payload?.listings) ? payload.listings : [];
-        setHomeListings((current) => (nextListings.length > 0 ? nextListings : current));
+        setHomeListings(nextListings);
       } catch (error) {
         if (!isActive || requestId !== homeListingsRequestIdRef.current) return;
         if (error?.name === "AbortError") return;
-        setHomeListings((current) => (current.length > 0 ? current : []));
+        setHomeListings([]);
       } finally {
         if (isActive && requestId === homeListingsRequestIdRef.current) {
           setHomeListingsLoading(false);
@@ -430,6 +431,11 @@ function CustomerHomePageInner({
     () => sortListingsByAvailability(hybridItems),
     [hybridItems]
   );
+  const browseLaunchListings = useCallback(() => {
+    const launchLocation = getDefaultLaunchLocation();
+    setLocation?.(launchLocation);
+    router.push(withLocationHref("/listings", launchLocation));
+  }, [router, setLocation]);
   const featuredListingIds = useMemo(
     () =>
       sortListingsByAvailability(Array.isArray(homeListings) ? homeListings : [])
@@ -713,6 +719,30 @@ function CustomerHomePageInner({
       </div>
       {!search ? (
         <>
+          {locationHydrated && hasLocation && !homeListingsLoading && homeListings.length === 0 ? (
+            <section className="relative z-20 w-full bg-[#fcfcfd] pb-6 pt-4 md:pb-8 md:pt-5">
+              <div className="mx-auto flex w-full max-w-6xl justify-center px-4 sm:px-6 md:px-8">
+                <div className="w-full max-w-[720px] rounded-[28px] border border-[#e6ddff] bg-[#fbf8ff] px-6 py-6 text-center shadow-[0_18px_54px_-42px_rgba(76,29,149,0.42)] sm:px-9 sm:py-7">
+                  <div className="mx-auto mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#ded1ff] bg-white text-[#6d4aff] shadow-sm">
+                    <MapPin className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.75rem]">
+                    {activeCity ? `No listings in ${activeCity} yet` : "No listings near you yet"}
+                  </h2>
+                  <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">
+                    YourBarrio is launching first in Long Beach. We&apos;ll expand to nearby cities soon.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={browseLaunchListings}
+                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#7c3aed] px-5 py-2.5 text-sm font-semibold !text-white shadow-[0_5px_14px_rgba(124,58,237,0.16),0_1px_2px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#6d28d9] hover:!text-white hover:shadow-[0_7px_18px_rgba(124,58,237,0.20),0_2px_5px_rgba(15,23,42,0.08)] focus-visible:!text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-300/25 active:translate-y-0 active:!text-white"
+                  >
+                    Browse Long Beach listings
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
           <TrendingListingsSection
             mode={mode}
             listings={homeListings}
@@ -723,7 +753,8 @@ function CustomerHomePageInner({
             mode={mode}
             listings={homeListings}
             city={activeCity || null}
-            limit={4}
+            limit={8}
+            minItems={5}
             variant="new"
             excludeListingIds={featuredListingIds}
           />

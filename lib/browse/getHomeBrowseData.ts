@@ -174,32 +174,6 @@ async function tryLoadFromListingsTable({
   return { data: (data ?? []) as unknown as ListingSummary[], error: null };
 }
 
-async function tryLoadAllFromPublicListingsView({ limit }: { limit: number }) {
-  const supabase = getHomeBrowseSupabaseClient();
-  const { data, error } = await supabase
-    .from("public_listings_v")
-    .select(PUBLIC_LISTING_SELECT)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) return { data: null, error };
-  return { data: (data ?? []) as unknown as ListingSummary[], error: null };
-}
-
-async function tryLoadAllFromListingsTable({ limit }: { limit: number }) {
-  const supabase = getHomeBrowseSupabaseClient();
-  const { data, error } = await supabase
-    .from("public_listings")
-    .select(PUBLIC_LISTING_SELECT)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    return { data: [] as ListingSummary[], error: "legacy_public_listings_query_failed" };
-  }
-  return { data: (data ?? []) as unknown as ListingSummary[], error: null };
-}
-
 async function loadPublicSafeListings({
   location,
   limit,
@@ -213,18 +187,6 @@ async function loadPublicSafeListings({
   const fromLegacyView = await tryLoadFromListingsTable({ location, limit });
   if (!fromLegacyView.error && Array.isArray(fromLegacyView.data) && fromLegacyView.data.length) {
     return fromLegacyView.data;
-  }
-
-  const allFromView = await tryLoadAllFromPublicListingsView({ limit });
-  if (!allFromView.error && allFromView.data?.length) return allFromView.data;
-
-  const allFromLegacyView = await tryLoadAllFromListingsTable({ limit });
-  if (
-    !allFromLegacyView.error &&
-    Array.isArray(allFromLegacyView.data) &&
-    allFromLegacyView.data.length
-  ) {
-    return allFromLegacyView.data;
   }
 
   return [];

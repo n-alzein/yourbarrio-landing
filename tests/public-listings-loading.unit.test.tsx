@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getLocationCacheKey } from "@/lib/location";
 
 let searchParamsValue = "";
+const locationMock = vi.hoisted(() => ({
+  current: { city: "Long Beach", region: "CA", lat: 33.7701, lng: -118.1937 },
+  setLocation: vi.fn(),
+}));
 
 vi.mock("next/link", () => ({
   __esModule: true,
@@ -24,8 +28,9 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/components/location/LocationProvider", () => ({
   useLocation: () => ({
-    location: { city: "Long Beach", region: "CA", lat: 33.7701, lng: -118.1937 },
+    location: locationMock.current,
     hydrated: true,
+    setLocation: locationMock.setLocation,
   }),
 }));
 
@@ -41,6 +46,7 @@ vi.mock("@/components/cart/CartProvider", () => ({
 }));
 
 vi.mock("@/lib/listingPhotos", () => ({
+  resolveListingCardImageUrl: () => "/listing.jpg",
   resolveListingCoverImageUrl: () => "/listing.jpg",
 }));
 
@@ -69,6 +75,8 @@ function deferred<T>() {
 describe("public listings loading states", () => {
   beforeEach(() => {
     searchParamsValue = "";
+    locationMock.current = { city: "Long Beach", region: "CA", lat: 33.7701, lng: -118.1937 };
+    locationMock.setLocation.mockClear();
     sessionStorage.clear();
     vi.stubGlobal(
       "fetch",
@@ -124,6 +132,40 @@ describe("public listings loading states", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("listings-loading-grid")).not.toBeInTheDocument();
     });
+  });
+
+  it("uses the same selected city for title and listings API request", async () => {
+    locationMock.current = { city: "Costa Mesa", region: "CA", lat: 33.6411, lng: -117.9187 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ listings: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ListingsClient />);
+
+    expect(screen.getByText("Explore listings in Costa Mesa")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0] || "");
+    expect(requestUrl).toContain("city=Costa+Mesa");
+    expect(requestUrl).toContain("state=CA");
+    expect(requestUrl).toContain("lat=33.6411");
+    expect(requestUrl).toContain("lng=-117.9187");
+  });
+
+  it("shows a selected-city empty state instead of fallback listings", async () => {
+    locationMock.current = { city: "Costa Mesa", region: "CA", lat: 33.6411, lng: -117.9187 };
+
+    render(<ListingsClient />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No listings in Costa Mesa yet")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /browse long beach listings/i })).toBeInTheDocument();
+    expect(screen.queryByText("Cached listing")).not.toBeInTheDocument();
   });
 
   it("preserves cached results during a same-query refresh instead of replacing them with blank cards", async () => {

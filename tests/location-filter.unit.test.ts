@@ -6,6 +6,7 @@ import {
   matchesLocationCandidate,
   normalizeStateCode,
 } from "@/lib/location/filter";
+import { withLocationHref } from "@/lib/location";
 
 describe("location filter", () => {
   it("normalizes state names and abbreviations to USPS codes", () => {
@@ -90,5 +91,21 @@ describe("location filter", () => {
     ];
 
     expect(filterByLocation(rows, selected).map((row) => row.id)).toEqual(["ms-null"]);
+  });
+
+  it("preserves city, state, and coordinates in location-aware hrefs", () => {
+    const href = withLocationHref("/listings?category=all", {
+      city: "Costa Mesa",
+      region: "CA",
+      lat: 33.6411,
+      lng: -117.9187,
+    });
+
+    expect(href).toContain("/listings?");
+    expect(href).toContain("category=all");
+    expect(href).toContain("city=Costa+Mesa");
+    expect(href).toContain("state=CA");
+    expect(href).toContain("lat=33.6411");
+    expect(href).toContain("lng=-117.9187");
   });
 });

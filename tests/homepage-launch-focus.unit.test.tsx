@@ -3,6 +3,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 
+const locationMock = vi.hoisted(() => ({
+  current: { city: "Long Beach", region: "CA", lat: 33.7701, lng: -118.1937 },
+}));
+
 vi.mock("next/link", () => ({
   __esModule: true,
   default: ({ href, children, ...rest }: any) => (
@@ -39,7 +43,7 @@ vi.mock("@/lib/ids/publicRefs", () => ({
 
 vi.mock("@/components/location/LocationProvider", () => ({
   useLocation: () => ({
-    location: { city: "Long Beach", region: "CA", lat: 33.7701, lng: -118.1937 },
+    location: locationMock.current,
     hydrated: true,
   }),
 }));
@@ -79,6 +83,7 @@ function makeListings(count: number) {
 
 describe("homepage launch focus", () => {
   beforeEach(() => {
+    locationMock.current = { city: "Long Beach", region: "CA", lat: 33.7701, lng: -118.1937 };
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -114,6 +119,26 @@ describe("homepage launch focus", () => {
     expect(screen.getByText("Featured in Long Beach")).toBeInTheDocument();
   });
 
+  it("updates the featured title and view-all href for a selected city", () => {
+    locationMock.current = { city: "Costa Mesa", region: "CA", lat: 33.6411, lng: -117.9187 };
+
+    render(<TrendingListingsSection listings={makeListings(3)} city="Costa Mesa" />);
+
+    expect(screen.getByText("Featured in Costa Mesa")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view all listings/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("city=Costa+Mesa")
+    );
+    expect(screen.getByRole("link", { name: /view all listings/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("state=CA")
+    );
+    expect(screen.getByRole("link", { name: /view all listings/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("lat=33.6411")
+    );
+  });
+
   it("caps the home listings grid at two desktop rows worth of cards", () => {
     render(<TrendingListingsSection listings={makeListings(24)} city="Long Beach" limit={8} />);
 
@@ -122,7 +147,7 @@ describe("homepage launch focus", () => {
     expect(screen.getAllByRole("link").filter((node) => node.getAttribute("href")?.startsWith("/listings/"))).toHaveLength(8);
   });
 
-  it("adds a secondary new-this-week listing section", () => {
+  it("adds a secondary fresh-finds listing section", () => {
     render(
       <TrendingListingsSection
         listings={makeListings(6)}
@@ -133,9 +158,62 @@ describe("homepage launch focus", () => {
       />
     );
 
-    expect(screen.getByText("New this week")).toBeInTheDocument();
+    expect(screen.getByText("Recently added")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fresh finds" })).toBeInTheDocument();
+    expect(screen.getAllByText("Fresh finds")).toHaveLength(1);
     expect(screen.queryByText("Freshly added items from nearby shops")).not.toBeInTheDocument();
     expect(screen.getAllByRole("link").filter((node) => node.getAttribute("href")?.startsWith("/listings/"))).toHaveLength(4);
+  });
+
+  it("fills the fresh-finds row from non-featured listings when launch inventory allows it", () => {
+    render(
+      <TrendingListingsSection
+        listings={makeListings(13)}
+        city="Long Beach"
+        limit={8}
+        minItems={5}
+        variant="new"
+        excludeListingIds={makeListings(8).map((listing) => listing.public_id)}
+      />
+    );
+
+    const listingLinks = screen
+      .getAllByRole("link")
+      .filter((node) => node.getAttribute("href")?.startsWith("/listings/"));
+    expect(listingLinks).toHaveLength(5);
+    expect(listingLinks.map((node) => node.getAttribute("href"))).toEqual([
+      "/listings/listing-9",
+      "/listings/listing-10",
+      "/listings/listing-11",
+      "/listings/listing-12",
+      "/listings/listing-13",
+    ]);
+  });
+
+  it("backfills fresh finds without duplicate cards when non-featured inventory is short", () => {
+    render(
+      <TrendingListingsSection
+        listings={makeListings(11)}
+        city="Long Beach"
+        limit={8}
+        minItems={5}
+        variant="new"
+        excludeListingIds={makeListings(8).map((listing) => listing.public_id)}
+      />
+    );
+
+    const hrefs = screen
+      .getAllByRole("link")
+      .filter((node) => node.getAttribute("href")?.startsWith("/listings/"))
+      .map((node) => node.getAttribute("href"));
+    expect(hrefs).toHaveLength(5);
+    expect(new Set(hrefs).size).toBe(5);
+    expect(hrefs.slice(0, 3)).toEqual([
+      "/listings/listing-9",
+      "/listings/listing-10",
+      "/listings/listing-11",
+    ]);
+    expect(hrefs.slice(3)).not.toEqual(["/listings/listing-1", "/listings/listing-2"]);
   });
 
   it("keeps the homepage business title launch-appropriate", async () => {
@@ -154,6 +232,11 @@ describe("homepage launch focus", () => {
   it("removes the category section from the homepage client", () => {
     expect(customerHomeSource).not.toContain("Browse by category");
     expect(customerHomeSource).not.toContain("CategoryTilesGrid");
+  });
+
+  it("does not retain stale home listings when a selected-location request is empty", () => {
+    expect(customerHomeSource).not.toContain("nextListings.length > 0 ? nextListings : current");
+    expect(customerHomeSource).toContain("setHomeListings(nextListings)");
   });
 
   it("keeps customer-home listing thumbnails product-safe", () => {

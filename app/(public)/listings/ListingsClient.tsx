@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { MapPin, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocation } from "@/components/location/LocationProvider";
 import { sortListingsByAvailability } from "@/lib/inventory";
@@ -11,7 +11,7 @@ import {
   getListingsBrowseCategoryOptions,
   normalizeListingsBrowseCategory,
 } from "@/lib/listings/browseCategories";
-import { getLocationCacheKey } from "@/lib/location";
+import { getDefaultLaunchLocation, getLocationCacheKey, withLocationHref } from "@/lib/location";
 import { installNetTrace } from "@/lib/netTrace";
 import ListingMarketplaceCard, {
   LISTING_MARKETPLACE_GRID_CLASS,
@@ -244,7 +244,7 @@ export default function ListingsClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { location, hydrated: locationHydrated } = useLocation();
+  const { location, hydrated: locationHydrated, setLocation } = useLocation();
   const searchTerm = searchParams.get("q")?.trim() || "";
   const rawCategory = searchParams.get("category")?.trim() || "";
   const normalizedCategory = normalizeListingsBrowseCategory(rawCategory);
@@ -444,6 +444,10 @@ export default function ListingsClient() {
     async function getListingsSafe({ signal }: { signal: AbortSignal }) {
       try {
         const params = new URLSearchParams();
+        if (location?.city) params.set("city", location.city);
+        if (location?.region) params.set("state", location.region);
+        if (location?.lat != null) params.set("lat", String(location.lat));
+        if (location?.lng != null) params.set("lng", String(location.lng));
         if (searchTerm) params.set("q", searchTerm);
         if (category !== "all") params.set("category", category);
         params.set("limit", "120");
@@ -530,7 +534,7 @@ export default function ListingsClient() {
       active = false;
       controller.abort();
     };
-  }, [cacheKey, category, hasLoaded, hasLocation, invalidCategory, rawCategory, retryKey, searchTerm]);
+  }, [cacheKey, category, hasLoaded, hasLocation, invalidCategory, location, rawCategory, retryKey, searchTerm]);
 
   useEffect(() => {
     if (loading || loadError || showLocationEmpty || displayKey !== cacheKey) {
@@ -550,6 +554,12 @@ export default function ListingsClient() {
     }
     const query = next.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  function browseLaunchListings() {
+    const launchLocation = getDefaultLaunchLocation();
+    setLocation?.(launchLocation);
+    router.replace(withLocationHref(pathname || "/listings", launchLocation), { scroll: false });
   }
 
   return (
@@ -624,10 +634,29 @@ export default function ListingsClient() {
           ) : null}
 
           {!loading && !loadError && !showLocationEmpty && filteredListings.length === 0 ? (
-            <div className="rounded-[24px] border border-dashed border-slate-200 bg-[#fbfbfd] p-6 text-slate-600">
-              {invalidCategory
-                ? "That category filter is invalid."
-                : "No listings match the current filters."}
+            <div className="mx-auto w-full max-w-[720px] rounded-[28px] border border-[#e6ddff] bg-[#fbf8ff] px-6 py-6 text-center text-slate-600 shadow-[0_18px_54px_-42px_rgba(76,29,149,0.42)] sm:px-9 sm:py-7">
+              {invalidCategory ? (
+                "That category filter is invalid."
+              ) : (
+                <div>
+                  <div className="mx-auto mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#ded1ff] bg-white text-[#6d4aff] shadow-sm">
+                    <MapPin className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.75rem]">
+                    {marketCity ? `No listings in ${marketCity} yet` : "No listings near you yet"}
+                  </h2>
+                  <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">
+                    YourBarrio is launching first in Long Beach. We&apos;ll expand to nearby cities soon.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={browseLaunchListings}
+                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#7c3aed] px-5 py-2.5 text-sm font-semibold !text-white shadow-[0_5px_14px_rgba(124,58,237,0.16),0_1px_2px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#6d28d9] hover:!text-white hover:shadow-[0_7px_18px_rgba(124,58,237,0.20),0_2px_5px_rgba(15,23,42,0.08)] focus-visible:!text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-300/25 active:translate-y-0 active:!text-white"
+                  >
+                    Browse Long Beach listings
+                  </button>
+                </div>
+              )}
             </div>
           ) : null}
 

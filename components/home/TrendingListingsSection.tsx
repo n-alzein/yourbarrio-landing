@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { BrowseMode, ListingSummary } from "@/lib/browse/getHomeBrowseData";
+import { useLocation } from "@/components/location/LocationProvider";
 import { isSavedMediaVariantUrl } from "@/lib/images/resolveMediaAssetUrl";
 import { resolveListingCardImageUrl } from "@/lib/listingPhotos";
 import { getListingCategoryPlaceholder } from "@/lib/taxonomy/placeholders";
@@ -12,6 +13,7 @@ import { getCustomerListingUrl, getListingUrl } from "@/lib/ids/publicRefs";
 import { sortListingsByAvailability } from "@/lib/inventory";
 import HomeSectionContainer from "@/components/home/HomeSectionContainer";
 import { calculateListingPricing } from "@/lib/pricing";
+import { withLocationHref } from "@/lib/location";
 
 type TrendingListingsSectionProps = {
   mode?: BrowseMode;
@@ -20,6 +22,7 @@ type TrendingListingsSectionProps = {
   title?: string;
   subtitle?: string;
   limit?: number;
+  minItems?: number;
   variant?: "featured" | "new";
   excludeListingIds?: Array<string | null | undefined>;
 };
@@ -61,37 +64,50 @@ function getFreshListings({
   listings,
   excludeListingIds,
   limit,
+  minItems,
 }: {
   listings: ListingSummary[];
   excludeListingIds: Set<string>;
   limit: number;
+  minItems: number;
 }) {
   const sorted = [...listings].sort((left, right) => {
     const rightTime = Math.max(getTime(right?.inventory_last_updated_at), getTime(right?.created_at));
     const leftTime = Math.max(getTime(left?.inventory_last_updated_at), getTime(left?.created_at));
     return rightTime - leftTime;
   });
-  const distinct = sorted.filter((listing) => !excludeListingIds.has(getListingKey(listing)));
+  const seen = new Set<string>();
+  const dedupe = (listing: ListingSummary) => {
+    const key = getListingKey(listing);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  };
+  const distinct = sorted.filter((listing) => !excludeListingIds.has(getListingKey(listing))).filter(dedupe);
+  const targetCount = Math.min(limit, Math.max(0, minItems), sorted.length);
 
-  if (distinct.length >= limit) return distinct.slice(0, limit);
+  if (distinct.length >= targetCount) return distinct.slice(0, limit);
 
   const reused = sorted.filter((listing) => excludeListingIds.has(getListingKey(listing)));
   const rotatedReuse =
     reused.length > 1 ? [...reused.slice(Math.ceil(reused.length / 2)), ...reused.slice(0, Math.ceil(reused.length / 2))] : reused;
 
-  return [...distinct, ...rotatedReuse].slice(0, limit);
+  return [...distinct, ...rotatedReuse.filter(dedupe)].slice(0, targetCount);
 }
 
 export default function TrendingListingsSection({
   mode = "public",
   listings = [],
+  city,
   title,
   subtitle,
   limit = 8,
+  minItems,
   variant = "featured",
   excludeListingIds = [],
 }: TrendingListingsSectionProps) {
   const router = useRouter();
+  const { location } = useLocation();
   const safeListings = useMemo(
     () => (Array.isArray(listings) ? listings : []),
     [listings]
@@ -106,23 +122,25 @@ export default function TrendingListingsSection({
         listings: sortListingsByAvailability(safeListings),
         excludeListingIds: excludedKeys,
         limit,
+        minItems: minItems ?? 5,
       });
     }
     return sortListingsByAvailability(safeListings).slice(0, limit);
-  }, [excludedKeys, limit, safeListings, variant]);
+  }, [excludedKeys, limit, minItems, safeListings, variant]);
 
   const resolvedTitle = useMemo(() => {
     if (title) return title;
-    if (variant === "new") return "New this week";
-    return "Featured in Long Beach";
-  }, [title, variant]);
+    if (variant === "new") return "Fresh finds";
+    const trimmedCity = String(city || "").trim();
+    return trimmedCity ? `Featured in ${trimmedCity}` : "Featured near you";
+  }, [city, title, variant]);
 
   const resolvedSubtitle = useMemo(() => {
     const trimmed = String(subtitle || "").trim();
     return trimmed || null;
   }, [subtitle]);
 
-  const viewAllHref = "/listings";
+  const viewAllHref = withLocationHref("/listings", location);
   const isNewSection = variant === "new";
 
   if (!visibleListings.length) return null;
@@ -140,7 +158,7 @@ export default function TrendingListingsSection({
           <div className="min-w-0">
             {isNewSection ? (
               <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                Fresh finds
+                Recently added
               </p>
             ) : null}
             <h2 className="text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-900 sm:text-[1.7rem]">
