@@ -212,7 +212,7 @@ export async function setBusinessVerificationStatus({
   const { data: current, error: currentError } = await client
     .from("businesses")
     .select(
-      "owner_user_id, public_id, business_name, category, city, created_at, verification_status, stripe_connected, is_internal, risk_flags, verified_at"
+      "owner_user_id, public_id, business_name, category, city, created_at, verification_status, stripe_connected, is_internal, risk_flags, verified_at, business_terms_accepted_at, business_terms_version, business_terms_accepted_by_user_id"
     )
     .eq("owner_user_id", ownerUserId)
     .maybeSingle();
@@ -222,6 +222,17 @@ export async function setBusinessVerificationStatus({
   }
   if (!current) {
     throw new Error("Business not found for owner_user_id");
+  }
+
+  const hasBusinessTermsAcceptance = Boolean(
+    current.business_terms_accepted_at &&
+      current.business_terms_version &&
+      current.business_terms_accepted_by_user_id
+  );
+  if (next_status === "manually_verified" && !hasBusinessTermsAcceptance) {
+    throw new Error(
+      "Business Terms acceptance is required before this business can be verified."
+    );
   }
 
   const updatePayload =

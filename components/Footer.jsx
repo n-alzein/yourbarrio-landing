@@ -23,7 +23,7 @@ export default function Footer({ className = "" }) {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-white/[0.035] to-transparent" />
       <div className="w-full px-5 sm:px-6 md:px-8 lg:px-12">
         <div
-          className="mx-auto grid max-w-[1180px] grid-cols-1 gap-12 text-slate-300 md:grid-cols-[minmax(0,1.15fr)_0.72fr_0.72fr] md:gap-8 lg:gap-12"
+          className="mx-auto grid max-w-[1180px] grid-cols-1 gap-10 text-slate-300 sm:grid-cols-2 md:grid-cols-[minmax(0,1.2fr)_0.48fr_0.72fr_0.62fr] md:gap-8 lg:gap-11"
         >
           {/* BRAND COLUMN */}
           <div className="max-w-[19rem]">
@@ -69,14 +69,31 @@ export default function Footer({ className = "" }) {
                   About
                 </Link>
               </li>
+            </ul>
+          </div>
+
+          {/* LEGAL COLUMN */}
+          <div className="md:pt-2">
+            <h4 className={footerHeadingClass}>Legal</h4>
+            <ul className="mt-5 space-y-3.5">
               <li>
-                <Link href="/privacy" className={footerLinkClass}>
-                  Privacy
+                <Link href="/terms" className={footerLinkClass}>
+                  Terms of Service
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className={footerLinkClass}>
-                  Terms
+                <Link href="/privacy" className={footerLinkClass}>
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/business-terms" className={footerLinkClass}>
+                  Business Terms
+                </Link>
+              </li>
+              <li>
+                <Link href="/prohibited-categories" className={footerLinkClass}>
+                  Category Policy
                 </Link>
               </li>
             </ul>

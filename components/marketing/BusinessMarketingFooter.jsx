@@ -40,6 +40,16 @@ export default function BusinessMarketingFooter() {
                   Terms
                 </Link>
               </li>
+              <li>
+                <Link href="/business-terms" className="transition-colors duration-200 hover:text-white">
+                  Business Terms
+                </Link>
+              </li>
+              <li>
+                <Link href="/prohibited-categories" className="transition-colors duration-200 hover:text-white">
+                  Prohibited Categories
+                </Link>
+              </li>
             </ul>
           </div>
 

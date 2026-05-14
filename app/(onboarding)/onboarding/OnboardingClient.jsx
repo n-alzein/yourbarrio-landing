@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
@@ -139,7 +140,7 @@ function getBusinessTypePreviewImage(slug) {
 // ------------------------------
 // MAIN COMPONENT (only ONE export default)
 // ------------------------------
-export default function BusinessOnboardingPage() {
+export default function BusinessOnboardingPage({ initialBusinessTermsAccepted = false }) {
   const { user, loadingUser, refreshProfile } = useAuth();
   const router = useRouter();
 
@@ -149,6 +150,7 @@ export default function BusinessOnboardingPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [step, setStep] = useState(1);
+  const [legalAccepted, setLegalAccepted] = useState(Boolean(initialBusinessTermsAccepted));
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPulse, setPreviewPulse] = useState(false);
   const [toast, setToast] = useState(null);
@@ -423,6 +425,10 @@ export default function BusinessOnboardingPage() {
     if (isIncompleteUSPhone(form.phone)) {
       errors.phone = "Enter a complete 10-digit US phone number.";
     }
+    if (!initialBusinessTermsAccepted && !legalAccepted) {
+      errors.legalAccepted =
+        "You need to confirm authorization and accept the required policies before continuing.";
+    }
 
     return { errors, normalizedAddress, normalizedNotificationsPhone };
   }
@@ -504,6 +510,9 @@ export default function BusinessOnboardingPage() {
           website: normalizedWebsite,
           latitude: pickedLocationRef.current?.lat ?? null,
           longitude: pickedLocationRef.current?.lng ?? null,
+          business_terms_accepted: Boolean(
+            legalAccepted || initialBusinessTermsAccepted
+          ),
         }),
       });
 
@@ -749,6 +758,76 @@ export default function BusinessOnboardingPage() {
                           onConfirmCode={handleConfirmVerificationCode}
                         />
                       </div>
+                    </div>
+
+                    <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600">
+                      <div className="font-semibold text-slate-950">Before you continue</div>
+                      <p className="mt-1">
+                        By creating a business profile, you confirm that you are authorized
+                        to represent this business and agree to the{" "}
+                        <Link
+                          className="font-semibold text-[#5d2bd6] underline underline-offset-4"
+                          href="/business-terms"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          YourBarrio Business Terms
+                        </Link>
+                        ,{" "}
+                        <Link
+                          className="font-semibold text-[#5d2bd6] underline underline-offset-4"
+                          href="/terms"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Terms of Service
+                        </Link>
+                        ,{" "}
+                        <Link
+                          className="font-semibold text-[#5d2bd6] underline underline-offset-4"
+                          href="/privacy"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Privacy Policy
+                        </Link>
+                        , and{" "}
+                        <Link
+                          className="font-semibold text-[#5d2bd6] underline underline-offset-4"
+                          href="/prohibited-categories"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Prohibited &amp; Restricted Categories Policy
+                        </Link>
+                        .
+                      </p>
+                      <label className="mt-3 flex gap-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-[#6e34ff] focus:ring-purple-300"
+                        checked={legalAccepted}
+                        onChange={(event) => {
+                          setLegalAccepted(event.target.checked);
+                          if (fieldErrors.legalAccepted) {
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.legalAccepted;
+                              return next;
+                            });
+                          }
+                        }}
+                      />
+                      <span>
+                        I confirm I am authorized to create and manage this business on
+                        YourBarrio and agree to the required policies.
+                      </span>
+                      </label>
+                      {fieldErrors.legalAccepted ? (
+                        <span className="mt-2 block text-sm text-rose-600">
+                          {fieldErrors.legalAccepted}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="mt-auto hidden pt-5 sm:flex sm:items-center sm:gap-3">

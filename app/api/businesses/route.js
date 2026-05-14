@@ -69,6 +69,7 @@ export async function POST(req) {
       notifications_phone,
       phone,
       website,
+      business_terms_accepted,
     } = body || {};
 
     const trimmedName = String(name || "").trim();
@@ -120,7 +121,9 @@ export async function POST(req) {
       .maybeSingle();
     const { data: existingBusiness } = await supabase
       .from("businesses")
-      .select("latitude,longitude")
+      .select(
+        "latitude,longitude,business_terms_accepted_at,business_terms_version,business_terms_accepted_by_user_id"
+      )
       .eq("owner_user_id", user.id)
       .maybeSingle();
 
@@ -142,6 +145,21 @@ export async function POST(req) {
       previousLocation: existingBusiness || existingUser || null,
       logger: console,
     });
+
+    const hasExistingBusinessTermsAcceptance = Boolean(
+      existingBusiness?.business_terms_accepted_at &&
+        existingBusiness?.business_terms_version &&
+        existingBusiness?.business_terms_accepted_by_user_id
+    );
+    if (!hasExistingBusinessTermsAcceptance && business_terms_accepted !== true) {
+      return NextResponse.json(
+        {
+          error:
+            "You need to confirm authorization and accept the required policies before continuing.",
+        },
+        { status: 400 }
+      );
+    }
 
     const usersPayload = {
       id: user.id,
@@ -204,6 +222,13 @@ export async function POST(req) {
       verification_status: "pending",
       updated_at: new Date().toISOString(),
     };
+    if (!hasExistingBusinessTermsAcceptance) {
+      businessesPayload.business_terms_accepted_at = new Date().toISOString();
+      businessesPayload.business_terms_version = "May 2026";
+      businessesPayload.business_terms_accepted_by_user_id = user.id;
+      businessesPayload.business_terms_acceptance_user_agent =
+        req.headers.get("user-agent") || null;
+    }
 
     const { data: businessRow, error: businessUpsertError } = await supabase
       .from("businesses")
@@ -212,7 +237,7 @@ export async function POST(req) {
         ignoreDuplicates: false,
       })
       .select(
-        "id,owner_user_id,public_id,business_name,business_type_id,business_type,category,address,city,state,postal_code,verification_status"
+        "id,owner_user_id,public_id,business_name,business_type_id,business_type,category,address,city,state,postal_code,verification_status,business_terms_accepted_at,business_terms_version,business_terms_accepted_by_user_id"
       )
       .single();
 

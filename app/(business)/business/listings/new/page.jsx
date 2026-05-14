@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AIDescriptionAssistant from "@/components/business/AIDescriptionAssistant";
 import ListingPhotoManager from "@/components/business/listings/ListingPhotoManager";
@@ -1141,6 +1142,15 @@ export default function NewListingPage() {
                       {visibleFieldErrors.category ? (
                         <p className="mt-2 text-sm text-rose-600">{visibleFieldErrors.category}</p>
                       ) : null}
+                      <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-900">
+                        Some products and services cannot be listed on YourBarrio, including
+                        cannabis, tobacco, alcohol, weapons, adult products, counterfeit goods,
+                        and regulated items. Review the{" "}
+                        <Link className="font-semibold underline underline-offset-4" href="/prohibited-categories">
+                          Prohibited &amp; Restricted Categories Policy
+                        </Link>
+                        .
+                      </div>
                     </div>
 
                     <div>

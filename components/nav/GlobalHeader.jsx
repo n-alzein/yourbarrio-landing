@@ -130,6 +130,8 @@ export default function GlobalHeader({
     pathname.startsWith("/listings/") ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
+    pathname === "/business-terms" ||
+    pathname === "/prohibited-categories" ||
     pathname === "/cart" ||
     pathname.startsWith("/cart/") ||
     pathname === "/customer" ||

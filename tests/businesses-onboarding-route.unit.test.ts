@@ -12,7 +12,10 @@ vi.mock("@/lib/supabaseServer", () => ({
 function createRequest(body = {}) {
   return new Request("http://localhost:3000/api/businesses", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": "Vitest Browser",
+    },
     body: JSON.stringify({
       name: "Cafe Uno",
       category: "Cafe",
@@ -23,6 +26,7 @@ function createRequest(body = {}) {
       postal_code: "90802",
       notifications_phone: "+1 562 555 0101",
       notifications_phone_verified: false,
+      business_terms_accepted: true,
       ...body,
     }),
   });
@@ -137,6 +141,63 @@ describe("POST /api/businesses", () => {
       error: "permission denied",
     });
     expect(supabase.rpc).toHaveBeenCalledWith("set_my_role_business");
+  });
+
+  it("returns 400 when business terms acceptance is missing", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ business_terms_accepted: false }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error:
+        "You need to confirm authorization and accept the required policies before continuing.",
+    });
+    expect(supabase.from("users").upsert).not.toHaveBeenCalled();
+    expect(supabase.from("businesses").upsert).not.toHaveBeenCalled();
+  });
+
+  it("stores business terms acceptance metadata on first accepted submission", async () => {
+    const supabase = createSupabaseMock();
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ business_terms_accepted: true }));
+
+    expect(response.status).toBe(200);
+    expect(supabase.from("businesses").upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        business_terms_accepted_at: expect.any(String),
+        business_terms_version: "May 2026",
+        business_terms_accepted_by_user_id: "11111111-1111-4111-8111-111111111111",
+        business_terms_acceptance_user_agent: "Vitest Browser",
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("preserves existing business terms acceptance metadata on later profile saves", async () => {
+    const supabase = createSupabaseMock({
+      existingBusinessOverride: {
+        business_terms_accepted_at: "2026-05-01T00:00:00.000Z",
+        business_terms_version: "May 2026",
+        business_terms_accepted_by_user_id: "22222222-2222-4222-8222-222222222222",
+      },
+    });
+    createSupabaseRouteHandlerClientMock.mockReturnValue(supabase);
+
+    const response = await POST(createRequest({ business_terms_accepted: false }));
+
+    expect(response.status).toBe(200);
+    expect(supabase.from("businesses").upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        business_terms_accepted_at: expect.anything(),
+        business_terms_version: expect.anything(),
+        business_terms_accepted_by_user_id: expect.anything(),
+        business_terms_acceptance_user_agent: expect.anything(),
+      }),
+      expect.any(Object)
+    );
   });
 
   it("returns 400 when business row is still incomplete after successful RPC", async () => {
