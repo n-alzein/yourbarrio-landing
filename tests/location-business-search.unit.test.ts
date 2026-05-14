@@ -64,4 +64,45 @@ describe("findBusinessesForLocation", () => {
 
     expect(results.map((row) => row.id)).toEqual(["ca-coords", "ca-null"]);
   });
+
+  it("supports strict city+state matching for city-labeled homepage feeds", async () => {
+    const supabase = createSupabaseMock([
+      {
+        id: "costa-mesa",
+        owner_user_id: "owner-costa-mesa",
+        city: "Costa Mesa",
+        state: "CA",
+        latitude: 33.6411,
+        longitude: -117.9187,
+        verification_status: "manually_verified",
+      },
+      {
+        id: "long-beach",
+        owner_user_id: "owner-long-beach",
+        city: "Long Beach",
+        state: "CA",
+        address: "2603 E Ocean Blvd",
+        latitude: 33.7629,
+        longitude: -118.1618,
+        verification_status: "manually_verified",
+      },
+    ]);
+
+    const selected = {
+      city: "Costa Mesa",
+      region: "CA",
+      lat: 33.6411,
+      lng: -117.9187,
+    };
+
+    const nearbyResults = await findBusinessesForLocation(supabase, selected, {
+      radiusKm: 50,
+    });
+    const strictResults = await findBusinessesForLocation(supabase, selected, {
+      strictCityState: true,
+    });
+
+    expect(nearbyResults.map((row) => row.id)).toEqual(["costa-mesa", "long-beach"]);
+    expect(strictResults.map((row) => row.id)).toEqual(["costa-mesa"]);
+  });
 });

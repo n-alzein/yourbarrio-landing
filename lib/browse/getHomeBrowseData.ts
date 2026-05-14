@@ -132,7 +132,10 @@ async function tryLoadFromPublicListingsView({
   limit: number;
 }) {
   const supabase = getHomeBrowseSupabaseClient();
-  const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, { limit: 1000 });
+  const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, {
+    limit: 1000,
+    strictCityState: true,
+  });
   if (businessIds.length === 0) {
     return { data: [] as ListingSummary[], error: null };
   }
@@ -156,7 +159,10 @@ async function tryLoadFromListingsTable({
   limit: number;
 }) {
   const supabase = getHomeBrowseSupabaseClient();
-  const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, { limit: 1000 });
+  const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, {
+    limit: 1000,
+    strictCityState: true,
+  });
   if (businessIds.length === 0) {
     return { data: [] as ListingSummary[], error: null };
   }

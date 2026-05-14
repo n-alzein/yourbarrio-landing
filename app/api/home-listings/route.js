@@ -223,6 +223,7 @@ export async function GET(request) {
     const businessIds = await findBusinessOwnerIdsForLocation(supabase, location, {
       limit: 1000,
       viewerCanSeeInternalContent: false,
+      strictCityState: true,
     });
 
     const { data, error, debug } = await runHomeListingsQuery(supabase, {

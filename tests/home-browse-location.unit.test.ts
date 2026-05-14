@@ -46,6 +46,18 @@ describe("getHomeBrowseData location filtering", () => {
 
     expect(result.city).toBe("Costa Mesa");
     expect(result.listings).toEqual([]);
+    expect(findBusinessOwnerIdsForLocationMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        city: "Costa Mesa",
+        state: "CA",
+        lat: 33.6411,
+        lng: -117.9187,
+      }),
+      expect.objectContaining({
+        strictCityState: true,
+      })
+    );
     expect(fromMock).not.toHaveBeenCalledWith("public_listings_v");
     expect(fromMock).not.toHaveBeenCalledWith("public_listings");
   });
