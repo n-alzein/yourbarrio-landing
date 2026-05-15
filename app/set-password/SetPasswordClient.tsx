@@ -77,64 +77,71 @@ export default function SetPasswordClient() {
       : "";
 
   return (
-    <div className="min-h-screen w-full bg-white text-slate-900">
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-4 py-12">
+    <div className="min-h-screen w-full bg-slate-50 text-slate-900">
+      <main className="flex min-h-screen w-full items-center justify-center px-4 py-12">
         <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-slate-900">Set your password</h1>
-          <p className="mt-2 text-sm text-slate-600">Enter a new password for your account.</p>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold text-slate-900">Set your password</h1>
+            <p className="text-sm text-slate-600">Enter a new password for your account.</p>
+          </div>
 
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <label htmlFor="new-password" className="block text-sm text-slate-700">
-              New password
-              <input
-                id="new-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                placeholder={`Minimum ${MIN_PASSWORD_LENGTH} characters`}
-                autoComplete="new-password"
-              />
-            </label>
+          <form className="mt-12" onSubmit={handleSubmit}>
+            <div>
+              <div className="space-y-2">
+                <label htmlFor="new-password" className="block text-sm text-slate-700">
+                  New password
+                </label>
+                <input
+                  id="new-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  placeholder={`Minimum ${MIN_PASSWORD_LENGTH} characters`}
+                  autoComplete="new-password"
+                />
+              </div>
 
-            <label htmlFor="confirm-password" className="block text-sm text-slate-700">
-              Repeat new password
-              <input
-                id="confirm-password"
-                type="password"
-                value={passwordConfirm}
-                onChange={(event) => setPasswordConfirm(event.target.value)}
-                className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                placeholder="Re-enter your new password"
-                autoComplete="new-password"
-              />
-            </label>
-
-            <p className="text-xs text-slate-500">Use at least 8 characters.</p>
+              <div className="mt-7 space-y-2">
+                <label htmlFor="confirm-password" className="block text-sm text-slate-700">
+                  Repeat new password
+                </label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={(event) => setPasswordConfirm(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  placeholder="Re-enter your new password"
+                  autoComplete="new-password"
+                />
+                <p className="pt-1 text-sm text-slate-500">Use at least 8 characters.</p>
+              </div>
+            </div>
 
             {pageError || errorMessage ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {errorMessage || pageError}
               </div>
             ) : null}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="yb-primary-button inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold !text-white"
-            >
-              {submitting ? "Updating..." : "Update password"}
-            </button>
-          </form>
+            <div className="mt-10 flex flex-col gap-4">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="yb-primary-button inline-flex h-12 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold !text-white"
+              >
+                {submitting ? "Updating..." : "Update password"}
+              </button>
 
-          <div className="mt-6">
-            <Link
-              href="/auth/forgot-password"
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Request a new reset link
-            </Link>
-          </div>
+              <Link
+                href="/auth/forgot-password"
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Request a new reset link
+              </Link>
+            </div>
+          </form>
         </section>
       </main>
     </div>

@@ -218,16 +218,19 @@ function BusinessRegisterInner() {
             </button>
           </>
         ) : (
-          <div className="space-y-5">
-            <h2 className="mb-1 text-2xl font-bold text-slate-900">Check your email</h2>
-            <div className="rounded-xl border border-[var(--yb-border)] bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <div className="mt-12 sm:mt-16">
+            <h2 className="text-2xl font-bold text-slate-900">Check your email</h2>
+
+            <div className="mt-5 sm:mt-6 rounded-xl border border-[var(--yb-border)] bg-slate-50 px-4 py-3 text-sm text-slate-700">
               We sent a verification link to <span className="font-semibold">{email.trim()}</span>.
               {" "}Open it to finish creating your business account.
             </div>
-            <p className="pt-1 text-sm text-slate-500">
+
+            <p className="mt-5 sm:mt-6 text-sm text-slate-500">
               Didn&apos;t get it? Check your spam.
             </p>
-            <div className="pt-1 flex flex-col gap-0">
+
+            <div className="mt-4 flex flex-col gap-5 sm:mt-5">
               <button
                 type="button"
                 onClick={handleResend}
@@ -240,7 +243,7 @@ function BusinessRegisterInner() {
                 type="button"
                 onClick={handleChangeEmail}
                 disabled={loading}
-                className="mt-4 w-full py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Change email
               </button>

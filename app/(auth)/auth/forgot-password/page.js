@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Forgot your password?</h1>
         <p className="mt-2 text-sm text-slate-700">Enter your email and we will send a reset link.</p>
 
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <form className="mt-6" onSubmit={handleSubmit}>
           <div>
             <label htmlFor="reset-email" className="mb-1.5 block text-sm text-slate-700">
               Email address
@@ -59,13 +59,15 @@ export default function ForgotPasswordPage() {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="yb-primary-button inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold !text-white"
-          >
-            {submitting ? "Sending..." : "Send reset link"}
-          </button>
+          <div className="mt-4">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="yb-primary-button inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold !text-white"
+            >
+              {submitting ? "Sending..." : "Send reset link"}
+            </button>
+          </div>
         </form>
 
         {errorMessage ? (

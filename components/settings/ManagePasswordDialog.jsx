@@ -214,17 +214,20 @@ export default function ManagePasswordDialog({
   };
 
   const handleSendReset = async () => {
-    if (!supabase || !userEmail) return;
+    if (!userEmail) return;
     setSendingReset(true);
     setErrorMessage("");
     setInfoMessage("");
     try {
-      const redirectTo = `${window.location.origin}/auth/update-password`;
-      const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo,
+      const response = await fetch("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email: userEmail }),
       });
-      if (error) {
-        setErrorMessage(error.message || "Failed to send reset email.");
+      if (!response.ok) {
+        setErrorMessage("Failed to send reset email.");
       } else {
         setInfoMessage("Password reset email sent.");
       }

@@ -15,6 +15,24 @@ function getRecoveryRedirectTo(siteUrl: string) {
   return `${siteUrl}/auth/confirm?next=/set-password`;
 }
 
+function getPasswordResetSiteUrl(request: NextRequest) {
+  const configuredSiteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "").trim();
+  const siteUrl = configuredSiteUrl || getSiteUrlFromRequest(request);
+
+  try {
+    const url = new URL(siteUrl);
+    if (
+      process.env.NODE_ENV === "production" &&
+      (url.hostname === "yourbarrio.com" || url.hostname === "www.yourbarrio.com")
+    ) {
+      return "https://www.yourbarrio.com";
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return getSiteUrlFromRequest(request);
+  }
+}
+
 function maskEmail(input: string) {
   const [localPart, domain = ""] = String(input || "").split("@");
   if (!localPart) return "***";
@@ -35,7 +53,7 @@ export async function POST(request: NextRequest) {
   }
 
   const email = parsed.data.email.toLowerCase();
-  const siteUrl = getSiteUrlFromRequest(request);
+  const siteUrl = getPasswordResetSiteUrl(request);
   const generationSupabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "");
   const verificationSupabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
   const genRef = getSupabaseRefFromUrl(generationSupabaseUrl);
@@ -81,11 +99,18 @@ export async function POST(request: NextRequest) {
 
     const resetUrl = buildConfirmStartUrl(tokenHash, "recovery", "/set-password", siteUrl);
 
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[auth.request-password-reset] sending_resend_template", {
+        templateId: process.env.RESEND_RESET_PASSWORD_TEMPLATE_ID || "reset-your-password",
+        resetUrlOrigin: new URL(resetUrl).origin,
+      });
+    }
+
     await sendResetPasswordEmail({
       to: email,
       resetUrl,
       productName: "YourBarrio",
-      supportEmail: "support@yourbarrio.com",
+      supportEmail: process.env.SUPPORT_EMAIL || "support@yourbarrio.com",
     });
   } catch (error: any) {
     console.error("[auth.request-password-reset] unexpected error", {

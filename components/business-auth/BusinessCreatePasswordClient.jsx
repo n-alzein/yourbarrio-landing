@@ -190,66 +190,72 @@ export default function BusinessCreatePasswordClient({
           : "Finalizing your verified session before password setup..."}
       </p>
 
-      <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-        <label htmlFor="business-password" className="block text-sm font-medium text-slate-900">
-          Password
-        </label>
-        <div className="relative">
-          <input
-            id="business-password"
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
-            placeholder={`Minimum ${BUSINESS_PASSWORD_MIN_LENGTH} characters`}
-            autoComplete="new-password"
-            disabled={submitting || !ready}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((value) => !value)}
-            className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-slate-700"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            disabled={submitting || !ready}
-          >
-            <EyeIcon open={showPassword} />
-          </button>
+      <form className="mt-8" onSubmit={handleSubmit}>
+        <div>
+          <div className="space-y-2">
+            <label htmlFor="business-password" className="block text-sm font-medium text-slate-900">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="business-password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                placeholder={`Minimum ${BUSINESS_PASSWORD_MIN_LENGTH} characters`}
+                autoComplete="new-password"
+                disabled={submitting || !ready}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-slate-700"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                disabled={submitting || !ready}
+              >
+                <EyeIcon open={showPassword} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-7 space-y-2">
+            <label
+              htmlFor="business-password-confirm"
+              className="block text-sm font-medium text-slate-900"
+            >
+              Confirm password
+            </label>
+            <div className="relative">
+              <input
+                id="business-password-confirm"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
+                disabled={submitting || !ready}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((value) => !value)}
+                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-slate-700"
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                disabled={submitting || !ready}
+              >
+                <EyeIcon open={showConfirmPassword} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        <label
-          htmlFor="business-password-confirm"
-          className="block text-sm font-medium text-slate-900"
-        >
-          Confirm password
-        </label>
-        <div className="relative">
-          <input
-            id="business-password-confirm"
-            type={showConfirmPassword ? "text" : "password"}
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
-            placeholder="Re-enter your password"
-            autoComplete="new-password"
-            disabled={submitting || !ready}
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirmPassword((value) => !value)}
-            className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500 transition hover:text-slate-700"
-            aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-            disabled={submitting || !ready}
-          >
-            <EyeIcon open={showConfirmPassword} />
-          </button>
-        </div>
-
-        <p className="text-xs text-slate-500">
+        <p className="mt-2 text-xs text-slate-500">
           Use at least {BUSINESS_PASSWORD_MIN_LENGTH} characters.
         </p>
 
         {errorMessage ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {errorMessage}
           </div>
         ) : null}
@@ -257,7 +263,7 @@ export default function BusinessCreatePasswordClient({
         <button
           type="submit"
           disabled={submitting || !ready}
-          className="yb-primary-button mt-2 inline-flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold text-white"
+          className="yb-primary-button mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold text-white"
         >
           {!ready ? "Finalizing session..." : submitting ? "Saving..." : "Create password"}
         </button>

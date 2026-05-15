@@ -28,6 +28,24 @@ function getResetRedirectTo(siteUrl: string): string {
   return `${siteUrl}/auth/confirm?next=/set-password`;
 }
 
+function getPasswordResetSiteUrl(request: NextRequest) {
+  const configuredSiteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "").trim();
+  const siteUrl = configuredSiteUrl || getSiteUrlFromRequest(request);
+
+  try {
+    const url = new URL(siteUrl);
+    if (
+      process.env.NODE_ENV === "production" &&
+      (url.hostname === "yourbarrio.com" || url.hostname === "www.yourbarrio.com")
+    ) {
+      return "https://www.yourbarrio.com";
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return getSiteUrlFromRequest(request);
+  }
+}
+
 function fingerprint(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 12);
 }
@@ -58,7 +76,7 @@ export async function POST(
 
   const targetEmail = parsed.data.targetEmail.trim().toLowerCase();
   const reason = parsed.data.reason.trim();
-  const siteUrl = getSiteUrlFromRequest(request);
+  const siteUrl = getPasswordResetSiteUrl(request);
   const redirectTo = getResetRedirectTo(siteUrl);
   const generationSupabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "");
   const verificationSupabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
@@ -97,11 +115,17 @@ export async function POST(
           token_hash_fp: fingerprint(tokenHash),
         });
         const resetUrl = buildConfirmStartUrl(tokenHash, "recovery", "/set-password", siteUrl);
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth.admin-reset] sending_resend_template", {
+            templateId: process.env.RESEND_RESET_PASSWORD_TEMPLATE_ID || "reset-your-password",
+            resetUrlOrigin: new URL(resetUrl).origin,
+          });
+        }
         await sendResetPasswordEmail({
           to: targetEmail,
           resetUrl,
           productName: "YourBarrio",
-          supportEmail: "support@yourbarrio.com",
+          supportEmail: process.env.SUPPORT_EMAIL || "support@yourbarrio.com",
         });
       }
     }
