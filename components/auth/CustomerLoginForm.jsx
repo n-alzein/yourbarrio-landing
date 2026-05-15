@@ -25,6 +25,15 @@ import {
   readClientRedirectState,
 } from "@/lib/auth/clientRedirectState";
 import { buildOAuthCallbackUrl, logOAuthStart } from "@/lib/auth/oauthRedirect";
+import {
+  authErrorClassName,
+  authForgotLinkClassName,
+  authGoogleButtonClassName,
+  authInputClassName,
+  authLabelClassName,
+  authPrimaryButtonClassName,
+  authSwitchLinkClassName,
+} from "@/components/auth/authFormStyles";
 
 export default function CustomerLoginForm({
   next: nextOverride = null,
@@ -418,9 +427,9 @@ export default function CustomerLoginForm({
 
   return (
     <>
-      <form onSubmit={handleLogin} className="space-y-4">
-        <div className="space-y-2">
-          <label htmlFor="customer-login-email" className="text-sm text-slate-700">Email</label>
+      <form onSubmit={handleLogin}>
+        <div className="mb-4 space-y-2">
+          <label htmlFor="customer-login-email" className={authLabelClassName}>Email</label>
           <input
             id="customer-login-email"
             name="email"
@@ -429,13 +438,13 @@ export default function CustomerLoginForm({
             autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder-slate-400 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+            className={authInputClassName}
             disabled={loading || loadingUser}
           />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="customer-login-password" className="text-sm text-slate-700">Password</label>
+          <label htmlFor="customer-login-password" className={authLabelClassName}>Password</label>
           <input
             id="customer-login-password"
             name="password"
@@ -444,29 +453,31 @@ export default function CustomerLoginForm({
             autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder-slate-400 transition focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+            className={authInputClassName}
             disabled={loading || loadingUser}
           />
           <div className="mt-3 pb-1 text-right">
-            <Link href="/auth/forgot-password" className="text-sm text-gray-500 transition hover:text-gray-700 hover:underline focus-visible:underline">
+            <Link href="/auth/forgot-password" className={authForgotLinkClassName}>
               Forgot password?
             </Link>
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-lg border border-red-500/20 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
+        <div className="pt-3">
+          {error ? (
+            <div className={authErrorClassName}>
+              {error}
+            </div>
+          ) : null}
 
-        <button
-          type="submit"
-          disabled={loading || loadingUser}
-          className="yb-primary-button w-full rounded-xl py-3 text-base font-semibold text-white"
-        >
-          {loading ? "Logging in..." : "Log in"}
-        </button>
+          <button
+            type="submit"
+            disabled={loading || loadingUser}
+            className={authPrimaryButtonClassName}
+          >
+            {loading ? "Logging in..." : "Log in"}
+          </button>
+        </div>
       </form>
 
       <div className="mt-4">
@@ -474,7 +485,7 @@ export default function CustomerLoginForm({
           type="button"
           onClick={handleGoogleLogin}
           disabled={loading || loadingUser}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className={authGoogleButtonClassName}
         >
           <img src="/google-icon.svg" className="h-5 w-5" alt="Google" />
           Continue with Google
@@ -486,7 +497,7 @@ export default function CustomerLoginForm({
         <button
           type="button"
           onClick={() => onSwitchToSignup?.() || modal?.openModal?.("customer-signup")}
-          className="font-semibold text-pink-600 hover:underline"
+          className={authSwitchLinkClassName}
         >
           Create an account
         </button>

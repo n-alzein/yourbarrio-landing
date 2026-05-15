@@ -3,6 +3,13 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import { PATHS } from "@/lib/auth/paths";
 import { buildOAuthCallbackUrl, logOAuthStart } from "@/lib/auth/oauthRedirect";
+import {
+  authErrorClassName,
+  authGoogleButtonClassName,
+  authInputClassName,
+  authLabelClassName,
+  authPrimaryButtonClassName,
+} from "@/components/auth/authFormStyles";
 
 function BusinessRegisterInner() {
   const supabaseRef = useRef(null);
@@ -152,7 +159,7 @@ function BusinessRegisterInner() {
         </p>
 
         {authError ? (
-          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className={authErrorClassName}>
             {authError}
           </div>
         ) : null}
@@ -161,7 +168,7 @@ function BusinessRegisterInner() {
           <>
             <form onSubmit={handleContinue} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-900" htmlFor="business-email">
+                <label className={authLabelClassName} htmlFor="business-email">
                   Email
                 </label>
                 <input
@@ -174,7 +181,7 @@ function BusinessRegisterInner() {
                     setEmail(e.target.value);
                     if (authError) setAuthError("");
                   }}
-                  className="w-full px-4 py-3 rounded-xl bg-white border border-[var(--yb-border)] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                  className={authInputClassName}
                   required
                   autoComplete="email"
                 />
@@ -183,7 +190,7 @@ function BusinessRegisterInner() {
               <button
                 type="submit"
                 disabled={loading}
-                className="yb-primary-button mt-2 w-full rounded-xl py-3 font-semibold text-white"
+                className={`${authPrimaryButtonClassName} mt-2`}
               >
                 {loading ? "Sending..." : "Continue"}
               </button>
@@ -204,7 +211,7 @@ function BusinessRegisterInner() {
             <button
               onClick={handleGoogle}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+              className={authGoogleButtonClassName}
             >
               <img src="/google-icon.svg" alt="" className="w-5 h-5" />
               Continue with Google
@@ -225,7 +232,7 @@ function BusinessRegisterInner() {
                 type="button"
                 onClick={handleResend}
                 disabled={loading}
-                className="yb-primary-button w-full rounded-xl py-3 font-semibold text-white"
+                className={authPrimaryButtonClassName}
               >
                 {loading ? "Sending..." : "Resend email"}
               </button>

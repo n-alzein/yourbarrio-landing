@@ -90,6 +90,16 @@ function mockFetchWithProfile(email = "new@example.com") {
       };
     }
 
+    if (url === "/api/account/legal-acceptances") {
+      return {
+        ok: true,
+        headers: {
+          get: () => null,
+        },
+        json: async () => ({ ok: true }),
+      };
+    }
+
     throw new Error(`Unexpected fetch ${url}`);
   }) as any;
 }
@@ -101,6 +111,14 @@ function fillSignupForm(email = "new@example.com") {
   fireEvent.change(screen.getByLabelText("Password"), {
     target: { value: "password123" },
   });
+}
+
+function acceptCustomerPolicies() {
+  fireEvent.click(
+    screen.getByLabelText(
+      "I agree to the YourBarrio Terms of Service and acknowledge the Privacy Policy."
+    )
+  );
 }
 
 describe("CustomerSignupModal", () => {
@@ -135,6 +153,7 @@ describe("CustomerSignupModal", () => {
 
     render(<CustomerSignupModal onClose={onCloseMock} />);
     fillSignupForm("new@example.com");
+    acceptCustomerPolicies();
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => {
@@ -155,6 +174,16 @@ describe("CustomerSignupModal", () => {
       expect.objectContaining({
         method: "GET",
         cache: "no-store",
+      })
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/account/legal-acceptances",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          customer_terms_accepted: true,
+          source: "signup",
+        }),
       })
     );
     expect(mockSupabase.from).not.toHaveBeenCalled();
@@ -179,6 +208,7 @@ describe("CustomerSignupModal", () => {
 
     render(<CustomerSignupModal onClose={onCloseMock} />);
     fillSignupForm("new@example.com");
+    acceptCustomerPolicies();
     const button = screen.getByRole("button", { name: "Create account" });
 
     fireEvent.click(button);
@@ -216,6 +246,7 @@ describe("CustomerSignupModal", () => {
 
     render(<CustomerSignupModal onClose={onCloseMock} next="/checkout?business_id=vendor-1" />);
     fillSignupForm("new@example.com");
+    acceptCustomerPolicies();
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => {
@@ -236,6 +267,7 @@ describe("CustomerSignupModal", () => {
 
     render(<CustomerSignupModal onClose={onCloseMock} />);
     fillSignupForm("repaired@example.com");
+    acceptCustomerPolicies();
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => {
@@ -266,12 +298,63 @@ describe("CustomerSignupModal", () => {
 
     render(<CustomerSignupModal onClose={onCloseMock} />);
     fillSignupForm("existing@example.com");
+    acceptCustomerPolicies();
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     expect(
       await screen.findByText("An account with this email already exists. Log in instead.")
     ).toBeInTheDocument();
     expect(locationReplaceMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("renders customer Terms and Privacy consent links without Business Terms", () => {
+    mockSupabase = createSupabase({
+      signUpResult: {
+        data: { user: null, session: null },
+        error: null,
+      },
+    });
+
+    render(<CustomerSignupModal onClose={onCloseMock} />);
+
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
+      "href",
+      "/terms"
+    );
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+      "href",
+      "/privacy"
+    );
+    expect(screen.queryByText(/Business Terms/i)).not.toBeInTheDocument();
+  });
+
+  it("shows consent validation only after submit attempt and blocks signup when unchecked", async () => {
+    mockSupabase = createSupabase({
+      signUpResult: {
+        data: { user: null, session: null },
+        error: null,
+      },
+    });
+    global.fetch = vi.fn() as any;
+
+    render(<CustomerSignupModal onClose={onCloseMock} />);
+    fillSignupForm("new@example.com");
+
+    expect(
+      screen.queryByText(
+        "Please accept the Terms of Service and Privacy Policy to continue."
+      )
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(
+      await screen.findByText(
+        "Please accept the Terms of Service and Privacy Policy to continue."
+      )
+    ).toBeInTheDocument();
+    expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });

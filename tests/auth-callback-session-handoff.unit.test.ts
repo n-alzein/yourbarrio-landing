@@ -8,6 +8,7 @@ const {
   getBusinessPasswordGateStateMock,
   isBusinessIntentPathMock,
   resolvePostAuthDestinationMock,
+  hasCurrentCustomerLegalAcceptancesMock,
 } = vi.hoisted(() => ({
   cookiesMock: vi.fn(),
   createServerClientMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   getBusinessPasswordGateStateMock: vi.fn(),
   isBusinessIntentPathMock: vi.fn(),
   resolvePostAuthDestinationMock: vi.fn(),
+  hasCurrentCustomerLegalAcceptancesMock: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -38,6 +40,10 @@ vi.mock("@/lib/auth/businessPasswordGate", () => ({
   getBusinessPasswordGateState: getBusinessPasswordGateStateMock,
   isBusinessIntentPath: isBusinessIntentPathMock,
   resolvePostAuthDestination: resolvePostAuthDestinationMock,
+}));
+
+vi.mock("@/lib/auth/userLegalAcceptances", () => ({
+  hasCurrentCustomerLegalAcceptances: hasCurrentCustomerLegalAcceptancesMock,
 }));
 
 function makeCookieStore() {
@@ -78,8 +84,13 @@ describe("auth callback session handoff", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://www.yourbarrio.com");
     cookiesMock.mockResolvedValue(makeCookieStore());
-    ensureUserProvisionedForUserMock.mockResolvedValue(undefined);
+    ensureUserProvisionedForUserMock.mockResolvedValue({
+      userCreated: false,
+      userRepaired: false,
+      role: "customer",
+    });
     ensureBusinessProvisionedForUserMock.mockResolvedValue(undefined);
+    hasCurrentCustomerLegalAcceptancesMock.mockResolvedValue(false);
     isBusinessIntentPathMock.mockReturnValue(false);
     getBusinessPasswordGateStateMock.mockResolvedValue({
       role: "customer",
@@ -230,5 +241,102 @@ describe("auth callback session handoff", () => {
     expect(response.headers.get("x-auth-callback-has-cookies")).toBe("0");
     expect(response.headers.get("x-auth-callback-has-set-cookie")).toBe("0");
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("routes first-time customer OAuth users without consent to completion before customer app access", async () => {
+    ensureUserProvisionedForUserMock.mockResolvedValueOnce({
+      userCreated: true,
+      userRepaired: false,
+      role: "customer",
+    });
+    hasCurrentCustomerLegalAcceptancesMock.mockResolvedValueOnce(false);
+    createServerClientMock.mockImplementation((_url, _key, options) => ({
+      auth: {
+        exchangeCodeForSession: vi.fn(async () => {
+          options.cookies.setAll([
+            {
+              name: "sb-crskbfbleiubpkvyvvlf-auth-token",
+              value: "persisted-session",
+              options: { httpOnly: true, sameSite: "lax", path: "/", maxAge: 3600 },
+            },
+          ]);
+          return {
+            data: {
+              session: { access_token: "access" },
+              user: { id: "user-1", email: "user@example.com" },
+            },
+            error: null,
+          };
+        }),
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access" } },
+          error: null,
+        }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "user@example.com" } },
+          error: null,
+        }),
+      },
+    }));
+    const { GET } = await importRoute();
+
+    const response = await GET(
+      makeRequest("https://yourbarrio.com/api/auth/callback?code=oauth-code&next=/customer/home")
+    );
+    const location = response.headers.get("location") || "";
+    const parsed = new URL(location);
+
+    expect(response.status).toBe(303);
+    expect(parsed.pathname).toBe("/customer/onboarding");
+    expect(parsed.searchParams.get("next")).toBe("/customer/home");
+    expect(parsed.searchParams.get("yb_auth_handoff")).toBe("1");
+    expect(hasCurrentCustomerLegalAcceptancesMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not force accepted OAuth customers through completion again", async () => {
+    ensureUserProvisionedForUserMock.mockResolvedValueOnce({
+      userCreated: true,
+      userRepaired: false,
+      role: "customer",
+    });
+    hasCurrentCustomerLegalAcceptancesMock.mockResolvedValueOnce(true);
+    createServerClientMock.mockImplementation((_url, _key, options) => ({
+      auth: {
+        exchangeCodeForSession: vi.fn(async () => {
+          options.cookies.setAll([
+            {
+              name: "sb-crskbfbleiubpkvyvvlf-auth-token",
+              value: "persisted-session",
+              options: { httpOnly: true, sameSite: "lax", path: "/", maxAge: 3600 },
+            },
+          ]);
+          return {
+            data: {
+              session: { access_token: "access" },
+              user: { id: "user-1", email: "user@example.com" },
+            },
+            error: null,
+          };
+        }),
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access" } },
+          error: null,
+        }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "user@example.com" } },
+          error: null,
+        }),
+      },
+    }));
+    const { GET } = await importRoute();
+
+    const response = await GET(
+      makeRequest("https://yourbarrio.com/api/auth/callback?code=oauth-code&next=/customer/home")
+    );
+    const parsed = new URL(response.headers.get("location") || "");
+
+    expect(response.status).toBe(303);
+    expect(parsed.pathname).toBe("/customer/home");
+    expect(parsed.searchParams.get("yb_auth_handoff")).toBe("1");
   });
 });

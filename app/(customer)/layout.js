@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { headers, cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import GlobalHeader from "@/components/nav/GlobalHeader";
 import CustomerRouteShell from "@/components/layout/CustomerRouteShell";
 import InactivityLogout from "@/components/auth/InactivityLogout";
@@ -15,6 +16,7 @@ import { isRscPrefetchRequest } from "@/lib/next/isRscPrefetchRequest";
 import { getRequestPath } from "@/lib/url/getRequestPath";
 import { getFeatureFlag, CUSTOMER_NEARBY_PUBLIC_FLAG_KEY } from "@/lib/featureFlags";
 import { getServerAuth } from "@/lib/auth/server";
+import { hasCurrentCustomerLegalAcceptances } from "@/lib/auth/userLegalAcceptances";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,6 +25,13 @@ export const metadata = {
     "yb-shell": "customer",
   },
 };
+
+const CUSTOMER_LEGAL_ACCEPTANCE_ROLLOUT = Date.parse("2026-05-14T00:00:00.000Z");
+
+function isPostRolloutCustomerProfile(profile) {
+  const createdAt = Date.parse(profile?.created_at || "");
+  return Number.isFinite(createdAt) && createdAt >= CUSTOMER_LEGAL_ACCEPTANCE_ROLLOUT;
+}
 
 export default async function CustomerLayout({ children }) {
   const isRsc = await isRscPrefetchRequest();
@@ -158,6 +167,26 @@ export default async function CustomerLayout({ children }) {
           },
         }
       : user;
+
+  if (
+    requestPath !== "/customer/onboarding" &&
+    !supportModeActive &&
+    (seededProfile?.role || targetRole || effectiveRole) === "customer" &&
+    isPostRolloutCustomerProfile(seededProfile)
+  ) {
+    let hasLegalAcceptance = false;
+    try {
+      hasLegalAcceptance = await hasCurrentCustomerLegalAcceptances(seededUser?.id);
+    } catch (error) {
+      console.warn("[CUSTOMER_LEGAL_ACCEPTANCE_GATE] check_failed", {
+        userId: seededUser?.id || null,
+        error: error?.message || String(error),
+      });
+    }
+    if (!hasLegalAcceptance) {
+      redirect(`/customer/onboarding?next=${encodeURIComponent(requestPath || "/customer/home")}`);
+    }
+  }
 
   return (
     <>

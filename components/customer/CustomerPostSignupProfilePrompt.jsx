@@ -131,7 +131,7 @@ export default function CustomerPostSignupProfilePrompt() {
             {error ? <p className="text-sm text-rose-600">{error}</p> : null}
           </div>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={dismiss}
@@ -143,7 +143,7 @@ export default function CustomerPostSignupProfilePrompt() {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed disabled:bg-violet-300"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-violet-600 px-4 text-sm font-medium !text-white transition hover:bg-violet-700 hover:!text-white active:!text-white focus-visible:!text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/20 disabled:cursor-not-allowed disabled:bg-violet-300 disabled:!text-white"
             >
               {saving ? "Saving..." : "Save and continue"}
             </button>

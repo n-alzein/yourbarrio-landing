@@ -20,6 +20,15 @@ import {
   readClientRedirectState,
 } from "@/lib/auth/clientRedirectState";
 import { buildOAuthCallbackUrl, logOAuthStart } from "@/lib/auth/oauthRedirect";
+import {
+  authErrorClassName,
+  authForgotLinkClassName,
+  authGoogleButtonClassName,
+  authInputClassName,
+  authLabelClassName,
+  authPrimaryButtonClassName,
+  authSwitchLinkClassName,
+} from "@/components/auth/authFormStyles";
 
 function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = false }) {
   const authDiagEnabled = process.env.NEXT_PUBLIC_AUTH_DIAG === "1";
@@ -34,6 +43,9 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const displayedAuthError =
+    authError ||
+    (callbackError === "invalid_credentials" ? GENERIC_INVALID_CREDENTIALS_MESSAGE : "");
   const redirectingRef = useRef(false);
   const mountedRef = useRef(false);
   const pendingRef = useRef(false);
@@ -614,27 +626,17 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
               We couldn&apos;t complete sign-in from that link. Please try again.
             </div>
           ) : null}
-          {callbackError === "invalid_credentials" ? (
-            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {GENERIC_INVALID_CREDENTIALS_MESSAGE}
-            </div>
-          ) : null}
           {sessionExpired ? (
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               Your session expired. Please log in again.
             </div>
           ) : null}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            {authError ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {authError}
-              </div>
-            ) : null}
-            <div className="space-y-2">
+          <form onSubmit={handleLogin}>
+            <div className="mb-4 space-y-2">
               <label
                 htmlFor="business-login-email"
-                className="text-sm font-medium text-slate-900"
+                className={authLabelClassName}
               >
                 Email
               </label>
@@ -642,7 +644,7 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
                 id="business-login-email"
                 name="email"
                 type="email"
-                className="w-full px-4 py-3 rounded-xl border border-[var(--yb-border)] bg-white text-slate-900 placeholder:text-slate-500 transition focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                className={authInputClassName}
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -653,7 +655,7 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
             <div className="space-y-2">
               <label
                 htmlFor="business-login-password"
-                className="text-sm font-medium text-slate-900"
+                className={authLabelClassName}
               >
                 Password
               </label>
@@ -661,7 +663,7 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
                 id="business-login-password"
                 name="password"
                 type="password"
-                className="w-full px-4 py-3 rounded-xl border border-[var(--yb-border)] bg-white text-slate-900 placeholder:text-slate-500 transition focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                className={authInputClassName}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -670,26 +672,34 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
               <div className="mt-3 pb-1 text-right">
                 <Link
                   href="/auth/forgot-password"
-                  className="text-sm text-gray-500 transition hover:text-gray-700 hover:underline focus-visible:underline"
+                  className={authForgotLinkClassName}
                 >
                   Forgot password?
                 </Link>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="yb-primary-button yb-auth-cta w-full rounded-xl py-3 text-lg font-semibold text-white"
-            >
-              {loading ? "Signing in..." : "Log in"}
-            </button>
+            <div className="pt-3">
+              {displayedAuthError ? (
+                <div className={authErrorClassName}>
+                  {displayedAuthError}
+                </div>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`${authPrimaryButtonClassName} yb-auth-cta`}
+              >
+                {loading ? "Signing in..." : "Log in"}
+              </button>
+            </div>
           </form>
 
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full mt-5 py-3 rounded-xl font-medium flex items-center justify-center gap-2 border border-[var(--yb-border)] bg-white text-slate-900 transition hover:bg-slate-50"
+            className={`${authGoogleButtonClassName} mt-5`}
           >
             <img src="/google-icon.svg" className="h-5 w-5" alt="Google" />
             Continue with Google
@@ -699,7 +709,7 @@ function BusinessLoginInner({ isPopup, callbackError = "", sessionExpired = fals
             Don&apos;t have an account?{" "}
             <a
               href="/business-auth/register"
-              className="font-medium text-[var(--color-primary)] hover:underline"
+              className={authSwitchLinkClassName}
             >
               Sign up
             </a>

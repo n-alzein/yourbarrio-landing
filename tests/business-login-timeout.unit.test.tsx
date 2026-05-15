@@ -126,4 +126,37 @@ describe("BusinessLoginClient timeout handling", () => {
       expect.any(Error)
     );
   });
+
+  it("renders invalid credentials below forgot password with explicit button spacing", () => {
+    render(<BusinessLoginClient callbackError="invalid_credentials" />);
+
+    const emailInput = screen.getByLabelText("Email");
+    const forgotPassword = screen.getByRole("link", { name: "Forgot password?" });
+    const alert = screen.getByText("Invalid email or password");
+    const loginButton = screen.getByRole("button", { name: "Log in" });
+
+    expect(
+      emailInput.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      forgotPassword.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      alert.compareDocumentPosition(loginButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(alert).toHaveClass("mb-4");
+    expect(alert.parentElement).toHaveClass("pt-3");
+    expect(loginButton).toHaveClass("!text-white");
+  });
+
+  it("keeps forgot password secondary and sign up primary", () => {
+    render(<BusinessLoginClient />);
+
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveClass(
+      "text-slate-500"
+    );
+    expect(screen.getByRole("link", { name: "Sign up" })).toHaveClass(
+      "text-[var(--color-primary)]"
+    );
+  });
 });

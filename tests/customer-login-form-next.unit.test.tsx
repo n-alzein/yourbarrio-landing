@@ -236,4 +236,46 @@ describe("CustomerLoginForm next priority", () => {
     });
     expect(replaceMock).not.toHaveBeenCalled();
   });
+
+  it("keeps customer login error spacing calm above the primary button", async () => {
+    mockAuth.supabase = {
+      ...createSupabaseClient(),
+      auth: {
+        ...createSupabaseClient().auth,
+        signInWithPassword: vi.fn(async () => ({
+          data: { session: null },
+          error: { message: "invalid credentials", code: "invalid_credentials" },
+        })),
+      },
+    };
+
+    render(<CustomerLoginForm />);
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "wrong@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "wrong-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    const alert = await screen.findByText("The email or password is incorrect.");
+    expect(alert).toHaveClass("border-rose-200");
+    expect(alert).toHaveClass("bg-rose-50/80");
+    expect(alert).toHaveClass("text-rose-700");
+    expect(alert).toHaveClass("mb-4");
+    expect(alert.parentElement).toHaveClass("pt-3");
+    expect(alert.parentElement).not.toHaveClass("space-y-4");
+  });
+
+  it("keeps forgot password secondary and create account primary", () => {
+    render(<CustomerLoginForm />);
+
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveClass(
+      "text-slate-500"
+    );
+    expect(screen.getByRole("button", { name: "Create an account" })).toHaveClass(
+      "text-[var(--color-primary)]"
+    );
+  });
 });

@@ -1,11 +1,20 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import BaseModal from "./BaseModal";
 import { useAuth } from "../AuthProvider";
 import { useModal } from "./ModalProvider";
 import { buildOAuthCallbackUrl, logOAuthStart } from "@/lib/auth/oauthRedirect";
 import { markCustomerProfilePromptPending } from "@/components/customer/CustomerPostSignupProfilePrompt";
+import {
+  authErrorClassName,
+  authGoogleButtonClassName,
+  authInputClassName,
+  authLabelClassName,
+  authPrimaryButtonClassName,
+  authSwitchLinkClassName,
+} from "@/components/auth/authFormStyles";
 
 function resolveSignupDestination(next) {
   if (typeof next !== "string") return "/customer/home";
@@ -27,10 +36,15 @@ export default function CustomerSignupModal({ onClose, next = null }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [legalAttempted, setLegalAttempted] = useState(false);
+  const [legalError, setLegalError] = useState("");
   const submitLockRef = useRef(false);
 
   const friendlyExistingAccountMessage =
     "An account with this email already exists. Log in instead.";
+  const legalAcceptanceError =
+    "Please accept the Terms of Service and Privacy Policy to continue.";
   const destination = resolveSignupDestination(next);
 
   function isAlreadyRegisteredError(authError) {
@@ -101,6 +115,23 @@ export default function CustomerSignupModal({ onClose, next = null }) {
     return payload;
   }
 
+  async function recordLegalAcceptance() {
+    const res = await fetch("/api/account/legal-acceptances", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customer_terms_accepted: true,
+        source: "signup",
+      }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(payload?.error || "legal_acceptance_failed");
+    }
+    return payload;
+  }
+
   async function recoverExistingSessionForEmail() {
     const { data } = await supabase.auth.getSession();
     const session = data?.session;
@@ -124,6 +155,15 @@ export default function CustomerSignupModal({ onClose, next = null }) {
 
     submitLockRef.current = true;
     setError("");
+    setLegalAttempted(true);
+    setLegalError("");
+
+    if (!legalAccepted) {
+      setLegalError(legalAcceptanceError);
+      submitLockRef.current = false;
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -157,6 +197,7 @@ export default function CustomerSignupModal({ onClose, next = null }) {
 
       await persistSession(signUpData?.session);
       await fetchFreshProfile();
+      await recordLegalAcceptance();
       markCustomerProfilePromptPending(authUser.id);
 
       onClose?.();
@@ -178,6 +219,14 @@ export default function CustomerSignupModal({ onClose, next = null }) {
 
   async function handleGoogleSignup() {
     setError("");
+    setLegalAttempted(true);
+    setLegalError("");
+
+    if (!legalAccepted) {
+      setLegalError(legalAcceptanceError);
+      return;
+    }
+
     setLoading(true);
 
     const currentOrigin =
@@ -208,7 +257,7 @@ export default function CustomerSignupModal({ onClose, next = null }) {
     >
       <form onSubmit={handleSignup} className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="customer-signup-email" className="text-sm text-slate-700">Email</label>
+          <label htmlFor="customer-signup-email" className={authLabelClassName}>Email</label>
           <input
             id="customer-signup-email"
             name="email"
@@ -217,19 +266,13 @@ export default function CustomerSignupModal({ onClose, next = null }) {
             autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="
-              w-full px-4 py-3 rounded-xl 
-              bg-slate-50 border border-slate-200 
-              text-slate-900 placeholder-slate-400
-              focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400
-              transition
-            "
+            className={authInputClassName}
             disabled={loading}
           />
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="customer-signup-password" className="text-sm text-slate-700">Password</label>
+          <label htmlFor="customer-signup-password" className={authLabelClassName}>Password</label>
           <input
             id="customer-signup-password"
             name="password"
@@ -238,19 +281,54 @@ export default function CustomerSignupModal({ onClose, next = null }) {
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="
-              w-full px-4 py-3 rounded-xl 
-              bg-slate-50 border border-slate-200 
-              text-slate-900 placeholder-slate-400
-              focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-400
-              transition
-            "
+            className={authInputClassName}
             disabled={loading}
           />
         </div>
 
+        <div className="pt-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-700">
+              <input
+                type="checkbox"
+                checked={legalAccepted}
+                onChange={(event) => {
+                  setLegalAccepted(event.target.checked);
+                  if (event.target.checked) setLegalError("");
+                }}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-2 focus:ring-purple-500/40"
+                disabled={loading}
+              />
+              <span>
+                I agree to the YourBarrio{" "}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-purple-700 underline-offset-2 hover:underline"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and acknowledge the{" "}
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-purple-700 underline-offset-2 hover:underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+            {legalAttempted && legalError ? (
+              <p className="mt-2 text-xs leading-5 text-rose-600/90">{legalError}</p>
+            ) : null}
+          </div>
+        </div>
+
         {error ? (
-          <div className="rounded-lg border border-red-500/20 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className={authErrorClassName}>
             {error}
           </div>
         ) : null}
@@ -258,7 +336,7 @@ export default function CustomerSignupModal({ onClose, next = null }) {
         <button
           type="submit"
           disabled={loading}
-          className="yb-primary-button mt-2 w-full rounded-xl py-3 text-base font-semibold text-white"
+          className={`${authPrimaryButtonClassName} mt-2`}
         >
           {loading ? "Creating account..." : "Create account"}
         </button>
@@ -269,14 +347,7 @@ export default function CustomerSignupModal({ onClose, next = null }) {
           type="button"
           onClick={handleGoogleSignup}
           disabled={loading}
-          className="
-            w-full py-3 rounded-xl font-medium
-            bg-white border border-slate-200 text-slate-900
-            hover:bg-slate-50
-            flex items-center justify-center gap-2
-            transition
-            disabled:opacity-60 disabled:cursor-not-allowed
-          "
+          className={authGoogleButtonClassName}
         >
           <img src="/google-icon.svg" className="h-5 w-5" alt="Google" />
           Continue with Google
@@ -288,7 +359,7 @@ export default function CustomerSignupModal({ onClose, next = null }) {
         <button
           type="button"
           onClick={() => openModal("customer-login")}
-          className="text-pink-600 font-semibold hover:underline"
+          className={authSwitchLinkClassName}
         >
           Log in
         </button>

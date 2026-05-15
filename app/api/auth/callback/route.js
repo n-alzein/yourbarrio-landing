@@ -16,6 +16,7 @@ import {
   isBlockedAccountStatus,
   normalizeAccountStatus,
 } from "@/lib/accountDeletion/status";
+import { hasCurrentCustomerLegalAcceptances } from "@/lib/auth/userLegalAcceptances";
 
 const AUTH_CALLBACK_HANDLER_MARKER = "app/api/auth/callback/route.js";
 const AUTH_HANDOFF_PARAM = "yb_auth_handoff";
@@ -157,7 +158,7 @@ async function ensureBusinessProvisioned({ user, debug }) {
 }
 
 async function ensureUserProvisioned({ user, debug }) {
-  await ensureUserProvisionedForUser({
+  return ensureUserProvisionedForUser({
     userId: user?.id,
     email: user?.email || "",
     fullName: user?.user_metadata?.full_name || user?.user_metadata?.name || "",
@@ -493,8 +494,9 @@ export async function GET(request) {
       });
     }
 
+    let userProvisioningResult = null;
     try {
-      await ensureUserProvisioned({ user, debug });
+      userProvisioningResult = await ensureUserProvisioned({ user, debug });
     } catch (provisionError) {
       console.warn("[AUTH_REDIRECT_TRACE] user_provisioning:failed", {
         userId: user.id,
@@ -560,6 +562,23 @@ export async function GET(request) {
       onboardingComplete: businessGate.onboardingComplete,
       safeNext,
     });
+    let finalDestination = destination;
+    if (resolvedRole === "customer" && userProvisioningResult?.userCreated === true) {
+      let hasLegalAcceptance = false;
+      try {
+        hasLegalAcceptance = await hasCurrentCustomerLegalAcceptances(user.id);
+      } catch (acceptanceError) {
+        console.warn("[AUTH_REDIRECT_TRACE] customer_legal_acceptance_check_failed", {
+          userId: user.id,
+          error: acceptanceError?.message || String(acceptanceError),
+        });
+      }
+      if (!hasLegalAcceptance) {
+        const completionUrl = new URL("/customer/onboarding", "https://yourbarrio.local");
+        completionUrl.searchParams.set("next", destination || "/customer/home");
+        finalDestination = `${completionUrl.pathname}${completionUrl.search}`;
+      }
+    }
     if (authDiagServer) {
       console.info("[AUTH_DIAG_SERVER] callback:destination", {
         pathname: requestUrl.pathname,
@@ -571,7 +590,7 @@ export async function GET(request) {
         passwordSet: businessGate.passwordSet,
         onboardingComplete: businessGate.onboardingComplete,
         safeNext,
-        destination,
+        destination: finalDestination,
         cookieMutations: cookiesSetDuringAuth.map((cookie) => cookie.name),
       });
     }
@@ -602,19 +621,20 @@ export async function GET(request) {
         nextRejectedByValidation: Boolean(rawNext) && !nextSafe,
         nextRejectedByAllowlist: nextSafe && !nextAllowed,
         chosenDestination: destination,
+        finalDestination,
       });
     }
     if (debug) {
       console.warn("[AUTH_REDIRECT_TRACE] api_auth_callback", {
         nextRaw: rawNext,
         nextPath: safeNext,
-        destination,
+        destination: finalDestination,
         role: resolvedRole || null,
       });
     }
 
     return buildRedirectResponse({
-      destination,
+      destination: finalDestination,
       role: resolvedRole || "",
       reason:
         resolvedRole === "business"

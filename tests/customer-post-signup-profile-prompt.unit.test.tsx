@@ -50,6 +50,18 @@ describe("CustomerPostSignupProfilePrompt", () => {
     expect(screen.getByText("Add your name so local shops know who they’re helping.")).toBeInTheDocument();
   });
 
+  it("keeps action spacing comfortable and primary button text white", () => {
+    markCustomerProfilePromptPending("user-1");
+    render(<CustomerPostSignupProfilePrompt />);
+
+    const saveButton = screen.getByRole("button", { name: "Save and continue" });
+    expect(saveButton).toHaveClass("!text-white");
+    expect(saveButton).toHaveClass("hover:!text-white");
+    expect(saveButton).toHaveClass("focus-visible:!text-white");
+    expect(saveButton).toHaveClass("disabled:!text-white");
+    expect(saveButton.parentElement).toHaveClass("pt-2");
+  });
+
   it("skipping prevents immediate repeated display", () => {
     markCustomerProfilePromptPending("user-1");
     const { unmount } = render(<CustomerPostSignupProfilePrompt />);
