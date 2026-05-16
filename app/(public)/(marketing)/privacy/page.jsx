@@ -1,3 +1,5 @@
+import SmoothHashLink from "@/components/marketing/SmoothHashLink";
+
 export const metadata = {
   title: "Privacy Policy | YourBarrio",
   description:
@@ -167,9 +169,9 @@ export default function PrivacyPage() {
           <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[13px] leading-5 text-slate-700">
             {sections.map((section) => (
               <li key={section.id} className="pl-1">
-                <a className="hover:text-purple-700" href={`#${section.id}`}>
+                <SmoothHashLink className="hover:text-purple-700" href={`#${section.id}`}>
                   {section.title}
-                </a>
+                </SmoothHashLink>
               </li>
             ))}
           </ol>

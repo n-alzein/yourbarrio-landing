@@ -96,10 +96,21 @@ export default async function RootLayout({ children, auth, businessAuth }) {
       lang="en"
       className="theme-light"
       data-theme="light"
-      data-scroll-behavior="smooth"
+      data-scroll-behavior="auto"
       suppressHydrationWarning
     >
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                if ("scrollRestoration" in history) {
+                  history.scrollRestoration = "manual";
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1"

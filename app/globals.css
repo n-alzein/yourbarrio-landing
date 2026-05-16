@@ -135,7 +135,7 @@
 
 html {
   font-size: 16px;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   overflow-anchor: none;
   background-color: var(--yb-bg);
   color: var(--yb-text);
