@@ -136,13 +136,13 @@ export default function AdminUserActivityPanel({
             value={q}
             onChange={(event) => setQ(event.target.value)}
             placeholder="Search action, actor, target"
-            className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm md:col-span-2"
+            className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:col-span-2 md:text-sm"
           />
           <input
             value={action}
             onChange={(event) => setAction(event.target.value)}
             placeholder="Action"
-            className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm"
+            className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm"
           />
           <button
             type="button"

@@ -161,7 +161,7 @@ export default function AdminUserSecurityActions({
               type="email"
               value={newEmail}
               onChange={(event) => setNewEmail(event.target.value)}
-              className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
               placeholder="user@example.com"
               autoComplete="off"
             />
@@ -257,7 +257,7 @@ function ReasonInput({
         rows={4}
         minLength={MIN_REASON_LENGTH}
         maxLength={500}
-        className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+        className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
         placeholder="Required reason for this security action (10-500 chars)"
       />
       <span className="mt-1 block text-xs text-neutral-500">{reason.trim().length}/500</span>

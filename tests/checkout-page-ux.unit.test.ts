@@ -48,7 +48,7 @@ describe("checkout page UX polish", () => {
     expect(checkoutPageSource).toContain("submittedRef.current = true");
     expect(checkoutPageSource).toContain("submittedRef.current = false");
     expect(checkoutPageSource).toContain("const hasInvalidCheckoutItems = stockIssues.length > 0");
-    expect(checkoutPageSource).toContain("disabled={submitting || hasInvalidCheckoutItems}");
+    expect(checkoutPageSource).toContain("disabled={submitting || loading || hasInvalidCheckoutItems}");
     expect(checkoutPageSource).toContain("Preparing secure checkout…");
     expect(checkoutPageSource).toContain("Continue to payment");
   });

@@ -56,7 +56,7 @@ export default function AttributeEditor({
         <div>
           <label className="text-sm font-medium text-slate-700">Option name</label>
           <input
-            className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+            className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-base text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 md:text-sm"
             placeholder={index === 0 ? "Size" : "Color"}
             value={attribute.name}
             onChange={(event) => onChange({ ...attribute, name: event.target.value })}
@@ -83,7 +83,7 @@ export default function AttributeEditor({
               <input
                 key={valueRow.id || `${index}-${valueIndex}`}
                 autoFocus
-                className="h-8 min-w-[88px] rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                className="h-10 min-w-[88px] rounded-lg border border-slate-300 bg-white px-2.5 text-base text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 md:h-8 md:text-sm"
                 value={editingChoiceValue}
                 onChange={(event) => setEditingChoiceValue(event.target.value)}
                 onBlur={commitEditedChoice}
@@ -134,7 +134,7 @@ export default function AttributeEditor({
           {isAddingChoice ? (
             <input
               autoFocus
-              className="h-8 min-w-[96px] rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+              className="h-10 min-w-[96px] rounded-lg border border-slate-300 bg-white px-2.5 text-base text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 md:h-8 md:text-sm"
               placeholder="Add choice"
               value={draftChoice}
               onChange={(event) => setDraftChoice(event.target.value)}

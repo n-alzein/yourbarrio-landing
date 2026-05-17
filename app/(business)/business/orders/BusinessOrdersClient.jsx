@@ -46,7 +46,7 @@ const primaryButton =
   `${baseButton} border border-transparent bg-[#6D3DF5] !text-white hover:bg-[#5E32E6] hover:!text-white focus-visible:!text-white active:bg-[#5228D6] active:!text-white`;
 
 const fieldBase =
-  "h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--brand-rgb),0.35)] focus-visible:ring-offset-2";
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base text-slate-900 transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--brand-rgb),0.35)] focus-visible:ring-offset-2 md:text-sm";
 
 const businessStatusBadgeClass =
   "business-order-status !px-1.5 !py-0.5 !text-[11px] !font-medium tracking-[0.01em]";

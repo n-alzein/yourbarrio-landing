@@ -184,7 +184,7 @@ export default function HardDeleteFakeTestAccountButton({
               <input
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
-                className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+                className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base text-neutral-100 md:text-sm"
               />
             </label>
 

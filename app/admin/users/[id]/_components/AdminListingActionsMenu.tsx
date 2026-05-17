@@ -244,7 +244,7 @@ export default function AdminListingActionsMenu({
                 onChange={(event) => setReason(event.target.value)}
                 rows={4}
                 maxLength={500}
-                className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
                 placeholder="Required moderation reason"
               />
             </label>

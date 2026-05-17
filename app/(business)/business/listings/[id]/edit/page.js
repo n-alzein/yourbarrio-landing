@@ -112,9 +112,9 @@ export default function EditListingPage() {
   const labelBase = "text-sm font-semibold text-slate-900";
   const helperBase = "mt-2 text-xs text-slate-500";
   const inputBase =
-    "mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100";
+    "mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 md:text-sm";
   const selectBase =
-    "mt-2 h-11 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100";
+    "mt-2 h-11 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 md:text-sm";
 
   const [form, setForm] = useState({
     title: "",

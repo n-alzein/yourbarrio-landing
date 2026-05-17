@@ -101,12 +101,12 @@ export default async function AdminAdminsPage({
               type="email"
               required
               placeholder="admin email"
-              className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+              className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
             />
             <select
               name="role"
               defaultValue="admin_support"
-              className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+              className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
             >
               {ADMIN_ROLES.map((role) => (
                 <option key={role} value={role}>
@@ -160,7 +160,7 @@ export default async function AdminAdminsPage({
                               <select
                                 name="role"
                                 defaultValue={role}
-                                className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
+                                className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-base md:text-xs"
                               >
                                 {ADMIN_ROLES.map((adminRole) => (
                                   <option key={adminRole} value={adminRole}>

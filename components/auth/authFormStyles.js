@@ -1,5 +1,5 @@
 export const authInputClassName =
-  "w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 py-3 text-slate-900 placeholder:text-slate-500 transition hover:border-slate-300 focus:border-[var(--yb-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-500 transition hover:border-slate-300 focus:border-[var(--yb-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] disabled:cursor-not-allowed disabled:opacity-60";
 
 export const authLabelClassName = "text-sm font-medium text-slate-900";
 

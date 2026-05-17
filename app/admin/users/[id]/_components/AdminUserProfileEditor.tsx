@@ -61,7 +61,7 @@ export default function AdminUserProfileEditor({ userId, initialValues }: AdminU
             value={values[field.name]}
             onChange={(event) => setValues((prev) => ({ ...prev, [field.name]: event.target.value }))}
             placeholder={field.placeholder}
-            className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+            className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
           />
         ))}
       </div>

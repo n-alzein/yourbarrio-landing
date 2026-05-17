@@ -29,9 +29,9 @@ export default async function AdminImpersonationPage({
       <AdminFlash searchParams={params} />
 
       <form action={startImpersonationAction} className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 md:grid-cols-3">
-        <input name="targetUserId" required placeholder="target_user_id" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
-        <input name="minutes" type="number" min={1} max={480} defaultValue={30} className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
-        <input name="reason" required placeholder="Reason" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
+        <input name="targetUserId" required placeholder="target_user_id" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
+        <input name="minutes" type="number" min={1} max={480} defaultValue={30} className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
+        <input name="reason" required placeholder="Reason" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
         <button type="submit" className="h-10 rounded bg-amber-500 px-3 text-sm font-medium text-black hover:bg-amber-400 md:col-span-3">
           Start support mode
         </button>
@@ -40,7 +40,7 @@ export default async function AdminImpersonationPage({
       <form action={stopImpersonationAction} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
         <h3 className="mb-2 text-sm font-semibold text-neutral-300">Stop by session id (optional)</h3>
         <div className="flex flex-wrap gap-2">
-          <input name="sessionId" placeholder="session_id (optional, defaults to cookie session)" className="h-10 min-w-80 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
+          <input name="sessionId" placeholder="session_id (optional, defaults to cookie session)" className="h-10 min-w-80 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
           <input type="hidden" name="returnTo" value="/admin/impersonation" />
           <button type="submit" className="h-10 rounded bg-neutral-100 px-3 text-sm font-medium text-black hover:bg-neutral-300">
             Stop support mode

@@ -235,7 +235,7 @@ export default function AdminListingsClient({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by ID, SKU, order, title, business, UUID..."
-            className="h-11 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/40"
+            className="h-11 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-base text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/40 md:text-sm"
           />
           <p className="mt-2 text-xs text-neutral-500">
             Supports 537b949ec6, YB-LST-*, YB-SKU-*, YB-ORD-*, UUIDs, listing titles, and business names.

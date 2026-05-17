@@ -694,7 +694,7 @@ export default function CheckoutPage() {
                       onChange={handleContactDraftChange}
                       placeholder="Full name"
                       required
-                      className="w-full min-w-0 rounded-xl px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-xl px-3 py-2 text-base md:text-sm"
                       style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                     />
                     <input
@@ -703,7 +703,7 @@ export default function CheckoutPage() {
                       onChange={handleContactDraftChange}
                       placeholder="Phone number"
                       required
-                      className="w-full min-w-0 rounded-xl px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-xl px-3 py-2 text-base md:text-sm"
                       style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                     />
                     <input
@@ -712,7 +712,7 @@ export default function CheckoutPage() {
                       onChange={handleContactDraftChange}
                       placeholder="Email"
                       type="email"
-                      className="w-full min-w-0 rounded-xl px-3 py-2 text-sm md:col-span-2"
+                      className="w-full min-w-0 rounded-xl px-3 py-2 text-base md:text-sm md:col-span-2"
                       style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                     />
                   </div>
@@ -856,7 +856,7 @@ export default function CheckoutPage() {
                     onChange={handleChange}
                     placeholder="Delivery instructions"
                     rows={3}
-                    className="w-full min-w-0 rounded-xl px-3 py-2 text-sm md:col-span-2"
+                    className="w-full min-w-0 rounded-xl px-3 py-2 text-base md:text-sm md:col-span-2"
                     style={{ background: "var(--overlay)", border: "1px solid var(--border)" }}
                   />
                 </div>

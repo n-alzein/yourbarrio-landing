@@ -189,7 +189,7 @@ export default function AdminUserNotesPanel({
             rows={4}
             value={noteText}
             onChange={(event) => setNoteText(event.target.value)}
-            className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+            className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
             placeholder="Internal note"
             maxLength={2000}
             disabled={isSubmitting}
@@ -224,7 +224,7 @@ export default function AdminUserNotesPanel({
                       value={editingText}
                       onChange={(event) => setEditingText(event.target.value)}
                       maxLength={2000}
-                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                       disabled={busyNoteId === note.id}
                     />
                     <div className="flex items-center gap-2">

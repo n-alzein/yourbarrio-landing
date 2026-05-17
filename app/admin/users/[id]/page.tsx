@@ -362,13 +362,13 @@ export default async function AdminUserDetailPage({
                   min={1}
                   max={480}
                   defaultValue={30}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
                 />
                 <input
                   name="reason"
                   required
                   placeholder="Reason"
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
                 />
               </div>
               <button
@@ -435,13 +435,13 @@ export default async function AdminUserDetailPage({
                   min={1}
                   max={480}
                   defaultValue={30}
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
                 />
                 <input
                   name="reason"
                   required
                   placeholder="Reason"
-                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+                  className="rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
                 />
               </div>
               <button

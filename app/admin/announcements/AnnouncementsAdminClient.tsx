@@ -159,9 +159,9 @@ function StatusBadge({ status }: { status: Announcement["status"] }) {
 }
 
 const inputClass =
-  "h-10 w-full min-w-0 rounded-md border border-neutral-700 bg-neutral-950 px-3 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20";
+  "h-10 w-full min-w-0 rounded-md border border-neutral-700 bg-neutral-950 px-3 text-base text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 md:text-sm";
 const textareaClass =
-  "min-h-24 w-full min-w-0 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20";
+  "min-h-24 w-full min-w-0 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-base text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 md:text-sm";
 const secondaryButtonClass =
   "h-10 rounded-md border border-neutral-700 bg-neutral-950 px-4 text-sm font-semibold text-neutral-100 hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-60";
 const primaryButtonClass =

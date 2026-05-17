@@ -143,7 +143,7 @@ export default function AdminBusinessListingsTab({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search title or public ID"
-              className="mt-1 h-11 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30"
+              className="mt-1 h-11 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-base text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 md:text-sm"
             />
           </label>
 
@@ -283,7 +283,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-11 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30"
+        className="mt-1 h-11 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 text-base text-neutral-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 md:text-sm"
       >
         {children}
       </select>

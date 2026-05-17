@@ -27,7 +27,7 @@ export default function AdminUserRoleEditor({ userId, initialRole }: AdminUserRo
         name="role"
         value={role}
         onChange={(event) => setRole(event.target.value)}
-        className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+        className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-base md:text-sm"
       />
       <RoleSaveBar dirty={dirty} onCancel={handleCancel} formId={formId} />
     </form>

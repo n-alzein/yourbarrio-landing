@@ -120,7 +120,7 @@ export default function VerificationFilters({ pendingCount }: VerificationFilter
               setSearchInput(event.target.value);
             }}
             placeholder="Business, category, city, owner email"
-            className="h-10 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-sm text-neutral-100"
+            className="h-10 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-base text-neutral-100 md:text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-neutral-400 md:col-span-3">
@@ -132,7 +132,7 @@ export default function VerificationFilters({ pendingCount }: VerificationFilter
               setParams({ city: event.target.value });
             }}
             placeholder="Any city"
-            className="h-10 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-sm text-neutral-100"
+            className="h-10 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-base text-neutral-100 md:text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-neutral-400 md:col-span-3">
@@ -143,7 +143,7 @@ export default function VerificationFilters({ pendingCount }: VerificationFilter
             onChange={(event) => {
               setParams({ is_internal: event.target.value || null });
             }}
-            className="h-10 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-sm text-neutral-100"
+            className="h-10 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-base text-neutral-100 md:text-sm"
           >
             <option value="">All</option>
             <option value="true">Yes</option>

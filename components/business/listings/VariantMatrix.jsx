@@ -68,7 +68,7 @@ export default function VariantMatrix({ variants, onChange, errors, basePrice = 
                     type="number"
                     min="0"
                     aria-label={`Quantity for ${label}`}
-                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-2.5 text-base text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 md:h-8 md:text-sm"
                     placeholder="Qty"
                     value={variant.quantity}
                     onChange={(event) =>
@@ -92,7 +92,7 @@ export default function VariantMatrix({ variants, onChange, errors, basePrice = 
                     min="0.01"
                     step="0.01"
                     aria-label={`Price override for ${label}`}
-                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-2.5 text-base text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 md:h-8 md:text-sm"
                     value={variant.price ?? ""}
                     placeholder="Use base price"
                     onFocus={() => initializePriceOverride(variant, index)}
@@ -119,7 +119,7 @@ export default function VariantMatrix({ variants, onChange, errors, basePrice = 
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
                   <input
                     aria-label={`SKU for ${label}`}
-                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-2.5 text-base text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 md:h-8 md:text-sm"
                     value={variant.sku || ""}
                     placeholder="Optional"
                     onChange={(event) =>

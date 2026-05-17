@@ -146,10 +146,10 @@ export default async function AdminAuditPage({
       <AdminFlash searchParams={params} />
 
       <form className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 md:grid-cols-5">
-        <input name="q" defaultValue={q} placeholder="search action, actor, target" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm md:col-span-2" />
-        <input name="action" defaultValue={action} placeholder="action" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
-        <input type="date" name="from" defaultValue={fromDate} className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
-        <input type="date" name="to" defaultValue={toDate} className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm" />
+        <input name="q" defaultValue={q} placeholder="search action, actor, target" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:col-span-2 md:text-sm" />
+        <input name="action" defaultValue={action} placeholder="action" className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
+        <input type="date" name="from" defaultValue={fromDate} className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
+        <input type="date" name="to" defaultValue={toDate} className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm" />
         <button type="submit" className="yb-primary-button h-10 rounded px-3 text-sm font-medium text-white md:col-span-2">
           Apply filters
         </button>

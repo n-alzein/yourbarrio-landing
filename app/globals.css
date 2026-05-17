@@ -175,6 +175,19 @@ button {
   color: inherit;
 }
 
+@media (max-width: 767px) {
+  :where(
+      input:not([type="button"]):not([type="checkbox"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="image"]):not([type="radio"]):not([type="range"]):not([type="reset"]):not([type="submit"]),
+      select,
+      textarea,
+      [contenteditable="true"],
+      [contenteditable=""],
+      [role="combobox"]
+    ) {
+    font-size: 16px !important;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;

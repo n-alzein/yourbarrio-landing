@@ -274,12 +274,12 @@ export default async function AdminModerationPage({
               name="q"
               defaultValue={q}
               placeholder="Search reporter, target, reason"
-              className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm md:col-span-2"
+              className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:col-span-2 md:text-sm"
             />
             <select
               name="type"
               defaultValue={type}
-              className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm"
+              className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm"
             >
               <option value="all">Type: all</option>
               <option value="user">Users</option>
@@ -290,7 +290,7 @@ export default async function AdminModerationPage({
             <select
               name="status"
               defaultValue={status}
-              className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm"
+              className="h-10 rounded border border-neutral-700 bg-neutral-950 px-3 text-base md:text-sm"
             >
               <option value="">Status: any</option>
               <option value="open">open</option>
@@ -699,7 +699,7 @@ export default async function AdminModerationPage({
                     <select
                       name="status"
                       defaultValue={selectedRow.status}
-                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                     >
                       <option value="open">open</option>
                       <option value="in_review">in_review</option>
@@ -711,7 +711,7 @@ export default async function AdminModerationPage({
                       rows={3}
                       placeholder="Admin notes (optional)"
                       defaultValue={selectedRow.admin_notes || ""}
-                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                      className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                     />
                     <ActionButtonClient
                       label="Save status and notes"
@@ -733,14 +733,14 @@ export default async function AdminModerationPage({
                           name="adminNotes"
                           rows={3}
                           placeholder="Hide action notes (optional)"
-                          className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                          className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                         />
                         <DangerConfirmClient
                           warning="This action will hide the listing and resolve this flag."
                           buttonLabel="Hide listing and resolve"
                           pendingLabel="Hiding listing..."
                           warningClassName="text-xs text-amber-200"
-                          inputClassName="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                          inputClassName="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                           buttonClassName="w-full rounded bg-amber-600 px-3 py-2 text-sm font-medium hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </form>
@@ -760,14 +760,14 @@ export default async function AdminModerationPage({
                           name="adminNotes"
                           rows={3}
                           placeholder="Hide action notes (optional)"
-                          className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                          className="w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                         />
                         <DangerConfirmClient
                           warning="This action will hide the review and resolve this flag."
                           buttonLabel="Hide review and resolve"
                           pendingLabel="Hiding review..."
                           warningClassName="text-xs text-amber-200"
-                          inputClassName="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                          inputClassName="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-base md:text-sm"
                           buttonClassName="w-full rounded bg-amber-600 px-3 py-2 text-sm font-medium hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </form>

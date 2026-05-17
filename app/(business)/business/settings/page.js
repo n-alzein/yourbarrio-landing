@@ -55,7 +55,7 @@ const sectionBodyClassName = "space-y-5";
 const sectionFooterClassName =
   "mt-6 border-t border-slate-100 pt-4 sm:justify-end";
 const businessInputClassName =
-  "h-11 w-full rounded-2xl border border-slate-100 bg-white px-3.5 text-sm text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-violet-500 focus-visible:ring-4 focus-visible:ring-violet-500/15";
+  "h-11 w-full rounded-2xl border border-slate-100 bg-white px-3.5 text-base text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-violet-500 focus-visible:ring-4 focus-visible:ring-violet-500/15 md:text-sm";
 const businessTextareaClassName = `${businessInputClassName} h-auto min-h-[110px] py-3`;
 const readOnlyFieldClassName =
   "flex min-h-11 items-center rounded-2xl border border-slate-100 bg-slate-50/70 px-3.5 text-sm text-slate-700";

@@ -202,7 +202,7 @@ export default function BusinessCreatePasswordClient({
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)] md:text-sm"
                 placeholder={`Minimum ${BUSINESS_PASSWORD_MIN_LENGTH} characters`}
                 autoComplete="new-password"
                 disabled={submitting || !ready}
@@ -232,7 +232,7 @@ export default function BusinessCreatePasswordClient({
                 type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)]"
+                className="h-12 w-full rounded-xl border border-[var(--yb-border)] bg-white px-4 pr-12 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--yb-focus)] focus:border-[var(--yb-focus)] md:text-sm"
                 placeholder="Re-enter your password"
                 autoComplete="new-password"
                 disabled={submitting || !ready}
