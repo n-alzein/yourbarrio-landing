@@ -1,11 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildAuthReturnPath,
   buildLoginHrefForReturnPath,
   ProfileHero,
 } from "@/components/business/profile-system/ProfileSystem";
 import PublicBusinessHero from "@/components/publicBusinessProfile/PublicBusinessHero";
+import {
+  getBusinessProfileShareUrl,
+  shareBusinessProfile,
+} from "@/lib/share/businessProfileShare";
+
+const ProfileHeroAny = ProfileHero as any;
+const PublicBusinessHeroAny = PublicBusinessHero as any;
 
 let mockAuth = {
   user: null,
@@ -80,10 +87,23 @@ const profile = {
 
 describe("ProfileHero preview actions", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     pushMock.mockReset();
     getOrCreateConversationMock.mockReset();
     openModalMock.mockReset();
     setAuthIntentMock.mockReset();
+    Object.defineProperty(navigator, "share", {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "canShare", {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
     Object.defineProperty(window, "scrollTo", {
       value: vi.fn(),
       writable: true,
@@ -94,6 +114,10 @@ describe("ProfileHero preview actions", () => {
       role: null,
       supabase: null,
     };
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("builds login hrefs that preserve the current route and query string", () => {
@@ -115,7 +139,7 @@ describe("ProfileHero preview actions", () => {
 
   it("shows directions as the primary CTA and keeps guest messaging de-emphasized", () => {
     render(
-      <ProfileHero
+      <ProfileHeroAny
         mode="preview"
         profile={profile}
         ratingSummary={{ count: 3, average: 4.7 }}
@@ -136,6 +160,7 @@ describe("ProfileHero preview actions", () => {
     expect(screen.queryByText("Local business")).not.toBeInTheDocument();
     expect(screen.getAllByText("Los Angeles, CA")).toHaveLength(1);
     expect(screen.getByLabelText("Share")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Share" })).toHaveAttribute("type", "button");
     expect(screen.getByTestId("profile-hero-cover")).toHaveAttribute(
       "data-business-cover-source",
       "defaultFallback"
@@ -144,7 +169,7 @@ describe("ProfileHero preview actions", () => {
 
   it("does not leak the owner back link into public hero renders by default", () => {
     render(
-      <PublicBusinessHero
+      <PublicBusinessHeroAny
         mode="public"
         profile={profile}
         ratingSummary={{ count: 3, average: 4.7 }}
@@ -157,7 +182,7 @@ describe("ProfileHero preview actions", () => {
 
   it("keeps the owner preview back link behind an explicit preview flag", () => {
     render(
-      <PublicBusinessHero
+      <PublicBusinessHeroAny
         mode="public"
         profile={profile}
         ratingSummary={{ count: 3, average: 4.7 }}
@@ -175,7 +200,7 @@ describe("ProfileHero preview actions", () => {
   it("scrolls to the reviews section from the header review summary", () => {
     render(
       <>
-        <ProfileHero
+        <ProfileHeroAny
           mode="preview"
           profile={profile}
           ratingSummary={{ count: 3, average: 4.7 }}
@@ -202,7 +227,7 @@ describe("ProfileHero preview actions", () => {
     getOrCreateConversationMock.mockResolvedValue("conversation-123");
 
     render(
-      <ProfileHero
+      <ProfileHeroAny
         mode="preview"
         profile={profile}
         ratingSummary={{ count: 3, average: 4.7 }}
@@ -227,7 +252,7 @@ describe("ProfileHero preview actions", () => {
 
   it("keeps the public full-bleed mobile hero identity and actions mobile-scoped", () => {
     render(
-      <PublicBusinessHero
+      <PublicBusinessHeroAny
         mode="public"
         profile={profile}
         ratingSummary={{ count: 3, average: 4.7 }}
@@ -267,5 +292,126 @@ describe("ProfileHero preview actions", () => {
       expect(action).toHaveClass("h-11", "w-11", "md:w-auto");
       expect(action?.querySelector("span")).toHaveClass("sr-only", "md:not-sr-only");
     }
+  });
+
+  it("uses native sharing for the public business profile URL when available", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://yourbarrio.com");
+    const shareMock = vi.fn().mockResolvedValue(undefined);
+    const clipboardMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      value: shareMock,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "canShare", {
+      value: vi.fn(() => true),
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: clipboardMock },
+      configurable: true,
+    });
+
+    render(
+      <ProfileHeroAny
+        mode="preview"
+        profile={profile}
+        ratingSummary={{ count: 3, average: 4.7 }}
+        publicPath="/b/shop-111"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+
+    await waitFor(() => {
+      expect(shareMock).toHaveBeenCalledWith({
+        title: "Barrio Boutique",
+        text: "Check out Barrio Boutique on YourBarrio.",
+        url: "https://yourbarrio.com/b/shop-111",
+      });
+    });
+    expect(clipboardMock).not.toHaveBeenCalled();
+    expect(await screen.findByText("Shared")).toBeInTheDocument();
+  });
+
+  it("falls back to copying the public profile URL when native sharing is unavailable", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://yourbarrio.com");
+    const clipboardMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: clipboardMock },
+      configurable: true,
+    });
+
+    render(
+      <ProfileHeroAny
+        mode="preview"
+        profile={profile}
+        ratingSummary={{ count: 3, average: 4.7 }}
+        publicPath="/b/shop-111"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+
+    await waitFor(() => {
+      expect(clipboardMock).toHaveBeenCalledWith("https://yourbarrio.com/b/shop-111");
+    });
+    expect(await screen.findByText("Link copied")).toBeInTheDocument();
+  });
+
+  it("does not show an error or copy fallback for normal native share cancellation", async () => {
+    const clipboardMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      value: vi.fn().mockRejectedValue(new DOMException("Share canceled", "AbortError")),
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: clipboardMock },
+      configurable: true,
+    });
+
+    render(
+      <ProfileHeroAny
+        mode="preview"
+        profile={profile}
+        ratingSummary={{ count: 3, average: 4.7 }}
+        publicPath="/b/shop-111"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+
+    await waitFor(() => {
+      expect(navigator.share).toHaveBeenCalled();
+    });
+    expect(clipboardMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Couldn't share. Copy the URL from your browser.")).not.toBeInTheDocument();
+  });
+});
+
+describe("business profile share utility", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("generates an absolute public business profile URL from the configured site origin", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://yourbarrio.com");
+
+    expect(getBusinessProfileShareUrl("/b/shop-111")).toBe(
+      "https://yourbarrio.com/b/shop-111"
+    );
+  });
+
+  it("returns copied when native sharing is unavailable but clipboard succeeds", async () => {
+    const navigatorRef = {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as Navigator;
+
+    await expect(
+      shareBusinessProfile({
+        businessName: "Barrio Boutique",
+        publicPath: "/b/shop-111",
+        navigatorRef,
+      })
+    ).resolves.toBe("copied");
   });
 });

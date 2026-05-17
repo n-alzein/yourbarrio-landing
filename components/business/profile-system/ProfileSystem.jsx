@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import BusinessAvatarSurface from "@/components/business/BusinessAvatarSurface";
@@ -35,6 +35,7 @@ import {
   parseHours,
   toObject,
 } from "@/lib/business/profileUtils";
+import { shareBusinessProfile } from "@/lib/share/businessProfileShare";
 
 const NAV_OFFSET = 152;
 const PENDING_AUTH_ACTION_STORAGE_KEY = "yb:pendingAuthAction";
@@ -475,7 +476,9 @@ function HeroPreviewActions({
   variant = "default",
 }) {
   const [copied, setCopied] = useState(false);
+  const [shareStatus, setShareStatus] = useState(null);
   const [messageLoading, setMessageLoading] = useState(false);
+  const shareResetTimerRef = useRef(null);
   const { user, role, supabase } = useAuth();
   const { openModal } = useModal();
   const {
@@ -523,16 +526,41 @@ function HeroPreviewActions({
     });
   }, [currentQuery, loginHref, loginTarget, pathname]);
 
-  const handleShare = async () => {
-    if (typeof window === "undefined") return;
-    const shareUrl = publicPath
-      ? new URL(publicPath, window.location.origin).toString()
-      : window.location.href;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
+  useEffect(() => {
+    return () => {
+      if (shareResetTimerRef.current) {
+        window.clearTimeout(shareResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showShareStatus = (type, message) => {
+    if (shareResetTimerRef.current) {
+      window.clearTimeout(shareResetTimerRef.current);
+    }
+    setShareStatus({ type, message });
+    if (type === "success") {
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {}
+    }
+    shareResetTimerRef.current = window.setTimeout(() => {
+      setShareStatus(null);
+      setCopied(false);
+      shareResetTimerRef.current = null;
+    }, 1800);
+  };
+
+  const handleShare = async () => {
+    const result = await shareBusinessProfile({
+      businessName: profile?.business_name || profile?.full_name || "YourBarrio business",
+      publicPath,
+    });
+    if (result === "shared") {
+      showShareStatus("success", "Shared");
+    } else if (result === "copied") {
+      showShareStatus("success", "Link copied");
+    } else if (result === "failed") {
+      showShareStatus("error", "Couldn't share. Copy the URL from your browser.");
+    }
   };
 
   const handleMessage = async () => {
@@ -561,6 +589,17 @@ function HeroPreviewActions({
     });
     openModal("customer-login", { next: loginTarget });
   };
+  const shareFeedback = shareStatus ? (
+    <p
+      className={cx(
+        "text-xs font-medium",
+        shareStatus.type === "success" ? "text-emerald-700" : "text-slate-500"
+      )}
+      aria-live="polite"
+    >
+      {shareStatus.message}
+    </p>
+  ) : null;
 
   if (viewerMode === "owner" && variant === "elevated") {
     return (
@@ -632,6 +671,7 @@ function HeroPreviewActions({
             variant={variant}
           />
         </div>
+        {shareFeedback}
       </div>
     );
   }
@@ -738,6 +778,7 @@ function HeroPreviewActions({
             Sign in to message
           </button>
         )}
+        {shareFeedback}
       </div>
     );
   }
@@ -836,6 +877,7 @@ function HeroPreviewActions({
           />
         </div>
       </div>
+      {shareFeedback ? <div className="flex w-full sm:justify-end">{shareFeedback}</div> : null}
     </div>
   );
 }
