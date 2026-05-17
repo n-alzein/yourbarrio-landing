@@ -165,6 +165,7 @@ export default function GoogleMapClient({
   onMarkerHover,
   onMarkerLeave,
   onMarkerClick,
+  onMarkerClear,
   showRecenterControl = false,
   recenterButtonTestId = "recenter-map",
   markerClickBehavior = "navigate",
@@ -678,6 +679,12 @@ export default function GoogleMapClient({
         }
         activePopupRef.current = popup;
       });
+      popup.on("close", () => {
+        if (activePopupRef.current === popup) {
+          activePopupRef.current = null;
+        }
+        onMarkerClear?.(key);
+      });
 
       const marker = new mapboxgl.Marker({ element: wrapper, anchor: "bottom" })
         .setLngLat([biz.coords.lng, biz.coords.lat])
@@ -690,8 +697,14 @@ export default function GoogleMapClient({
       };
 
       const openBusinessProfile = (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
         if (markerClickBehavior === "select") {
+          if (activePopupRef.current && activePopupRef.current !== popup) {
+            activePopupRef.current.remove();
+          }
           popup.addTo(map);
+          activePopupRef.current = popup;
           onMarkerClick?.(key);
           return;
         }
@@ -1438,6 +1451,8 @@ export default function GoogleMapClient({
     map.on("moveend", moveEndHandler);
     map.on("click", () => {
       activePopupRef.current?.remove();
+      activePopupRef.current = null;
+      onMarkerClear?.();
     });
 
     return () => {

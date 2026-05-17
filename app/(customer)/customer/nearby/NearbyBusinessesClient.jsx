@@ -162,6 +162,7 @@ export default function NearbyBusinessesClient() {
   const [businessTypeFilter, setBusinessTypeFilter] = useState("All");
   const [businessTypeOptions, setBusinessTypeOptions] = useState([]);
   const [sortMode, setSortMode] = useState("recommended");
+  // This controls the active List/Map view across mobile and desktop breakpoints.
   const [mobileView, setMobileView] = useState("list");
   const [isMobile, setIsMobile] = useState(false);
   const [preciseLocationLoading, setPreciseLocationLoading] = useState(false);
@@ -189,6 +190,7 @@ export default function NearbyBusinessesClient() {
   const cardRefs = useRef(new Map());
   const hasLoadedYbRef = useRef(initialNearbyCache.cached);
   const ybRequestIdRef = useRef(0);
+  const selectedBusinessIdRef = useRef(null);
 
   useEffect(() => {
     const initial = readNearbyCacheSnapshot(storageKey);
@@ -204,6 +206,10 @@ export default function NearbyBusinessesClient() {
   useEffect(() => {
     hasLoadedYbRef.current = hasLoadedYb;
   }, [hasLoadedYb]);
+
+  useEffect(() => {
+    selectedBusinessIdRef.current = selectedBusinessId;
+  }, [selectedBusinessId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -584,18 +590,43 @@ export default function NearbyBusinessesClient() {
     [toggleSavedBusiness]
   );
 
+  const clearSelectedMarker = useCallback((businessId = null) => {
+    const currentSelectedBusinessId = selectedBusinessIdRef.current;
+    const matchesSelected =
+      businessId == null ||
+      currentSelectedBusinessId == null ||
+      String(currentSelectedBusinessId) === String(businessId);
+
+    if (!matchesSelected) return;
+
+    setSelectedBusinessId(null);
+    setSelectedBusiness(null);
+    setHoveredBusinessId((current) =>
+      businessId == null || String(current) === String(businessId) ? null : current
+    );
+  }, []);
+
+  const onViewModeChange = useCallback(
+    (nextView) => {
+      if (nextView === "list") {
+        clearSelectedMarker();
+      }
+      setMobileView(nextView === "map" ? "map" : "list");
+    },
+    [clearSelectedMarker]
+  );
+
   const onMarkerClick = useCallback((businessId) => {
     if (!businessId) return;
     setSelectedBusinessId(businessId);
     setHoveredBusinessId(businessId);
     const selected = filteredBusinesses.find((biz) => String(biz.id) === String(businessId));
     setSelectedBusiness(getBusinessSelection(selected));
-    const node = cardRefs.current.get(businessId);
+    const node = mobileView === "list" ? cardRefs.current.get(businessId) : null;
     if (node) {
       node.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
     }
-    setMobileView("list");
-  }, [filteredBusinesses]);
+  }, [filteredBusinesses, mobileView]);
 
   const onCardMapFocusClick = useCallback(
     (business) => {
@@ -698,7 +729,7 @@ export default function NearbyBusinessesClient() {
             <button
               key={item.key}
               type="button"
-              onClick={() => setMobileView(item.key)}
+              onClick={() => onViewModeChange(item.key)}
               className={`rounded-md px-4 text-sm font-medium transition ${
                 mobileView === item.key
                   ? "bg-violet-50 text-violet-700"
@@ -757,7 +788,7 @@ export default function NearbyBusinessesClient() {
         ) : (
           <NearbySplitViewShell
             mobileView={mobileView}
-            onMobileViewChange={setMobileView}
+            onMobileViewChange={onViewModeChange}
             renderMobileToggle={false}
             controls={controls}
             resultsPane={
@@ -815,6 +846,7 @@ export default function NearbyBusinessesClient() {
                   onMarkerHover={setHoveredBusinessId}
                   onMarkerLeave={() => setHoveredBusinessId(null)}
                   onMarkerClick={onMarkerClick}
+                  onMarkerClear={clearSelectedMarker}
                   showRecenterControl
                   />
               </div>
