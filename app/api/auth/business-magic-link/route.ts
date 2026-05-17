@@ -3,7 +3,11 @@ import { z } from "zod";
 import { BUSINESS_GO_DASHBOARD_PATH } from "@/lib/auth/businessPasswordGate";
 import { getSiteUrlFromRequest } from "@/lib/auth/getSiteUrl";
 import { supabaseAdmin } from "@/lib/auth/supabaseAdmin";
-import { resend } from "@/lib/email/resendClient";
+import {
+  buildBusinessMagicLinkText,
+  getAuthEmailSiteUrl,
+  sendAuthTemplateEmail,
+} from "@/lib/email/authEmail";
 
 const requestSchema = z.object({
   email: z.string().trim().email().max(320),
@@ -36,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   const email = parsed.data.email.toLowerCase();
-  const siteUrl = getSiteUrlFromRequest(request);
+  const siteUrl = getAuthEmailSiteUrl(getSiteUrlFromRequest(request));
 
   if (process.env.NODE_ENV !== "production") {
     console.log("[invite-flow] PATH=BUSINESS_MAGIC_LINK_ROUTE reached", { email });
@@ -82,17 +86,18 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const { error: resendError } = await resend.emails.send({
-    from: "YourBarrio <no-reply@yourbarrio.com>",
+  const { error: resendError } = await sendAuthTemplateEmail({
     to: email,
     subject: "YourBarrio — Set up your business account",
-    template: {
-      id: "business-account-invitation",
-      variables: {
-        magicLink,
-        supportEmail: "support@yourbarrio.com",
-      },
+    templateId: "business-account-invitation",
+    variables: {
+      magicLink,
+      supportEmail: "support@yourbarrio.com",
     },
+    text: buildBusinessMagicLinkText({
+      magicLink,
+      supportEmail: "support@yourbarrio.com",
+    }),
     tags: [{ name: "email_kind", value: "business_magic_link" }],
   });
 

@@ -1,6 +1,9 @@
 import "server-only";
 
-import { resend } from "@/lib/email/resendClient";
+import {
+  buildPasswordResetText,
+  sendAuthTemplateEmail,
+} from "@/lib/email/authEmail";
 
 type SendResetPasswordEmailInput = {
   to: string;
@@ -18,10 +21,6 @@ export async function sendResetPasswordEmail({
   subject,
 }: SendResetPasswordEmailInput) {
   const templateId = process.env.RESEND_RESET_PASSWORD_TEMPLATE_ID || "reset-your-password";
-  const from =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.RESEND_FROM ||
-    "YourBarrio <no-reply@yourbarrio.com>";
   const finalSubject = subject || `Reset your ${productName} password`;
   if (process.env.NODE_ENV !== "production" && resetUrl.includes("&amp;")) {
     console.warn("[email.reset-password] resetUrl appears HTML-escaped before send");
@@ -42,18 +41,16 @@ export async function sendResetPasswordEmail({
     });
   }
 
-  const result = await resend.emails.send({
-    from,
+  const result = await sendAuthTemplateEmail({
     to,
     subject: finalSubject,
-    template: {
-      id: templateId,
-      variables: {
-        resetUrl,
-        supportEmail,
-        productName,
-      },
+    templateId,
+    variables: {
+      resetUrl,
+      supportEmail,
+      productName,
     },
+    text: buildPasswordResetText({ resetUrl, productName, supportEmail }),
   });
 
   if (result.error) {

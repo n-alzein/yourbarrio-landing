@@ -16,6 +16,7 @@ vi.mock("@/lib/email/resendClient", () => ({
 vi.mock("server-only", () => ({}));
 
 import { sendResetPasswordEmail } from "@/lib/email/sendResetPasswordEmail";
+import { getAuthEmailSiteUrl } from "@/lib/email/authEmail";
 
 describe("password reset email delivery", () => {
   beforeEach(() => {
@@ -23,7 +24,7 @@ describe("password reset email delivery", () => {
     vi.unstubAllEnvs();
   });
 
-  it("sends the published Resend reset template without inline content", async () => {
+  it("sends the published Resend reset template with the auth sender and text fallback", async () => {
     resendSendMock.mockResolvedValue({ data: { id: "msg_reset" }, error: null });
 
     await sendResetPasswordEmail({
@@ -34,7 +35,7 @@ describe("password reset email delivery", () => {
     });
 
     expect(resendSendMock).toHaveBeenCalledWith({
-      from: "YourBarrio <no-reply@yourbarrio.com>",
+      from: "YourBarrio <auth@yourbarrio.com>",
       to: "customer@example.com",
       subject: "Reset your YourBarrio password",
       template: {
@@ -45,15 +46,23 @@ describe("password reset email delivery", () => {
           productName: "YourBarrio",
         },
       },
+      text: [
+        "Reset your YourBarrio password",
+        "",
+        "Use this secure link to set a new password for your YourBarrio account:",
+        "https://www.yourbarrio.com/set-password?token_hash=abc&type=recovery",
+        "",
+        "If you did not request this password reset, you can ignore this email.",
+        "Need help? Contact support@yourbarrio.com.",
+      ].join("\n"),
     });
     expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("html");
-    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
     expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("react");
   });
 
   it("uses the dedicated template id and sender env vars when configured", async () => {
     vi.stubEnv("RESEND_RESET_PASSWORD_TEMPLATE_ID", "tpl_reset_uuid");
-    vi.stubEnv("RESEND_FROM_EMAIL", "YourBarrio <no-reply@yourbarrio.com>");
+    vi.stubEnv("AUTH_EMAIL_FROM", "YourBarrio <auth@yourbarrio.com>");
     vi.stubEnv("SUPPORT_EMAIL", "help@yourbarrio.com");
     resendSendMock.mockResolvedValue({ data: { id: "msg_reset" }, error: null });
 
@@ -70,6 +79,8 @@ describe("password reset email delivery", () => {
         productName: "YourBarrio",
       },
     });
+    expect(resendSendMock.mock.calls[0][0].from).toBe("YourBarrio <auth@yourbarrio.com>");
+    expect(resendSendMock.mock.calls[0][0].text).toContain("Need help? Contact help@yourbarrio.com.");
   });
 
   it("does not fall back to inline reset email content", async () => {
@@ -87,7 +98,7 @@ describe("password reset email delivery", () => {
 
     expect(resendSendMock).toHaveBeenCalledTimes(1);
     expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("html");
-    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
+    expect(resendSendMock.mock.calls[0][0].text).toContain("If you did not request this password reset");
   });
 
   it("keeps password reset requests off Supabase's built-in email sender", () => {
@@ -110,5 +121,12 @@ describe("password reset email delivery", () => {
     expect(`${forgotPage}\n${settingsDialog}\n${resetRoute}`).not.toContain(
       "resetPasswordForEmail"
     );
+  });
+
+  it("uses the www YourBarrio origin for production auth email links", () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(getAuthEmailSiteUrl("https://yourbarrio.com")).toBe("https://www.yourbarrio.com");
+    expect(getAuthEmailSiteUrl("https://www.yourbarrio.com")).toBe("https://www.yourbarrio.com");
   });
 });

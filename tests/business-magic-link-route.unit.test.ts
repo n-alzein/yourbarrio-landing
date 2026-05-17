@@ -23,6 +23,7 @@ vi.mock("@/lib/email/resendClient", () => ({
     },
   },
 }));
+vi.mock("server-only", () => ({}));
 
 function createRequest(email = "biz@example.com") {
   return new Request("http://localhost:3000/api/auth/business-magic-link", {
@@ -64,7 +65,7 @@ describe("POST /api/auth/business-magic-link", () => {
       },
     });
     expect(resendSendMock).toHaveBeenCalledWith({
-      from: "YourBarrio <no-reply@yourbarrio.com>",
+      from: "YourBarrio <auth@yourbarrio.com>",
       to: "biz@example.com",
       subject: "YourBarrio — Set up your business account",
       template: {
@@ -75,6 +76,15 @@ describe("POST /api/auth/business-magic-link", () => {
           supportEmail: "support@yourbarrio.com",
         },
       },
+      text: [
+        "Set up your YourBarrio business account",
+        "",
+        "Use this secure link to continue signing in to YourBarrio:",
+        "https://localhost:3000/auth/confirm?next=%2Fgo%2Fdashboard&token_hash=hashed_abc&type=email",
+        "",
+        "If you did not request this email, you can ignore it.",
+        "Need help? Contact support@yourbarrio.com.",
+      ].join("\n"),
       tags: [{ name: "email_kind", value: "business_magic_link" }],
     });
   });

@@ -1,7 +1,11 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/auth/supabaseAdmin";
-import { resend } from "@/lib/email/resendClient";
+import {
+  buildBusinessMagicLinkText,
+  getAuthEmailSiteUrl,
+  sendAuthTemplateEmail,
+} from "@/lib/email/authEmail";
 
 function getInviteRedirectUrl(siteUrl: string) {
   return new URL("/auth/confirm?next=/business/onboarding", siteUrl).toString();
@@ -25,6 +29,8 @@ export async function sendAdminInvite(
   email: string,
   siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "http://localhost:3000"
 ): Promise<{ userId: string; inviteLink: string }> {
+  const authSiteUrl = getAuthEmailSiteUrl(siteUrl);
+
   if (process.env.NODE_ENV !== "production") {
     console.log("[invite-flow] PATH=A adminInvite.ts reached", { email });
   }
@@ -65,7 +71,7 @@ export async function sendAdminInvite(
       type: "magiclink",
       email,
       options: {
-        redirectTo: getInviteRedirectUrl(siteUrl),
+        redirectTo: getInviteRedirectUrl(authSiteUrl),
       },
     });
 
@@ -76,7 +82,7 @@ export async function sendAdminInvite(
     const hashedToken = data?.properties?.hashed_token || "";
     const verificationType = String(data?.properties?.verification_type || "email");
     const magicLink = hashedToken
-      ? buildTokenHashConfirmLink(siteUrl, hashedToken, verificationType)
+      ? buildTokenHashConfirmLink(authSiteUrl, hashedToken, verificationType)
       : "";
     const userId = data?.user?.id;
 
@@ -88,17 +94,18 @@ export async function sendAdminInvite(
       console.log("[business-invite] link generated", Boolean(magicLink));
     }
 
-    const { error: resendError } = await resend.emails.send({
-      from: "YourBarrio <no-reply@yourbarrio.com>",
+    const { error: resendError } = await sendAuthTemplateEmail({
       to: email,
       subject: "YourBarrio — Set up your business account",
-      template: {
-        id: "business-account-invitation",
-        variables: {
-          magicLink,
-          supportEmail: "support@yourbarrio.com",
-        },
+      templateId: "business-account-invitation",
+      variables: {
+        magicLink,
+        supportEmail: "support@yourbarrio.com",
       },
+      text: buildBusinessMagicLinkText({
+        magicLink,
+        supportEmail: "support@yourbarrio.com",
+      }),
       tags: [{ name: "email_kind", value: "business_invite" }],
     });
 

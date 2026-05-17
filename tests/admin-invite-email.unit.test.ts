@@ -63,7 +63,7 @@ describe("sendAdminInvite", () => {
       },
     });
     expect(resendSendMock).toHaveBeenCalledWith({
-      from: "YourBarrio <no-reply@yourbarrio.com>",
+      from: "YourBarrio <auth@yourbarrio.com>",
       to: "biz@example.com",
       subject: "YourBarrio — Set up your business account",
       template: {
@@ -74,6 +74,15 @@ describe("sendAdminInvite", () => {
           supportEmail: "support@yourbarrio.com",
         },
       },
+      text: [
+        "Set up your YourBarrio business account",
+        "",
+        "Use this secure link to continue signing in to YourBarrio:",
+        "https://yourbarrio.com/auth/confirm?next=%2Fbusiness%2Fonboarding&token_hash=hashed_abc&type=email",
+        "",
+        "If you did not request this email, you can ignore it.",
+        "Need help? Contact support@yourbarrio.com.",
+      ].join("\n"),
       tags: [{ name: "email_kind", value: "business_invite" }],
     });
     expect(inviteUserByEmailMock).not.toHaveBeenCalled();
