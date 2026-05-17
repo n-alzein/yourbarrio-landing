@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingBag, Trash2, Truck, Minus, Plus } from "lucide-react";
+import { AlertTriangle, ShoppingBag, Trash2, Truck, Minus, Plus } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { useAuth } from "@/components/AuthProvider";
 import { useCart } from "@/components/cart/CartProvider";
@@ -62,11 +62,25 @@ function readGuestCartSafely() {
 }
 
 const isExpiredReservationItem = (item) => {
+  if (isUnavailableCartItem(item)) return false;
+  const status = String(item?.cart_item_status || item?.reservation_status || "").toLowerCase();
+  if (status === "reservation_expired" || status === "hold_expired") return true;
   const expiresAt = item?.reservation_expires_at ? Date.parse(item.reservation_expires_at) : NaN;
   return (
     (Number.isFinite(expiresAt) && expiresAt <= Date.now()) ||
     String(item?.stock_error || "").toLowerCase().includes("reservation expired")
   );
+};
+
+const UNAVAILABLE_ITEM_STATUSES = new Set(["unavailable", "sold_out"]);
+const UNAVAILABLE_ITEM_ISSUE_CODES = new Set(["unavailable", "sold_out"]);
+
+const isUnavailableCartItem = (item) => {
+  const status = String(item?.cart_item_status || item?.reservation_status || "").toLowerCase();
+  const issueCode = String(item?.cart_item_issue_code || item?.stock_error_code || "").toLowerCase();
+  if (UNAVAILABLE_ITEM_STATUSES.has(status) || UNAVAILABLE_ITEM_ISSUE_CODES.has(issueCode)) return true;
+  const stockError = String(item?.stock_error || "").toLowerCase();
+  return stockError.includes("no longer available") || stockError.includes("currently unavailable");
 };
 
 export default function CartPageClient({ suppressEmptyState = false }) {
@@ -130,6 +144,10 @@ export default function CartPageClient({ suppressEmptyState = false }) {
     [vendorGroups]
   );
   const total = allItemsSubtotal + deliveryFees + fees;
+  const hasUnavailableCartItems = useMemo(
+    () => items.some((item) => isUnavailableCartItem(item)),
+    [items]
+  );
   const hasRenderableCart = vendorGroups.length > 0 || items.length > 0;
 
   useEffect(() => {
@@ -376,9 +394,11 @@ export default function CartPageClient({ suppressEmptyState = false }) {
             {vendorGroups.map((group) => {
               const businessName = group.business_name || "Local vendor";
               const groupKey = group.business_id || "unknown";
+              const hasUnavailableItems = group.items.some((item) => isUnavailableCartItem(item));
               const hasStockIssues = group.items.some(
                 (item) =>
                   isExpiredReservationItem(item) ||
+                  isUnavailableCartItem(item) ||
                   item.stock_error ||
                   Number(item.quantity || 0) > Number(item.max_order_quantity || 0)
               );
@@ -491,6 +511,7 @@ export default function CartPageClient({ suppressEmptyState = false }) {
                     {group.items.map((item) => {
                       const maxQuantity = Number(item.max_order_quantity || 0);
                       const isAtMax = Number(item.quantity || 0) >= maxQuantity;
+                      const itemUnavailable = isUnavailableCartItem(item);
                       const reservationExpired = isExpiredReservationItem(item);
                       return (
                         <div
@@ -525,7 +546,39 @@ export default function CartPageClient({ suppressEmptyState = false }) {
                                       Reserved in your cart for 30 minutes.
                                     </p>
                                   ) : null}
-                                  {reservationExpired ? (
+                                  {itemUnavailable ? (
+                                    <div
+                                      className="mt-3 w-full max-w-sm space-y-1 rounded-[6px] px-2.5 py-2 text-xs"
+                                      style={{
+                                        background: "rgba(245,158,11,0.14)",
+                                        border: "1px solid rgba(180,83,9,0.18)",
+                                        color: "#92400e",
+                                      }}
+                                    >
+                                      <div className="flex items-start gap-1.5">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <div className="min-w-0">
+                                          <p className="font-semibold">This item is no longer available.</p>
+                                          <p className="opacity-85">
+                                            Someone else reserved or purchased the last one after your cart hold expired.
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeItem(item.id)}
+                                        disabled={updatingItem === item.id}
+                                        className="mt-1.5 rounded-[6px] px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed"
+                                        style={{
+                                          background: "rgba(255,255,255,0.62)",
+                                          border: "1px solid rgba(180,83,9,0.32)",
+                                          color: "#78350f",
+                                        }}
+                                      >
+                                        Remove from cart
+                                      </button>
+                                    </div>
+                                  ) : reservationExpired ? (
                                     <div
                                       className="mt-3 w-full max-w-sm space-y-1 rounded-[6px] px-2.5 py-2 text-xs"
                                       style={{
@@ -533,8 +586,13 @@ export default function CartPageClient({ suppressEmptyState = false }) {
                                         color: "#b45309",
                                       }}
                                     >
-                                      <p className="font-semibold">⚠ This item is no longer reserved.</p>
-                                      <p className="opacity-80">Availability may have changed.</p>
+                                      <div className="flex items-start gap-1.5">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <div className="min-w-0">
+                                          <p className="font-semibold">This item is no longer reserved.</p>
+                                          <p className="opacity-80">Availability may have changed.</p>
+                                        </div>
+                                      </div>
                                       <button
                                         type="button"
                                         onClick={() => handleUpdateCartItem(item)}
@@ -610,13 +668,25 @@ export default function CartPageClient({ suppressEmptyState = false }) {
                       <span className="min-w-0 font-medium text-[rgba(15,23,42,0.6)]">Vendor subtotal</span>
                       <span className="shrink-0 font-semibold">${formatMoney(group.subtotal)}</span>
                     </div>
-                    {user?.id ? (
-                      <Link
-                        href={hasStockIssues ? "#" : checkoutHref}
-                        aria-disabled={hasStockIssues}
-                        onClick={(event) => {
-                          if (hasStockIssues) event.preventDefault();
+                    {hasStockIssues ? (
+                      <button
+                        type="button"
+                        disabled
+                        aria-disabled="true"
+                        data-testid={`cart-vendor-checkout-button-${groupKey}`}
+                        className={`${checkoutButtonClassName} mt-3 w-full md:mt-0 md:w-auto md:shrink-0`}
+                        style={{
+                          background: "#8C81AD",
+                          border: "1px solid rgba(109,96,145,0.18)",
+                          color: "#FFFFFF",
+                          boxShadow: "0 1px 4px rgba(109,96,145,0.08)",
                         }}
+                      >
+                        {hasUnavailableItems ? "Remove unavailable item" : "Update cart to continue"}
+                      </button>
+                    ) : user?.id ? (
+                      <Link
+                        href={checkoutHref}
                         data-testid={`cart-vendor-checkout-button-${groupKey}`}
                         className={`${checkoutButtonClassName} mt-3 w-full md:mt-0 md:w-auto md:shrink-0`}
                         style={{
@@ -681,6 +751,17 @@ export default function CartPageClient({ suppressEmptyState = false }) {
                 </div>
               </div>
               <p className="mt-3 text-xs opacity-70">Payment is collected after you confirm delivery or pickup details at checkout.</p>
+              {hasUnavailableCartItems ? (
+                <p
+                  className="mt-3 rounded-[6px] px-2.5 py-2 text-xs"
+                  style={{
+                    background: "rgba(245,158,11,0.1)",
+                    color: "#92400e",
+                  }}
+                >
+                  Your cart contains an unavailable item. Remove it to continue checkout.
+                </p>
+              ) : null}
             </div>
           </aside>
         </div>

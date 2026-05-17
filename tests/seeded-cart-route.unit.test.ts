@@ -5,6 +5,7 @@ const {
   getServiceSupabaseServerClientMock,
   getUserCachedMock,
   getCurrentAccountContextMock,
+  getInventoryAvailabilitySnapshotMock,
   upsertCartItemReservationMock,
   releaseCartItemReservationMock,
 } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const {
   getServiceSupabaseServerClientMock: vi.fn(),
   getUserCachedMock: vi.fn(),
   getCurrentAccountContextMock: vi.fn(),
+  getInventoryAvailabilitySnapshotMock: vi.fn(),
   upsertCartItemReservationMock: vi.fn(),
   releaseCartItemReservationMock: vi.fn(),
 }));
@@ -51,12 +53,7 @@ vi.mock("@/lib/listingOptions", () => ({
 
 vi.mock("@/lib/cart/reservations", () => ({
   buildOnlyLeftAvailableMessage: vi.fn((quantity: number) => `Only ${quantity} left available.`),
-  getInventoryAvailabilitySnapshot: vi.fn(async () => ({
-    stockQuantity: 5,
-    activeCartReservations: 0,
-    committedOrderQuantity: 0,
-    availableQuantity: 5,
-  })),
+  getInventoryAvailabilitySnapshot: getInventoryAvailabilitySnapshotMock,
   releaseCartItemReservation: releaseCartItemReservationMock,
   upsertCartItemReservation: upsertCartItemReservationMock,
 }));
@@ -382,6 +379,12 @@ describe("cart api seeded listing guard", () => {
     });
     upsertCartItemReservationMock.mockReset();
     releaseCartItemReservationMock.mockReset();
+    getInventoryAvailabilitySnapshotMock.mockResolvedValue({
+      stockQuantity: 5,
+      activeCartReservations: 0,
+      committedOrderQuantity: 0,
+      availableQuantity: 5,
+    });
   });
 
   it("rejects seeded listings before cart write", async () => {
@@ -408,6 +411,12 @@ describe("cart api guest auth handling", () => {
     getCurrentAccountContextMock.mockResolvedValue({
       canPurchase: true,
       isRoleResolved: true,
+    });
+    getInventoryAvailabilitySnapshotMock.mockResolvedValue({
+      stockQuantity: 5,
+      activeCartReservations: 0,
+      committedOrderQuantity: 0,
+      availableQuantity: 5,
     });
   });
 
@@ -502,6 +511,60 @@ describe("cart api guest auth handling", () => {
         cart_items: [{ id: "cart-item-1", quantity: 3 }],
       },
     });
+  });
+
+  it("returns refreshed unavailable cart state when an expired hold cannot be reserved again", async () => {
+    const { supabase, state } = createGuestCapableSupabaseMock();
+    const cart = supabase.createCart(null, "guest-1");
+    const item = supabase.createCartItem(1, cart.id);
+    item.reservation_expires_at = new Date(Date.now() - 60_000).toISOString();
+    getSupabaseServerClientMock.mockResolvedValue(supabase);
+    getUserCachedMock.mockResolvedValue({
+      user: null,
+      error: { name: "AuthSessionMissingError", message: "Auth session missing!" },
+    });
+    getInventoryAvailabilitySnapshotMock.mockResolvedValue({
+      stockQuantity: 1,
+      activeCartReservations: 1,
+      committedOrderQuantity: 0,
+      availableQuantity: 0,
+    });
+    upsertCartItemReservationMock.mockResolvedValue({
+      success: false,
+      errorCode: "insufficient_inventory",
+      message: "Only 0 left available.",
+      availableQuantity: 0,
+      cartItemId: item.id,
+      reservationExpiresAt: null,
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost:3000/api/cart", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guest_id: "guest-1", item_id: item.id, quantity: 1 }),
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Only 0 left available.",
+      code: "insufficient_inventory",
+      maxQuantity: 0,
+      guest_id: "guest-1",
+      cart: {
+        cart_items: [
+          {
+            id: item.id,
+            cart_item_status: "unavailable",
+            cart_item_issue_code: "sold_out",
+            stock_error: "This item is no longer available.",
+            max_order_quantity: 0,
+          },
+        ],
+      },
+    });
+    expect(state.cartItems).toHaveLength(1);
   });
 
   it("allows guest removal without an auth session", async () => {

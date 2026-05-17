@@ -182,7 +182,7 @@ describe("CartPageClient mobile checkout area", () => {
 
     const checkoutButton = screen.getByTestId("cart-vendor-checkout-button-vendor-1");
     expect(checkoutButton).toHaveAttribute("aria-disabled", "true");
-    expect(checkoutButton).toHaveAttribute("href", "#");
+    expect(checkoutButton).toHaveTextContent("Update cart to continue");
 
     fireEvent.click(screen.getByRole("button", { name: "Update cart" }));
 
@@ -196,6 +196,114 @@ describe("CartPageClient mobile checkout area", () => {
       });
     });
     expect(routerReplaceMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps unavailable inventory final after an expired hold refresh fails", async () => {
+    const expiredItem = {
+      id: "cart-item-1",
+      listing_id: "listing-1",
+      title: "Linen jacket",
+      quantity: 1,
+      unit_price: 23,
+      image_url: null,
+      max_order_quantity: 1,
+      reservation_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      cart_item_status: "reservation_expired",
+      cart_item_issue_code: "reservation_expired",
+      stock_error: "Your cart reservation expired.",
+    };
+    const unavailableItem = {
+      ...expiredItem,
+      max_order_quantity: 0,
+      cart_item_status: "unavailable",
+      cart_item_issue_code: "sold_out",
+      stock_error: "This item is no longer available.",
+    };
+    mockCartState = {
+      items: [expiredItem],
+      vendorGroups: [
+        {
+          business_id: "vendor-1",
+          business_name: longBusinessName,
+          cart_id: "cart-1",
+          item_count: 1,
+          subtotal: 23,
+          fulfillment_type: "pickup",
+          available_fulfillment_methods: ["pickup"],
+          items: [expiredItem],
+        },
+      ],
+    };
+    mockUpdateItem.mockImplementation(async () => {
+      mockCartState = {
+        ...mockCartState,
+        items: [unavailableItem],
+        vendorGroups: [
+          {
+            ...(mockCartState.vendorGroups as any[])[0],
+            items: [unavailableItem],
+          },
+        ],
+      };
+      return { error: "Only 0 left available.", code: "insufficient_inventory", maxQuantity: 0 };
+    });
+
+    render(<CartPageClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Update cart" }));
+
+    expect(await screen.findByText("This item is no longer available.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Someone else reserved or purchased the last one after your cart hold expired.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove from cart" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update cart" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("cart-vendor-checkout-button-vendor-1")).toHaveTextContent(
+      "Remove unavailable item"
+    );
+    expect(
+      screen.getByText("Your cart contains an unavailable item. Remove it to continue checkout.")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove from cart" }));
+    expect(mockRemoveItem).toHaveBeenCalledWith("cart-item-1");
+  });
+
+  it("prioritizes unavailable inventory over the guest sign-in checkout CTA", () => {
+    mockUser = null;
+    mockCartState = {
+      vendorGroups: [
+        {
+          business_id: "vendor-1",
+          business_name: longBusinessName,
+          cart_id: "cart-1",
+          item_count: 1,
+          subtotal: 23,
+          fulfillment_type: "pickup",
+          available_fulfillment_methods: ["pickup"],
+          items: [
+            {
+              id: "cart-item-1",
+              listing_id: "listing-1",
+              title: "Linen jacket",
+              quantity: 1,
+              unit_price: 23,
+              image_url: null,
+              max_order_quantity: 0,
+              cart_item_status: "unavailable",
+              cart_item_issue_code: "sold_out",
+              stock_error: "This item is no longer available.",
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<CartPageClient />);
+
+    expect(screen.getByTestId("cart-vendor-checkout-button-vendor-1")).toHaveTextContent(
+      "Remove unavailable item"
+    );
+    expect(screen.queryByRole("button", { name: "Sign in to checkout" })).not.toBeInTheDocument();
   });
 
   it("leaves non-expired cart items on the normal reservation display", () => {

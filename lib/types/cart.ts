@@ -15,6 +15,9 @@ export type CartItem = {
   image_url: string | null;
   reserved_quantity?: number | null;
   reservation_expires_at?: string | null;
+  cart_item_status?: "available" | "reservation_expired" | "unavailable" | "insufficient_inventory" | string | null;
+  cart_item_issue_code?: string | null;
+  stock_error?: string | null;
   client_item_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;

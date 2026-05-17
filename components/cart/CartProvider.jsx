@@ -711,7 +711,14 @@ export function CartProvider({ children }) {
 
         const payload = await parseResponse(response);
         if (!response.ok) {
-          return { error: payload?.error || "Failed to update cart" };
+          if (payload?.cart || Array.isArray(payload?.carts)) {
+            syncGuestCartPayload(payload);
+          }
+          return {
+            error: payload?.error || "Failed to update cart",
+            code: payload?.code || null,
+            maxQuantity: payload?.maxQuantity ?? null,
+          };
         }
 
         const nextGuestCart = syncGuestCartPayload(payload);
@@ -733,7 +740,14 @@ export function CartProvider({ children }) {
 
       const payload = await parseResponse(response);
       if (!response.ok) {
-        return { error: payload?.error || "Failed to update cart" };
+        if (payload?.cart || Array.isArray(payload?.carts)) {
+          syncCart(payload);
+        }
+        return {
+          error: payload?.error || "Failed to update cart",
+          code: payload?.code || null,
+          maxQuantity: payload?.maxQuantity ?? null,
+        };
       }
 
       syncCart(payload);

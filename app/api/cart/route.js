@@ -215,14 +215,30 @@ async function enrichCartsWithFulfillment(carts, serviceClient, businessByVendor
       );
 
       let stockError = null;
+      let cartItemStatus = "available";
+      let cartItemIssueCode = null;
       if (isSeededListing(purchasableListing)) {
         stockError = "This preview item is not available for purchase yet.";
+        cartItemStatus = "unavailable";
+        cartItemIssueCode = "seeded_listing";
       } else if (reservationExpired) {
-        stockError = "Your cart reservation expired.";
+        if (maxQuantity >= Number(item?.quantity || 0)) {
+          stockError = "Your cart reservation expired.";
+          cartItemStatus = "reservation_expired";
+          cartItemIssueCode = "reservation_expired";
+        } else {
+          stockError = "This item is no longer available.";
+          cartItemStatus = "unavailable";
+          cartItemIssueCode = maxQuantity <= 0 ? "sold_out" : "insufficient_inventory";
+        }
       } else if (!listing || (item?.variant_id && !variant)) {
         stockError = "This item is currently unavailable.";
+        cartItemStatus = "unavailable";
+        cartItemIssueCode = "unavailable";
       } else if (Number(item?.quantity || 0) > maxQuantity) {
         stockError = buildOnlyLeftAvailableMessage(maxQuantity);
+        cartItemStatus = "insufficient_inventory";
+        cartItemIssueCode = "insufficient_inventory";
       }
 
       cartItems.push({
@@ -232,6 +248,8 @@ async function enrichCartsWithFulfillment(carts, serviceClient, businessByVendor
         max_order_quantity: maxQuantity,
         reserved_quantity: Number(item?.reserved_quantity || item?.quantity || 0),
         reservation_expires_at: item?.reservation_expires_at || null,
+        cart_item_status: cartItemStatus,
+        cart_item_issue_code: cartItemIssueCode,
         stock_error: stockError,
       });
     }
@@ -755,9 +773,14 @@ export async function PATCH(request) {
       });
 
       if (!reservationResult.success) {
+        const payload = await getCartPayload(serviceClient, {
+          userId: user?.id || null,
+          guestId: user?.id ? null : guestId,
+        });
         return jsonError(reservationResult.message, 409, {
           code: reservationResult.errorCode,
           maxQuantity: reservationResult.availableQuantity,
+          ...(payload || { cart: null, vendor: null, carts: [], vendors: {} }),
         });
       }
     }
