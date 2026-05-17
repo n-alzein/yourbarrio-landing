@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  buildPasswordResetText,
   sendAuthTemplateEmail,
 } from "@/lib/email/authEmail";
 
@@ -50,7 +49,6 @@ export async function sendResetPasswordEmail({
       supportEmail,
       productName,
     },
-    text: buildPasswordResetText({ resetUrl, productName, supportEmail }),
   });
 
   if (result.error) {

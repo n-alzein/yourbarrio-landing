@@ -74,17 +74,9 @@ describe("sendAdminInvite", () => {
           supportEmail: "support@yourbarrio.com",
         },
       },
-      text: [
-        "Set up your YourBarrio business account",
-        "",
-        "Use this secure link to continue signing in to YourBarrio:",
-        "https://yourbarrio.com/auth/confirm?next=%2Fbusiness%2Fonboarding&token_hash=hashed_abc&type=email",
-        "",
-        "If you did not request this email, you can ignore it.",
-        "Need help? Contact support@yourbarrio.com.",
-      ].join("\n"),
       tags: [{ name: "email_kind", value: "business_invite" }],
     });
+    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
     expect(inviteUserByEmailMock).not.toHaveBeenCalled();
     expect(signInWithOtpMock).not.toHaveBeenCalled();
     expect(result).toEqual({

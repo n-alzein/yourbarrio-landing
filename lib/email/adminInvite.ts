@@ -2,7 +2,6 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/auth/supabaseAdmin";
 import {
-  buildBusinessMagicLinkText,
   getAuthEmailSiteUrl,
   sendAuthTemplateEmail,
 } from "@/lib/email/authEmail";
@@ -102,10 +101,6 @@ export async function sendAdminInvite(
         magicLink,
         supportEmail: "support@yourbarrio.com",
       },
-      text: buildBusinessMagicLinkText({
-        magicLink,
-        supportEmail: "support@yourbarrio.com",
-      }),
       tags: [{ name: "email_kind", value: "business_invite" }],
     });
 

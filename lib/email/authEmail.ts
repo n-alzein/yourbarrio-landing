@@ -28,19 +28,47 @@ type SendAuthTemplateEmailInput = {
   subject: string;
   templateId: string;
   variables: Record<string, string | number>;
+  tags?: Array<{ name: string; value: string }>;
+};
+
+type SendAuthManualEmailInput = {
+  to: string;
+  subject: string;
+  html: string;
   text: string;
   tags?: Array<{ name: string; value: string }>;
 };
+
+function logAuthEmailError({
+  error,
+  context,
+}: {
+  error: unknown;
+  context: Record<string, unknown>;
+}) {
+  const resendError = error as {
+    message?: string;
+    name?: string;
+    statusCode?: number;
+    status?: number;
+  } | null;
+
+  console.error("[email.auth] resend_send_failed", {
+    ...context,
+    errorName: resendError?.name || null,
+    statusCode: resendError?.statusCode || resendError?.status || null,
+    message: resendError?.message || "unknown_error",
+  });
+}
 
 export async function sendAuthTemplateEmail({
   to,
   subject,
   templateId,
   variables,
-  text,
   tags,
 }: SendAuthTemplateEmailInput) {
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from: getAuthEmailFrom(),
     to,
     subject,
@@ -48,9 +76,52 @@ export async function sendAuthTemplateEmail({
       id: templateId,
       variables,
     },
+    tags,
+  });
+
+  if (result.error) {
+    logAuthEmailError({
+      error: result.error,
+      context: {
+        emailKind: "auth_template",
+        templateId,
+        hasTemplate: true,
+        hasText: false,
+      },
+    });
+  }
+
+  return result;
+}
+
+export async function sendAuthManualEmail({
+  to,
+  subject,
+  html,
+  text,
+  tags,
+}: SendAuthManualEmailInput) {
+  const result = await resend.emails.send({
+    from: getAuthEmailFrom(),
+    to,
+    subject,
+    html,
     text,
     tags,
-  } as any);
+  });
+
+  if (result.error) {
+    logAuthEmailError({
+      error: result.error,
+      context: {
+        emailKind: "auth_manual",
+        hasTemplate: false,
+        hasText: Boolean(text),
+      },
+    });
+  }
+
+  return result;
 }
 
 export function buildPasswordResetText({

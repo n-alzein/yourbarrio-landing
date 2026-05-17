@@ -76,17 +76,9 @@ describe("POST /api/auth/business-magic-link", () => {
           supportEmail: "support@yourbarrio.com",
         },
       },
-      text: [
-        "Set up your YourBarrio business account",
-        "",
-        "Use this secure link to continue signing in to YourBarrio:",
-        "https://localhost:3000/auth/confirm?next=%2Fgo%2Fdashboard&token_hash=hashed_abc&type=email",
-        "",
-        "If you did not request this email, you can ignore it.",
-        "Need help? Contact support@yourbarrio.com.",
-      ].join("\n"),
       tags: [{ name: "email_kind", value: "business_magic_link" }],
     });
+    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
   });
 
   it("fails loudly when resend send fails", async () => {

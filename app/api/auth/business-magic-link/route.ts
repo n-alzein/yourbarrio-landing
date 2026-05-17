@@ -4,7 +4,6 @@ import { BUSINESS_GO_DASHBOARD_PATH } from "@/lib/auth/businessPasswordGate";
 import { getSiteUrlFromRequest } from "@/lib/auth/getSiteUrl";
 import { supabaseAdmin } from "@/lib/auth/supabaseAdmin";
 import {
-  buildBusinessMagicLinkText,
   getAuthEmailSiteUrl,
   sendAuthTemplateEmail,
 } from "@/lib/email/authEmail";
@@ -94,10 +93,6 @@ export async function POST(request: NextRequest) {
       magicLink,
       supportEmail: "support@yourbarrio.com",
     },
-    text: buildBusinessMagicLinkText({
-      magicLink,
-      supportEmail: "support@yourbarrio.com",
-    }),
     tags: [{ name: "email_kind", value: "business_magic_link" }],
   });
 

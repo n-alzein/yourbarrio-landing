@@ -16,7 +16,11 @@ vi.mock("@/lib/email/resendClient", () => ({
 vi.mock("server-only", () => ({}));
 
 import { sendResetPasswordEmail } from "@/lib/email/sendResetPasswordEmail";
-import { getAuthEmailSiteUrl } from "@/lib/email/authEmail";
+import {
+  buildPasswordResetText,
+  getAuthEmailSiteUrl,
+  sendAuthManualEmail,
+} from "@/lib/email/authEmail";
 
 describe("password reset email delivery", () => {
   beforeEach(() => {
@@ -24,7 +28,7 @@ describe("password reset email delivery", () => {
     vi.unstubAllEnvs();
   });
 
-  it("sends the published Resend reset template with the auth sender and text fallback", async () => {
+  it("sends the published Resend reset template with the auth sender and no text field", async () => {
     resendSendMock.mockResolvedValue({ data: { id: "msg_reset" }, error: null });
 
     await sendResetPasswordEmail({
@@ -46,17 +50,9 @@ describe("password reset email delivery", () => {
           productName: "YourBarrio",
         },
       },
-      text: [
-        "Reset your YourBarrio password",
-        "",
-        "Use this secure link to set a new password for your YourBarrio account:",
-        "https://www.yourbarrio.com/set-password?token_hash=abc&type=recovery",
-        "",
-        "If you did not request this password reset, you can ignore this email.",
-        "Need help? Contact support@yourbarrio.com.",
-      ].join("\n"),
     });
     expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("html");
+    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
     expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("react");
   });
 
@@ -80,10 +76,10 @@ describe("password reset email delivery", () => {
       },
     });
     expect(resendSendMock.mock.calls[0][0].from).toBe("YourBarrio <auth@yourbarrio.com>");
-    expect(resendSendMock.mock.calls[0][0].text).toContain("Need help? Contact help@yourbarrio.com.");
+    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
   });
 
-  it("does not fall back to inline reset email content", async () => {
+  it("does not fall back to inline reset email content or text on template sends", async () => {
     resendSendMock.mockResolvedValue({
       data: null,
       error: { message: "template variable missing" },
@@ -98,7 +94,33 @@ describe("password reset email delivery", () => {
 
     expect(resendSendMock).toHaveBeenCalledTimes(1);
     expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("html");
-    expect(resendSendMock.mock.calls[0][0].text).toContain("If you did not request this password reset");
+    expect(resendSendMock.mock.calls[0][0]).not.toHaveProperty("text");
+  });
+
+  it("allows non-template auth emails to include a plain text fallback", async () => {
+    resendSendMock.mockResolvedValue({ data: { id: "msg_manual" }, error: null });
+
+    const text = buildPasswordResetText({
+      resetUrl: "https://www.yourbarrio.com/set-password?token_hash=abc&type=recovery",
+      productName: "YourBarrio",
+      supportEmail: "support@yourbarrio.com",
+    });
+
+    await sendAuthManualEmail({
+      to: "customer@example.com",
+      subject: "Reset your YourBarrio password",
+      html: "<p>Reset your password</p>",
+      text,
+    });
+
+    expect(resendSendMock).toHaveBeenCalledWith({
+      from: "YourBarrio <auth@yourbarrio.com>",
+      to: "customer@example.com",
+      subject: "Reset your YourBarrio password",
+      html: "<p>Reset your password</p>",
+      text,
+      tags: undefined,
+    });
   });
 
   it("keeps password reset requests off Supabase's built-in email sender", () => {
