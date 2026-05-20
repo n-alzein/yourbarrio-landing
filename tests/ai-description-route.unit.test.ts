@@ -5,9 +5,13 @@ import { getBusinessDayWindow } from "@/lib/ai/descriptionUsage";
 const {
   getBusinessDataClientForRequestMock,
   getServiceRoleClientMock,
+  assertBusinessCanUseFeatureMock,
+  consumeBusinessUsageMock,
 } = vi.hoisted(() => ({
   getBusinessDataClientForRequestMock: vi.fn(),
   getServiceRoleClientMock: vi.fn(),
+  assertBusinessCanUseFeatureMock: vi.fn(),
+  consumeBusinessUsageMock: vi.fn(),
 }));
 
 vi.mock("@/lib/business/getBusinessDataClientForRequest", () => ({
@@ -17,6 +21,15 @@ vi.mock("@/lib/business/getBusinessDataClientForRequest", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   getSupabaseServerClient: getServiceRoleClientMock,
 }));
+
+vi.mock("@/lib/monetization/entitlements", async () => {
+  const actual = await vi.importActual("@/lib/monetization/entitlements");
+  return {
+    ...actual,
+    assertBusinessCanUseFeature: assertBusinessCanUseFeatureMock,
+    consumeBusinessUsage: consumeBusinessUsageMock,
+  };
+});
 
 function createRequest(body = {}) {
   return new Request("http://localhost:3000/api/ai/description", {
@@ -104,6 +117,8 @@ describe("POST /api/ai/description", () => {
     process.env.OPENAI_API_KEY = "test-openai-key";
     delete process.env.OPENAI_DESCRIPTION_ASSISTANT_MODEL;
     vi.stubGlobal("fetch", vi.fn());
+    assertBusinessCanUseFeatureMock.mockResolvedValue(undefined);
+    consumeBusinessUsageMock.mockResolvedValue(undefined);
   });
 
   it("falls back to gpt-5.4-nano when no override model is configured", async () => {
@@ -128,6 +143,7 @@ describe("POST /api/ai/description", () => {
     expect(await response.json()).toEqual({
       description: "A polished neighborhood boutique with thoughtful local style.",
     });
+    expect(consumeBusinessUsageMock).toHaveBeenCalledTimes(1);
 
     const upstreamPayload = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
     expect(upstreamPayload.model).toBe("gpt-5.4-nano");
@@ -197,6 +213,7 @@ describe("POST /api/ai/description", () => {
       error: "You’ve reached today’s AI description limit. You can try again tomorrow.",
     });
     expect(global.fetch).not.toHaveBeenCalled();
+    expect(consumeBusinessUsageMock).not.toHaveBeenCalled();
   });
 
   it("returns 429 when the per-target daily limit has been reached before calling OpenAI", async () => {
@@ -217,6 +234,7 @@ describe("POST /api/ai/description", () => {
       error: "You’ve reached today’s AI description limit. You can try again tomorrow.",
     });
     expect(global.fetch).not.toHaveBeenCalled();
+    expect(consumeBusinessUsageMock).not.toHaveBeenCalled();
   });
 
   it("uses Los Angeles business-day boundaries when UTC date differs from the local date", async () => {
@@ -326,6 +344,7 @@ describe("POST /api/ai/description", () => {
         error: expect.any(Error),
       })
     );
+    expect(consumeBusinessUsageMock).not.toHaveBeenCalled();
   });
 
   it("does not fail generation when usage logging fails", async () => {

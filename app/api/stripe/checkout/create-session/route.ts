@@ -27,6 +27,7 @@ import { getSupabaseServerClient as getServiceClient } from "@/lib/supabase/serv
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
 import { normalizeStateCode } from "@/lib/location/normalizeStateCode";
 import { calculateCheckoutPricing } from "@/lib/pricing";
+import { calculateMarketplaceFeeForOrder } from "@/lib/monetization/fees";
 import { getVariantInventoryListing } from "@/lib/listingOptions";
 import { assertListingPurchasable } from "@/lib/seededListings";
 
@@ -586,10 +587,17 @@ export async function POST(request: Request) {
   if (!stripeStatus.canAcceptPayments) {
     return jsonError("This business is not ready to accept payments yet", 400);
   }
+  const marketplaceFee = await calculateMarketplaceFeeForOrder({
+    businessId: business.id,
+    orderSubtotalCents: subtotalCents,
+    currency: "usd",
+    client: serviceClient,
+  });
   const pricing = calculateCheckoutPricing({
     subtotalCents,
     deliveryFeeCents,
     taxCents: 0,
+    platformFeeCents: marketplaceFee.applicationFeeAmountCents,
   });
   const platformFeeAmount = pricing.platformFeeCents;
   const totalCents = pricing.totalCents;
@@ -685,6 +693,28 @@ export async function POST(request: Request) {
     const stripe = getStripe();
     const appUrl = getAppUrl();
 
+    const paymentIntentData = {
+      ...(platformFeeAmount > 0 ? { application_fee_amount: platformFeeAmount } : {}),
+      transfer_data: {
+        destination: stripeStatus.accountId!,
+      },
+      metadata: {
+        checkout_flow: checkoutFlow,
+        order_id: orderRecord.id,
+        listing_id: orderItems[0]?.listing_id || "",
+        business_id: business.id,
+        vendor_user_id: business.owner_user_id,
+        customer_user_id: user.id,
+        fulfillment_type: fulfillmentType,
+        quantity: String(orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)),
+        cart_id: String(cartId || orderInput.cart_id || ""),
+        subtotal_cents: String(subtotalCents),
+        delivery_fee_cents: String(deliveryFeeCents),
+        platform_fee_amount: String(platformFeeAmount),
+        total_cents: String(totalCents),
+      },
+    };
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       success_url: `${appUrl}/orders/${encodeURIComponent(
@@ -750,27 +780,7 @@ export async function POST(request: Request) {
         platform_fee_amount: String(platformFeeAmount),
         total_cents: String(totalCents),
       },
-      payment_intent_data: {
-        application_fee_amount: platformFeeAmount,
-        transfer_data: {
-          destination: stripeStatus.accountId!,
-        },
-        metadata: {
-          checkout_flow: checkoutFlow,
-          order_id: orderRecord.id,
-          listing_id: orderItems[0]?.listing_id || "",
-          business_id: business.id,
-          vendor_user_id: business.owner_user_id,
-          customer_user_id: user.id,
-          fulfillment_type: fulfillmentType,
-          quantity: String(orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)),
-          cart_id: String(cartId || orderInput.cart_id || ""),
-          subtotal_cents: String(subtotalCents),
-          delivery_fee_cents: String(deliveryFeeCents),
-          platform_fee_amount: String(platformFeeAmount),
-          total_cents: String(totalCents),
-        },
-      },
+      payment_intent_data: paymentIntentData,
     });
 
     const { error: orderUpdateError } = await serviceClient

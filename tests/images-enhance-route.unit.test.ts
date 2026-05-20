@@ -6,6 +6,8 @@ const getMediaServiceClientMock = vi.fn();
 const uploadMock = vi.fn();
 const mediaUpdateMock = vi.fn();
 const mediaMaybeSingleMock = vi.fn();
+const assertBusinessCanUseFeatureMock = vi.fn();
+const consumeBusinessUsageMock = vi.fn();
 
 vi.mock("@/lib/business/getBusinessDataClientForRequest", () => ({
   getBusinessDataClientForRequest: (...args) =>
@@ -29,6 +31,19 @@ vi.mock("@/lib/images/mediaAssets.server", async () => {
   };
 });
 
+vi.mock("@/lib/monetization/entitlements", async () => {
+  const actual = await vi.importActual("@/lib/monetization/entitlements");
+  return {
+    ...actual,
+    assertBusinessCanUseFeature: (...args) => assertBusinessCanUseFeatureMock(...args),
+    consumeBusinessUsage: (...args) => consumeBusinessUsageMock(...args),
+  };
+});
+
+vi.mock("@/lib/supabase/server", () => ({
+  getSupabaseServerClient: vi.fn(() => ({})),
+}));
+
 describe("POST /api/images/enhance", () => {
   beforeEach(() => {
     getBusinessDataClientForRequestMock.mockReset();
@@ -37,8 +52,12 @@ describe("POST /api/images/enhance", () => {
     uploadMock.mockReset();
     mediaUpdateMock.mockReset();
     mediaMaybeSingleMock.mockReset();
+    assertBusinessCanUseFeatureMock.mockReset();
+    consumeBusinessUsageMock.mockReset();
 
     uploadMock.mockResolvedValue({ error: null });
+    assertBusinessCanUseFeatureMock.mockResolvedValue(undefined);
+    consumeBusinessUsageMock.mockResolvedValue(undefined);
     mediaUpdateMock.mockReturnValue({
       eq: vi.fn(() => ({
         eq: vi.fn(() => ({
@@ -57,6 +76,7 @@ describe("POST /api/images/enhance", () => {
 
     getBusinessDataClientForRequestMock.mockResolvedValue({
       ok: true,
+      businessId: "business-1",
       effectiveUserId: "user-1",
       client: {},
     });
@@ -128,6 +148,7 @@ describe("POST /api/images/enhance", () => {
         enhanced_path: "tmp/user-1/session-1/asset-1/enhanced.webp",
       })
     );
+    expect(consumeBusinessUsageMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not upload or label fallback original output as enhanced", async () => {
@@ -166,6 +187,7 @@ describe("POST /api/images/enhance", () => {
       },
     });
     expect(uploadMock).not.toHaveBeenCalled();
+    expect(consumeBusinessUsageMock).not.toHaveBeenCalled();
   });
 
   it("normalizes upstream failures without leaking raw details", async () => {
@@ -196,5 +218,6 @@ describe("POST /api/images/enhance", () => {
         status: 502,
       },
     });
+    expect(consumeBusinessUsageMock).not.toHaveBeenCalled();
   });
 });

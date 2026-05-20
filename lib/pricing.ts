@@ -47,21 +47,26 @@ export function calculateCheckoutPricing({
   subtotalCents,
   deliveryFeeCents = 0,
   taxCents = 0,
+  platformFeeCents,
 }: {
   subtotalCents: number;
   deliveryFeeCents?: number;
   taxCents?: number;
+  platformFeeCents?: number;
 }): CheckoutPricingBreakdown {
   const baseSubtotalCents = Math.max(0, Math.round(Number(subtotalCents || 0)));
   const normalizedDeliveryFeeCents = Math.max(0, Math.round(Number(deliveryFeeCents || 0)));
   const normalizedTaxCents = Math.max(0, Math.round(Number(taxCents || 0)));
-  const platformFeeCents = calculatePlatformFeeAmount(baseSubtotalCents);
+  const normalizedPlatformFeeCents =
+    platformFeeCents === undefined
+      ? calculatePlatformFeeAmount(baseSubtotalCents)
+      : Math.max(0, Math.round(Number(platformFeeCents || 0)));
   const subtotalBeforeTaxCents =
-    baseSubtotalCents + platformFeeCents + normalizedDeliveryFeeCents;
+    baseSubtotalCents + normalizedPlatformFeeCents + normalizedDeliveryFeeCents;
 
   return {
     baseSubtotalCents,
-    platformFeeCents,
+    platformFeeCents: normalizedPlatformFeeCents,
     subtotalBeforeTaxCents,
     taxCents: normalizedTaxCents,
     deliveryFeeCents: normalizedDeliveryFeeCents,

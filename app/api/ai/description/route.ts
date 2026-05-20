@@ -12,6 +12,12 @@ import {
   isValidAiDescriptionSurface,
 } from "@/lib/ai/descriptionUsage";
 import { getBusinessDataClientForRequest } from "@/lib/business/getBusinessDataClientForRequest";
+import {
+  BusinessEntitlementError,
+  assertBusinessCanUseFeature,
+  consumeBusinessUsage,
+} from "@/lib/monetization/entitlements";
+import { FEATURES } from "@/lib/monetization/features";
 import { getSupabaseServerClient as getServiceRoleClient } from "@/lib/supabase/server";
 
 type AssistantAction =
@@ -223,6 +229,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const entitlementClient = getServiceRoleClient();
+  try {
+    await assertBusinessCanUseFeature(
+      access.businessId,
+      FEATURES.AI_DESCRIPTION_GENERATION,
+      entitlementClient
+    );
+  } catch (error) {
+    if (error instanceof BusinessEntitlementError) {
+      return NextResponse.json(
+        { error: error.result.reason || "You've reached this month's usage limit." },
+        { status: 429 }
+      );
+    }
+    throw error;
+  }
+
   let body: RequestBody;
   try {
     body = (await request.json()) || {};
@@ -365,8 +388,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await consumeBusinessUsage(
+      access.businessId,
+      FEATURES.AI_DESCRIPTION_GENERATION,
+      1,
+      { surface, targetId: targetId || null, action },
+      entitlementClient
+    );
+
     return NextResponse.json({ description }, { status: 200 });
   } catch (error) {
+    if (error instanceof BusinessEntitlementError) {
+      return NextResponse.json(
+        { error: error.result.reason || "You've reached this month's usage limit." },
+        { status: 429 }
+      );
+    }
     console.error("[ai-description] generation_failed", {
       businessId: access.businessId,
       userId: access.effectiveUserId,

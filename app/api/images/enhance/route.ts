@@ -11,6 +11,13 @@ import {
   MEDIA_BUCKET,
 } from "@/lib/images/mediaAssets.server";
 import { buildSupabasePublicUrl } from "@/lib/images/resolveMediaAssetUrl";
+import {
+  BusinessEntitlementError,
+  assertBusinessCanUseFeature,
+  consumeBusinessUsage,
+} from "@/lib/monetization/entitlements";
+import { FEATURES } from "@/lib/monetization/features";
+import { getSupabaseServerClient as getServiceRoleClient } from "@/lib/supabase/server";
 
 const routeLimiter = rateLimit({ interval: 10 * 60_000, uniqueTokenPerInterval: 200 });
 const ALLOWED_BACKGROUNDS = new Set<PhotoroomBackgroundMode>(["original", "white", "soft_gray"]);
@@ -55,6 +62,13 @@ export async function POST(request: Request) {
   }
 
   try {
+    const serviceClient = getServiceRoleClient();
+    await assertBusinessCanUseFeature(
+      access.businessId,
+      FEATURES.AI_PHOTO_ENHANCEMENT,
+      serviceClient
+    );
+
     const formData = await request.formData();
     const image = formData.get("image");
     const mediaAssetId = String(formData.get("mediaAssetId") || "").trim();
@@ -217,6 +231,14 @@ export async function POST(request: Request) {
       .eq("status", "temporary");
     if (updateError) throw updateError;
 
+    await consumeBusinessUsage(
+      access.businessId,
+      FEATURES.AI_PHOTO_ENHANCEMENT,
+      1,
+      { mediaAssetId: mediaAsset.id, background },
+      serviceClient
+    );
+
     return NextResponse.json(
       {
         ok: true,
@@ -235,6 +257,20 @@ export async function POST(request: Request) {
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof BusinessEntitlementError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "FEATURE_LIMIT_REACHED",
+            message:
+              error.result.reason || "You've reached this month's photo enhancement limit.",
+          },
+        },
+        { status: 429 }
+      );
+    }
+
     const typedError = error as Error & { status?: number; requestId?: string | null };
     const debug = buildDebugPayload({
       stage: (typedError as Error & { stage?: string })?.stage || "unknown",
