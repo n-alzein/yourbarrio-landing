@@ -123,15 +123,32 @@ When `MARKETPLACE_TAKE_RATE_ENABLED=false`, fees are always `0`. The existing St
 
 Because the current listing editor writes directly to Supabase from the browser, active listing limit enforcement is added at the database boundary with `enforce_business_active_listing_limit`. Drafts remain allowed.
 
-The trigger counts listings with `status = 'published'`, `admin_hidden = false`, and `deleted_at IS NULL`. It fires on insert and on updates to `status`, `admin_hidden`, or `deleted_at`, so restoring a hidden/deleted published listing is checked against the active limit. Current listing ownership is legacy-shaped: `listings.business_id` stores the business owner user id, while monetization uses `businesses.id`; the trigger documents and resolves this through `businesses.owner_user_id`.
+The trigger counts listings with `status = 'published'`, `admin_hidden = false`, and `deleted_at IS NULL`. It fires on insert and on updates to `status`, `admin_hidden`, or `deleted_at`, so restoring a hidden/deleted published listing is checked against the active limit.
+
+Listing ownership is now in a transitional compatibility state:
+
+- `listings.business_id` remains the legacy owner user id for existing listing, cart, checkout, inventory, media, and admin paths.
+- `listings.business_entity_id` is the canonical nullable reference to `businesses.id`.
+- Migration `20260519183000_listing_business_entity_compatibility.sql` backfills `business_entity_id`, adds indexes, and adds a trigger to populate it for browser listing writes that still only send legacy `business_id`.
+- The active listing limit trigger prefers `NEW.business_entity_id` when present, then falls back to `listings.business_id -> businesses.owner_user_id`.
+- Active listing counts include both canonical rows and legacy fallback rows for the same business.
+
+See `LISTING_BUSINESS_ID_CLEANUP_AUDIT.md` for the full ownership audit and staged cleanup plan.
 
 ## Assumptions
 
 - `businesses.id` is the canonical business entity ID for monetization.
-- `listings.business_id` currently stores the business owner user ID, so the listing limit trigger maps through `businesses.owner_user_id`.
+- `listings.business_id` currently stores the business owner user ID. New code should prefer `listings.business_entity_id` where available, while preserving legacy fallback until cart/order/inventory/media/admin paths are migrated.
 - There is no dedicated admin business detail monetization UI yet, so admin APIs were implemented and documented instead of adding a new admin page pattern.
 - Existing POS, unique-item, and capacity inventory modes were not implemented; only entitlement gates were seeded.
 - Existing marketplace checkout used a hardcoded platform fee. The new fee abstraction makes that fee zero unless the take-rate flag is enabled.
+
+## Future final cleanup
+
+- Once all code paths use canonical business id, rename/remove the legacy field.
+- Add/validate FK from `listings.business_id` or its replacement column to `businesses.id`.
+- Remove legacy fallback from monetization trigger.
+- Migrate cart, checkout, order, inventory job, media, admin listing, seed, and test paths away from owner-user assumptions.
 
 ## Commands run
 

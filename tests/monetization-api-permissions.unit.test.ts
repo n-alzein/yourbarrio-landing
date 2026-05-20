@@ -13,13 +13,13 @@ describe("monetization API permissions", () => {
   });
 
   it("protects admin monetization mutations with the admin-access guard", () => {
-    expect(source("app/api/admin/businesses/[businessId]/monetization/plan/route.ts")).toContain(
+    expect(source("app/api/admin/businesses/[id]/monetization/plan/route.ts")).toContain(
       "requireBusinessMonetizationAdminAccess"
     );
-    expect(source("app/api/admin/businesses/[businessId]/monetization/overrides/route.ts")).toContain(
+    expect(source("app/api/admin/businesses/[id]/monetization/overrides/route.ts")).toContain(
       "requireBusinessMonetizationAdminAccess"
     );
-    expect(source("app/api/admin/businesses/[businessId]/monetization/usage/reset/route.ts")).toContain(
+    expect(source("app/api/admin/businesses/[id]/monetization/usage/reset/route.ts")).toContain(
       "requireBusinessMonetizationAdminAccess"
     );
   });

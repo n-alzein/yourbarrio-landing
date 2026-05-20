@@ -8,7 +8,7 @@ function jsonError(message: string, status = 400) {
 
 async function getBusinessId(params: any) {
   const resolved = typeof params?.then === "function" ? await params : params;
-  return String(resolved?.businessId || "").trim();
+  return String(resolved?.id || resolved?.businessId || "").trim();
 }
 
 export async function POST(request: Request, { params }: { params: any }) {
@@ -32,4 +32,3 @@ export async function POST(request: Request, { params }: { params: any }) {
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
-

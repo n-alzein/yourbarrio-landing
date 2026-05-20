@@ -7,6 +7,14 @@ const migration = readFileSync(
   "utf8"
 );
 
+const listingBusinessCompatibilityMigration = readFileSync(
+  path.join(
+    process.cwd(),
+    "supabase/migrations/20260519183000_listing_business_entity_compatibility.sql"
+  ),
+  "utf8"
+);
+
 describe("monetization foundation migration", () => {
   it("creates the core monetization tables and seeds founding plan defaults", () => {
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS public.monetization_plans");
@@ -33,6 +41,19 @@ describe("monetization foundation migration", () => {
     expect(migration).toContain("listings.business_id stores the");
     expect(migration).toContain("businesses.owner_user_id");
     expect(migration).toContain("WHERE owner_user_id = NEW.business_id");
+  });
+
+  it("keeps active listing limits compatible with canonical and legacy listing ownership", () => {
+    expect(listingBusinessCompatibilityMigration).toContain(
+      "ADD COLUMN IF NOT EXISTS business_entity_id uuid"
+    );
+    expect(listingBusinessCompatibilityMigration).toContain("b.owner_user_id = l.business_id");
+    expect(listingBusinessCompatibilityMigration).toContain("NEW.business_entity_id IS NOT NULL");
+    expect(listingBusinessCompatibilityMigration).toContain("l.business_entity_id = v_business_id");
+    expect(listingBusinessCompatibilityMigration).toContain("l.business_id = v_owner_user_id");
+    expect(listingBusinessCompatibilityMigration).toContain(
+      "BEFORE INSERT OR UPDATE OF status, admin_hidden, deleted_at ON public.listings"
+    );
   });
 
   it("restricts direct plan entitlement reads to public, owned, or admin-visible plans", () => {

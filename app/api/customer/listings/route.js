@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getUserCached } from "@/lib/supabaseServer";
-import { getPublicBusinessByOwnerId } from "@/lib/business/getPublicBusinessByOwnerId";
+import { getPublicBusinessForListing } from "@/lib/business/getPublicBusinessForListing";
 import { withListingPricing } from "@/lib/pricing";
 import { getListingVariants } from "@/lib/listingOptions";
 
@@ -16,7 +16,7 @@ async function findPublicListingByRef(supabase, listingRef) {
     : await supabase
         .from("public_listings_v")
         .select("*")
-        .ilike("public_id", normalizedRef)
+        .eq("public_id", normalizedRef)
         .maybeSingle();
 
   if (directLookup.error || directLookup.data) {
@@ -74,7 +74,7 @@ export async function GET(request) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const business = await getPublicBusinessByOwnerId(listing.business_id);
+    const business = await getPublicBusinessForListing(listing);
     if (!business) {
       console.log("[public listings]", { count: 1 });
       const response = NextResponse.json(

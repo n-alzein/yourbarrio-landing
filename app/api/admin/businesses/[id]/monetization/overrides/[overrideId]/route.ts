@@ -8,7 +8,7 @@ function jsonError(message: string, status = 400) {
 async function getParams(params: any) {
   const resolved = typeof params?.then === "function" ? await params : params;
   return {
-    businessId: String(resolved?.businessId || "").trim(),
+    businessId: String(resolved?.id || resolved?.businessId || "").trim(),
     overrideId: String(resolved?.overrideId || "").trim(),
   };
 }
@@ -36,4 +36,3 @@ export async function DELETE(_request: Request, { params }: { params: any }) {
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
-
