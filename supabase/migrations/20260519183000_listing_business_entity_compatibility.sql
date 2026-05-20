@@ -289,9 +289,12 @@ DECLARE
   has_is_test boolean;
   has_status boolean;
   has_is_published boolean;
+  current_view_has_is_test boolean;
   select_is_test_column text;
+  append_is_test_column text;
   where_status text;
   where_is_published text;
+  where_is_test text;
 BEGIN
   SELECT EXISTS (
     SELECT 1
@@ -317,9 +320,25 @@ BEGIN
       AND column_name = 'is_published'
   ) INTO has_is_published;
 
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'public_listings_v'
+      AND column_name = 'is_test'
+  ) INTO current_view_has_is_test;
+
+  -- CREATE OR REPLACE VIEW cannot rename/reorder existing columns. Keep
+  -- is_test in its historical position only when the current view already has
+  -- it there; otherwise append it as a new column near the end.
   select_is_test_column := CASE
-    WHEN has_is_test THEN 'l.is_test,'
-    ELSE 'false AS is_test,'
+    WHEN current_view_has_is_test THEN 'l.is_test,'
+    ELSE ''
+  END;
+
+  append_is_test_column := CASE
+    WHEN has_is_test AND NOT current_view_has_is_test THEN ', l.is_test'
+    ELSE ''
   END;
 
   where_status := CASE
@@ -329,6 +348,11 @@ BEGIN
 
   where_is_published := CASE
     WHEN has_is_published THEN ' AND l.is_published = true'
+    ELSE ''
+  END;
+
+  where_is_test := CASE
+    WHEN has_is_test THEN ' AND COALESCE(l.is_test, false) = false'
     ELSE ''
   END;
 
@@ -363,7 +387,7 @@ BEGIN
         l.cover_image_id,
         l.is_seeded,
         b.is_seeded AS business_is_seeded,
-        l.listing_category_id,
+        l.listing_category_id%s,
         l.business_entity_id
       FROM public.listings l
       JOIN public.businesses b
@@ -374,13 +398,15 @@ BEGIN
         %s
         AND COALESCE(l.admin_hidden, false) = false
         AND COALESCE(l.is_internal, false) = false
-        AND COALESCE(l.is_test, false) = false
+        %s
         AND COALESCE(b.is_internal, false) = false
         AND b.verification_status IN ('auto_verified', 'manually_verified')
     $sql$,
     select_is_test_column,
+    append_is_test_column,
     where_status,
-    where_is_published
+    where_is_published,
+    where_is_test
   );
 END $$;
 

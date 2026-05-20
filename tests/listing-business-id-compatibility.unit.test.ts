@@ -219,6 +219,27 @@ describe("listing business id compatibility", () => {
     expect(customerCategorySource).toContain('.from("public_listings_v")');
   });
 
+  it("preserves public_listings_v column order and appends new compatibility columns", () => {
+    expect(migration).toContain("current_view_has_is_test");
+    expect(migration).toContain("WHEN current_view_has_is_test THEN 'l.is_test,'");
+    expect(migration).toContain("WHEN has_is_test AND NOT current_view_has_is_test THEN ', l.is_test'");
+    expect(migration).not.toContain("WHEN has_is_test THEN 'l.is_test,'");
+    expect(migration).not.toContain("ELSE 'false AS is_test,'");
+
+    const viewStart = migration.indexOf("CREATE OR REPLACE VIEW public.public_listings_v AS");
+    const viewEnd = migration.indexOf("FROM public.listings l", viewStart);
+    const selectList = migration.slice(viewStart, viewEnd);
+    const createdAtIndex = selectList.indexOf("l.created_at");
+    const inventoryIndex = selectList.indexOf("l.inventory_quantity");
+    const listingCategoryIdIndex = selectList.indexOf("l.listing_category_id%s");
+    const businessEntityIndex = selectList.indexOf("l.business_entity_id");
+
+    expect(createdAtIndex).toBeGreaterThan(-1);
+    expect(inventoryIndex).toBeGreaterThan(createdAtIndex);
+    expect(listingCategoryIdIndex).toBeGreaterThan(inventoryIndex);
+    expect(businessEntityIndex).toBeGreaterThan(listingCategoryIdIndex);
+  });
+
   it("allows business-owner listing access through legacy or canonical ownership", () => {
     const businesses = [
       {
